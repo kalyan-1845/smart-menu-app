@@ -19,16 +19,29 @@ const app = express();
 // Create HTTP Server (wraps Express)
 const httpServer = createServer(app);
 
-// Initialize Socket.io
+// --- 🔒 SECURITY CONFIGURATION (CORS) ---
+// This list allows both your local computer AND your live website to connect
+const allowedOrigins = [
+    "http://localhost:5173",             // Localhost (for testing)
+    "https://smartmenuss.netlify.app"    // YOUR NETLIFY WEBSITE (The Fix!)
+];
+
+// Initialize Socket.io with CORS
 const io = new Server(httpServer, {
     cors: {
-        origin: "https://mongodb+srv://prsnlkalyan_db_user:vasudev 1972@cluster0.phbbtix.mongodb.net/?retryWrites=true&w=majority appName=Cluster/api/dishes", // Allow your React Frontend
-        methods: ["GET", "POST", "PUT", "DELETE"]
+        origin: allowedOrigins,
+        methods: ["GET", "POST", "PUT", "DELETE"],
+        credentials: true
     }
 });
 
 // 1. MIDDLEWARE
-app.use(cors()); // Enable Cross-Origin Resource Sharing
+// Enable CORS for regular API requests (Login, Menu, etc.)
+app.use(cors({
+    origin: allowedOrigins,
+    credentials: true
+}));
+
 app.use(express.json()); // Allow reading JSON body data
 
 // 2. SOCKET MIDDLEWARE
@@ -39,6 +52,7 @@ app.use((req, res, next) => {
 });
 
 // 3. DATABASE CONNECTION
+// Note: Ensure your Render Environment Variable 'MONGO_URI' is set correctly!
 mongoose.connect(process.env.MONGO_URI || "mongodb://127.0.0.1:27017/smartmenu")
     .then(() => console.log("✅ MongoDB Connected Successfully"))
     .catch((err) => console.error("❌ MongoDB Connection Error:", err));

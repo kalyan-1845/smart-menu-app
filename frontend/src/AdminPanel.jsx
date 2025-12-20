@@ -4,10 +4,9 @@ import { Link, useNavigate } from "react-router-dom";
 
 const AdminPanel = () => {
     const navigate = useNavigate();
-    
 
     // --- STATE DEFINITIONS ---
-    
+
     // 1. Dish Form State
     const [formData, setFormData] = useState({
         name: "",
@@ -25,7 +24,7 @@ const AdminPanel = () => {
     const [ownerId, setOwnerId] = useState(localStorage.getItem("ownerId"));
     const [token, setToken] = useState(localStorage.getItem("ownerToken"));
 
-    // 4. UPI Payment State (NEW)
+    // 4. UPI Payment State
     const [upiId, setUpiId] = useState("");
     const [isUpiSaved, setIsUpiSaved] = useState(false);
 
@@ -40,6 +39,7 @@ const AdminPanel = () => {
 
         try {
             // Fetch Restaurant Name
+            // Make sure this URL matches your Render Backend
             const nameRes = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/auth/restaurant/${ownerId}`);
             setRestaurantName(nameRes.data.username);
 
@@ -48,20 +48,21 @@ const AdminPanel = () => {
             setDishes(dishRes.data);
         } catch (error) {
             console.error("Failed to fetch admin details:", error);
+            // If token is invalid (401), force logout
             if (error.response?.status === 401) {
                 handleLogout();
             }
         }
     };
 
-    // Effect 2: Load Saved UPI ID from LocalStorage
+    // Effect 2: Load Saved UPI ID from LocalStorage & Fetch Data
     useEffect(() => {
         const savedUPI = localStorage.getItem("restaurantUPI");
         if (savedUPI) setUpiId(savedUPI);
         
         // Trigger fetch
         fetchAdminData();
-    }, [ownerId]);
+    }, [ownerId, token]); // Added dependencies to ensure it runs when auth changes
 
     // --- HANDLERS ---
 
@@ -77,7 +78,7 @@ const AdminPanel = () => {
         window.location.href = "/"; 
     };
 
-    // 3. Save UPI Handler (NEW)
+    // 3. Save UPI Handler
     const handleSaveUPI = () => {
         if (!upiId.includes("@")) {
             alert("Invalid UPI ID. It must contain '@' (e.g., name@okaxis)");
@@ -97,8 +98,9 @@ const AdminPanel = () => {
             });
             alert("✅ Dish Added Successfully!");
             setFormData({ name: "", price: "", category: "Starters", description: "", image: "" });
-            fetchAdminData(); 
+            fetchAdminData(); // Refresh the list
         } catch (error) {
+            console.error(error);
             alert("❌ Error adding dish. Please check your session.");
         }
     };
@@ -110,13 +112,14 @@ const AdminPanel = () => {
             await axios.delete(`https://smart-menu-backend-5ge7.onrender.com/api/dishes/${dishId}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            fetchAdminData();
+            fetchAdminData(); // Refresh the list
         } catch (error) {
+            console.error(error);
             alert("❌ Failed to delete dish.");
         }
     };
 
-    // 6. Helper
+    // 6. Helper: Load Example Data
     const loadExample = () => {
         setFormData({
             name: "BBQ Chicken Pizza",
@@ -152,7 +155,7 @@ const AdminPanel = () => {
                 {/* --- LEFT COLUMN: Settings & Forms --- */}
                 <div className="space-y-8">
                     
-                    {/* 1. UPI SETTINGS CARD (NEW) */}
+                    {/* 1. UPI SETTINGS CARD */}
                     <div className="bg-[#181D2A] p-6 rounded-3xl shadow-xl border border-gray-700">
                         <h2 className="text-xl font-bold text-[#FF9933] mb-4 flex items-center gap-2">
                             💳 Payment Settings <span className="text-xs text-gray-400 font-normal">(Required for Online Pay)</span>
@@ -186,7 +189,6 @@ const AdminPanel = () => {
                             
                             <div className="grid grid-cols-2 gap-4">
                                 <input name="price" type="number" value={formData.price} onChange={handleChange} required className="w-full p-3 rounded-lg bg-gray-700 border border-gray-600 outline-none" placeholder="Price (₹)" />
-                                {/* Changed category to Select for better UX */}
                                 <select name="category" value={formData.category} onChange={handleChange} className="w-full p-3 rounded-lg bg-gray-700 border border-gray-600 outline-none text-white">
                                     <option value="Starters">Starters</option>
                                     <option value="Main Course">Main Course</option>
@@ -223,7 +225,6 @@ const AdminPanel = () => {
                             dishes.map((dish) => (
                                 <div key={dish._id} className="bg-[#181D2A] p-4 rounded-xl flex justify-between items-center border border-gray-700 hover:border-gray-500 transition">
                                     <div className="flex items-center gap-4">
-                                        {/* Optional: Show tiny image preview if exists */}
                                         {dish.image && <img src={dish.image} alt="mini" className="w-12 h-12 rounded-lg object-cover hidden sm:block" />}
                                         <div>
                                             <p className="text-lg font-bold text-white">{dish.name}</p>
