@@ -4,46 +4,38 @@ import { useNavigate, Link } from "react-router-dom";
 
 const Login = () => {
     const navigate = useNavigate();
-    
-    // State for form inputs
-    const [formData, setFormData] = useState({
-        username: "",
-        password: ""
-    });
-    
-    // State for error/loading
-    const [error, setError] = useState("");
+    const [formData, setFormData] = useState({ username: "", password: "" });
+    const [error, setError] = useState(""); 
     const [loading, setLoading] = useState(false);
 
-    // Handle typing in input boxes
     const handleChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
     };
 
-    // Handle Login Submit
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
         setError("");
 
         try {
-            // ✅ FIX: This is the Clean URL. No "localhost".
+            // ✅ CLEAN URL: Fixed the mangled path to remove "...localhost:5000"
             const response = await axios.post("https://smart-menu-backend-5ge7.onrender.com/api/auth/login", formData);
             
-            // Save token and ownerId to localStorage
+            // Store credentials upon successful login
             localStorage.setItem("ownerToken", response.data.token);
             localStorage.setItem("ownerId", response.data.ownerId);
-
-            // Redirect to Admin Dashboard
-            navigate("/admin");
-
-        } catch (err) {
-            // ✅ FIX: Readable error message logging
-            const errorMessage = err.response && err.response.data && err.response.data.message
-                ? err.response.data.message
-                : "Server not reachable. Please wait 60s for Render to wake up.";
             
-            console.error("Login Failed Details:", err);
+            navigate("/admin");
+        } catch (err) {
+            // ✅ ERROR LOGGING FIX: Construct a readable message to avoid "Mr" log
+            const errorMessage = err.response
+                ? err.response.data?.message || "Invalid credentials."
+                : err.request
+                ? "Server is not reachable. Please wait 60s for Render to wake up."
+                : `Error: ${err.message}`;
+
+            // Logging the specific message followed by the full object for context
+            console.error(`Login attempt failed: ${errorMessage}`, err); 
             setError(errorMessage);
         } finally {
             setLoading(false);
@@ -51,59 +43,67 @@ const Login = () => {
     };
 
     return (
-        <div className="min-h-screen bg-[#0d0d0d] flex items-center justify-center text-white font-sans">
-            <div className="bg-[#1a1a1a] p-10 rounded-2xl w-full max-w-md shadow-2xl">
-                <h2 className="text-center text-3xl font-bold mb-8 text-[#f97316]">
-                    Staff Access 🔒
-                </h2>
+        <div className="min-h-screen bg-[#0A0F18] flex items-center justify-center text-white p-6 font-sans">
+            <div className="bg-[#181D2A] p-8 md:p-10 rounded-3xl shadow-2xl w-full max-w-md border border-gray-700/50">
+                <div className="text-center mb-8">
+                    <h1 className="text-3xl font-extrabold text-[#FF9933] mb-2">Staff Access 🔒</h1>
+                    <p className="text-gray-400 text-sm leading-relaxed">
+                        Enter your credentials to unlock the dashboard.
+                    </p>
+                </div>
 
-                <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-                    
+                <form onSubmit={handleSubmit} className="space-y-6">
                     <div>
-                        <label className="block mb-2 text-sm text-gray-400">Restaurant ID / Username</label>
-                        <input 
-                            type="text" 
+                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 ml-1">
+                            Restaurant ID (Username)
+                        </label>
+                        <input
+                            type="text"
                             name="username"
                             value={formData.username}
                             onChange={handleChange}
                             required
-                            placeholder="Enter username"
-                            className="w-full p-3 rounded-lg bg-[#0d0d0d] border border-gray-800 text-white focus:outline-none focus:border-[#f97316]"
+                            className="w-full p-3 rounded-xl bg-gray-800/50 border border-gray-700 focus:ring-2 focus:ring-[#FF9933] text-white outline-none transition"
+                            placeholder="e.g., kalyanresto1"
                         />
                     </div>
 
                     <div>
-                        <label className="block mb-2 text-sm text-gray-400">Password</label>
-                        <input 
-                            type="password" 
+                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 ml-1">
+                            Staff Password
+                        </label>
+                        <input
+                            type="password"
                             name="password"
                             value={formData.password}
                             onChange={handleChange}
                             required
-                            placeholder="Enter password"
-                            className="w-full p-3 rounded-lg bg-[#0d0d0d] border border-gray-800 text-white focus:outline-none focus:border-[#f97316]"
+                            className="w-full p-3 rounded-xl bg-gray-800/50 border border-gray-700 focus:ring-2 focus:ring-[#FF9933] text-white outline-none transition"
+                            placeholder="••••••••"
                         />
                     </div>
 
                     {error && (
-                        <div className="bg-red-900/20 border border-red-600 text-red-500 p-3 rounded-lg text-sm text-center">
+                        <div className="text-red-400 bg-red-900/20 p-3 rounded-xl text-sm border border-red-800/50 text-center font-semibold animate-pulse">
                             {error}
                         </div>
                     )}
 
-                    <button 
-                        type="submit" 
+                    <button
+                        type="submit"
                         disabled={loading}
-                        className={`w-full p-3 rounded-lg font-bold text-white transition ${loading ? 'bg-gray-600 cursor-not-allowed' : 'bg-[#f97316] hover:bg-orange-600'}`}
+                        className="w-full bg-[#FF9933] hover:bg-orange-500 text-white font-black py-4 rounded-2xl shadow-lg transition transform active:scale-95 disabled:opacity-50 uppercase tracking-widest text-sm"
                     >
-                        {loading ? "Verifying..." : "Unlock Dashboard 🔑"}
+                        {loading ? "Verifying..." : "Unlock Dashboards 🔑"}
                     </button>
                 </form>
 
-                <div className="mt-6 text-center text-sm text-gray-500">
-                    <p>New Restaurant Owner? <Link to="/register" className="text-[#f97316] hover:underline">Register Here</Link></p>
+                <div className="mt-8 text-center pt-6 border-t border-gray-700/30">
+                    <p className="text-gray-400 text-sm">
+                        New Restaurant Owner? 
+                        <Link to="/register" className="text-[#FF9933] hover:underline ml-1 font-bold">Register Your Business</Link>
+                    </p>
                 </div>
-
             </div>
         </div>
     );
