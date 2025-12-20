@@ -11,15 +11,15 @@ const AdminPanel = () => {
     const [formData, setFormData] = useState({
         name: "",
         price: "",
-        category: "Starters", // Default category
+        category: "Starters",
         description: "",
         image: ""
     });
 
     // 2. Data State
-    const [dishes, setDishes] = useState([]); // Default to empty array
+    const [dishes, setDishes] = useState([]); // Default to empty array to prevent crashes
     const [restaurantName, setRestaurantName] = useState("Dashboard");
-    const [loading, setLoading] = useState(true); // Added Loading State
+    const [loading, setLoading] = useState(true); // Loading state for Render wake-up
 
     // 3. Auth State
     const [ownerId, setOwnerId] = useState(localStorage.getItem("ownerId"));
@@ -33,6 +33,7 @@ const AdminPanel = () => {
 
     // Effect 1: Load Admin Data (Restaurant Name & Menu)
     const fetchAdminData = async () => {
+        // If not logged in, redirect to login page immediately
         if (!ownerId || !token) {
             navigate("/login");
             return;
@@ -42,48 +43,48 @@ const AdminPanel = () => {
             setLoading(true);
             
             // 1. Fetch Restaurant Name
-            // Using your Render Backend URL
+            // URL is correct: https://smart-menu-backend-5ge7.onrender.com
             const nameRes = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/auth/restaurant/${ownerId}`);
             setRestaurantName(nameRes.data.username || "Restaurant");
 
             // 2. Fetch Dishes
             const dishRes = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/dishes?restaurantId=${ownerId}`);
             
-            // Safety Check: Ensure data is an array before setting it
-            if (Array.isArray(dishRes.data)) {
+            // CRITICAL FIX: Check if data is actually an array before using it
+            if (dishRes.data && Array.isArray(dishRes.data)) {
                 setDishes(dishRes.data);
             } else {
-                setDishes([]);
+                setDishes([]); // Safety fallback
             }
 
         } catch (error) {
             console.error("Failed to fetch admin details:", error);
-            // If token is invalid (401), force logout
-            if (error.response?.status === 401) {
+            // If token is invalid (401 error), force logout
+            if (error.response && error.response.status === 401) {
                 handleLogout();
             }
         } finally {
-            setLoading(false); // Stop loading even if error
+            setLoading(false); // Stop loading circle
         }
     };
 
-    // Effect 2: Load Saved UPI ID from LocalStorage & Fetch Data
+    // Effect 2: Load Saved UPI ID from LocalStorage & Fetch Data on load
     useEffect(() => {
         const savedUPI = localStorage.getItem("restaurantUPI");
         if (savedUPI) setUpiId(savedUPI);
         
-        // Trigger fetch
         fetchAdminData();
-    }, [ownerId, token]); // Dependencies ensure it runs on load
+        // eslint-disable-next-line
+    }, []); 
 
     // --- HANDLERS ---
 
-    // 1. Form Handlers
+    // 1. Handle Input Changes
     const handleChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
     };
 
-    // 2. Auth Handler
+    // 2. Handle Logout
     const handleLogout = () => {
         localStorage.removeItem("ownerToken");
         localStorage.removeItem("ownerId");
@@ -98,7 +99,7 @@ const AdminPanel = () => {
         }
         localStorage.setItem("restaurantUPI", upiId);
         setIsUpiSaved(true);
-        setTimeout(() => setIsUpiSaved(false), 2000); // Reset success message
+        setTimeout(() => setIsUpiSaved(false), 2000); 
     };
 
     // 4. Submit New Dish
@@ -109,8 +110,10 @@ const AdminPanel = () => {
                 headers: { Authorization: `Bearer ${token}` }
             });
             alert("✅ Dish Added Successfully!");
+            // Reset form
             setFormData({ name: "", price: "", category: "Starters", description: "", image: "" });
-            fetchAdminData(); // Refresh the list
+            // Refresh list
+            fetchAdminData(); 
         } catch (error) {
             console.error(error);
             alert("❌ Error adding dish. Please check your session.");
@@ -124,7 +127,7 @@ const AdminPanel = () => {
             await axios.delete(`https://smart-menu-backend-5ge7.onrender.com/api/dishes/${dishId}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            fetchAdminData(); // Refresh the list
+            fetchAdminData(); // Refresh list
         } catch (error) {
             console.error(error);
             alert("❌ Failed to delete dish.");
@@ -142,18 +145,20 @@ const AdminPanel = () => {
         });
     };
 
-    // --- RENDER LOADING STATE ---
+    // --- LOADING SCREEN (Important for Render) ---
     if (loading) {
         return (
             <div className="min-h-screen bg-[#0A0F18] flex items-center justify-center text-white">
                 <div className="text-center">
-                    <h2 className="text-xl font-bold mb-2">Connecting to Kitchen...</h2>
+                    <h2 className="text-2xl font-bold mb-4 text-[#FF9933]">Connecting to Kitchen...</h2>
+                    <div className="w-10 h-10 border-4 border-[#FF9933] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
                     <p className="text-gray-400">Please wait up to 60 seconds for the server to wake up.</p>
                 </div>
             </div>
         );
     }
 
+    // --- MAIN UI ---
     return (
         <div className="min-h-screen bg-[#0A0F18] font-sans text-white p-6 md:p-10">
             
