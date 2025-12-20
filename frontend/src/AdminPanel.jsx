@@ -6,269 +6,139 @@ const AdminPanel = () => {
     const navigate = useNavigate();
 
     // --- STATE DEFINITIONS ---
-
-    // 1. Dish Form State
-    const [formData, setFormData] = useState({
-        name: "",
-        price: "",
-        category: "Starters", // Default category
-        description: "",
-        image: ""
-    });
-
-    // 2. Data State
-    const [dishes, setDishes] = useState([]); // Default to empty array to prevent crashes
+    const [formData, setFormData] = useState({ name: "", price: "", category: "Starters", description: "", image: "" });
+    const [dishes, setDishes] = useState([]); 
     const [restaurantName, setRestaurantName] = useState("Dashboard");
-    const [loading, setLoading] = useState(true); // Loading state for Render wake-up
-
-    // 3. Auth State
-    const [ownerId, setOwnerId] = useState(localStorage.getItem("ownerId"));
-    const [token, setToken] = useState(localStorage.getItem("ownerToken"));
-
-    // 4. UPI Payment State
+    const [loading, setLoading] = useState(true);
+    const [ownerId] = useState(localStorage.getItem("ownerId"));
+    const [token] = useState(localStorage.getItem("ownerToken"));
     const [upiId, setUpiId] = useState("");
     const [isUpiSaved, setIsUpiSaved] = useState(false);
 
-    // --- EFFECTS ---
-
-    // Effect 1: Load Admin Data (Restaurant Name & Menu)
+    // --- DATA FETCHING ---
     const fetchAdminData = async () => {
-        // If not logged in, redirect to login page immediately
-        if (!ownerId || !token) {
-            navigate("/login");
-            return;
-        }
-
+        if (!ownerId || !token) { navigate("/login"); return; }
         try {
             setLoading(true);
-            
-            // 1. Fetch Restaurant Name
-            // URL is correct: https://smart-menu-backend-5ge7.onrender.com
+            // ✅ Ensure URL exactly matches the backend route to prevent 404
             const nameRes = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/auth/restaurant/${ownerId}`);
             setRestaurantName(nameRes.data.username || "Restaurant");
 
-            // 2. Fetch Dishes
             const dishRes = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/dishes?restaurantId=${ownerId}`);
-            
-            // CRITICAL FIX: Check if data is actually an array before using it
-            if (dishRes.data && Array.isArray(dishRes.data)) {
-                setDishes(dishRes.data);
-            } else {
-                setDishes([]); // Safety fallback
-            }
-
-        } catch (error) {
-            console.error("Failed to fetch admin details:", error);
-            // If token is invalid (401 error), force logout
-            if (error.response && error.response.status === 401) {
-                handleLogout();
-            }
-        } finally {
-            setLoading(false); // Stop loading circle
-        }
+            setDishes(Array.isArray(dishRes.data) ? dishRes.data : []);
+        } catch (e) {
+            const errorMessage = e.response ? e.response.data?.message : e.message;
+            console.error(`Fetch failed: ${errorMessage}`, e);
+            if (e.response?.status === 401) handleLogout();
+        } finally { setLoading(false); }
     };
 
-    // Effect 2: Load Saved UPI ID from LocalStorage & Fetch Data on load
     useEffect(() => {
         const savedUPI = localStorage.getItem("restaurantUPI");
         if (savedUPI) setUpiId(savedUPI);
-        
         fetchAdminData();
-        // eslint-disable-next-line
-    }, []); 
+    }, [ownerId, token]);
 
     // --- HANDLERS ---
-
-    // 1. Handle Input Changes
-    const handleChange = (e) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
-    };
-
-    // 2. Handle Logout
     const handleLogout = () => {
         localStorage.removeItem("ownerToken");
         localStorage.removeItem("ownerId");
         window.location.href = "/"; 
     };
 
-    // 3. Save UPI Handler
     const handleSaveUPI = () => {
-        if (!upiId.includes("@")) {
-            alert("Invalid UPI ID. It must contain '@' (e.g., name@okaxis)");
-            return;
-        }
+        if (!upiId.includes("@")) { alert("Invalid UPI ID"); return; }
         localStorage.setItem("restaurantUPI", upiId);
         setIsUpiSaved(true);
-        setTimeout(() => setIsUpiSaved(false), 2000); 
+        setTimeout(() => setIsUpiSaved(false), 2000);
     };
 
-    // 4. Submit New Dish
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
             await axios.post("https://smart-menu-backend-5ge7.onrender.com/api/dishes", formData, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            alert("✅ Dish Added Successfully!");
-            // Reset form
+            alert("✅ Dish Added!");
             setFormData({ name: "", price: "", category: "Starters", description: "", image: "" });
-            // Refresh list
             fetchAdminData(); 
-        } catch (error) {
-            console.error(error);
-            alert("❌ Error adding dish. Please check your session.");
-        }
+        } catch (error) { alert("❌ Error adding dish."); }
     };
 
-    // 5. Delete Dish
     const handleDelete = async (dishId) => {
-        if (!window.confirm("Delete this dish?")) return;
+        if (!window.confirm("Delete this item?")) return;
         try {
             await axios.delete(`https://smart-menu-backend-5ge7.onrender.com/api/dishes/${dishId}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            fetchAdminData(); // Refresh list
-        } catch (error) {
-            console.error(error);
-            alert("❌ Failed to delete dish.");
-        }
+            fetchAdminData();
+        } catch (error) { alert("❌ Delete failed."); }
     };
 
-    // 6. Helper: Load Example Data
-    const loadExample = () => {
-        setFormData({
-            name: "BBQ Chicken Pizza",
-            price: 450,
-            category: "Pizza",
-            description: "Smoky BBQ sauce, grilled chicken, and red onions.",
-            image: "https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=500"
-        });
-    };
-
-    // --- RENDER LOADING STATE ---
-    if (loading) {
-        return (
-            <div className="min-h-screen bg-[#0A0F18] flex items-center justify-center text-white">
-                <div className="text-center">
-                    <h2 className="text-2xl font-bold mb-4 text-[#FF9933]">Connecting to Kitchen...</h2>
-                    <div className="w-10 h-10 border-4 border-[#FF9933] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                    <p className="text-gray-400">Please wait up to 60 seconds for the server to wake up.</p>
-                </div>
+    if (loading) return (
+        <div className="min-h-screen bg-[#0A0F18] flex items-center justify-center text-white">
+            <div className="text-center">
+                <h2 className="text-xl font-bold mb-2">Connecting to Backend...</h2>
+                <div className="w-8 h-8 border-4 border-[#FF9933] border-t-transparent rounded-full animate-spin mx-auto"></div>
+                <p className="text-gray-500 text-sm mt-2">Wait 60s if the server is sleeping.</p>
             </div>
-        );
-    }
+        </div>
+    );
 
-    // --- MAIN UI ---
     return (
-        <div className="min-h-screen bg-[#0A0F18] font-sans text-white p-6 md:p-10">
-            
-            {/* --- HEADER --- */}
-            <header className="flex flex-col md:flex-row justify-between items-center mb-10 gap-4 max-w-6xl mx-auto border-b border-gray-700 pb-4">
-                <h1 className="text-3xl md:text-4xl font-extrabold text-white">
-                    <span className="text-[#FF9933]">{restaurantName}</span> Admin 📊
-                </h1>
+        <div className="min-h-screen bg-[#0A0F18] text-white p-6 md:p-10">
+            <header className="flex flex-col md:flex-row justify-between items-center mb-10 max-w-6xl mx-auto border-b border-gray-700 pb-4">
+                <h1 className="text-3xl font-extrabold"><span className="text-[#FF9933]">{restaurantName}</span> Admin 📊</h1>
                 <div className="flex gap-4">
-                    <Link to="/chef">
-                        <button className="bg-[#181D2A] hover:bg-gray-700 border border-gray-700 px-6 py-2 rounded-lg font-bold text-gray-300 transition">
-                            ← Kitchen
-                        </button>
-                    </Link>
-                    <button onClick={handleLogout} className="bg-red-600 hover:bg-red-500 px-6 py-2 rounded-lg font-bold transition">
-                        Logout
-                    </button>
+                    <Link to="/chef"><button className="bg-gray-800 px-6 py-2 rounded-lg hover:bg-gray-700 transition">Kitchen</button></Link>
+                    <button onClick={handleLogout} className="bg-red-600 px-6 py-2 rounded-lg font-bold">Logout</button>
                 </div>
             </header>
 
             <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-10">
-                
-                {/* --- LEFT COLUMN: Settings & Forms --- */}
                 <div className="space-y-8">
-                    
-                    {/* 1. UPI SETTINGS CARD */}
-                    <div className="bg-[#181D2A] p-6 rounded-3xl shadow-xl border border-gray-700">
-                        <h2 className="text-xl font-bold text-[#FF9933] mb-4 flex items-center gap-2">
-                            💳 Payment Settings <span className="text-xs text-gray-400 font-normal">(Required for Online Pay)</span>
-                        </h2>
-                        <label className="block text-sm text-gray-400 mb-2">Your UPI ID (e.g. business@okaxis)</label>
+                    {/* UPI Settings */}
+                    <div className="bg-[#181D2A] p-6 rounded-3xl border border-gray-700 shadow-xl">
+                        <h2 className="text-xl font-bold text-[#FF9933] mb-4">💳 Payment UPI</h2>
                         <div className="flex gap-3">
-                            <input 
-                                value={upiId} 
-                                onChange={(e) => setUpiId(e.target.value)} 
-                                placeholder="Enter UPI ID..." 
-                                className="flex-1 p-3 rounded-lg bg-gray-700 border border-gray-600 focus:ring-2 focus:ring-[#FF9933] outline-none text-white"
-                            />
-                            <button 
-                                onClick={handleSaveUPI} 
-                                className={`px-6 py-3 rounded-lg font-bold transition ${isUpiSaved ? 'bg-green-600 text-white' : 'bg-white text-black hover:bg-gray-200'}`}
-                            >
-                                {isUpiSaved ? "Saved!" : "Save"}
-                            </button>
+                            <input value={upiId} onChange={(e) => setUpiId(e.target.value)} placeholder="business@okaxis" className="flex-1 p-3 rounded-lg bg-gray-700 outline-none text-white" />
+                            <button onClick={handleSaveUPI} className={`px-6 py-3 rounded-lg font-bold ${isUpiSaved ? 'bg-green-600' : 'bg-white text-black'}`}>{isUpiSaved ? "Saved" : "Save"}</button>
                         </div>
                     </div>
 
-                    {/* 2. ADD DISH FORM */}
-                    <div className="bg-[#181D2A] p-8 rounded-3xl shadow-xl border border-gray-700">
-                        <div className="flex justify-between items-center mb-6">
-                            <h2 className="text-2xl font-bold text-[#FF9933]">Add New Item</h2>
-                            <button onClick={loadExample} className="text-sm text-blue-400 hover:underline">Load Example</button>
-                        </div>
-                        
+                    {/* Add Dish Form */}
+                    <div className="bg-[#181D2A] p-8 rounded-3xl border border-gray-700 shadow-xl">
+                        <h2 className="text-2xl font-bold text-[#FF9933] mb-6">Add New Item</h2>
                         <form onSubmit={handleSubmit} className="space-y-4">
-                            <input name="name" value={formData.name} onChange={handleChange} required className="w-full p-3 rounded-lg bg-gray-700 border border-gray-600 focus:ring-2 focus:ring-[#FF9933] outline-none" placeholder="Dish Name" />
-                            
+                            <input name="name" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} placeholder="Item Name" className="w-full p-3 rounded-lg bg-gray-700 text-white" required />
                             <div className="grid grid-cols-2 gap-4">
-                                <input name="price" type="number" value={formData.price} onChange={handleChange} required className="w-full p-3 rounded-lg bg-gray-700 border border-gray-600 outline-none" placeholder="Price (₹)" />
-                                <select name="category" value={formData.category} onChange={handleChange} className="w-full p-3 rounded-lg bg-gray-700 border border-gray-600 outline-none text-white">
-                                    <option value="Starters">Starters</option>
-                                    <option value="Main Course">Main Course</option>
-                                    <option value="Pizza">Pizza</option>
-                                    <option value="Burger">Burger</option>
-                                    <option value="Drinks">Drinks</option>
-                                    <option value="Dessert">Dessert</option>
+                                <input name="price" type="number" value={formData.price} onChange={(e) => setFormData({...formData, price: e.target.value})} placeholder="Price" className="w-full p-3 rounded-lg bg-gray-700 text-white" required />
+                                <select value={formData.category} onChange={(e) => setFormData({...formData, category: e.target.value})} className="w-full p-3 rounded-lg bg-gray-700 text-white">
+                                    <option>Starters</option><option>Main Course</option><option>Pizza</option><option>Burger</option><option>Drinks</option><option>Dessert</option>
                                 </select>
                             </div>
-
-                            <input name="image" value={formData.image} onChange={handleChange} className="w-full p-3 rounded-lg bg-gray-700 border border-gray-600 outline-none" placeholder="Image URL (https://...)" />
-                            <textarea name="description" value={formData.description} onChange={handleChange} rows="3" className="w-full p-3 rounded-lg bg-gray-700 border border-gray-600 outline-none" placeholder="Description..." />
-                            
-                            <button type="submit" className="w-full bg-[#FF9933] hover:bg-orange-500 text-white font-bold py-3 rounded-lg shadow-lg transition transform active:scale-95">
-                                Publish Item 🚀
-                            </button>
+                            <input name="image" value={formData.image} onChange={(e) => setFormData({...formData, image: e.target.value})} placeholder="Image URL" className="w-full p-3 rounded-lg bg-gray-700 text-white" />
+                            <textarea name="description" value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} placeholder="Description" className="w-full p-3 rounded-lg bg-gray-700 text-white" />
+                            <button type="submit" className="w-full bg-[#FF9933] py-3 rounded-lg font-bold hover:bg-orange-500 transition shadow-lg">Publish Item 🚀</button>
                         </form>
                     </div>
                 </div>
 
-                {/* --- RIGHT COLUMN: Menu List --- */}
-                <div>
-                    <h2 className="text-2xl font-bold mb-4 text-white flex justify-between items-center">
-                        Current Menu 
-                        <span className="bg-gray-800 text-sm px-3 py-1 rounded-full text-gray-400">{dishes?.length || 0} Items</span>
-                    </h2>
-                    
-                    <div className="space-y-4 max-h-[700px] overflow-y-auto pr-2 custom-scrollbar">
-                        {(!dishes || dishes.length === 0) ? (
-                            <div className="text-center p-10 border border-dashed border-gray-700 rounded-xl">
-                                <p className="text-gray-500">No dishes yet. Add your first item!</p>
-                            </div>
-                        ) : (
-                            dishes.map((dish) => (
-                                <div key={dish._id} className="bg-[#181D2A] p-4 rounded-xl flex justify-between items-center border border-gray-700 hover:border-gray-500 transition">
-                                    <div className="flex items-center gap-4">
-                                        {dish.image && <img src={dish.image} alt="mini" className="w-12 h-12 rounded-lg object-cover hidden sm:block" />}
-                                        <div>
-                                            <p className="text-lg font-bold text-white">{dish.name}</p>
-                                            <p className="text-[#FF9933] font-extrabold">₹{dish.price} <span className="text-gray-500 text-xs font-normal ml-2 bg-gray-800 px-2 py-0.5 rounded">{dish.category}</span></p>
-                                        </div>
-                                    </div>
-                                    <button onClick={() => handleDelete(dish._id)} className="bg-red-600/20 text-red-500 border border-red-600/50 hover:bg-red-600 hover:text-white px-4 py-2 rounded-lg font-bold transition">
-                                        Delete
-                                    </button>
+                {/* Menu List */}
+                <div className="bg-[#181D2A] p-6 rounded-3xl border border-gray-700 shadow-xl h-[700px] overflow-y-auto">
+                    <h2 className="text-2xl font-bold mb-4">Current Menu ({dishes.length})</h2>
+                    <div className="space-y-4">
+                        {dishes.length === 0 ? <p className="text-gray-500 text-center py-10">No items added yet.</p> : dishes.map((dish) => (
+                            <div key={dish._id} className="flex justify-between items-center bg-gray-800 p-4 rounded-xl border border-gray-700">
+                                <div className="flex items-center gap-4">
+                                    {dish.image && <img src={dish.image} className="w-12 h-12 rounded-lg object-cover" alt="" />}
+                                    <div><p className="font-bold">{dish.name}</p><p className="text-[#FF9933] font-bold">₹{dish.price}</p></div>
                                 </div>
-                            ))
-                        )}
+                                <button onClick={() => handleDelete(dish._id)} className="text-red-500 font-bold hover:text-red-400">Delete</button>
+                            </div>
+                        ))}
                     </div>
                 </div>
-
             </div>
         </div>
     );
