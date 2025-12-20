@@ -24,12 +24,13 @@ const Menu = ({ cart = [], addToCart, setRestaurantId, setTableNum }) => {
     useEffect(() => {
         const fetchMenu = async () => {
             try {
-                const shopRes = await axios.get(`http://localhost:5000/api/auth/restaurant/${id}`);
+                // Replace YOUR_RENDER_URL with the actual link from your Render dashboard
+                await axios.get(`https://mongodb+srv://prsnlkalyan_db_user:vasudev1972@cluster0.phbbtix.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0/api/auth/restaurant/${id}`);
                 setRestaurant({ name: shopRes.data.restaurantName, _id: shopRes.data._id });
                 if(setRestaurantId) setRestaurantId(shopRes.data._id);
                 if (table && setTableNum) setTableNum(table);
 
-                const dishRes = await axios.get(`http://localhost:5000/api/dishes?restaurantId=${shopRes.data._id}`);
+                await axios.get(`https://mongodb+srv://prsnlkalyan_db_user:vasudev1972@cluster0.phbbtix.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0/api/dishes?restaurantId=${shopRes.data._id}`);
                 setDishes(dishRes.data);
             } catch (error) {
                 console.warn("Backend not reachable. Using Demo Data.");
