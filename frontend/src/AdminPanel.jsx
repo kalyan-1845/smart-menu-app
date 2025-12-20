@@ -11,7 +11,7 @@ const AdminPanel = () => {
     const [formData, setFormData] = useState({
         name: "",
         price: "",
-        category: "Starters",
+        category: "Starters", // Default category
         description: "",
         image: ""
     });
@@ -145,7 +145,7 @@ const AdminPanel = () => {
         });
     };
 
-    // --- LOADING SCREEN (Important for Render) ---
+    // --- RENDER LOADING STATE ---
     if (loading) {
         return (
             <div className="min-h-screen bg-[#0A0F18] flex items-center justify-center text-white">
