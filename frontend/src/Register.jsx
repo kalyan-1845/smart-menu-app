@@ -42,35 +42,38 @@ const Register = () => {
         }
 
         try {
-            // 🎯 STEP 1: Send registration data to the backend
-            // Ensure your backend authRoutes.js is listening on this endpoint
-            const response = await axios.post('https://smart-menu-backend-5ge7.onrender.com/...localhost:5000/api/auth/register', formData);
+            // ✅ CLEAN URL FIX: Removed '...localhost:5000' to prevent 404 errors
+            const response = await axios.post('https://smart-menu-backend-5ge7.onrender.com/api/auth/register', formData);
             
             // The backend returns the token, the new MongoDB _id, and the username
             const { token, _id, username } = response.data;
 
             if (token && _id) {
-                // 🎯 STEP 2: Store credentials for the session
+                // 🎯 Store credentials for the session
                 localStorage.setItem('ownerToken', token);
                 localStorage.setItem('ownerId', _id);
                 localStorage.setItem('ownerUsername', username || formData.username);
 
                 alert(`✅ Registration successful! Welcome, ${formData.restaurantName}.`);
                 
-                // 🎯 STEP 3: Hard Redirect
-                // Using window.location.href forces a clean state refresh for the dashboard
+                // 🎯 Hard Redirect for clean state
                 window.location.href = '/chef'; 
             } else {
-                // Fallback if backend registers but doesn't provide a session token
                 alert("✅ Account created! Please log in.");
                 navigate('/login');
             }
 
         } catch (err) {
-            console.error('Registration error:', err);
-            // Extracts the specific error message from the backend (e.g., "Email already exists")
-            const msg = err.response?.data?.message || 'Registration failed. Username or Email might already be taken.';
-            setError(msg);
+            // ✅ "Mr" ERROR LOGGING FIX: 
+            // Construct a readable message from the error object
+            const errorMessage = err.response
+                ? err.response.data?.message || 'Registration failed. Username or Email might already be taken.'
+                : err.request
+                ? 'Server is not reachable. Is the backend awake?'
+                : `Error: ${err.message}`;
+
+            console.error(`Registration attempt failed: ${errorMessage}`, err);
+            setError(errorMessage);
         } finally {
             setLoading(false);
         }
@@ -179,7 +182,7 @@ const Register = () => {
                                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
                                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                 </svg>
-                                Creating Kitchen...
+                                Creating Account...
                             </span>
                         ) : (
                             'Create Account & Access 🚀'
