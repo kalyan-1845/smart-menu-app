@@ -18,7 +18,7 @@ const SalesDashboard = () => {
                 const config = { headers: { Authorization: `Bearer ${token}` } };
                 
                 // Fetch orders for this restaurant
-                const res = await axios.get(`http://mongodb+srv://axios.post("https://smart-menu-backend-5ge7.onrender.com/api/auth/login", { ... })_db_user:vasudev1972@cluster0.phbbtix.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0/api/orders?restaurantId=${ownerId}`, config);
+                const res = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/...localhost:5000/api/orders?restaurantId=${ownerId}`, config);
                 
                 // 📊 LOGIC: Filter only successful/delivered orders for sales
                 const successfulOrders = res.data.filter(o => o.status === "SERVED" || o.status === "Ready");

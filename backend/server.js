@@ -22,7 +22,7 @@ const httpServer = createServer(app);
 // --- 🔒 SECURITY CONFIGURATION (CORS) ---
 // This list allows both your local computer AND your live website to connect
 const allowedOrigins = [
-    "http://localhost:5173",             // Localhost (for testing)
+    "https://smart-menu-backend-5ge7.onrender.com/...localhost:5173",             // Localhost (for testing)
     "https://smartmenuss.netlify.app"    // YOUR NETLIFY WEBSITE
 ];
 

@@ -28,10 +28,10 @@ const ChefDashboard = () => {
         try {
             const config = { headers: { Authorization: `Bearer ${token}` } };
             
-            const nameRes = await axios.get(`http://mongodb+srv://axios.post("https://smart-menu-backend-5ge7.onrender.com/api/auth/login", { ... })_db_user:vasudev1972@cluster0.phbbtix.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0/api/auth/restaurant/${ownerId}`, config);
+            const nameRes = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/...localhost:5000/api/auth/restaurant/${ownerId}`, config);
             setRestaurantName(nameRes.data.username || nameRes.data.restaurantName);
 
-            const res = await axios.get(`http://mongodb+srv://axios.post("https://smart-menu-backend-5ge7.onrender.com/api/auth/login", { ... })_db_user:vasudev1972@cluster0.phbbtix.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0/api/orders?restaurantId=${ownerId}`, config);
+            const res = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/...localhost:5000/api/orders?restaurantId=${ownerId}`, config);
             const activeOrders = res.data.filter(o => o.status !== "SERVED");
 
             setOrders(prevOrders => {
@@ -53,7 +53,7 @@ const ChefDashboard = () => {
         fetchOrders(); 
         
         // Initialize Socket
-        socketRef.current = io("http://mongodb+srv://axios.post("https://smart-menu-backend-5ge7.onrender.com/api/auth/login", { ... })_db_user:vasudev1972@cluster0.phbbtix.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0");
+        socketRef.current = io("https://smart-menu-backend-5ge7.onrender.com/...localhost:5000");
         const socket = socketRef.current;
         
         // Listen for NEW calls
@@ -96,7 +96,7 @@ const ChefDashboard = () => {
     const updateOrderStatus = async (orderId, newStatus) => {
         try {
             setOrders(prev => prev.map(order => order._id === orderId ? { ...order, status: newStatus } : order));
-            await axios.put(`http://mongodb+srv://axios.post("https://smart-menu-backend-5ge7.onrender.com/api/auth/login", { ... })_db_user:vasudev1972@cluster0.phbbtix.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0/api/orders/${orderId}`, { status: newStatus }, { headers: { Authorization: `Bearer ${token}` } });
+            await axios.put(`https://smart-menu-backend-5ge7.onrender.com/...localhost:5000/api/orders/${orderId}`, { status: newStatus }, { headers: { Authorization: `Bearer ${token}` } });
             
             if (newStatus === "Ready") { 
                 setTimeout(() => { setOrders(prev => prev.filter(o => o._id !== orderId)); }, 600000); 
@@ -107,7 +107,7 @@ const ChefDashboard = () => {
     const handleDeleteOrder = async (orderId) => {
         if(!window.confirm("Remove this order from the list?")) return;
         try { 
-            await axios.delete(`http://mongodb+srv://axios.post("https://smart-menu-backend-5ge7.onrender.com/api/auth/login", { ... })_db_user:vasudev1972@cluster0.phbbtix.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0/api/orders/${orderId}`, { headers: { Authorization: `Bearer ${token}` } }); 
+            await axios.delete(`https://smart-menu-backend-5ge7.onrender.com/...localhost:5000/api/orders/${orderId}`, { headers: { Authorization: `Bearer ${token}` } }); 
             setOrders(prev => prev.filter(o => o._id !== orderId)); 
         } catch (error) { console.error("Delete failed", error); }
     };
