@@ -23,7 +23,7 @@ const httpServer = createServer(app);
 // This list allows both your local computer AND your live website to connect
 const allowedOrigins = [
     "http://localhost:5173",             // Localhost (for testing)
-    "https://smartmenuss.netlify.app"    // YOUR NETLIFY WEBSITE (The Fix!)
+    "https://smartmenuss.netlify.app"    // YOUR NETLIFY WEBSITE
 ];
 
 // Initialize Socket.io with CORS

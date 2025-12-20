@@ -11,7 +11,7 @@ const OrderTracker = () => {
   useEffect(() => {
     const fetchOrder = async () => {
       try {
-        const response = await axios.get(`http://mongodb+srv://prsnlkalyan_db_user:vasudev1972@cluster0.phbbtix.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0/api/orders/track/${id}`);
+        const response = await axios.get(`http://localhost:5000/api/orders/track/${id}`);
         setOrder(response.data);
       } catch (err) {
         setError("Order not found or link is invalid.");
@@ -22,7 +22,7 @@ const OrderTracker = () => {
     fetchOrder(); // Initial fetch
 
     // 1. Real-Time Socket Connection
-    const socket = io("http://mongodb+srv://prsnlkalyan_db_user:vasudev1972@cluster0.phbbtix.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0");
+    const socket = io("http://localhost:5000");
 
     // Listen for status updates specifically for this order
     socket.on("order-updated", (updatedOrder) => {

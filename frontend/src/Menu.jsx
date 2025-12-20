@@ -24,16 +24,19 @@ const Menu = ({ cart = [], addToCart, setRestaurantId, setTableNum }) => {
     useEffect(() => {
         const fetchMenu = async () => {
             try {
-                // Replace YOUR_RENDER_URL with the actual link from your Render dashboard
-                await axios.get(`https://mongodb+srv://prsnlkalyan_db_user:vasudev1972@cluster0.phbbtix.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0/api/auth/restaurant/${id}`);
-                setRestaurant({ name: shopRes.data.restaurantName, _id: shopRes.data._id });
+                // 1. Fetch Restaurant Info (FIXED: Using Render URL)
+                const shopRes = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/auth/restaurant/${id}`);
+                setRestaurant({ name: shopRes.data.username || shopRes.data.restaurantName, _id: shopRes.data._id });
+                
                 if(setRestaurantId) setRestaurantId(shopRes.data._id);
                 if (table && setTableNum) setTableNum(table);
 
-                await axios.get(`https://mongodb+srv://prsnlkalyan_db_user:vasudev1972@cluster0.phbbtix.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0/api/dishes?restaurantId=${shopRes.data._id}`);
+                // 2. Fetch Dishes (FIXED: Using Render URL)
+                const dishRes = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/dishes?restaurantId=${shopRes.data._id}`);
                 setDishes(dishRes.data);
+
             } catch (error) {
-                console.warn("Backend not reachable. Using Demo Data.");
+                console.warn("Backend not reachable. Using Demo Data.", error);
                 setDishes(dummyDishes);
                 setRestaurant({ name: "My Restaurant (Demo)", _id: "demo_id" });
             } finally {
@@ -60,12 +63,14 @@ const Menu = ({ cart = [], addToCart, setRestaurantId, setTableNum }) => {
         if (!confirmCall) return;
 
         try {
-            await axios.post("http://mongodb+srv://prsnlkalyan_db_user:vasudev1972@cluster0.phbbtix.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0/api/orders/call-waiter", {
+            // FIXED: Using Render URL
+            await axios.post("https://smart-menu-backend-5ge7.onrender.com/api/orders/call-waiter", {
                 restaurantId: id,
                 tableNumber: table
             });
             alert("🛎️ Staff has been notified. We will be with you shortly!");
         } catch (error) {
+            console.error(error);
             alert("🛎️ Request Sent! (Simulation Mode)");
         }
     };
