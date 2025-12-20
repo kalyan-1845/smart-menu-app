@@ -11,14 +11,15 @@ const AdminPanel = () => {
     const [formData, setFormData] = useState({
         name: "",
         price: "",
-        category: "Starters", // Default category
+        category: "Starters",
         description: "",
         image: ""
     });
 
     // 2. Data State
-    const [dishes, setDishes] = useState([]);
+    const [dishes, setDishes] = useState([]); // Default to empty array
     const [restaurantName, setRestaurantName] = useState("Dashboard");
+    const [loading, setLoading] = useState(true); // Added Loading State
 
     // 3. Auth State
     const [ownerId, setOwnerId] = useState(localStorage.getItem("ownerId"));
@@ -38,20 +39,29 @@ const AdminPanel = () => {
         }
 
         try {
-            // Fetch Restaurant Name
-            // Make sure this URL matches your Render Backend
+            setLoading(true);
+            // 1. Fetch Restaurant Name
             const nameRes = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/auth/restaurant/${ownerId}`);
-            setRestaurantName(nameRes.data.username);
+            setRestaurantName(nameRes.data.username || "Restaurant");
 
-            // Fetch Dishes
+            // 2. Fetch Dishes
             const dishRes = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/dishes?restaurantId=${ownerId}`);
-            setDishes(dishRes.data);
+            
+            // Safety Check: Ensure data is an array before setting it
+            if (Array.isArray(dishRes.data)) {
+                setDishes(dishRes.data);
+            } else {
+                setDishes([]);
+            }
+
         } catch (error) {
             console.error("Failed to fetch admin details:", error);
             // If token is invalid (401), force logout
             if (error.response?.status === 401) {
                 handleLogout();
             }
+        } finally {
+            setLoading(false); // Stop loading even if error
         }
     };
 
@@ -62,7 +72,7 @@ const AdminPanel = () => {
         
         // Trigger fetch
         fetchAdminData();
-    }, [ownerId, token]); // Added dependencies to ensure it runs when auth changes
+    }, [ownerId, token]);
 
     // --- HANDLERS ---
 
@@ -75,7 +85,7 @@ const AdminPanel = () => {
     const handleLogout = () => {
         localStorage.removeItem("ownerToken");
         localStorage.removeItem("ownerId");
-        window.location.href = "/"; 
+        navigate("/"); 
     };
 
     // 3. Save UPI Handler
@@ -86,7 +96,7 @@ const AdminPanel = () => {
         }
         localStorage.setItem("restaurantUPI", upiId);
         setIsUpiSaved(true);
-        setTimeout(() => setIsUpiSaved(false), 2000); // Reset success message
+        setTimeout(() => setIsUpiSaved(false), 2000);
     };
 
     // 4. Submit New Dish
@@ -112,7 +122,7 @@ const AdminPanel = () => {
             await axios.delete(`https://smart-menu-backend-5ge7.onrender.com/api/dishes/${dishId}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            fetchAdminData(); // Refresh the list
+            fetchAdminData();
         } catch (error) {
             console.error(error);
             alert("❌ Failed to delete dish.");
@@ -129,6 +139,18 @@ const AdminPanel = () => {
             image: "https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=500"
         });
     };
+
+    // --- RENDER LOADING STATE ---
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-[#0A0F18] flex items-center justify-center text-white">
+                <div className="text-center">
+                    <h2 className="text-xl font-bold mb-2">Connecting to Kitchen...</h2>
+                    <p className="text-gray-400">Please wait up to 60 seconds for the server to wake up.</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-[#0A0F18] font-sans text-white p-6 md:p-10">
@@ -213,11 +235,11 @@ const AdminPanel = () => {
                 <div>
                     <h2 className="text-2xl font-bold mb-4 text-white flex justify-between items-center">
                         Current Menu 
-                        <span className="bg-gray-800 text-sm px-3 py-1 rounded-full text-gray-400">{dishes.length} Items</span>
+                        <span className="bg-gray-800 text-sm px-3 py-1 rounded-full text-gray-400">{dishes?.length || 0} Items</span>
                     </h2>
                     
                     <div className="space-y-4 max-h-[700px] overflow-y-auto pr-2 custom-scrollbar">
-                        {dishes.length === 0 ? (
+                        {(!dishes || dishes.length === 0) ? (
                             <div className="text-center p-10 border border-dashed border-gray-700 rounded-xl">
                                 <p className="text-gray-500">No dishes yet. Add your first item!</p>
                             </div>
