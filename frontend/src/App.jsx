@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
-
 // --- COMPONENT IMPORTS ---
-import Menu from "./menu.jsx"; 
+import Menu from "./Menu.jsx"; 
 import Cart from "./Cart.jsx";
 import ChefDashboard from "./ChefDashboard.jsx";
 import OwnerLogin from "./OwnerLogin.jsx";

@@ -24,12 +24,12 @@ const Menu = ({ cart = [], addToCart, setRestaurantId, setTableNum }) => {
     useEffect(() => {
         const fetchMenu = async () => {
             try {
-                const shopRes = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/auth/restaurant/${id}`);
+                const shopRes = await axios.get(`http://localhost:5000/api/auth/restaurant/${id}`);
                 setRestaurant({ name: shopRes.data.restaurantName, _id: shopRes.data._id });
                 if(setRestaurantId) setRestaurantId(shopRes.data._id);
                 if (table && setTableNum) setTableNum(table);
 
-                const dishRes = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/dishes?restaurantId=${shopRes.data._id}`);
+                const dishRes = await axios.get(`http://localhost:5000/api/dishes?restaurantId=${shopRes.data._id}`);
                 setDishes(dishRes.data);
             } catch (error) {
                 console.warn("Backend not reachable. Using Demo Data.");
@@ -59,7 +59,7 @@ const Menu = ({ cart = [], addToCart, setRestaurantId, setTableNum }) => {
         if (!confirmCall) return;
 
         try {
-            await axios.post("https://smart-menu-backend-5ge7.onrender.com/api/orders/call-waiter", {
+            await axios.post("http://localhost:5000/api/orders/call-waiter", {
                 restaurantId: id,
                 tableNumber: table
             });
