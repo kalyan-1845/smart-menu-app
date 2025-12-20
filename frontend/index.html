@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#0d0d0d" />
+    <meta name="description" content="Smart Restaurant Menu & Ordering System" />
+    
+    <title>Smart Menu</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Poppins:wght@500;600;700;800&display=swap" rel="stylesheet">
+
+    <style>
+      /* 1. Basic Reset & Variables */
+      :root {
+        --bg-color: #0d0d0d;
+        --card-bg: #1a1a1a;
+        --text-color: #ffffff;
+        --primary-orange: #f97316;
+        --app-max-width: 480px; /* 📱 LIMIT WIDTH for Desktop View */
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        /* Disable blue highlight on touch for mobile */
+        -webkit-tap-highlight-color: transparent; 
+      }
+
+      body {
+        /* 🎨 Outer Background (What you see on the sides on Desktop) */
+        background-color: #000; 
+        color: var(--text-color);
+        font-family: 'Inter', sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        overflow-x: hidden;
+        
+        /* 📐 Center the App on Desktop Screens */
+        display: flex;
+        justify-content: center;
+        min-height: 100vh;
+      }
+
+      /* 2. MAIN APP CONTAINER (The "Phone" Screen) */
+      #root {
+        width: 100%;
+        max-width: var(--app-max-width); /* 🛑 Prevent stretching on big screens */
+        background-color: var(--bg-color); /* The actual App Background */
+        min-height: 100vh;
+        position: relative;
+        box-shadow: 0 0 20px rgba(255, 255, 255, 0.05); /* Subtle glow on desktop */
+      }
+
+      /* 3. Typography Defaults */
+      h1, h2, h3, h4, h5, h6 {
+        font-family: 'Poppins', sans-serif;
+      }
+
+      button {
+        font-family: 'Inter', sans-serif;
+      }
+
+      /* 4. Custom Scrollbar */
+      ::-webkit-scrollbar { width: 5px; }
+      ::-webkit-scrollbar-track { background: #0d0d0d; }
+      ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+      ::-webkit-scrollbar-thumb:hover { background: #555; }
+
+      /* 5. Selection Color */
+      ::selection {
+        background: var(--primary-orange);
+        color: #fff;
+      }
+
+      /* 6. Utilities */
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      
+      /* Loader for React while it starts */
+      #root:empty {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+      }
+      #root:empty::after {
+        content: "Loading...";
+        color: #666;
+        font-family: 'Poppins', sans-serif;
+        font-weight: bold;
+        animation: pulse 1.5s infinite;
+      }
+      @keyframes pulse {
+        0% { opacity: 0.5; }
+        50% { opacity: 1; }
+        100% { opacity: 0.5; }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
