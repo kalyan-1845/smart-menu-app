@@ -60,7 +60,7 @@ const Menu = ({ cart = [], addToCart, setRestaurantId, setTableNum }) => {
         if (!confirmCall) return;
 
         try {
-            await axios.post("http://localhost:5000/api/orders/call-waiter", {
+            await axios.post("http://mongodb+srv://prsnlkalyan_db_user:vasudev1972@cluster0.phbbtix.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0/api/orders/call-waiter", {
                 restaurantId: id,
                 tableNumber: table
             });

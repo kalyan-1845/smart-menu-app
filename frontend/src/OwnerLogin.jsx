@@ -35,7 +35,7 @@ const OwnerLogin = () => {
 
             // 🎯 STEP 2: API Call
             // Note: Ensure your Backend is running on port 5000 and CORS is enabled
-            const response = await axios.post("https://smart-menu-backend-5ge7.onrender.com/api/auth/login", formData);
+            const response = await axios.post("http://localhost:5000/api/auth/login", formData);
             
             // 🎯 STEP 3: Validation & Storage
             // We check if data exists before trying to use it to prevent crashes
