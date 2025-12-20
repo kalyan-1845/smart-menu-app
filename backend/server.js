@@ -22,7 +22,7 @@ const httpServer = createServer(app);
 // Initialize Socket.io
 const io = new Server(httpServer, {
     cors: {
-        origin: "http://localhost:5173", // Allow your React Frontend
+        origin: "https://mongodb+srv://prsnlkalyan_db_user:vasudev 1972@cluster0.phbbtix.mongodb.net/?retryWrites=true&w=majority appName=Cluster/api/dishes", // Allow your React Frontend
         methods: ["GET", "POST", "PUT", "DELETE"]
     }
 });
