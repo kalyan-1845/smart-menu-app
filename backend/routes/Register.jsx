@@ -11,7 +11,7 @@ const Register = () => {
     e.preventDefault();
     try {
       // Create Account
-      const res = await axios.post("http://localhost:5000/api/auth/register", {
+      const res = await axios.post("https://smart-menu-backend-5ge7.onrender.com/api/auth/register", {
         username,
         password
       });

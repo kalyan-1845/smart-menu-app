@@ -30,7 +30,7 @@ const SuperAdmin = () => {
     const fetchOwners = async () => {
         setLoading(true);
         try {
-            const res = await axios.get("http://localhost:5000/api/auth/admin/all-owners");
+            const res = await axios.get("https://smart-menu-backend-5ge7.onrender.com/api/auth/admin/all-owners");
             setOwners(res.data);
         } catch (error) {
             console.error("Error fetching owners:", error);
@@ -48,7 +48,7 @@ const SuperAdmin = () => {
         if (!confirmChange) return;
 
         try {
-            await axios.put(`http://localhost:5000/api/auth/admin/update-status/${id}`, { status: newStatus });
+            await axios.put(`https://smart-menu-backend-5ge7.onrender.com/api/auth/admin/update-status/${id}`, { status: newStatus });
             alert(`✅ ${username} is now ${newStatus}`);
             fetchOwners(); // Refresh list
         } catch (error) {
@@ -64,7 +64,7 @@ const SuperAdmin = () => {
         if (!confirmDelete) return;
 
         try {
-            await axios.delete(`http://localhost:5000/api/auth/admin/delete-owner/${id}`);
+            await axios.delete(`https://smart-menu-backend-5ge7.onrender.com/api/auth/admin/delete-owner/${id}`);
             alert(`✅ Data purged for ${username}`);
             fetchOwners();
         } catch (error) {

@@ -18,7 +18,7 @@ const SalesDashboard = () => {
                 const config = { headers: { Authorization: `Bearer ${token}` } };
                 
                 // Fetch orders for this restaurant
-                const res = await axios.get(`http://localhost:5000/api/orders?restaurantId=${ownerId}`, config);
+                const res = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/orders?restaurantId=${ownerId}`, config);
                 
                 // 📊 LOGIC: Filter only successful/delivered orders for sales
                 const successfulOrders = res.data.filter(o => o.status === "SERVED" || o.status === "Ready");

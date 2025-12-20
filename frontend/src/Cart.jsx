@@ -58,7 +58,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
 
         try {
             // Adjust URL to your production/local backend
-            const response = await axios.post("http://localhost:5000/api/orders", orderData);
+            const response = await axios.post("https://smart-menu-backend-5ge7.onrender.com/api/orders", orderData);
             
             // Clear cart and redirect to success page
             clearCart();

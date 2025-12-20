@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 
 const AdminPanel = () => {
     const navigate = useNavigate();
+    
 
     // --- STATE DEFINITIONS ---
     
@@ -39,11 +40,11 @@ const AdminPanel = () => {
 
         try {
             // Fetch Restaurant Name
-            const nameRes = await axios.get(`http://localhost:5000/api/auth/restaurant/${ownerId}`);
+            const nameRes = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/auth/restaurant/${ownerId}`);
             setRestaurantName(nameRes.data.username);
 
             // Fetch Dishes
-            const dishRes = await axios.get(`http://localhost:5000/api/dishes?restaurantId=${ownerId}`);
+            const dishRes = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/dishes?restaurantId=${ownerId}`);
             setDishes(dishRes.data);
         } catch (error) {
             console.error("Failed to fetch admin details:", error);
@@ -91,7 +92,7 @@ const AdminPanel = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
-            await axios.post("http://localhost:5000/api/dishes", formData, {
+            await axios.post("https://smart-menu-backend-5ge7.onrender.com/api/dishes", formData, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             alert("✅ Dish Added Successfully!");
@@ -106,7 +107,7 @@ const AdminPanel = () => {
     const handleDelete = async (dishId) => {
         if (!window.confirm("Delete this dish?")) return;
         try {
-            await axios.delete(`http://localhost:5000/api/dishes/${dishId}`, {
+            await axios.delete(`https://smart-menu-backend-5ge7.onrender.com/api/dishes/${dishId}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             fetchAdminData();
