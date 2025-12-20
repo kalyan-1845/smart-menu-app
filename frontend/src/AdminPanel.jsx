@@ -11,7 +11,7 @@ const AdminPanel = () => {
     const [formData, setFormData] = useState({
         name: "",
         price: "",
-        category: "Starters",
+        category: "Starters", // Default category
         description: "",
         image: ""
     });
@@ -40,7 +40,9 @@ const AdminPanel = () => {
 
         try {
             setLoading(true);
+            
             // 1. Fetch Restaurant Name
+            // Using your Render Backend URL
             const nameRes = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/auth/restaurant/${ownerId}`);
             setRestaurantName(nameRes.data.username || "Restaurant");
 
@@ -72,7 +74,7 @@ const AdminPanel = () => {
         
         // Trigger fetch
         fetchAdminData();
-    }, [ownerId, token]);
+    }, [ownerId, token]); // Dependencies ensure it runs on load
 
     // --- HANDLERS ---
 
@@ -85,7 +87,7 @@ const AdminPanel = () => {
     const handleLogout = () => {
         localStorage.removeItem("ownerToken");
         localStorage.removeItem("ownerId");
-        navigate("/"); 
+        window.location.href = "/"; 
     };
 
     // 3. Save UPI Handler
@@ -96,7 +98,7 @@ const AdminPanel = () => {
         }
         localStorage.setItem("restaurantUPI", upiId);
         setIsUpiSaved(true);
-        setTimeout(() => setIsUpiSaved(false), 2000);
+        setTimeout(() => setIsUpiSaved(false), 2000); // Reset success message
     };
 
     // 4. Submit New Dish
@@ -122,7 +124,7 @@ const AdminPanel = () => {
             await axios.delete(`https://smart-menu-backend-5ge7.onrender.com/api/dishes/${dishId}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            fetchAdminData();
+            fetchAdminData(); // Refresh the list
         } catch (error) {
             console.error(error);
             alert("❌ Failed to delete dish.");
