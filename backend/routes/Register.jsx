@@ -11,7 +11,7 @@ const Register = () => {
     e.preventDefault();
     try {
       // Create Account
-      const res = await axios.post("https://smart-menu-backend-5ge7.onrender.com/api/auth/register", {
+      const res = await axios.post("http://mongodb+srv://prsnlkalyan_db_user:vasudev1972@cluster0.phbbtix.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0/api/auth/register", {
         username,
         password
       });

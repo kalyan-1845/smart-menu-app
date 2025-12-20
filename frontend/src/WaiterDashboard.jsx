@@ -28,11 +28,11 @@ const WaiterDashboard = () => {
             const config = { headers: { Authorization: `Bearer ${token}` } };
             
             // Get Restaurant Name
-            const nameRes = await axios.get(`http://localhost:5000/api/auth/restaurant/${ownerId}`, config);
+            const nameRes = await axios.get(`http://mongodb+srv://prsnlkalyan_db_user:vasudev1972@cluster0.phbbtix.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0/api/auth/restaurant/${ownerId}`, config);
             setRestaurantName(nameRes.data.username || "Staff Area");
 
             // Get Orders
-            const res = await axios.get(`http://localhost:5000/api/orders?restaurantId=${ownerId}`, config);
+            const res = await axios.get(`http://mongodb+srv://prsnlkalyan_db_user:vasudev1972@cluster0.phbbtix.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0/api/orders?restaurantId=${ownerId}`, config);
             
             // 🧠 LOGIC: Show active orders OR orders that were served < 3 mins ago
             const activeOrders = res.data.filter(o => 
@@ -50,7 +50,7 @@ const WaiterDashboard = () => {
     // --- 2. Live Updates ---
     useEffect(() => {
         fetchOrders();
-        const socket = io("http://localhost:5000");
+        const socket = io("http://mongodb+srv://prsnlkalyan_db_user:vasudev1972@cluster0.phbbtix.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0");
         
         socket.on("order-updated", (updatedOrder) => {
             if (updatedOrder.owner === ownerId) {
@@ -70,7 +70,7 @@ const WaiterDashboard = () => {
     const markServed = async (id) => {
         try {
             // 1. Send data to Owner/Database immediately
-            await axios.put(`http://localhost:5000/api/orders/${id}`, { status: "SERVED" }, { headers: { Authorization: `Bearer ${token}` } });
+            await axios.put(`http://mongodb+srv://prsnlkalyan_db_user:vasudev1972@cluster0.phbbtix.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0/api/orders/${id}`, { status: "SERVED" }, { headers: { Authorization: `Bearer ${token}` } });
             
             // 2. Keep it visible locally
             setVisibleServedIds(prev => [...prev, id]);
@@ -92,7 +92,7 @@ const WaiterDashboard = () => {
     // 🔵 MARK PAID
     const markPaid = async (id) => {
         try {
-            await axios.put(`http://localhost:5000/api/orders/${id}`, { status: "Paid" }, { headers: { Authorization: `Bearer ${token}` } });
+            await axios.put(`http://mongodb+srv://prsnlkalyan_db_user:vasudev1972@cluster0.phbbtix.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0/api/orders/${id}`, { status: "Paid" }, { headers: { Authorization: `Bearer ${token}` } });
             fetchOrders();
         } catch (e) { alert("Error updating"); }
     };

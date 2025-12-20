@@ -44,7 +44,7 @@ const Register = () => {
         try {
             // 🎯 STEP 1: Send registration data to the backend
             // Ensure your backend authRoutes.js is listening on this endpoint
-            const response = await axios.post('https://smart-menu-backend-5ge7.onrender.com/api/auth/register', formData);
+            const response = await axios.post('http://mongodb+srv://prsnlkalyan_db_user:vasudev1972@cluster0.phbbtix.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0/api/auth/register', formData);
             
             // The backend returns the token, the new MongoDB _id, and the username
             const { token, _id, username } = response.data;
