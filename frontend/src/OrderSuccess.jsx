@@ -31,6 +31,7 @@ const OrderSuccess = () => {
             const image = canvas.toDataURL("image/png");
             const link = document.createElement("a");
             link.href = image;
+            // Uses order ID suffix for the filename
             link.download = `Receipt_${order?._id?.slice(-5).toUpperCase() || "Order"}.png`;
             link.click();
         } catch (error) {
@@ -45,7 +46,7 @@ const OrderSuccess = () => {
         const table = order?.tableNumber;
 
         if (restaurantId) {
-            // ✅ Clean navigation to bypass staff login redirects
+            // ✅ Dynamic navigation based on whether it's a table order or takeaway
             if (table && table !== "Takeaway") {
                 navigate(`/menu/${restaurantId}/${table}`);
             } else {
@@ -56,6 +57,7 @@ const OrderSuccess = () => {
         }
     };
 
+    // State handling for missing order data
     if (!order) {
         return (
             <div style={{ height: '100vh', background: '#0d0d0d', color: 'white', display: 'flex', justifyContent: 'center', alignItems: 'center', flexDirection: 'column' }}>
@@ -68,15 +70,17 @@ const OrderSuccess = () => {
     return (
         <div style={{ minHeight: '100vh', background: '#0d0d0d', color: 'white', padding: '20px', maxWidth: '480px', margin: '0 auto', display: 'flex', flexDirection: 'column', alignItems: 'center', fontFamily: 'sans-serif' }}>
             
-            {/* Success Visual */}
+            {/* 1. Success Icon Visual */}
             <div style={{ width: '70px', height: '70px', background: '#22c55e', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '15px', boxShadow: '0 0 20px rgba(34, 197, 94, 0.4)' }}>
-                <svg width="35" height="35" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                <svg width="35" height="35" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
             </div>
 
             <h1 style={{ fontSize: '24px', fontWeight: '900', margin: '0 0 5px 0', letterSpacing: '1px' }}>ORDER PLACED!</h1>
             <p style={{ color: '#888', marginBottom: '30px', fontSize: '14px' }}>The kitchen has received your request.</p>
 
-            {/* DIGITAL RECEIPT CARD */}
+            {/* 2. DIGITAL RECEIPT CARD (Target for html2canvas) */}
             <div ref={receiptRef} style={{ width: '100%', background: 'white', color: 'black', borderRadius: '24px', padding: '30px', position: 'relative', overflow: 'hidden', boxShadow: '0 10px 40px rgba(0,0,0,0.6)' }}>
                 
                 {/* Visual Header Strip */}
@@ -107,6 +111,7 @@ const OrderSuccess = () => {
                                 <span style={{ fontWeight: '600' }}>{item.quantity} x {item.name}</span>
                                 <span style={{ fontWeight: 'bold' }}>₹{item.price * item.quantity}</span>
                             </div>
+                            {/* Display Customizations */}
                             {item.selectedSpecs?.length > 0 && (
                                 <p style={{ fontSize: '10px', color: '#ef4444', margin: '4px 0 0 0', fontWeight: 'bold', fontStyle: 'italic' }}>
                                     Note: {item.selectedSpecs.join(", ")}
@@ -116,17 +121,17 @@ const OrderSuccess = () => {
                     ))}
                 </div>
 
-                {/* Totals */}
+                {/* Totals Section */}
                 <div style={{ borderTop: '2px solid #111', paddingTop: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: '14px', fontWeight: 'bold' }}>AMOUNT PAID</span>
                     <span style={{ fontSize: '26px', fontWeight: '900', color: '#111' }}>₹{order.totalAmount}</span>
                 </div>
 
-                {/* Barcode Decoration */}
+                {/* Receipt Barcode Decoration */}
                 <div style={{ marginTop: '25px', height: '45px', background: 'repeating-linear-gradient(to right, #000 0px, #000 1px, #fff 1px, #fff 4px)', opacity: 0.15 }}></div>
             </div>
 
-            {/* Action Area */}
+            {/* 3. Action Buttons */}
             <div style={{ width: '100%', marginTop: '30px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <button 
                     onClick={downloadReceipt}
