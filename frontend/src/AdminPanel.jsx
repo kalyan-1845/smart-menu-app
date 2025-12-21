@@ -5,7 +5,6 @@ import jsPDF from "jspdf";
 import "jspdf-autotable";
 import io from "socket.io-client";
 import confetti from "canvas-confetti"; // Install: npm install canvas-confetti
-import { generateMonthlyReport } from "./ReportGenerator"; 
 // 🎨 Icons
 import SetupWizard from "./components/SetupWizard";
 // At the top of AdminPanel.jsx
