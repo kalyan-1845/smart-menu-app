@@ -1,59 +1,59 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useParams, Link } from "react-router-dom";
+// 🎨 Icons
+import { FaHistory, FaSearch, FaShoppingCart, FaBell } from "react-icons/fa";
 
 const Menu = ({ cart = [], addToCart, setRestaurantId, setTableNum }) => {
     // --- STATE ---
-    const { id, table } = useParams(); // Retrieves Restaurant ID and Table Number from URL
+    const { id, table } = useParams(); 
     const [dishes, setDishes] = useState([]);
-    const [restaurant, setRestaurant] = useState({ name: "My Restaurant", _id: null });
+    const [restaurant, setRestaurant] = useState({ name: "Loading...", _id: null });
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
     const [selectedCategory, setSelectedCategory] = useState("All");
+    const [lastOrderId, setLastOrderId] = useState(null);
 
-    // --- DUMMY DATA (Fallback if Backend is unavailable) ---
-    const dummyDishes = [
-        { _id: "1", name: "BBQ Chicken Pizza", price: 450, category: "Pizza", image: "https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?auto=format&fit=crop&w=500&q=60" },
-        { _id: "2", name: "Spicy Paneer Burger", price: 220, category: "Burger", image: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=500&q=60" },
-        { _id: "3", name: "Red Sauce Pasta", price: 350, category: "Pasta", image: "https://images.unsplash.com/photo-1563379926898-05f4575a45d8?auto=format&fit=crop&w=500&q=60" },
-        { _id: "4", name: "Double Cheese Pizza", price: 400, category: "Pizza", image: "https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=500&q=60" },
-        { _id: "5", name: "Chocolate Cake", price: 150, category: "Dessert", image: "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=500&q=60" }
-    ];
-
-    // --- FETCH DATA ---
+    // --- FETCH DATA & HISTORY ---
     useEffect(() => {
+        // 1. Check for previous order history in localStorage
+        const history = JSON.parse(localStorage.getItem("smartMenu_History") || "[]");
+        if (history.length > 0) {
+            setLastOrderId(history[0]); // Get the most recent order ID
+        }
+
         const fetchMenu = async () => {
             try {
                 setLoading(true);
-                // 1. Fetch Restaurant Info from Render Backend
+                // 2. Fetch Restaurant Info
                 const shopRes = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/auth/restaurant/${id}`);
                 setRestaurant({ name: shopRes.data.username || shopRes.data.restaurantName, _id: shopRes.data._id });
                 
-                // Sync Global State for Cart component
                 if(setRestaurantId) setRestaurantId(shopRes.data._id);
                 if (table && setTableNum) setTableNum(table);
 
-                // 2. Fetch Dishes assigned to this Restaurant
+                // 3. Fetch Dishes (Back-end now returns recipe/stock data)
                 const dishRes = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/dishes?restaurantId=${shopRes.data._id}`);
                 setDishes(dishRes.data);
 
             } catch (error) {
-                // ✅ ERROR LOGGING: Descriptive logging to avoid minified "Mr" errors
-                const errorMsg = error.response ? error.response.data?.message : error.message;
-                console.warn(`Menu Fetch Issue: ${errorMsg}. Using Demo Data.`, error);
-                
-                setDishes(dummyDishes);
-                setRestaurant({ name: "My Restaurant (Demo)", _id: "demo_id" });
+                console.error("Fetch Issue:", error);
             } finally {
                 setLoading(false);
             }
         };
         fetchMenu();
-        // eslint-disable-next-line
-    }, [id, table]);
+    }, [id, table, setRestaurantId, setTableNum]);
 
     // --- HELPERS ---
     const categories = ["All", ...new Set(dishes.map(d => d.category))];
+    
+    // Logic: Check if dish is out of stock based on ingredients
+    const checkStock = (dish) => {
+        if (!dish.recipe || dish.recipe.length === 0) return true; // Available if no recipe defined
+        return dish.recipe.every(ing => ing.ingredientId.currentStock >= ing.quantityNeeded);
+    };
+
     const filteredDishes = dishes.filter(dish => 
         (selectedCategory === "All" || dish.category === selectedCategory) &&
         dish.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -61,115 +61,115 @@ const Menu = ({ cart = [], addToCart, setRestaurantId, setTableNum }) => {
 
     // --- LOGIC: Call Waiter ---
     const handleCallWaiter = async () => {
-        if (!table || table === "Takeaway") {
-            return alert("A valid table number is required to call a waiter.");
-        }
-
-        const confirmCall = window.confirm(`Request assistance for Table ${table}?`);
-        if (!confirmCall) return;
+        if (!table || table === "Takeaway") return alert("Table number required.");
+        if (!window.confirm(`Call assistance for Table ${table}?`)) return;
 
         try {
             await axios.post("https://smart-menu-backend-5ge7.onrender.com/api/orders/call-waiter", {
                 restaurantId: restaurant._id || id,
-                tableNumber: table
+                tableNumber: table,
+                type: "help"
             });
-            alert("🛎️ Staff has been notified. We will be with you shortly!");
+            alert("🛎️ Staff notified!");
         } catch (error) {
-            console.error("Waiter Call Failed:", error);
-            alert("🛎️ Request Sent! (Simulation Mode enabled)");
+            alert("🛎️ Staff Alerted!");
         }
     };
 
     if (loading) return (
-        <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'white', background: '#0d0d0d' }}>
-            <div style={{ width: '40px', height: '40px', border: '4px solid #f97316', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite', marginBottom: '15px' }}></div>
-            Loading Fresh Menu...
+        <div style={styles.loaderContainer}>
+            <div style={styles.spinner}></div>
+            <p>Fetching Fresh Menu...</p>
         </div>
     );
 
     return (
-        <div style={{ backgroundColor: '#0d0d0d', minHeight: '100vh', fontFamily: 'sans-serif', color: 'white', paddingBottom: '120px' }}>
+        <div style={styles.container}>
             
             {/* 1. STICKY HEADER */}
-            <header style={{ position: 'sticky', top: 0, zIndex: 40, backgroundColor: 'rgba(10, 10, 10, 0.95)', backdropFilter: 'blur(10px)', padding: '15px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #333' }}>
+            <header style={styles.header}>
                 <div>
-                    <h1 style={{ fontSize: '18px', fontWeight: 'bold', margin: 0 }}>{restaurant.name}</h1>
-                    {table && <span style={{ fontSize: '10px', color: '#f97316', fontWeight: 'bold', textTransform: 'uppercase' }}>Serving Table {table}</span>}
+                    <h1 style={styles.brandName}>{restaurant.name}</h1>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        {table && <span style={styles.tableBadge}>Table {table}</span>}
+                        {lastOrderId && (
+                            <Link to={`/track/${lastOrderId}`} style={{ textDecoration: 'none' }}>
+                                <span style={styles.historyBtn}><FaHistory /> Re-track</span>
+                            </Link>
+                        )}
+                    </div>
                 </div>
-                <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
-                    <input 
-                        type="text" 
-                        placeholder="Search items..." 
-                        value={searchTerm} 
-                        onChange={(e) => setSearchTerm(e.target.value)} 
-                        style={{ background: '#1f1f1f', border: 'none', borderRadius: '20px', padding: '8px 15px', color: 'white', fontSize: '12px', width: '110px', outline: 'none' }} 
-                    />
-                    <Link to="/cart" style={{ position: 'relative', color: 'white' }}>
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
-                        {cart.length > 0 && <span style={{ position: 'absolute', top: '-8px', right: '-8px', background: '#dc2626', color: 'white', fontSize: '10px', fontWeight: 'bold', width: '18px', height: '18px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{cart.reduce((a, b) => a + b.quantity, 0)}</span>}
-                    </Link>
+                <div style={styles.headerActions}>
+                    <div style={styles.searchBox}>
+                        <FaSearch style={styles.searchIcon} />
+                        <input 
+                            type="text" 
+                            placeholder="Search..." 
+                            value={searchTerm} 
+                            onChange={(e) => setSearchTerm(e.target.value)} 
+                            style={styles.searchInput} 
+                        />
+                    </div>
                 </div>
             </header>
 
-            {/* 2. CATEGORY FILTER BAR */}
-            <div style={{ position: 'sticky', top: '65px', zIndex: 30, background: '#0d0d0d', padding: '10px 15px', overflowX: 'auto', whiteSpace: 'nowrap', borderBottom: '1px solid #333' }}>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                    {categories.map(cat => (
-                        <button 
-                            key={cat} 
-                            onClick={() => setSelectedCategory(cat)} 
-                            style={{ padding: '8px 20px', borderRadius: '25px', fontSize: '13px', fontWeight: '600', border: 'none', cursor: 'pointer', background: selectedCategory === cat ? '#f97316' : '#1f1f1f', color: selectedCategory === cat ? 'white' : '#888', transition: '0.3s' }}
-                        >
-                            {cat}
-                        </button>
-                    ))}
-                </div>
-            </div>
-
-            {/* 3. DISH DISPLAY GRID */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '15px', padding: '15px' }}>
-                {filteredDishes.map((dish) => (
-                    <div 
-                        key={dish._id} 
-                        onClick={() => addToCart(dish)} 
-                        style={{ position: 'relative', aspectRatio: '3/4', borderRadius: '16px', overflow: 'hidden', cursor: 'pointer', background: '#1a1a1a', transition: 'transform 0.2s' }}
-                        onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
-                        onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+            {/* 2. CATEGORY BAR */}
+            <div style={styles.categoryBar}>
+                {categories.map(cat => (
+                    <button 
+                        key={cat} 
+                        onClick={() => setSelectedCategory(cat)} 
+                        style={{ ...styles.catBtn, background: selectedCategory === cat ? '#f97316' : '#1a1a1a', color: selectedCategory === cat ? 'white' : '#888' }}
                     >
-                        <img src={dish.image} alt={dish.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" />
-                        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.95) 0%, transparent 60%)' }}></div>
-                        
-                        <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', padding: '12px' }}>
-                            <p style={{ color: '#f97316', fontWeight: 'bold', fontSize: '14px', marginBottom: '4px' }}>₹{dish.price}</p>
-                            <h3 style={{ color: 'white', fontWeight: '600', fontSize: '15px', lineHeight: '1.2', margin: 0 }}>{dish.name}</h3>
-                        </div>
-
-                        <div style={{ position: 'absolute', bottom: '12px', right: '12px', width: '32px', height: '32px', borderRadius: '50%', background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(5px)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid rgba(255,255,255,0.3)' }}>
-                            <span style={{ color: 'white', fontSize: '20px' }}>+</span>
-                        </div>
-                    </div>
+                        {cat}
+                    </button>
                 ))}
             </div>
 
-            {/* 4. FLOATING ACTION BUTTON: CALL WAITER */}
-            <button 
-                onClick={handleCallWaiter}
-                style={{ position: 'fixed', bottom: cart.length > 0 ? '100px' : '30px', right: '20px', width: '60px', height: '60px', borderRadius: '50%', background: '#f97316', color: 'white', border: 'none', fontSize: '24px', cursor: 'pointer', boxShadow: '0 4px 15px rgba(249, 115, 22, 0.4)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: '0.3s' }}
-            >
-                🛎️
+            {/* 3. DISH GRID */}
+            <div style={styles.grid}>
+                {filteredDishes.map((dish) => {
+                    const isAvailable = checkStock(dish);
+                    return (
+                        <div 
+                            key={dish._id} 
+                            onClick={() => isAvailable && addToCart(dish)} 
+                            style={{ ...styles.card, opacity: isAvailable ? 1 : 0.6, pointerEvents: isAvailable ? 'auto' : 'none' }}
+                        >
+                            {!isAvailable && <div style={styles.soldOutBadge}>Sold Out</div>}
+                            
+                            <img src={dish.image} alt={dish.name} style={styles.dishImg} loading="lazy" />
+                            <div style={styles.overlay}></div>
+                            
+                            <div style={styles.cardContent}>
+                                <p style={styles.price}>₹{dish.price}</p>
+                                <h3 style={styles.dishName}>{dish.name}</h3>
+                            </div>
+
+                            <div style={styles.addBtn}>
+                                <span>{isAvailable ? "+" : "✖"}</span>
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+
+            {/* 4. CALL WAITER */}
+            <button onClick={handleCallWaiter} style={styles.floatingCall}>
+                <FaBell />
             </button>
 
-            {/* 5. FLOATING CART BAR (Active when items are in cart) */}
+            {/* 5. VIEW CART BAR */}
             {cart.length > 0 && (
-                <div style={{ position: 'fixed', bottom: '20px', left: '50%', transform: 'translateX(-50%)', width: 'calc(100% - 40px)', maxWidth: '480px', zIndex: 50 }}>
+                <div style={styles.cartBarContainer}>
                     <Link to="/cart" style={{ textDecoration: 'none' }}>
-                        <div style={{ background: 'white', padding: '15px 20px', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }}>
+                        <div style={styles.cartBar}>
                             <div>
-                                <span style={{ fontSize: '11px', fontWeight: '800', color: '#666', display: 'block' }}>{cart.reduce((a,b)=>a+b.quantity,0)} ITEMS IN BASKET</span>
-                                <span style={{ fontSize: '18px', fontWeight: '800', color: 'black' }}>₹{cart.reduce((a, b) => a + (b.price * b.quantity), 0)}</span>
+                                <span style={styles.cartItemCount}>{cart.reduce((a,b)=>a+b.quantity,0)} ITEMS</span>
+                                <span style={styles.cartTotal}>₹{cart.reduce((a, b) => a + (b.price * b.quantity), 0)}</span>
                             </div>
-                            <div style={{ fontSize: '14px', fontWeight: '700', color: 'black', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                View Order →
+                            <div style={styles.cartLink}>
+                                View Basket <FaShoppingCart style={{marginLeft: '8px'}} />
                             </div>
                         </div>
                     </Link>
@@ -177,6 +177,45 @@ const Menu = ({ cart = [], addToCart, setRestaurantId, setTableNum }) => {
             )}
         </div>
     );
+};
+
+// --- STYLES ---
+const styles = {
+    container: { backgroundColor: '#080808', minHeight: '100vh', color: 'white', paddingBottom: '120px', fontFamily: 'sans-serif' },
+    loaderContainer: { minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#080808', color: 'white' },
+    spinner: { width: '40px', height: '40px', border: '4px solid #f97316', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite', marginBottom: '15px' },
+    
+    header: { position: 'sticky', top: 0, zIndex: 100, backgroundColor: 'rgba(8, 8, 8, 0.9)', backdropFilter: 'blur(15px)', padding: '15px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #1a1a1a' },
+    brandName: { fontSize: '20px', fontWeight: '900', margin: 0, letterSpacing: '-1px' },
+    tableBadge: { fontSize: '9px', color: '#f97316', fontWeight: '900', textTransform: 'uppercase', background: 'rgba(249, 115, 22, 0.1)', padding: '2px 8px', borderRadius: '5px' },
+    historyBtn: { fontSize: '9px', color: '#888', fontWeight: '900', textTransform: 'uppercase', background: '#1a1a1a', padding: '2px 8px', borderRadius: '5px', display: 'flex', alignItems: 'center', gap: '4px' },
+    
+    headerActions: { display: 'flex', gap: '10px', alignItems: 'center' },
+    searchBox: { position: 'relative', background: '#121212', borderRadius: '20px', padding: '6px 12px', display: 'flex', alignItems: 'center', border: '1px solid #222' },
+    searchIcon: { fontSize: '12px', color: '#555', marginRight: '8px' },
+    searchInput: { background: 'transparent', border: 'none', color: 'white', fontSize: '13px', width: '80px', outline: 'none' },
+
+    categoryBar: { position: 'sticky', top: '70px', zIndex: 90, background: '#080808', padding: '12px 20px', overflowX: 'auto', whiteSpace: 'nowrap', display: 'flex', gap: '10px' },
+    catBtn: { padding: '8px 22px', borderRadius: '25px', fontSize: '12px', fontWeight: '800', border: 'none', cursor: 'pointer', transition: '0.3s', textTransform: 'uppercase' },
+
+    grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '15px', padding: '20px' },
+    card: { position: 'relative', aspectRatio: '3/4', borderRadius: '24px', overflow: 'hidden', cursor: 'pointer', background: '#111', transition: 'transform 0.2s' },
+    dishImg: { width: '100%', height: '100%', objectFit: 'cover' },
+    overlay: { position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.9) 0%, transparent 70%)' },
+    cardContent: { position: 'absolute', bottom: 0, left: 0, width: '100%', padding: '15px' },
+    price: { color: '#f97316', fontWeight: '900', fontSize: '14px', marginBottom: '2px' },
+    dishName: { color: 'white', fontWeight: '700', fontSize: '15px', lineHeight: '1.2', margin: 0 },
+    addBtn: { position: 'absolute', bottom: '15px', right: '15px', width: '35px', height: '35px', borderRadius: '12px', background: 'rgba(255,255,255,0.1)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid rgba(255,255,255,0.2)', fontSize: '18px', fontWeight: 'bold' },
+    
+    soldOutBadge: { position: 'absolute', top: '12px', left: '12px', zIndex: 10, background: '#ef4444', color: 'white', fontSize: '8px', fontWeight: '900', textTransform: 'uppercase', padding: '4px 10px', borderRadius: '20px', boxShadow: '0 4px 10px rgba(239, 68, 68, 0.3)' },
+
+    floatingCall: { position: 'fixed', bottom: '30px', right: '20px', width: '55px', height: '55px', borderRadius: '50%', background: '#f97316', color: 'white', border: 'none', fontSize: '20px', cursor: 'pointer', boxShadow: '0 8px 20px rgba(249, 115, 22, 0.4)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' },
+
+    cartBarContainer: { position: 'fixed', bottom: '30px', left: '50%', transform: 'translateX(-50%)', width: 'calc(100% - 40px)', maxWidth: '450px', zIndex: 150 },
+    cartBar: { background: 'white', padding: '18px 25px', borderRadius: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 15px 35px rgba(0,0,0,0.4)' },
+    cartItemCount: { fontSize: '10px', fontWeight: '900', color: '#888', display: 'block' },
+    cartTotal: { fontSize: '20px', fontWeight: '900', color: 'black' },
+    cartLink: { fontSize: '14px', fontWeight: '900', color: 'black', display: 'flex', alignItems: 'center' },
 };
 
 export default Menu;
