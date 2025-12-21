@@ -7,7 +7,7 @@
   CI = "false"
   NODE_VERSION = "20"
 
-# This section must be at the very bottom and not indented
+# This section fixes the "MIME type" and 404 errors
 [[redirects]]
   from = "/*"
   to = "/index.html"

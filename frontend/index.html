@@ -21,7 +21,6 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@600;700;800&display=swap" rel="stylesheet">
 
     <style>
-      /* --- 1. PRO VARIABLES --- */
       :root {
         --bg-color: #0d0d0d;
         --card-bg: #1a1a1a;
@@ -32,7 +31,6 @@
         --safe-area-inset-bottom: env(safe-area-inset-bottom);
       }
 
-      /* --- 2. GLOBAL RESET --- */
       * {
         box-sizing: border-box;
         margin: 0;
@@ -55,7 +53,6 @@
         justify-content: center;
       }
 
-      /* --- 3. APP CONTAINER --- */
       #root {
         width: 100%;
         max-width: var(--app-max-width);
@@ -67,7 +64,6 @@
         flex-direction: column;
       }
 
-      /* --- 4. ANIMATED PRE-LOADER --- */
       #root:empty {
         display: flex;
         flex-direction: column;
@@ -100,7 +96,6 @@
       @keyframes spin { 100% { transform: rotate(360deg); } }
       @keyframes fade { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
 
-      /* --- 5. MOBILE OVERRIDES & UTILITIES --- */
       @media (max-width: 480px) {
         #root {
           max-width: 100%;
