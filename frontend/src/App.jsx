@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 // --- COMPONENT IMPORTS ---
 import Menu from "./Menu.jsx"; 
@@ -11,7 +11,7 @@ import OrderTracker from "./OrderTracker.jsx";
 import WaiterDashboard from "./WaiterDashboard.jsx";
 import SuperAdmin from './SuperAdmin.jsx';
 import OrderSuccess from './OrderSuccess.jsx';
-import ManagerLogin from "./ManagerLogin.jsx"; // 🟢 Added Manager Login
+import ManagerLogin from "./ManagerLogin.jsx"; 
 
 // --- PROTECTED ROUTE MIDDLEWARE ---
 // Standard protection for staff areas (Chef, Waiter)
@@ -20,7 +20,7 @@ const ProtectedRoute = ({ children }) => {
   return token ? children : <Navigate to="/login" replace />;
 };
 
-// 🔒 NEW: MANAGER PROTECTION MIDDLEWARE
+// 🔒 MANAGER PROTECTION MIDDLEWARE
 // Specifically for the Admin/Manage Menu area
 const ManagerProtectedRoute = ({ children }) => {
   const token = localStorage.getItem("ownerToken");
@@ -136,7 +136,7 @@ function App() {
         {/* 🛡️ MANAGER LOGIN ROUTE */}
         <Route path="/manager-login" element={<ProtectedRoute><ManagerLogin /></ProtectedRoute>} />
 
-        {/* ⚙️ ADMIN PANEL (Requires standard Login AND bb1972 Password) */}
+        {/* ⚙️ ADMIN PANEL (Requires standard Login AND Manager Password) */}
         <Route path="/admin" element={
             <ManagerProtectedRoute>
                 <AdminPanel />

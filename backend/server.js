@@ -20,13 +20,13 @@ const app = express();
 const httpServer = createServer(app);
 
 // --- 🔒 SECURITY CONFIGURATION (CORS) ---
-// This list allows both your local computer AND your live website to connect
+// ✅ FIXED: Cleaned the allowed origins to remove mangled strings
 const allowedOrigins = [
-    "https://smart-menu-backend-5ge7.onrender.com/...localhost:5173",             // Localhost (for testing)
-    "https://smartmenuss.netlify.app"    // YOUR NETLIFY WEBSITE
+    "http://localhost:5173",           // Local development
+    "https://smartmenuss.netlify.app"   // Your live Netlify website
 ];
 
-// Initialize Socket.io with CORS
+// Initialize Socket.io with clean CORS
 const io = new Server(httpServer, {
     cors: {
         origin: allowedOrigins,
@@ -36,7 +36,6 @@ const io = new Server(httpServer, {
 });
 
 // 1. MIDDLEWARE
-// Enable CORS for regular API requests (Login, Menu, etc.)
 app.use(cors({
     origin: allowedOrigins,
     credentials: true
@@ -45,14 +44,14 @@ app.use(cors({
 app.use(express.json()); // Allow reading JSON body data
 
 // 2. SOCKET MIDDLEWARE
-// This lets your routes (like orderRoutes) send real-time alerts using 'req.io'
+// Attach socket instance to every request so routes can trigger real-time alerts
 app.use((req, res, next) => {
     req.io = io;
     next();
 });
 
 // 3. DATABASE CONNECTION
-// Note: Ensure your Render Environment Variable 'MONGO_URI' is set correctly!
+// Ensure your Render Environment Variable 'MONGO_URI' is active
 mongoose.connect(process.env.MONGO_URI || "mongodb://127.0.0.1:27017/smartmenu")
     .then(() => console.log("✅ MongoDB Connected Successfully"))
     .catch((err) => console.error("❌ MongoDB Connection Error:", err));
@@ -64,15 +63,20 @@ app.use('/api/orders', orderRoutes);
 
 // 5. TEST ROUTE
 app.get('/', (req, res) => {
-    res.send('API is running...');
+    res.send('Smart Menu API is Live...');
 });
 
-// 6. SOCKET CONNECTION CHECK
+// 6. SOCKET CONNECTION LOGGING
 io.on('connection', (socket) => {
-    console.log('⚡ A client connected: ' + socket.id);
+    console.log('⚡ Client Connected: ' + socket.id);
     
+    // Listen for manual resolving of waiter calls from the dashboard
+    socket.on("resolve-call", (data) => {
+        io.emit("call-resolved", data);
+    });
+
     socket.on('disconnect', () => {
-        console.log('Client disconnected');
+        console.log('⚡ Client Disconnected');
     });
 });
 

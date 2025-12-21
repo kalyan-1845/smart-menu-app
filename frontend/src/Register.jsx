@@ -34,7 +34,7 @@ const Register = () => {
         setError('');
         setLoading(true);
 
-        // Simple validation
+        // Simple client-side validation
         if (formData.password.length < 6) {
             setError("Password must be at least 6 characters long.");
             setLoading(false);
@@ -42,8 +42,13 @@ const Register = () => {
         }
 
         try {
-            // ✅ CLEAN URL FIX: Removed '...localhost:5000' to prevent 404 errors
-            const response = await axios.post('https://smart-menu-backend-5ge7.onrender.com/api/auth/register', formData);
+            /** * ✅ FIXED URL: Removed concatenated 'localhost' strings.
+             * Ensure your backend is deployed and running on this Render URL.
+             */
+            const response = await axios.post(
+                'https://smart-menu-backend-5ge7.onrender.com/api/auth/register', 
+                formData
+            );
             
             // The backend returns the token, the new MongoDB _id, and the username
             const { token, _id, username } = response.data;
@@ -56,24 +61,22 @@ const Register = () => {
 
                 alert(`✅ Registration successful! Welcome, ${formData.restaurantName}.`);
                 
-                // 🎯 Hard Redirect for clean state
+                // 🎯 Hard Redirect
+                // Using window.location.href forces a clean state refresh for the dashboard
                 window.location.href = '/chef'; 
             } else {
+                // Fallback if backend registers but doesn't provide a session token
                 alert("✅ Account created! Please log in.");
                 navigate('/login');
             }
 
         } catch (err) {
-            // ✅ "Mr" ERROR LOGGING FIX: 
-            // Construct a readable message from the error object
-            const errorMessage = err.response
-                ? err.response.data?.message || 'Registration failed. Username or Email might already be taken.'
-                : err.request
-                ? 'Server is not reachable. Is the backend awake?'
-                : `Error: ${err.message}`;
-
-            console.error(`Registration attempt failed: ${errorMessage}`, err);
-            setError(errorMessage);
+            console.error('Registration error:', err);
+            
+            // Extracts specific error message from the backend or provides a fallback
+            const msg = err.response?.data?.message || 
+                        'Registration failed. Server might be down or Username/Email already taken.';
+            setError(msg);
         } finally {
             setLoading(false);
         }
@@ -182,7 +185,7 @@ const Register = () => {
                                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
                                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                 </svg>
-                                Creating Account...
+                                Creating Kitchen...
                             </span>
                         ) : (
                             'Create Account & Access 🚀'

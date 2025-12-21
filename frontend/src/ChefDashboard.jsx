@@ -28,10 +28,12 @@ const ChefDashboard = () => {
         try {
             const config = { headers: { Authorization: `Bearer ${token}` } };
             
-            const nameRes = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/...localhost:5000/api/auth/restaurant/${ownerId}`, config);
+            // ✅ FIXED URL: Removed "...localhost" concatenation
+            const nameRes = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/auth/restaurant/${ownerId}`, config);
             setRestaurantName(nameRes.data.username || nameRes.data.restaurantName);
 
-            const res = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/...localhost:5000/api/orders?restaurantId=${ownerId}`, config);
+            // ✅ FIXED URL: Removed "...localhost" concatenation
+            const res = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/orders?restaurantId=${ownerId}`, config);
             const activeOrders = res.data.filter(o => o.status !== "SERVED");
 
             setOrders(prevOrders => {
@@ -48,45 +50,46 @@ const ChefDashboard = () => {
         }
     };
 
-    // --- 2. LIVE SOCKET (With Sync Logic) ---
+    // --- 2. LIVE SOCKET ---
     useEffect(() => {
         fetchOrders(); 
         
-        // Initialize Socket
-        socketRef.current = io("https://smart-menu-backend-5ge7.onrender.com/...localhost:5000");
+        // ✅ FIXED URL: Production Socket link
+        socketRef.current = io("https://smart-menu-backend-5ge7.onrender.com");
         const socket = socketRef.current;
         
-        // Listen for NEW calls
         socket.on("waiter-call", (callData) => {
             if (callData.restaurantId === ownerId) {
-                // Prevent duplicate alerts for the same table
                 setServiceCalls(prev => {
                     const exists = prev.find(c => c.tableNumber === callData.tableNumber);
                     if (exists) return prev;
                     
-                    if (!isMuted) { callSound.current.currentTime = 0; callSound.current.play().catch(() => {}); }
+                    if (!isMuted) { 
+                        callSound.current.currentTime = 0; 
+                        callSound.current.play().catch(() => {}); 
+                    }
                     return [callData, ...prev];
                 });
             }
         });
 
-        // Listen for RESOLVED calls (When another waiter clicks "I'll Go")
         socket.on("call-resolved", (data) => {
             if (data.restaurantId === ownerId) {
                 setServiceCalls(prev => prev.filter(c => c.tableNumber !== data.tableNumber));
             }
         });
 
-        const interval = setInterval(fetchOrders, 5000); 
-        return () => { clearInterval(interval); socket.disconnect(); };
+        const interval = setInterval(fetchOrders, 10000); // Polling as backup every 10s
+        return () => { 
+            clearInterval(interval); 
+            socket.disconnect(); 
+        };
+        // eslint-disable-next-line
     }, [ownerId, isMuted]);
 
-    // --- 3. HANDLE "I'LL GO" (Syncs with everyone) ---
+    // --- 3. HANDLE WAITER CALLS ---
     const handleAttendTable = (tableNumber) => {
-        // 1. Remove from my screen immediately
         setServiceCalls(prev => prev.filter(c => c.tableNumber !== tableNumber));
-        
-        // 2. Tell server to remove from EVERYONE else's screen
         if(socketRef.current) {
             socketRef.current.emit("resolve-call", { restaurantId: ownerId, tableNumber });
         }
@@ -95,38 +98,63 @@ const ChefDashboard = () => {
     // --- 4. ORDER STATUS LOGIC ---
     const updateOrderStatus = async (orderId, newStatus) => {
         try {
+            // Optimistic Update
             setOrders(prev => prev.map(order => order._id === orderId ? { ...order, status: newStatus } : order));
-            await axios.put(`https://smart-menu-backend-5ge7.onrender.com/...localhost:5000/api/orders/${orderId}`, { status: newStatus }, { headers: { Authorization: `Bearer ${token}` } });
+            
+            // ✅ FIXED URL: Removed "...localhost"
+            await axios.put(`https://smart-menu-backend-5ge7.onrender.com/api/orders/${orderId}`, 
+                { status: newStatus }, 
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
             
             if (newStatus === "Ready") { 
-                setTimeout(() => { setOrders(prev => prev.filter(o => o._id !== orderId)); }, 600000); 
+                // Auto-clear from view after 10 mins
+                setTimeout(() => { 
+                    setOrders(prev => prev.filter(o => o._id !== orderId)); 
+                }, 600000); 
             }
-        } catch (error) { alert("Failed to update status."); fetchOrders(); }
+        } catch (error) { 
+            alert("Failed to update status."); 
+            fetchOrders(); 
+        }
     };
 
     const handleDeleteOrder = async (orderId) => {
         if(!window.confirm("Remove this order from the list?")) return;
         try { 
-            await axios.delete(`https://smart-menu-backend-5ge7.onrender.com/...localhost:5000/api/orders/${orderId}`, { headers: { Authorization: `Bearer ${token}` } }); 
+            // ✅ FIXED URL: Removed "...localhost"
+            await axios.delete(`https://smart-menu-backend-5ge7.onrender.com/api/orders/${orderId}`, 
+                { headers: { Authorization: `Bearer ${token}` } }
+            ); 
             setOrders(prev => prev.filter(o => o._id !== orderId)); 
-        } catch (error) { console.error("Delete failed", error); }
+        } catch (error) { 
+            console.error("Delete failed", error); 
+        }
     };
 
-    const handleLogout = () => { localStorage.clear(); window.location.href = "/"; };
+    const handleLogout = () => { 
+        localStorage.clear(); 
+        window.location.href = "/"; 
+    };
 
-    if (loading) return <div style={styles.loadingContainer}>Loading Kitchen...</div>;
+    if (loading) return (
+        <div style={styles.loadingContainer}>
+            <div style={{ textAlign: 'center' }}>
+                <div style={styles.spinner}></div>
+                <p>Loading Kitchen...</p>
+            </div>
+        </div>
+    );
 
     return (
         <div style={styles.dashboardContainer}>
             
-            {/* 🛎️ WAITER CALL ALERTS (SYNCED) */}
+            {/* 🛎️ WAITER CALL ALERTS */}
             {serviceCalls.length > 0 && (
                 <div style={styles.alertContainer}>
                     {serviceCalls.map((call, idx) => (
                         <div key={idx} style={styles.alertBanner}>
                             <span style={styles.alertText}><FaBell /> Table {call.tableNumber} needs help!</span>
-                            
-                            {/* "I'LL GO" BUTTON - Syncs with other waiters */}
                             <button onClick={() => handleAttendTable(call.tableNumber)} style={styles.attendBtn}>
                                 <FaWalking /> I'll Go
                             </button>
@@ -160,9 +188,9 @@ const ChefDashboard = () => {
                         </button>
                     </Link>
 
-                    <Link to="/manager-login">
+                    <Link to="/admin">
                         <button style={styles.iconButtonText}>
-                            <FaCog style={{ marginRight: '8px' }}/> Menu
+                            <FaCog style={{ marginRight: '8px' }}/> Dashboard
                         </button>
                     </Link>
 
@@ -240,12 +268,11 @@ const ChefDashboard = () => {
                                 {order.status === "Ready" && (
                                     <div>
                                         <div style={styles.waitingBanner}>
-                                            <FaBell style={{ marginRight: '8px' }} /> WAITING FOR WAITER
+                                            <FaBell style={{ marginRight: '8px' }} /> READY FOR PICKUP
                                         </div>
                                         <button onClick={() => handleDeleteOrder(order._id)} style={styles.btnClear}>
-                                            <FaRocket style={{ marginRight: '8px' }} /> PICKED UP / CLEAR
+                                            <FaRocket style={{ marginRight: '8px' }} /> CLEAR ORDER
                                         </button>
-                                        <p style={styles.autoClearText}>Auto-clears in 10 mins</p>
                                     </div>
                                 )}
                             </div>
@@ -260,63 +287,53 @@ const ChefDashboard = () => {
 // --- STYLES ---
 const styles = {
     dashboardContainer: { minHeight: '100vh', background: '#0d1117', color: 'white', padding: '24px', fontFamily: "'Inter', sans-serif" },
-    loadingContainer: { minHeight: '100vh', background: '#0d1117', color: 'white', display: 'flex', justifyContent: 'center', alignItems: 'center', fontWeight: '600', letterSpacing: '1px' },
+    loadingContainer: { minHeight: '100vh', background: '#0d1117', color: 'white', display: 'flex', justifyContent: 'center', alignItems: 'center' },
+    spinner: { width: '40px', height: '40px', border: '4px solid #f97316', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite', marginBottom: '15px' },
     
-    // Header
-    header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' },
+    header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px', flexWrap: 'wrap', gap: '20px' },
     headerTitle: { fontSize: '28px', fontWeight: '800', margin: 0, display: 'flex', alignItems: 'center' },
-    headerSubtitle: { color: '#8b949e', fontSize: '14px', marginTop: '4px', fontWeight: '500' },
-    headerButtons: { display: 'flex', gap: '12px' },
+    headerSubtitle: { color: '#8b949e', fontSize: '14px', marginTop: '4px' },
+    headerButtons: { display: 'flex', gap: '12px', flexWrap: 'wrap' },
     menuLink: { color: '#58a6ff', fontSize: '13px', textDecoration: 'none', fontWeight: '600', display: 'flex', alignItems: 'center', marginTop: '8px' },
 
-    // Buttons
-    iconButton: { background: '#21262d', border: '1px solid #30363d', color: '#c9d1d9', padding: '10px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' },
-    iconButtonText: { background: '#21262d', border: '1px solid #30363d', color: '#c9d1d9', padding: '10px 16px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', fontWeight: '600', fontSize: '13px' },
-    iconButtonRed: { background: '#3d1316', border: '1px solid #5a1e23', color: '#f85149', padding: '10px 16px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', fontWeight: '600', fontSize: '13px' },
+    iconButton: { background: '#21262d', border: '1px solid #30363d', color: '#c9d1d9', padding: '10px', borderRadius: '8px', cursor: 'pointer' },
+    iconButtonText: { background: '#21262d', border: '1px solid #30363d', color: '#c9d1d9', padding: '10px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', display: 'flex', alignItems: 'center' },
+    iconButtonRed: { background: '#3d1316', border: '1px solid #5a1e23', color: '#f85149', padding: '10px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', display: 'flex', alignItems: 'center' },
 
-    // Grid
-    grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '24px' },
-    emptyState: { gridColumn: '1/-1', textAlign: 'center', padding: '60px', color: '#8b949e', border: '2px dashed #30363d', borderRadius: '16px' },
+    grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '24px' },
+    emptyState: { gridColumn: '1/-1', textAlign: 'center', padding: '100px 0', color: '#8b949e', border: '2px dashed #30363d', borderRadius: '16px' },
 
-    // Card
-    card: { background: '#161b22', borderRadius: '16px', border: '1px solid #30363d', overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' },
+    card: { background: '#161b22', borderRadius: '16px', border: '1px solid #30363d', overflow: 'hidden' },
     cardHeader: { padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' },
     tableNumber: { fontSize: '20px', fontWeight: '700', margin: 0 },
-    orderId: { color: '#8b949e', fontSize: '13px', marginTop: '4px', fontWeight: '500' },
+    orderId: { color: '#8b949e', fontSize: '12px', marginTop: '4px' },
 
-    // Badges
-    badgeNew: { background: '#f97316', color: 'white', padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: '800', letterSpacing: '0.5px' },
-    badgeCooking: { background: '#eab308', color: 'black', padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: '800', letterSpacing: '0.5px' },
-    badgeReady: { background: '#22c55e', color: 'white', padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: '800', letterSpacing: '0.5px' },
+    badgeNew: { background: '#f97316', color: 'white', padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: '800' },
+    badgeCooking: { background: '#eab308', color: 'black', padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: '800' },
+    badgeReady: { background: '#22c55e', color: 'white', padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: '800' },
 
-    // Meta
     metaContainer: { padding: '0 20px 16px', display: 'flex', gap: '20px', borderBottom: '1px solid #30363d' },
-    metaItem: { display: 'flex', alignItems: 'center', color: '#8b949e', fontSize: '13px', fontWeight: '500' },
+    metaItem: { display: 'flex', alignItems: 'center', color: '#8b949e', fontSize: '13px' },
     metaIcon: { marginRight: '6px', color: '#58a6ff' },
 
-    // Items
     itemsContainer: { padding: '20px', maxHeight: '250px', overflowY: 'auto' },
-    itemRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' },
+    itemRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' },
     itemBullet: { color: '#f97316', fontSize: '8px', marginTop: '6px', marginRight: '10px' },
-    itemName: { fontSize: '15px', fontWeight: '600', color: '#e6edf3' },
+    itemName: { fontSize: '15px', fontWeight: '600' },
     itemQuantity: { fontSize: '16px', fontWeight: '700', color: '#f97316' },
     specsContainer: { display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' },
-    specTag: { background: 'rgba(248, 81, 73, 0.2)', color: '#ff7b72', border: '1px solid rgba(248, 81, 73, 0.4)', fontSize: '10px', padding: '2px 6px', borderRadius: '4px', fontWeight: '600' },
+    specTag: { background: 'rgba(248, 81, 73, 0.1)', color: '#ff7b72', border: '1px solid rgba(248, 81, 73, 0.2)', fontSize: '10px', padding: '2px 6px', borderRadius: '4px' },
 
-    // Buttons
     actionContainer: { padding: '20px', background: '#0d1117', borderTop: '1px solid #30363d' },
-    btnStart: { width: '100%', background: 'linear-gradient(135deg, #f97316, #ea580c)', border: 'none', color: 'white', padding: '14px', borderRadius: '10px', fontWeight: '700', fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' },
-    btnReady: { width: '100%', background: '#22c55e', border: 'none', color: 'white', padding: '14px', borderRadius: '10px', fontWeight: '700', fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' },
-    btnClear: { width: '100%', background: '#21262d', border: '1px solid #30363d', color: '#c9d1d9', padding: '14px', borderRadius: '10px', fontWeight: '700', fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: '12px' },
-    waitingBanner: { background: 'rgba(234, 179, 8, 0.2)', color: '#eab308', padding: '10px', borderRadius: '8px', textAlign: 'center', fontWeight: '700', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' },
-    autoClearText: { textAlign: 'center', color: '#8b949e', fontSize: '11px', marginTop: '8px', fontWeight: '500' },
+    btnStart: { width: '100%', background: '#f97316', border: 'none', color: 'white', padding: '14px', borderRadius: '10px', fontWeight: '700', cursor: 'pointer' },
+    btnReady: { width: '100%', background: '#22c55e', border: 'none', color: 'white', padding: '14px', borderRadius: '10px', fontWeight: '700', cursor: 'pointer' },
+    btnClear: { width: '100%', background: '#21262d', border: '1px solid #30363d', color: '#c9d1d9', padding: '14px', borderRadius: '10px', fontWeight: '700', cursor: 'pointer', marginTop: '10px' },
+    waitingBanner: { background: 'rgba(34, 197, 94, 0.1)', color: '#22c55e', padding: '10px', borderRadius: '8px', textAlign: 'center', fontWeight: '700', fontSize: '12px', marginBottom: '10px' },
 
-    // Alerts
-    alertContainer: { marginBottom: '20px' },
-    alertBanner: { background: '#f97316', padding: '12px 20px', borderRadius: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' },
-    alertText: { fontWeight: '700', color: 'white', display: 'flex', alignItems: 'center', gap: '8px' },
-    // "I'LL GO" Button Style
-    attendBtn: { background: 'white', color: '#f97316', border: 'none', padding: '8px 16px', borderRadius: '8px', fontWeight: '800', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }
+    alertContainer: { position: 'fixed', top: '20px', left: '50%', transform: 'translateX(-50%)', zIndex: 1000, width: '90%', maxWidth: '500px' },
+    alertBanner: { background: '#f97316', padding: '15px 20px', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 10px 25px rgba(0,0,0,0.3)', marginBottom: '10px' },
+    alertText: { fontWeight: '700', fontSize: '16px' },
+    attendBtn: { background: 'white', color: '#f97316', border: 'none', padding: '8px 16px', borderRadius: '8px', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }
 };
 
 export default ChefDashboard;

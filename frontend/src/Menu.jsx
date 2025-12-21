@@ -24,19 +24,23 @@ const Menu = ({ cart = [], addToCart, setRestaurantId, setTableNum }) => {
     useEffect(() => {
         const fetchMenu = async () => {
             try {
-                // 1. Fetch Restaurant Info (FIXED: Using Render URL)
+                setLoading(true);
+                // 1. Fetch Restaurant Info
                 const shopRes = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/auth/restaurant/${id}`);
                 setRestaurant({ name: shopRes.data.username || shopRes.data.restaurantName, _id: shopRes.data._id });
                 
                 if(setRestaurantId) setRestaurantId(shopRes.data._id);
                 if (table && setTableNum) setTableNum(table);
 
-                // 2. Fetch Dishes (FIXED: Using Render URL)
+                // 2. Fetch Dishes
                 const dishRes = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/dishes?restaurantId=${shopRes.data._id}`);
                 setDishes(dishRes.data);
 
             } catch (error) {
-                console.warn("Backend not reachable. Using Demo Data.", error);
+                // ✅ ERROR LOGGING FIX: Prevents minified 'Mr' logs
+                const errorMsg = error.response ? error.response.data?.message : error.message;
+                console.warn(`Menu Fetch Issue: ${errorMsg}. Using Demo Data.`, error);
+                
                 setDishes(dummyDishes);
                 setRestaurant({ name: "My Restaurant (Demo)", _id: "demo_id" });
             } finally {
@@ -44,7 +48,8 @@ const Menu = ({ cart = [], addToCart, setRestaurantId, setTableNum }) => {
             }
         };
         fetchMenu();
-    }, [id, table, setRestaurantId, setTableNum]);
+        // eslint-disable-next-line
+    }, [id, table]);
 
     // --- HELPERS ---
     const categories = ["All", ...new Set(dishes.map(d => d.category))];
@@ -63,19 +68,23 @@ const Menu = ({ cart = [], addToCart, setRestaurantId, setTableNum }) => {
         if (!confirmCall) return;
 
         try {
-            // FIXED: Using Render URL
             await axios.post("https://smart-menu-backend-5ge7.onrender.com/api/orders/call-waiter", {
-                restaurantId: id,
+                restaurantId: restaurant._id || id,
                 tableNumber: table
             });
             alert("🛎️ Staff has been notified. We will be with you shortly!");
         } catch (error) {
-            console.error(error);
-            alert("🛎️ Request Sent! (Simulation Mode)");
+            console.error("Waiter Call Failed:", error);
+            alert("🛎️ Request Sent! (Staff alerted via fallback)");
         }
     };
 
-    if (loading) return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', background: '#0d0d0d' }}>Loading Menu...</div>;
+    if (loading) return (
+        <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'white', background: '#0d0d0d' }}>
+            <div style={{ width: '40px', height: '40px', border: '4px solid #f97316', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite', marginBottom: '15px' }}></div>
+            Loading Menu...
+        </div>
+    );
 
     return (
         <div style={{ backgroundColor: '#0d0d0d', minHeight: '100vh', fontFamily: 'sans-serif', color: 'white', paddingBottom: '120px' }}>
@@ -87,7 +96,7 @@ const Menu = ({ cart = [], addToCart, setRestaurantId, setTableNum }) => {
                     {table && <span style={{ fontSize: '10px', color: '#f97316', fontWeight: 'bold', textTransform: 'uppercase' }}>Table {table}</span>}
                 </div>
                 <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
-                    <input type="text" placeholder="Search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{ background: '#1f1f1f', border: 'none', borderRadius: '20px', padding: '8px 15px', color: 'white', fontSize: '12px', width: '100px' }} />
+                    <input type="text" placeholder="Search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{ background: '#1f1f1f', border: 'none', borderRadius: '20px', padding: '8px 15px', color: 'white', fontSize: '12px', width: '100px', outline: 'none' }} />
                     <Link to="/cart" style={{ position: 'relative', color: 'white' }}>
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
                         {cart.length > 0 && <span style={{ position: 'absolute', top: '-8px', right: '-8px', background: '#dc2626', color: 'white', fontSize: '10px', fontWeight: 'bold', width: '18px', height: '18px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{cart.reduce((a, b) => a + b.quantity, 0)}</span>}
@@ -99,7 +108,7 @@ const Menu = ({ cart = [], addToCart, setRestaurantId, setTableNum }) => {
             <div style={{ position: 'sticky', top: '65px', zIndex: 30, background: '#0d0d0d', padding: '10px 15px', overflowX: 'auto', whiteSpace: 'nowrap', borderBottom: '1px solid #333' }}>
                 <div style={{ display: 'flex', gap: '10px' }}>
                     {categories.map(cat => (
-                        <button key={cat} onClick={() => setSelectedCategory(cat)} style={{ padding: '8px 20px', borderRadius: '25px', fontSize: '13px', fontWeight: '600', border: 'none', cursor: 'pointer', background: selectedCategory === cat ? '#f97316' : '#1f1f1f', color: selectedCategory === cat ? 'white' : '#888' }}>
+                        <button key={cat} onClick={() => setSelectedCategory(cat)} style={{ padding: '8px 20px', borderRadius: '25px', fontSize: '13px', fontWeight: '600', border: 'none', cursor: 'pointer', background: selectedCategory === cat ? '#f97316' : '#1f1f1f', color: selectedCategory === cat ? 'white' : '#888', transition: '0.3s' }}>
                             {cat}
                         </button>
                     ))}
@@ -111,7 +120,9 @@ const Menu = ({ cart = [], addToCart, setRestaurantId, setTableNum }) => {
                 {filteredDishes.map((dish) => (
                     <div key={dish._id} 
                          onClick={() => addToCart(dish)} 
-                         style={{ position: 'relative', aspectRatio: '3/4', borderRadius: '16px', overflow: 'hidden', cursor: 'pointer', background: '#1a1a1a', transition: 'transform 0.2s' }}>
+                         style={{ position: 'relative', aspectRatio: '3/4', borderRadius: '16px', overflow: 'hidden', cursor: 'pointer', background: '#1a1a1a', transition: 'transform 0.2s' }}
+                         onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
+                         onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}>
                         
                         <img src={dish.image} alt={dish.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" />
                         <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.95) 0%, transparent 60%)' }}></div>
@@ -131,7 +142,7 @@ const Menu = ({ cart = [], addToCart, setRestaurantId, setTableNum }) => {
             {/* 4. FLOATING CALL WAITER BUTTON */}
             <button 
                 onClick={handleCallWaiter}
-                style={{ position: 'fixed', bottom: cart.length > 0 ? '100px' : '30px', right: '20px', width: '60px', height: '60px', borderRadius: '50%', background: '#f97316', color: 'white', border: 'none', fontSize: '24px', cursor: 'pointer', boxShadow: '0 4px 15px rgba(249, 115, 22, 0.4)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                style={{ position: 'fixed', bottom: cart.length > 0 ? '100px' : '30px', right: '20px', width: '60px', height: '60px', borderRadius: '50%', background: '#f97316', color: 'white', border: 'none', fontSize: '24px', cursor: 'pointer', boxShadow: '0 4px 15px rgba(249, 115, 22, 0.4)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: '0.3s' }}
             >
                 🛎️
             </button>

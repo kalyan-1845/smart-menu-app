@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 
@@ -40,13 +40,11 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
 
         const orderData = {
             customerName,
-            // 🟢 FIX: Send as string to avoid "Table undefined" in Kitchen
             tableNumber: tableNum.toString(), 
             items: cart.map(item => ({
                 name: item.name,
                 quantity: item.quantity,
                 price: item.price,
-                // 🟢 FIX: Send selected customizations so Chef sees the red alerts
                 selectedSpecs: selectedSpecs[item._id] || [] 
             })),
             totalAmount: totalPrice,
@@ -57,15 +55,20 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
         };
 
         try {
-            // Adjust URL to your production/local backend
-            const response = await axios.post("https://smart-menu-backend-5ge7.onrender.com/...localhost:5000/api/orders", orderData);
+            // ✅ CLEAN URL FIX: Removed '...localhost:5000' to prevent 404 errors
+            const response = await axios.post("https://smart-menu-backend-5ge7.onrender.com/api/orders", orderData);
             
             // Clear cart and redirect to success page
             clearCart();
             navigate("/order-success", { state: { order: response.data } });
         } catch (error) {
-            console.error("Submission error:", error);
-            alert("Connection Error: The Kitchen did not receive your order. Please check your internet.");
+            // ✅ IMPROVED ERROR LOGGING: Prevents minified 'Mr' logs
+            const errorMessage = error.response
+                ? error.response.data?.message || "The Kitchen did not receive your order."
+                : "Connection Error: Is the backend awake on Render?";
+            
+            console.error(`Order Submission Failed: ${errorMessage}`, error);
+            alert(errorMessage);
         }
     };
 
@@ -77,7 +80,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                 <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.95)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
                     <div style={{ background: '#1a1a1a', width: '100%', maxWidth: '400px', borderRadius: '24px', padding: '30px', border: '1px solid #333', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}>
                         <h2 style={{ textAlign: 'center', marginBottom: '10px', fontSize: '20px' }}>Where are you sitting?</h2>
-                        <p style={{ textAlign: 'center', color: '#888', fontSize: '14px', marginBottom: '24px' }}>Select a table to see the menu correctly</p>
+                        <p style={{ textAlign: 'center', color: '#888', fontSize: '14px', marginBottom: '24px' }}>Select a table to continue</p>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
                             {tableOptions.map((opt) => (
                                 <button 
@@ -95,7 +98,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
 
             {/* 2. HEADER */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '25px' }}>
-                <Link to={-1} style={{ color: 'white', textDecoration: 'none', fontSize: '24px', background: '#1f1f1f', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '12px' }}>←</Link>
+                <button onClick={() => navigate(-1)} style={{ border: 'none', color: 'white', fontSize: '24px', background: '#1f1f1f', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '12px', cursor: 'pointer' }}>←</button>
                 <h1 style={{ fontSize: '22px', fontWeight: 'bold', margin: 0 }}>Review Order</h1>
             </div>
 
@@ -104,7 +107,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                 <div onClick={() => setShowTableModal(true)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', cursor: 'pointer' }}>
                     <div>
                         <p style={{ color: '#666', fontSize: '11px', fontWeight: 'bold', margin: '0 0 4px 0', textTransform: 'uppercase' }}>YOUR LOCATION</p>
-                        <h3 style={{ margin: 0, fontSize: '16px', color: '#f97316' }}>{tableNum ? `Table ${tableNum}` : "Click to select table"}</h3>
+                        <h3 style={{ margin: 0, fontSize: '16px', color: '#f97316' }}>{tableNum ? `Table ${tableNum}` : "Select table"}</h3>
                     </div>
                     <span style={{ fontSize: '14px' }}>✎</span>
                 </div>
@@ -142,9 +145,8 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                                 </div>
                             </div>
 
-                            {/* 🟢 DYNAMIC SPECIFICATIONS (Chef alert logic) */}
                             <div style={{ background: '#0d0d0d', padding: '12px', borderRadius: '12px', marginTop: '15px' }}>
-                                <p style={{ fontSize: '10px', color: '#555', fontWeight: 'bold', marginBottom: '8px', textTransform: 'uppercase' }}>Specifications</p>
+                                <p style={{ fontSize: '10px', color: '#555', fontWeight: 'bold', marginBottom: '8px', textTransform: 'uppercase' }}>Customizations</p>
                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                                     {item.specifications && item.specifications.length > 0 ? (
                                         item.specifications.map((spec) => (
@@ -162,7 +164,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                                             </button>
                                         ))
                                     ) : (
-                                        <span style={{ fontSize: '11px', color: '#333' }}>Standard Recipe</span>
+                                        <span style={{ fontSize: '11px', color: '#333' }}>Standard Preparation</span>
                                     )}
                                 </div>
                             </div>

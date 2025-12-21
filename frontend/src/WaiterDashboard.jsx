@@ -27,12 +27,12 @@ const WaiterDashboard = () => {
         try {
             const config = { headers: { Authorization: `Bearer ${token}` } };
             
-            // Get Restaurant Name
-            const nameRes = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/...localhost:5000/api/auth/restaurant/${ownerId}`, config);
+            // ✅ FIXED URL: Removed "...localhost" concatenation
+            const nameRes = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/auth/restaurant/${ownerId}`, config);
             setRestaurantName(nameRes.data.username || "Staff Area");
 
-            // Get Orders
-            const res = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/...localhost:5000/api/orders?restaurantId=${ownerId}`, config);
+            // ✅ FIXED URL: Removed "...localhost" concatenation
+            const res = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/orders?restaurantId=${ownerId}`, config);
             
             // 🧠 LOGIC: Show active orders OR orders that were served < 3 mins ago
             const activeOrders = res.data.filter(o => 
@@ -44,13 +44,17 @@ const WaiterDashboard = () => {
 
             setOrders(activeOrders);
             setLoading(false);
-        } catch (error) { console.error(error); }
+        } catch (error) { 
+            console.error("Fetch error:", error); 
+        }
     };
 
     // --- 2. Live Updates ---
     useEffect(() => {
         fetchOrders();
-        const socket = io("https://smart-menu-backend-5ge7.onrender.com/...localhost:5000");
+        
+        // ✅ FIXED URL: Production Socket link
+        const socket = io("https://smart-menu-backend-5ge7.onrender.com");
         
         socket.on("order-updated", (updatedOrder) => {
             if (updatedOrder.owner === ownerId) {
@@ -62,27 +66,31 @@ const WaiterDashboard = () => {
         // Refresh wait times every minute
         const timer = setInterval(() => { setOrders(prev => [...prev]); }, 60000);
         return () => { clearInterval(timer); socket.disconnect(); };
-    }, [ownerId, visibleServedIds]); // Dependency on visibleServedIds ensures UI updates when list changes
+        // eslint-disable-next-line
+    }, [ownerId, visibleServedIds]); 
 
     // --- 3. Actions ---
     
     // 🟢 MARK SERVED (With 3-Minute Delay)
     const markServed = async (id) => {
         try {
-            // 1. Send data to Owner/Database immediately
-            await axios.put(`https://smart-menu-backend-5ge7.onrender.com/...localhost:5000/api/orders/${id}`, { status: "SERVED" }, { headers: { Authorization: `Bearer ${token}` } });
+            // ✅ FIXED URL: Removed "...localhost"
+            await axios.put(`https://smart-menu-backend-5ge7.onrender.com/api/orders/${id}`, 
+                { status: "SERVED" }, 
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
             
-            // 2. Keep it visible locally
+            // Keep it visible locally
             setVisibleServedIds(prev => [...prev, id]);
 
-            // 3. Force a refresh so the status turns to "SERVED" in the UI immediately
+            // Force a refresh immediately
             fetchOrders();
 
-            // 4. Start 3-minute timer to hide it later
+            // Start 3-minute timer to hide it later
             setTimeout(() => {
-                setVisibleServedIds(prev => prev.filter(servedId => servedId !== id)); // Remove from visible list
-                setOrders(prev => prev.filter(o => o._id !== id)); // Remove from screen
-            }, 180000); // 180,000 ms = 3 Minutes
+                setVisibleServedIds(prev => prev.filter(servedId => servedId !== id)); 
+                setOrders(prev => prev.filter(o => o._id !== id)); 
+            }, 180000); 
 
         } catch (e) { 
             alert("Error updating order"); 
@@ -92,7 +100,11 @@ const WaiterDashboard = () => {
     // 🔵 MARK PAID
     const markPaid = async (id) => {
         try {
-            await axios.put(`https://smart-menu-backend-5ge7.onrender.com/...localhost:5000/api/orders/${id}`, { status: "Paid" }, { headers: { Authorization: `Bearer ${token}` } });
+            // ✅ FIXED URL: Removed "...localhost"
+            await axios.put(`https://smart-menu-backend-5ge7.onrender.com/api/orders/${id}`, 
+                { status: "Paid" }, 
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
             fetchOrders();
         } catch (e) { alert("Error updating"); }
     };
@@ -103,7 +115,12 @@ const WaiterDashboard = () => {
         return `${diff}m ago`;
     };
 
-    if (loading) return <div style={styles.loading}>Loading Waiter Panel...</div>;
+    if (loading) return (
+        <div style={styles.loading}>
+            <div style={styles.spinner}></div>
+            <p>Loading Waiter Panel...</p>
+        </div>
+    );
 
     return (
         <div style={styles.container}>
@@ -126,89 +143,81 @@ const WaiterDashboard = () => {
 
             {/* --- ORDERS LIST --- */}
             <div style={styles.grid}>
-                {orders.map(order => (
-                    <div key={order._id} style={{
-                        ...styles.card,
-                        // If served, dim the opacity slightly so they know it's done
-                        opacity: order.status === "SERVED" ? 0.6 : 1,
-                        borderColor: order.status === "SERVED" ? '#22c55e' : '#333'
-                    }}>
-                        
-                        {/* 1. Large Table Title */}
-                        <h2 style={styles.tableTitle}>
-                            {order.tableNumber === "Takeaway" ? "T-Takeaway" : `Table ${order.tableNumber || order.tableNum}`}
-                        </h2>
-
-                        {/* 2. Wait Time & User */}
-                        <div style={styles.metaRow}>
-                            <span style={styles.waitText}>Wait: {getWaitTime(order.createdAt)}</span>
-                        </div>
-                        <div style={styles.userRow}>
-                            <FaUser style={{fontSize:'12px', marginRight:'6px', color:'#8b949e'}} />
-                            <span style={styles.userName}>{order.customerName}</span>
-                        </div>
-
-                        {/* 3. Status Badge */}
-                        <div style={styles.statusRow}>
-                            <span style={{ 
-                                ...styles.statusBadge, 
-                                color: order.status === 'SERVED' ? '#22c55e' : (order.status === 'READY' ? '#22c55e' : (order.status === 'Paid' ? '#3b82f6' : '#f97316')) 
-                            }}>
-                                {order.status === 'Pending Payment' ? 'PENDING_PAYMENT' : order.status.toUpperCase()}
-                            </span>
-                        </div>
-
-                        {/* 4. Items List */}
-                        <div style={styles.itemsList}>
-                            {order.items.map((item, i) => (
-                                <div key={i} style={styles.itemRow}>
-                                    <span>{item.name}</span>
-                                    <span style={{color:'#8b949e'}}>×{item.quantity}</span>
-                                </div>
-                            ))}
-                        </div>
-
-                        {/* 5. ID Footer */}
-                        <p style={styles.idText}>ID: ...{order._id.slice(-8)}</p>
-
-                        {/* 6. Action Buttons */}
-                        <div style={styles.actionRow}>
+                {orders.length === 0 ? (
+                    <div style={styles.emptyState}>No active orders</div>
+                ) : (
+                    orders.map(order => (
+                        <div key={order._id} style={{
+                            ...styles.card,
+                            opacity: order.status === "SERVED" ? 0.6 : 1,
+                            borderColor: order.status === "SERVED" ? '#22c55e' : '#333'
+                        }}>
                             
-                            {/* If already Served, show "Done" message */}
-                            {order.status === "SERVED" ? (
-                                <div style={{width:'100%', textAlign:'center', color:'#22c55e', fontWeight:'bold', fontSize:'12px', padding:'10px', background:'#22c55e20', borderRadius:'8px'}}>
-                                    ✅ COMPLETED (Clears in 3m)
-                                </div>
-                            ) : (
-                                <>
-                                    {/* Mark Paid Button (Visible if not paid yet) */}
-                                    {order.status !== "Paid" && (
-                                        <button onClick={() => markPaid(order._id)} style={styles.btnPay}>
-                                            <FaMoneyBillWave /> Mark Paid
-                                        </button>
-                                    )}
-                                    
-                                    {/* Serve/Clear Button */}
-                                    <button onClick={() => markServed(order._id)} style={styles.btnServe}>
-                                        <FaCheckCircle /> Served / Clear
-                                    </button>
-                                </>
-                            )}
-                        </div>
+                            <h2 style={styles.tableTitle}>
+                                {order.tableNumber === "Takeaway" ? "Takeaway" : `Table ${order.tableNumber || order.tableNum}`}
+                            </h2>
 
-                    </div>
-                ))}
+                            <div style={styles.metaRow}>
+                                <span style={styles.waitText}>Wait: {getWaitTime(order.createdAt)}</span>
+                            </div>
+                            <div style={styles.userRow}>
+                                <FaUser style={{fontSize:'12px', marginRight:'6px', color:'#8b949e'}} />
+                                <span style={styles.userName}>{order.customerName || "Guest"}</span>
+                            </div>
+
+                            <div style={styles.statusRow}>
+                                <span style={{ 
+                                    ...styles.statusBadge, 
+                                    color: order.status === 'SERVED' ? '#22c55e' : (order.status === 'READY' ? '#22c55e' : (order.status === 'Paid' ? '#3b82f6' : '#f97316')) 
+                                }}>
+                                    {order.status === 'Pending Payment' ? 'PENDING_PAYMENT' : order.status.toUpperCase()}
+                                </span>
+                            </div>
+
+                            <div style={styles.itemsList}>
+                                {order.items.map((item, i) => (
+                                    <div key={i} style={styles.itemRow}>
+                                        <span>{item.name}</span>
+                                        <span style={{color:'#8b949e'}}>×{item.quantity}</span>
+                                    </div>
+                                ))}
+                            </div>
+
+                            <p style={styles.idText}>ID: ...{order._id.slice(-8)}</p>
+
+                            <div style={styles.actionRow}>
+                                {order.status === "SERVED" ? (
+                                    <div style={styles.completedBanner}>
+                                        ✅ COMPLETED (Clears in 3m)
+                                    </div>
+                                ) : (
+                                    <>
+                                        {order.status !== "Paid" && (
+                                            <button onClick={() => markPaid(order._id)} style={styles.btnPay}>
+                                                <FaMoneyBillWave /> Mark Paid
+                                            </button>
+                                        )}
+                                        <button onClick={() => markServed(order._id)} style={styles.btnServe}>
+                                            <FaCheckCircle /> Served / Clear
+                                        </button>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    ))
+                )}
             </div>
         </div>
     );
 };
 
-// --- STYLES (Dark Mode) ---
+// --- STYLES ---
 const styles = {
     container: { minHeight: '100vh', background: '#000000', color: 'white', padding: '20px', fontFamily: "'Inter', sans-serif" },
-    loading: { height: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', background: 'black', color: 'white' },
+    loading: { height: '100vh', display: 'flex', flexDirection:'column', justifyContent: 'center', alignItems: 'center', background: 'black', color: 'white' },
+    spinner: { width: '30px', height: '30px', border: '3px solid #3b82f6', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite', marginBottom: '10px' },
     
-    header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', borderBottom: '1px solid #333', paddingBottom: '20px' },
+    header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', borderBottom: '1px solid #333', paddingBottom: '20px', flexWrap: 'wrap', gap: '15px' },
     title: { fontSize: '28px', fontWeight: '800', margin: 0, display: 'flex', alignItems: 'center' },
     subtitle: { color: '#888', fontSize: '14px', marginTop: '5px' },
     
@@ -216,14 +225,13 @@ const styles = {
     logoutBtn: { background: '#450a0a', color: '#f87171', border: '1px solid #7f1d1d', padding: '10px 15px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600' },
 
     grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' },
+    emptyState: { gridColumn: '1/-1', textAlign: 'center', padding: '50px', color: '#555', fontSize: '18px' },
     
-    // Card Styles
     card: { background: '#0a0a0a', border: '1px solid #333', borderRadius: '12px', padding: '20px', position: 'relative', transition: '0.3s' },
     tableTitle: { fontSize: '24px', fontWeight: '800', color: '#ffffff', marginBottom: '5px' },
     
     metaRow: { marginBottom: '5px' },
     waitText: { color: '#888', fontSize: '13px' },
-    
     userRow: { display: 'flex', alignItems: 'center', marginBottom: '10px' },
     userName: { color: '#ccc', fontWeight: '600', fontSize: '14px' },
     
@@ -235,9 +243,10 @@ const styles = {
     
     idText: { color: '#555', fontSize: '11px', fontFamily: 'monospace', marginBottom: '20px' },
     
-    actionRow: { display: 'flex', gap: '10px' },
+    actionRow: { display: 'flex', gap: '10px', flexWrap: 'wrap' },
     btnPay: { flex: 1, background: '#1e3a8a', color: '#60a5fa', border: 'none', padding: '12px', borderRadius: '8px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' },
-    btnServe: { flex: 1, background: '#14532d', color: '#4ade80', border: 'none', padding: '12px', borderRadius: '8px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }
+    btnServe: { flex: 1, background: '#14532d', color: '#4ade80', border: 'none', padding: '12px', borderRadius: '8px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', minWidth: '140px' },
+    completedBanner: { width: '100%', textAlign: 'center', color: '#22c55e', fontWeight: 'bold', fontSize: '12px', padding: '10px', background: 'rgba(34, 197, 94, 0.1)', borderRadius: '8px' }
 };
 
 export default WaiterDashboard;

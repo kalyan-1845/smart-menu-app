@@ -11,7 +11,7 @@ const SuperAdmin = () => {
     const [usernameInput, setUsernameInput] = useState("");
     const [passwordInput, setPasswordInput] = useState("");
 
-    // 🔒 Master Credentials (As requested)
+    // 🔒 Master Credentials
     const ADMIN_USERNAME = "srinivas";
     const ADMIN_PASSWORD = "srividya"; 
 
@@ -30,10 +30,15 @@ const SuperAdmin = () => {
     const fetchOwners = async () => {
         setLoading(true);
         try {
-            const res = await axios.get("https://smart-menu-backend-5ge7.onrender.com/...localhost:5000/api/auth/admin/all-owners");
+            // ✅ CLEAN URL FIX: Removed '...localhost:5000' to prevent 404 errors
+            const res = await axios.get("https://smart-menu-backend-5ge7.onrender.com/api/auth/admin/all-owners");
             setOwners(res.data);
         } catch (error) {
-            console.error("Error fetching owners:", error);
+            // ✅ IMPROVED LOGGING: Prevents minified 'Mr' logs
+            const errorMessage = error.response
+                ? error.response.data?.message || "Failed to load registry."
+                : "Server not reachable. Check Render dashboard.";
+            console.error(`SuperAdmin Fetch Error: ${errorMessage}`, error);
             setOwners([]);
         } finally {
             setLoading(false);
@@ -48,7 +53,8 @@ const SuperAdmin = () => {
         if (!confirmChange) return;
 
         try {
-            await axios.put(`https://smart-menu-backend-5ge7.onrender.com/...localhost:5000/api/auth/admin/update-status/${id}`, { status: newStatus });
+            // ✅ CLEAN URL FIX: Using clean production path
+            await axios.put(`https://smart-menu-backend-5ge7.onrender.com/api/auth/admin/update-status/${id}`, { status: newStatus });
             alert(`✅ ${username} is now ${newStatus}`);
             fetchOwners(); // Refresh list
         } catch (error) {
@@ -64,7 +70,8 @@ const SuperAdmin = () => {
         if (!confirmDelete) return;
 
         try {
-            await axios.delete(`https://smart-menu-backend-5ge7.onrender.com/...localhost:5000/api/auth/admin/delete-owner/${id}`);
+            // ✅ CLEAN URL FIX: Using clean production path
+            await axios.delete(`https://smart-menu-backend-5ge7.onrender.com/api/auth/admin/delete-owner/${id}`);
             alert(`✅ Data purged for ${username}`);
             fetchOwners();
         } catch (error) {
@@ -141,45 +148,49 @@ const SuperAdmin = () => {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-800/50">
-                        {owners.map((owner) => (
-                            <tr key={owner._id} className="hover:bg-gray-900/30 transition-colors group">
-                                <td className="p-6">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-12 h-12 bg-gradient-to-tr from-red-600 to-orange-500 rounded-2xl flex items-center justify-center font-black text-lg">
-                                            {owner.username.charAt(0).toUpperCase()}
+                        {loading ? (
+                            <tr><td colSpan="4" className="p-10 text-center text-gray-500">Retrieving Secure Data...</td></tr>
+                        ) : (
+                            owners.map((owner) => (
+                                <tr key={owner._id} className="hover:bg-gray-900/30 transition-colors group">
+                                    <td className="p-6">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-12 h-12 bg-gradient-to-tr from-red-600 to-orange-500 rounded-2xl flex items-center justify-center font-black text-lg">
+                                                {owner.username.charAt(0).toUpperCase()}
+                                            </div>
+                                            <div className="flex flex-col">
+                                                <span className="font-bold text-xl text-white group-hover:text-red-500 transition-colors">{owner.username}</span>
+                                                <span className="text-[10px] text-gray-600 uppercase font-bold">Joined: {new Date(owner.createdAt).toLocaleDateString()}</span>
+                                            </div>
                                         </div>
-                                        <div className="flex flex-col">
-                                            <span className="font-bold text-xl text-white group-hover:text-red-500 transition-colors">{owner.username}</span>
-                                            <span className="text-[10px] text-gray-600 uppercase font-bold">Joined: {new Date(owner.createdAt).toLocaleDateString()}</span>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td className="p-6">
-                                    <span className={`px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${
-                                        owner.status === "Active" 
-                                        ? "bg-green-600/10 border-green-600/30 text-green-500" 
-                                        : "bg-red-600/10 border-red-600/30 text-red-500"
-                                    }`}>
-                                        ● {owner.status || "Active"}
-                                    </span>
-                                </td>
-                                <td className="p-6 font-mono text-xs text-blue-400">{owner._id}</td>
-                                <td className="p-6 text-right flex justify-end gap-3">
-                                    <button 
-                                        onClick={() => toggleStatus(owner._id, owner.status || "Active", owner.username)}
-                                        className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-xl font-black text-[10px] uppercase transition-all"
-                                    >
-                                        {owner.status === "Blocked" ? "Unblock ✅" : "Block 🚫"}
-                                    </button>
-                                    <button 
-                                        onClick={() => handleDelete(owner._id, owner.username)}
-                                        className="bg-red-600/10 border border-red-600/20 text-red-500 hover:bg-red-600 px-4 py-2 rounded-xl font-black text-[10px] uppercase transition-all"
-                                    >
-                                        Purge 🗑️
-                                    </button>
-                                </td>
-                            </tr>
-                        ))}
+                                    </td>
+                                    <td className="p-6">
+                                        <span className={`px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${
+                                            owner.status === "Active" 
+                                            ? "bg-green-600/10 border-green-600/30 text-green-500" 
+                                            : "bg-red-600/10 border-red-600/30 text-red-500"
+                                        }`}>
+                                            ● {owner.status || "Active"}
+                                        </span>
+                                    </td>
+                                    <td className="p-6 font-mono text-xs text-blue-400">{owner._id}</td>
+                                    <td className="p-6 text-right flex justify-end gap-3">
+                                        <button 
+                                            onClick={() => toggleStatus(owner._id, owner.status || "Active", owner.username)}
+                                            className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-xl font-black text-[10px] uppercase transition-all"
+                                        >
+                                            {owner.status === "Blocked" ? "Unblock ✅" : "Block 🚫"}
+                                        </button>
+                                        <button 
+                                            onClick={() => handleDelete(owner._id, owner.username)}
+                                            className="bg-red-600/10 border border-red-600/20 text-red-500 hover:bg-red-600 px-4 py-2 rounded-xl font-black text-[10px] uppercase transition-all"
+                                        >
+                                            Purge 🗑️
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))
+                        )}
                     </tbody>
                 </table>
             </div>
