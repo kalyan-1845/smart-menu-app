@@ -8,9 +8,10 @@
     <meta name="description" content="Smart Restaurant Menu & Real-time Ordering System" />
     <link rel="manifest" href="/manifest.json" />
     
-    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="SmartMenu" />
+    
     <link rel="apple-touch-icon" href="/logo192.png" />
 
     <title>Smart Menu | Cloud Kitchen</title>
@@ -27,7 +28,7 @@
         --text-main: #ffffff;
         --text-dim: #a1a1aa;
         --primary-orange: #f97316;
-        --app-max-width: 450px; /* Standard mobile width */
+        --app-max-width: 450px; 
         --safe-area-inset-bottom: env(safe-area-inset-bottom);
       }
 
@@ -42,8 +43,8 @@
 
       html, body {
         height: 100%;
-        background-color: #000; /* Sidebar background on Desktop */
-        overscroll-behavior-y: contain; /* Prevents pull-to-refresh bounce */
+        background-color: #000;
+        overscroll-behavior-y: contain;
       }
 
       body {
@@ -61,7 +62,6 @@
         background-color: var(--bg-color);
         min-height: 100vh;
         position: relative;
-        /* Professional Desktop Shadow */
         box-shadow: 0 0 100px rgba(0, 0, 0, 0.9), 0 0 20px rgba(249, 115, 22, 0.05);
         display: flex;
         flex-direction: column;
@@ -111,7 +111,6 @@
       .no-scrollbar::-webkit-scrollbar { display: none; }
       .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-      /* Custom Scrollbar for Desktop viewing */
       ::-webkit-scrollbar { width: 4px; }
       ::-webkit-scrollbar-track { background: transparent; }
       ::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }

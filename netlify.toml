@@ -6,3 +6,9 @@
 [build.environment]
   CI = "false"
   NODE_VERSION = "20"
+
+# This section must be at the very bottom and not indented
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
