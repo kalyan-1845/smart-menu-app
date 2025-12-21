@@ -4,27 +4,19 @@ import { Link, useNavigate } from "react-router-dom";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
 import io from "socket.io-client";
-import confetti from "canvas-confetti"; // Install: npm install canvas-confetti
-// 🎨 Icons
-import SetupWizard from "./components/SetupWizard";
-// At the top of AdminPanel.jsx
+import confetti from "canvas-confetti";
 import { generateMonthlyReport } from "./utils/ReportGenerator";
 
-// Inside the Analytics Tab JSX
+// 🎨 Icons
 import { 
     FaPlus, FaTrash, FaHistory, FaChartBar, FaDownload, FaCog, 
     FaCreditCard, FaArrowLeft, FaUtensils, FaFire, FaLock, 
     FaUserShield, FaWallet, FaArrowUp, FaArrowDown, FaBoxOpen, FaBell, 
     FaCommentDots, FaUsersCog, FaImage, FaCheckCircle, FaCircle, FaCrown
 } from "react-icons/fa";
- <button 
-    onClick={() => generateMonthlyReport(restaurantName, historyData, expenses, dishes)}
-    className="bg-white text-black px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 hover:bg-[#FF9933] transition-all"
->
-    <FaDownload /> Download Professional Report
-</button>
+
 // --- SUB-COMPONENT: SETUP WIZARD ---
-const SetupWizard = ({ dishesCount, upiId, pushEnabled, onComplete }) => {
+const SetupWizard = ({ dishesCount, upiId, pushEnabled }) => {
     const steps = [
         { id: 1, label: "Add your first 3 dishes", done: dishesCount >= 3, icon: <FaUtensils />, hint: "Head to the 'Menu' tab." },
         { id: 2, label: "Configure Payments", done: !!upiId, icon: <FaWallet />, hint: "Add your UPI ID in Settings." },
@@ -41,7 +33,7 @@ const SetupWizard = ({ dishesCount, upiId, pushEnabled, onComplete }) => {
     }, [completed]);
 
     if (completed === 3) return (
-        <div className="bg-green-500/10 border-2 border-green-500/20 p-6 rounded-[30px] mb-10 flex items-center justify-between animate-bounce">
+        <div className="bg-green-500/10 border-2 border-green-500/20 p-6 rounded-[30px] mb-10 flex items-center justify-between">
             <div>
                 <h2 className="text-xl font-black text-green-500 uppercase">Your Shop is Live! 🎉</h2>
                 <p className="text-xs text-gray-400 font-bold uppercase">All systems operational & ready for customers.</p>
@@ -89,26 +81,19 @@ const AdminPanel = () => {
     const [broadcast, setBroadcast] = useState(null);
     const [pushEnabled, setPushEnabled] = useState(Notification.permission === 'granted');
 
-    // Auth & Subscription
     const ownerId = localStorage.getItem("ownerId");
     const token = localStorage.getItem("ownerToken");
     const userRole = localStorage.getItem("userRole") || "OWNER";
     const [trialEndsAt, setTrialEndsAt] = useState(null);
     const [isPro, setIsPro] = useState(false);
 
-    // Data
     const [dishes, setDishes] = useState([]);
-    const [inventoryList, setInventoryList] = useState([]);
     const [historyData, setHistoryData] = useState([]);
     const [expenses, setExpenses] = useState([]);
-    const [staffList, setStaffList] = useState([]);
     const [upiId, setUpiId] = useState(localStorage.getItem("restaurantUPI") || "");
-    const [logo, setLogo] = useState(null);
     const [isUpiSaved, setIsUpiSaved] = useState(false);
     const [formData, setFormData] = useState({ name: "", price: "", category: "Starters" });
-    const [staffForm, setStaffForm] = useState({ username: "", password: "", role: "CHEF" });
 
-    // --- DATA SYNC ---
     const fetchData = async () => {
         if (!ownerId || !token) { navigate("/login"); return; }
         try {
@@ -118,22 +103,17 @@ const AdminPanel = () => {
                 axios.get(`${API_BASE}/auth/restaurant/${ownerId}`, config),
                 axios.get(`${API_BASE}/dishes?restaurantId=${ownerId}`, config),
                 axios.get(`${API_BASE}/orders?restaurantId=${ownerId}`, config),
-                axios.get(`${API_BASE}/orders/calls?restaurantId=${ownerId}`, config),
-                axios.get(`${API_BASE}/inventory?restaurantId=${ownerId}`, config),
                 axios.get(`${API_BASE}/expenses?restaurantId=${ownerId}`, config),
             ];
-            if (userRole === "OWNER") requests.push(axios.get(`${API_BASE}/auth/staff/${ownerId}`, config));
 
-            const [nameRes, dishRes, historyRes, assistRes, invRes, expRes, staffRes] = await Promise.all(requests);
+            const [nameRes, dishRes, historyRes, expRes] = await Promise.all(requests);
 
             setRestaurantName(nameRes.data.username || "Owner");
             setTrialEndsAt(nameRes.data.trialEndsAt);
             setIsPro(nameRes.data.isPro);
             setDishes(dishRes.data || []);
             setHistoryData(historyRes.data || []);
-            setInventoryList(invRes.data || []);
             setExpenses(expRes.data || []);
-            if (staffRes) setStaffList(staffRes.data || []);
 
         } catch (error) {
             console.error("Portal Sync Error:", error);
@@ -159,7 +139,6 @@ const AdminPanel = () => {
         return () => socket.disconnect();
     }, [ownerId]);
 
-    // --- ACTIONS ---
     const handleLogout = () => { localStorage.clear(); navigate("/"); };
 
     const subscribeToPush = async () => {
@@ -167,7 +146,6 @@ const AdminPanel = () => {
         if (permission === 'granted') {
             setPushEnabled(true);
             alert("🔔 Notifications Active!");
-            // Note: In real production, send subscription object to backend here
         }
     };
 
@@ -200,7 +178,6 @@ const AdminPanel = () => {
     return (
         <div className="min-h-screen bg-[#0A0F18] text-white p-4 md:p-8 font-sans selection:bg-[#FF9933] selection:text-black">
             
-            {/* 📢 BROADCAST BANNER */}
             {broadcast && (
                 <div className="fixed top-0 left-0 w-full bg-blue-600 text-white p-3 z-[2000] flex justify-between items-center animate-pulse">
                     <p className="text-[10px] font-black uppercase tracking-widest mx-auto">📢 {broadcast.title}: {broadcast.message}</p>
@@ -208,7 +185,6 @@ const AdminPanel = () => {
                 </div>
             )}
 
-            {/* 🛎️ WAITER ALERTS */}
             <div className="fixed top-20 right-6 z-[1000] space-y-4 w-80">
                 {activeAlerts.map((alert, i) => (
                     <div key={i} className="bg-[#FF9933] text-black p-5 rounded-2xl shadow-2xl animate-bounce flex justify-between items-center border-4 border-white">
@@ -219,7 +195,6 @@ const AdminPanel = () => {
             </div>
 
             <main className="max-w-6xl mx-auto">
-                {/* --- HEADER --- */}
                 <header className="flex flex-col md:flex-row justify-between items-center mb-10 pt-10 border-b border-gray-800 pb-10 gap-6">
                     <div>
                         <div className="flex items-center gap-3">
@@ -239,19 +214,7 @@ const AdminPanel = () => {
                         <button onClick={handleLogout} className="bg-red-600/10 text-red-500 px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-red-500/10 hover:bg-red-600 hover:text-white transition">Logout</button>
                     </div>
                 </header>
-                       <main className="max-w-6xl mx-auto">
-    {/* 🔥 THE WIZARD */}
-    {userRole === "OWNER" && (
-        <SetupWizard 
-            dishesCount={dishes.length} 
-            upiId={upiId} 
-            pushEnabled={pushEnabled} 
-        />
-    )}
 
-    {/* Rest of your tabs logic... */}
-</main>
-                {/* --- ONBOARDING WIZARD (Only for Owners) --- */}
                 {userRole === "OWNER" && (
                     <SetupWizard 
                         dishesCount={dishes.length} 
@@ -260,21 +223,15 @@ const AdminPanel = () => {
                     />
                 )}
 
-                {/* --- NAVIGATION --- */}
                 <nav className="flex flex-wrap gap-2 mb-10 bg-[#111] p-1.5 rounded-3xl border border-gray-800 shadow-2xl">
-                    {['menu', 'inventory', 'history', 'staff', 'feedback', 'settings'].map(tab => {
-                        if ((tab === 'history' || tab === 'staff') && userRole !== 'OWNER') return null;
-                        return (
-                            <button key={tab} onClick={() => setActiveTab(tab)} className={`flex-1 min-w-[100px] py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition ${activeTab === tab ? 'bg-[#FF9933] text-black shadow-xl scale-105' : 'text-gray-500 hover:text-white'}`}>
-                                {tab}
-                            </button>
-                        )
-                    })}
+                    {['menu', 'history', 'settings'].map(tab => (
+                        <button key={tab} onClick={() => setActiveTab(tab)} className={`flex-1 min-w-[100px] py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition ${activeTab === tab ? 'bg-[#FF9933] text-black shadow-xl scale-105' : 'text-gray-500 hover:text-white'}`}>
+                            {tab}
+                        </button>
+                    ))}
                 </nav>
 
-                {/* --- TAB CONTENT --- */}
                 <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    {/* MENU TAB */}
                     {activeTab === "menu" && (
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
                             <section className="bg-[#111] p-10 rounded-[45px] border border-gray-800 shadow-2xl">
@@ -305,9 +262,17 @@ const AdminPanel = () => {
                         </div>
                     )}
 
-                    {/* ANALYTICS TAB */}
                     {activeTab === "history" && (
                         <div className="space-y-10">
+                            <div className="flex justify-between items-center">
+                                <h2 className="text-2xl font-black uppercase tracking-tighter">Business Analytics</h2>
+                                <button 
+                                    onClick={() => generateMonthlyReport(restaurantName, historyData, expenses, dishes)}
+                                    className="bg-white text-black px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 hover:bg-[#FF9933] transition-all"
+                                >
+                                    <FaDownload /> Download Professional Report
+                                </button>
+                            </div>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                 <div className="bg-[#111] p-10 rounded-[45px] border border-gray-800"><p className="text-gray-500 text-[10px] font-black uppercase mb-2">Revenue</p><p className="text-4xl font-black">₹{totalRevenue.toLocaleString()}</p></div>
                                 <div className="bg-[#111] p-10 rounded-[45px] border border-gray-800"><p className="text-gray-500 text-[10px] font-black uppercase mb-2">Costs</p><p className="text-4xl font-black text-red-500">₹{totalExpenses.toLocaleString()}</p></div>
@@ -316,19 +281,16 @@ const AdminPanel = () => {
                         </div>
                     )}
 
-                    {/* SETTINGS TAB */}
                     {activeTab === "settings" && (
                         <div className="max-w-2xl mx-auto space-y-8">
                             <div className="bg-[#111] p-12 rounded-[50px] border border-gray-800 shadow-2xl">
                                 <h2 className="text-2xl font-black mb-10 text-[#FF9933] flex items-center gap-4 uppercase tracking-tighter"><FaCog /> Merchant Config</h2>
-                                
                                 <div className="mb-10">
                                     <label className="text-[10px] font-black text-gray-500 uppercase tracking-[3px] mb-4 block">Push Alerts (PWA)</label>
                                     <button onClick={subscribeToPush} className={`w-full py-5 rounded-3xl font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-3 ${pushEnabled ? 'bg-green-600/10 text-green-500 border border-green-500/20' : 'bg-[#FF9933] text-black'}`}>
                                         <FaBell /> {pushEnabled ? 'NOTIFICATIONS ACTIVE' : 'ENABLE ORDER NOTIFICATIONS'}
                                     </button>
                                 </div>
-
                                 <div className="mb-10">
                                     <label className="text-[10px] font-black text-gray-500 uppercase tracking-[3px] mb-4 block">Merchant UPI ID</label>
                                     <div className="flex gap-3">
@@ -341,7 +303,6 @@ const AdminPanel = () => {
                     )}
                 </div>
             </main>
-
             <footer className="max-w-6xl mx-auto mt-20 text-center pb-20 opacity-20">
                 <p className="text-[10px] font-black uppercase tracking-[10px]">Smart Menu Cloud v2.8 • Secured by srinivas</p>
             </footer>
