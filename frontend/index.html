@@ -2,107 +2,134 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <meta name="theme-color" content="#0d0d0d" />
-    <meta name="description" content="Smart Restaurant Menu & Ordering System" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     
-    <title>Smart Menu</title>
+    <meta name="theme-color" content="#0d0d0d" />
+    <meta name="description" content="Smart Restaurant Menu & Real-time Ordering System" />
+    <link rel="manifest" href="/manifest.json" />
+    
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="SmartMenu" />
+    <link rel="apple-touch-icon" href="/logo192.png" />
+
+    <title>Smart Menu | Cloud Kitchen</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Poppins:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@600;700;800&display=swap" rel="stylesheet">
 
     <style>
-      /* 1. Basic Reset & Variables */
+      /* --- 1. PRO VARIABLES --- */
       :root {
         --bg-color: #0d0d0d;
         --card-bg: #1a1a1a;
-        --text-color: #ffffff;
+        --text-main: #ffffff;
+        --text-dim: #a1a1aa;
         --primary-orange: #f97316;
-        --app-max-width: 480px; /* 📱 LIMIT WIDTH for Desktop View */
+        --app-max-width: 450px; /* Standard mobile width */
+        --safe-area-inset-bottom: env(safe-area-inset-bottom);
       }
 
+      /* --- 2. GLOBAL RESET --- */
       * {
         box-sizing: border-box;
         margin: 0;
         padding: 0;
-        /* Disable blue highlight on touch for mobile */
         -webkit-tap-highlight-color: transparent; 
+        outline: none;
+      }
+
+      html, body {
+        height: 100%;
+        background-color: #000; /* Sidebar background on Desktop */
+        overscroll-behavior-y: contain; /* Prevents pull-to-refresh bounce */
       }
 
       body {
-        /* 🎨 Outer Background (What you see on the sides on Desktop) */
-        background-color: #000; 
-        color: var(--text-color);
+        color: var(--text-main);
         font-family: 'Inter', sans-serif;
         -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
-        overflow-x: hidden;
-        
-        /* 📐 Center the App on Desktop Screens */
         display: flex;
         justify-content: center;
-        min-height: 100vh;
       }
 
-      /* 2. MAIN APP CONTAINER (The "Phone" Screen) */
+      /* --- 3. APP CONTAINER --- */
       #root {
         width: 100%;
-        max-width: var(--app-max-width); /* 🛑 Prevent stretching on big screens */
-        background-color: var(--bg-color); /* The actual App Background */
+        max-width: var(--app-max-width);
+        background-color: var(--bg-color);
         min-height: 100vh;
         position: relative;
-        box-shadow: 0 0 20px rgba(255, 255, 255, 0.05); /* Subtle glow on desktop */
+        /* Professional Desktop Shadow */
+        box-shadow: 0 0 100px rgba(0, 0, 0, 0.9), 0 0 20px rgba(249, 115, 22, 0.05);
+        display: flex;
+        flex-direction: column;
       }
 
-      /* 3. Typography Defaults */
-      h1, h2, h3, h4, h5, h6 {
-        font-family: 'Poppins', sans-serif;
-      }
-
-      button {
-        font-family: 'Inter', sans-serif;
-      }
-
-      /* 4. Custom Scrollbar */
-      ::-webkit-scrollbar { width: 5px; }
-      ::-webkit-scrollbar-track { background: #0d0d0d; }
-      ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
-      ::-webkit-scrollbar-thumb:hover { background: #555; }
-
-      /* 5. Selection Color */
-      ::selection {
-        background: var(--primary-orange);
-        color: #fff;
-      }
-
-      /* 6. Utilities */
-      .no-scrollbar::-webkit-scrollbar { display: none; }
-      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-      
-      /* Loader for React while it starts */
+      /* --- 4. ANIMATED PRE-LOADER --- */
       #root:empty {
         display: flex;
+        flex-direction: column;
         justify-content: center;
         align-items: center;
-        height: 100vh;
+        background: var(--bg-color);
       }
+
+      #root:empty::before {
+        content: "";
+        width: 50px;
+        height: 50px;
+        border: 4px solid rgba(249, 115, 22, 0.1);
+        border-top: 4px solid var(--primary-orange);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin-bottom: 20px;
+      }
+
       #root:empty::after {
-        content: "Loading...";
-        color: #666;
+        content: "SMART MENU CLOUD";
         font-family: 'Poppins', sans-serif;
-        font-weight: bold;
-        animation: pulse 1.5s infinite;
+        font-weight: 800;
+        font-size: 12px;
+        letter-spacing: 4px;
+        color: var(--primary-orange);
+        animation: fade 1.5s ease-in-out infinite;
       }
-      @keyframes pulse {
-        0% { opacity: 0.5; }
-        50% { opacity: 1; }
-        100% { opacity: 0.5; }
+
+      @keyframes spin { 100% { transform: rotate(360deg); } }
+      @keyframes fade { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
+
+      /* --- 5. MOBILE OVERRIDES & UTILITIES --- */
+      @media (max-width: 480px) {
+        #root {
+          max-width: 100%;
+          box-shadow: none;
+        }
       }
+
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+      /* Custom Scrollbar for Desktop viewing */
+      ::-webkit-scrollbar { width: 4px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
     </style>
   </head>
   <body>
     <div id="root"></div>
+
     <script type="module" src="/src/main.jsx"></script>
+
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').catch(err => {
+            console.log('SW registration failed: ', err);
+          });
+        });
+      }
+    </script>
   </body>
 </html>

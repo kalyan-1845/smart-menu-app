@@ -2,8 +2,8 @@ import mongoose from 'mongoose';
 
 /**
  * Dish Model
- * Represents a menu item with its customizations (specifications) 
- * and its link to the inventory (recipe).
+ * Represents a menu item with its customizations, stock availability,
+ * and link to the raw inventory (recipe).
  */
 const dishSchema = new mongoose.Schema({
   name: { 
@@ -27,7 +27,15 @@ const dishSchema = new mongoose.Schema({
     type: String 
   },
 
-  // 🟢 CUSTOMIZATIONS: Options like "No Onion", "Extra Spicy"
+  // 🔴 AVAILABILITY TOGGLE:
+  // Used by the Chef Dashboard to manually mark items as "Sold Out"
+  isAvailable: { 
+    type: Boolean, 
+    default: true 
+  },
+
+  // 🟢 CUSTOMIZATIONS: 
+  // Options like "No Onion", "Extra Spicy", "Eggless"
   specifications: [
     {
       label: { type: String }, 
@@ -36,31 +44,31 @@ const dishSchema = new mongoose.Schema({
   ],
 
   // 📦 RECIPE / INVENTORY LINK: 
-  // This tells the system which raw materials are used when this dish is ordered.
+  // Links raw materials. Every order subtracts these amounts from 'Inventory'
   recipe: [
     {
       ingredientId: { 
         type: mongoose.Schema.Types.ObjectId, 
-        ref: 'Inventory', // Links to the Inventory model
+        ref: 'Inventory', 
         required: true 
       },
       quantityNeeded: { 
         type: Number, 
         required: true,
-        default: 1 // Quantity to subtract from stock (e.g., 0.5kg or 1 unit)
+        default: 1 
       }
     }
   ],
 
   // 🔒 OWNER LINK:
-  // Ensures this dish only shows up for the correct restaurant.
+  // Multi-tenant security for different restaurant owners
   owner: { 
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'Owner', 
     required: true 
   }
 }, { 
-  timestamps: true // Tracks when dishes were created or updated
+  timestamps: true // Automatically manages createdAt and updatedAt
 });
 
 export default mongoose.model('Dish', dishSchema);

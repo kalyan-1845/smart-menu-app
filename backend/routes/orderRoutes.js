@@ -3,8 +3,33 @@ import Order from '../models/Order.js';
 import Call from '../models/Call.js'; // Ensure you have created this model
 import { protect, checkSubscription } from '../middleware/authMiddleware.js';
 
+import webpush from 'web-push';
+
+// Configure VAPID keys
+webpush.setVapidDetails(
+  'mailto:your-email@example.com',
+  process.env.VAPID_PUBLIC_KEY,
+  process.env.VAPID_PRIVATE_KEY
+);
+
+// Trigger this inside your "Place Order" function
+export const sendOrderNotification = async (ownerSubscription, orderData) => {
+    const payload = JSON.stringify({
+        title: "🔥 New Order Received!",
+        body: `Table ${orderData.tableNumber} just ordered ${orderData.items.length} items. Total: ₹${orderData.totalAmount}`,
+        icon: "/logo192.png",
+    });
+
+    try {
+        await webpush.sendNotification(ownerSubscription, payload);
+        console.log("Push sent to Owner");
+    } catch (err) {
+        console.error("Error sending push", err);
+    }
+};
 const router = express.Router();
 
+   
 /**
  * 1. PLACE ORDER (Public)
  * Used by customers in Cart.jsx to send their selection to the kitchen.

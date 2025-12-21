@@ -24,7 +24,7 @@ export const protect = async (req, res, next) => {
         res.status(401).json({ message: 'Not authorized, no token' });
     }
 };
-
+  
 // 2. 💰 SUBSCRIPTION CHECK MIDDLEWARE
 export const checkSubscription = async (req, res, next) => {
     const user = req.user;
