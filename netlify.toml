@@ -7,6 +7,8 @@
   CI = "false"
   NODE_VERSION = "20"
 
+# ✅ FIX: This section ensures the server sends index.html for all routes,
+# preventing the "text/html" MIME type error.
 [[redirects]]
   from = "/*"
   to = "/index.html"
