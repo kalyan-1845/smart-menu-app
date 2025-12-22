@@ -1,35 +1,35 @@
+import 'dotenv/config'; // Must stay at the very top for VAPID/DB keys
 import express from 'express';
-import dotenv from 'dotenv';
 import cors from 'cors';
 import mongoose from 'mongoose';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import rateLimit from 'express-rate-limit';
-import 'dotenv/config';
+
 // --- IMPORT ROUTES ---
 import authRoutes from './routes/authRoutes.js';
 import dishRoutes from './routes/dishRoutes.js';
 import orderRoutes from './routes/orderRoutes.js';
 import superAdminRoutes from './routes/superAdminRoutes.js';
-import broadcastRoutes from './routes/broadcastRoutes.js'; // Added from our previous step
+import broadcastRoutes from './routes/broadcastRoutes.js';
 
 // --- INITIALIZATION ---
-dotenv.config();
 const app = express();
 const httpServer = createServer(app);
 
 // --- 🔒 SECURITY: RATE LIMITER ---
-// Prevents spamming your API
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // limit each IP to 100 requests per windowMs
-    message: "Too many requests from this IP, please try again after 15 minutes"
+    max: 100, // limit each IP to 100 requests
+    message: "Too many requests from this IP, please try again later."
 });
 
 // --- 🔒 SECURITY: CORS CONFIG ---
+// Fixed to include your specific Netlify preview URL
 const allowedOrigins = [
     "http://localhost:5173",           
-    "https://smartmenuss.netlify.app"  
+    "https://smartmenuss.netlify.app",
+    "https://694915c413d9f40008f38924--smartmenuss.netlify.app" // Added this to fix your error
 ];
 
 const io = new Server(httpServer, {
@@ -41,18 +41,29 @@ const io = new Server(httpServer, {
 });
 
 // --- 1. MIDDLEWARE ---
-app.use(limiter); // Apply rate limiting to all requests
-app.use(cors({ origin: allowedOrigins, credentials: true }));
-app.use(express.json({ limit: '10mb' })); // Increased limit for Logo Base64 uploads
+app.use(limiter); 
+app.use(cors({ 
+    origin: function (origin, callback) {
+        // Allow requests with no origin (like mobile apps) or if in allowedOrigins
+        if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+            callback(null, true);
+        } else {
+            callback(new Error('CORS Policy: Origin not allowed'));
+        }
+    }, 
+    credentials: true 
+}));
 
-// Attach Socket.io to req so routes can use it
+app.use(express.json({ limit: '10mb' })); 
+
+// Attach Socket.io to req
 app.use((req, res, next) => {
     req.io = io;
     next();
 });
 
 // --- 2. DATABASE CONNECTION ---
-mongoose.connect(process.env.MONGO_URI || "mongodb://127.0.0.1:27017/smartmenu")
+mongoose.connect(process.env.MONGO_URI)
     .then(() => console.log("✅ Database Engine: Connected"))
     .catch((err) => console.error("❌ Database Engine Error:", err));
 
@@ -67,7 +78,6 @@ app.use('/api/broadcast', broadcastRoutes);
 app.get('/', (req, res) => res.send('Smart Menu Cloud API v2.8 Active...'));
 
 // --- 4. GLOBAL ERROR HANDLER ---
-// This prevents the server from crashing if a route fails
 app.use((err, req, res, next) => {
     const statusCode = res.statusCode === 200 ? 500 : res.statusCode;
     res.status(statusCode).json({
