@@ -5,10 +5,7 @@ import mongoose from 'mongoose';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import rateLimit from 'express-rate-limit';
-import 'dotenv/config'; // This MUST be at the top
-import express from 'express';
-// ... rest of your code
-
+import 'dotenv/config';
 // --- IMPORT ROUTES ---
 import authRoutes from './routes/authRoutes.js';
 import dishRoutes from './routes/dishRoutes.js';

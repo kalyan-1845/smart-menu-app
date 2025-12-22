@@ -143,8 +143,8 @@ function App() {
             </ManagerProtectedRoute>
         } />
 
-        {/* --- SUPER ADMIN --- */}
-        <Route path="/super-admin" element={<SuperAdmin />} />
+        {/* --- SUPER ADMIN (Fixed path for easier access) --- */}
+        <Route path="/superadmin" element={<SuperAdmin />} />
 
       </Routes>
     </Router>

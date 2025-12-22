@@ -6,104 +6,43 @@ import io from "socket.io-client";
 import { 
     FaUtensils, FaCog, FaLock, FaVolumeUp, FaVolumeMute, FaRegClock, 
     FaUser, FaCircle, FaFire, FaCheck, FaRocket, FaBell, 
-    FaExternalLinkAlt, FaUserTie, FaWalking, FaPrint 
+    FaExternalLinkAlt, FaUserTie, FaWalking, FaPrint, FaBoxOpen
 } from "react-icons/fa";
 
-            // ... existing states
-const [dishes, setDishes] = useState([]);
-const [activeChefTab, setActiveChefTab] = useState("orders"); // "orders" or "stock"
-
-// Inside your fetchOrders function (or a new useEffect), fetch dishes:
-const fetchDishes = async () => {
-    try {
-        const res = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/dishes?restaurantId=${ownerId}`);
-        setDishes(res.data);
-    } catch (e) { console.error("Dish sync failed"); }
-};
-
-useEffect(() => {
-    if (activeChefTab === "stock") fetchDishes();
-}, [activeChefTab]);
-
-// --- ACTION: TOGGLE AVAILABILITY ---
-const toggleDishAvailability = async (dishId, currentStatus) => {
-    try {
-        const newStatus = !currentStatus;
-        // Update UI Optimistically
-        setDishes(prev => prev.map(d => d._id === dishId ? { ...d, isAvailable: newStatus } : d));
-        
-        await axios.put(`https://smart-menu-backend-5ge7.onrender.com/api/dishes/${dishId}`, 
-            { isAvailable: newStatus }, 
-            { headers: { Authorization: `Bearer ${token}` } }
-        );
-    } catch (e) {
-        alert("Failed to update item status.");
-        fetchDishes();
-    }
-};       
-{/* --- TAB SWITCHER --- */}
-<div style={{ display: 'flex', gap: '10px', marginBottom: '30px' }}>
-    <button 
-        onClick={() => setActiveChefTab("orders")}
-        style={{ ...styles.iconButtonText, background: activeChefTab === 'orders' ? '#f97316' : '#1f2937' }}
-    >
-        LIVE ORDERS ({orders.length})
-    </button>
-    <button 
-        onClick={() => setActiveChefTab("stock")}
-        style={{ ...styles.iconButtonText, background: activeChefTab === 'stock' ? '#3b82f6' : '#1f2937' }}
-    >
-        STOCK CONTROL
-    </button>
-</div>
-
-{/* --- VIEW: STOCK CONTROL --- */}
-{activeChefTab === "stock" && (
-    <div style={styles.grid}>
-        {dishes.map(dish => (
-            <div key={dish._id} style={{ ...styles.card, padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
-                    <img src={dish.image} style={{ width: '50px', height: '50px', borderRadius: '12px', objectFit: 'cover', opacity: dish.isAvailable ? 1 : 0.3 }} alt="" />
-                    <div>
-                        <h3 style={{ margin: 0, fontSize: '16px', color: dish.isAvailable ? 'white' : '#555' }}>{dish.name}</h3>
-                        <p style={{ margin: 0, fontSize: '10px', color: dish.isAvailable ? '#22c55e' : '#ef4444', fontWeight: '900' }}>
-                            {dish.isAvailable ? "● AVAILABLE" : "● OUT OF STOCK"}
-                        </p>
-                    </div>
-                </div>
-                <button 
-                    onClick={() => toggleDishAvailability(dish._id, dish.isAvailable)}
-                    style={{ 
-                        background: dish.isAvailable ? '#ef4444' : '#22c55e', 
-                        color: 'white', border: 'none', padding: '10px 15px', borderRadius: '10px', fontWeight: '900', fontSize: '12px', cursor: 'pointer' 
-                    }}
-                >
-                    {dish.isAvailable ? "MARK SOLD OUT" : "MARK AVAILABLE"}
-                </button>
-            </div>
-        ))}
-    </div>
-)}
 const ChefDashboard = () => {
     const navigate = useNavigate();
+    
+    // --- 1. STATE MANAGEMENT ---
     const [orders, setOrders] = useState([]);
     const [restaurantName, setRestaurantName] = useState("Kitchen");
     const [loading, setLoading] = useState(true);
     const [serviceCalls, setServiceCalls] = useState([]); 
     const [isMuted, setIsMuted] = useState(false);
     
-    // 🟢 NEW STATE FOR PRINTING
+    // 🟢 STOCK & TAB STATES
+    const [dishes, setDishes] = useState([]);
+    const [activeChefTab, setActiveChefTab] = useState("orders"); // "orders" or "stock"
     const [printingOrder, setPrintingOrder] = useState(null);
     
     const ownerId = localStorage.getItem("ownerId");
     const token = localStorage.getItem("ownerToken");
 
-    // 🔊 AUDIO REFS
+    // 🔊 AUDIO & SOCKET REFS
     const audioRef = useRef(new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"));
     const callSound = useRef(new Audio("https://assets.mixkit.co/active_storage/sfx/2190/2190-preview.mp3"));
     const socketRef = useRef();
 
-    // --- 1. DATA FETCHING ---
+    // --- 2. DATA FETCHING ---
+    
+    // Fetch Dishes for Stock Control
+    const fetchDishes = async () => {
+        try {
+            const res = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/dishes?restaurantId=${ownerId}`);
+            setDishes(res.data);
+        } catch (e) { console.error("Dish sync failed"); }
+    };
+
+    // Fetch Live Orders
     const fetchOrders = async () => {
         if (!ownerId || !token) { navigate("/login"); return; }
         try {
@@ -128,7 +67,9 @@ const ChefDashboard = () => {
         }
     };
 
-    // --- 2. REAL-TIME SOCKET CONNECTION ---
+    // --- 3. EFFECTS ---
+
+    // Initial Load & Socket Setup
     useEffect(() => {
         fetchOrders(); 
         socketRef.current = io("https://smart-menu-backend-5ge7.onrender.com");
@@ -157,15 +98,31 @@ const ChefDashboard = () => {
         return () => { clearInterval(interval); socket.disconnect(); };
     }, [ownerId, isMuted]);
 
-    // --- 3. ACTIONS ---
+    // Fetch dishes when switching to stock tab
+    useEffect(() => {
+        if (activeChefTab === "stock") fetchDishes();
+    }, [activeChefTab]);
 
-    // 🟢 NEW: PRINT LOGIC
+    // --- 4. ACTIONS ---
+
+    const toggleDishAvailability = async (dishId, currentStatus) => {
+        try {
+            const newStatus = !currentStatus;
+            setDishes(prev => prev.map(d => d._id === dishId ? { ...d, isAvailable: newStatus } : d));
+            
+            await axios.put(`https://smart-menu-backend-5ge7.onrender.com/api/dishes/${dishId}`, 
+                { isAvailable: newStatus }, 
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+        } catch (e) {
+            alert("Failed to update item status.");
+            fetchDishes();
+        }
+    };
+
     const handlePrint = (order) => {
         setPrintingOrder(order);
-        // Delay slightly to ensure React renders the hidden div before printing
-        setTimeout(() => {
-            window.print();
-        }, 300);
+        setTimeout(() => { window.print(); }, 300);
     };
 
     const handleAttendTable = async (callId, tableNumber) => {
@@ -187,11 +144,6 @@ const ChefDashboard = () => {
                 { status: newStatus }, 
                 { headers: { Authorization: `Bearer ${token}` } }
             );
-            if (newStatus === "Ready") { 
-                setTimeout(() => { 
-                    setOrders(prev => prev.filter(o => o._id !== orderId)); 
-                }, 600000); 
-            }
         } catch (error) { 
             alert("Failed to update status."); 
             fetchOrders(); 
@@ -209,6 +161,8 @@ const ChefDashboard = () => {
     };
 
     const handleLogout = () => { localStorage.clear(); window.location.href = "/"; };
+
+    // --- 5. RENDER LOGIC ---
 
     if (loading) return (
         <div style={styles.loadingContainer}>
@@ -257,82 +211,127 @@ const ChefDashboard = () => {
                 </div>
             </header>
 
-            {/* --- LIVE ORDERS GRID --- */}
-            <div style={styles.grid}>
-                {orders.length === 0 ? (
-                    <div style={styles.emptyState}>
-                        <FaUtensils style={{ fontSize: '60px', marginBottom: '20px', opacity: 0.1 }} />
-                        <p style={{fontSize:'20px', fontWeight:'900', color:'#333'}}>NO ACTIVE ORDERS</p>
-                    </div>
-                ) : (
-                    orders.map((order) => (
-                        <div key={order._id} style={styles.card}>
-                            <div style={styles.cardHeader}>
-                                <div>
-                                    <h2 style={styles.tableNumber}>
-                                        {order.tableNumber === "Takeaway" ? "🛍️ Takeaway" : `🍽️ Table ${order.tableNumber}`}
-                                    </h2>
-                                    <p style={styles.orderId}>ID: #{order._id?.slice(-6).toUpperCase()}</p>
-                                </div>
-                                <span style={order.status === 'Cooking' ? styles.badgeCooking : (order.status === 'Ready' ? styles.badgeReady : styles.badgeNew)}>
-                                    ● {order.status === "PLACED" ? "NEW ORDER" : order.status.toUpperCase()}
-                                </span>
-                            </div>
-
-                            <div style={styles.metaContainer}>
-                                <span style={styles.metaItem}><FaRegClock style={styles.metaIcon} /> Received {new Date(order.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-                                <span style={styles.metaItem}><FaUser style={styles.metaIcon} /> {order.customerName || "Guest"}</span>
-                            </div>
-
-                            <div style={styles.itemsContainer}>
-                                {order.items.map((item, idx) => (
-                                    <div key={idx} style={styles.itemRow}>
-                                        <div style={{ display: 'flex', alignItems: 'flex-start' }}>
-                                            <FaCircle style={styles.itemBullet} />
-                                            <span>
-                                                <span style={styles.itemName}>{item.name}</span>
-                                                {item.customizations && item.customizations.length > 0 && (
-                                                    <div style={styles.specsContainer}>
-                                                        {item.customizations.map((spec, sIdx) => (
-                                                            <span key={sIdx} style={styles.specTag}>🚨 {spec}</span>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </span>
-                                        </div>
-                                        <span style={styles.itemQuantity}>×{item.quantity}</span>
-                                    </div>
-                                ))}
-                            </div>
-
-                            <div style={styles.actionContainer}>
-                                {/* 🟢 PRINT BUTTON ADDED HERE */}
-                                <button onClick={() => handlePrint(order)} style={styles.btnPrint}>
-                                    <FaPrint style={{ marginRight: '8px' }} /> PRINT KOT
-                                </button>
-
-                                <div style={{marginTop: '12px'}}>
-                                    {(order.status === "PLACED" || order.status === "Pending") && (
-                                        <button onClick={() => updateOrderStatus(order._id, "Cooking")} style={styles.btnStart}>
-                                            <FaFire style={{ marginRight: '8px' }} /> START PREPARING
-                                        </button>
-                                    )}
-                                    {order.status === "Cooking" && (
-                                        <button onClick={() => updateOrderStatus(order._id, "Ready")} style={styles.btnReady}>
-                                            <FaCheck style={{ marginRight: '8px' }} /> MARK AS READY
-                                        </button>
-                                    )}
-                                    {order.status === "Ready" && (
-                                        <button onClick={() => handleDeleteOrder(order._id)} style={styles.btnClear}>
-                                            <FaRocket style={{ marginRight: '8px' }} /> DISMISS ORDER
-                                        </button>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    ))
-                )}
+            {/* --- TAB SWITCHER --- */}
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '30px' }}>
+                <button 
+                    onClick={() => setActiveChefTab("orders")}
+                    style={{ ...styles.tabButton, background: activeChefTab === 'orders' ? '#f97316' : '#1f2937' }}
+                >
+                    <FaUtensils style={{marginRight:'8px'}}/> LIVE ORDERS ({orders.length})
+                </button>
+                <button 
+                    onClick={() => setActiveChefTab("stock")}
+                    style={{ ...styles.tabButton, background: activeChefTab === 'stock' ? '#3b82f6' : '#1f2937' }}
+                >
+                    <FaBoxOpen style={{marginRight:'8px'}}/> STOCK CONTROL
+                </button>
             </div>
+
+            {/* --- VIEW: LIVE ORDERS --- */}
+            {activeChefTab === "orders" && (
+                <div style={styles.grid}>
+                    {orders.length === 0 ? (
+                        <div style={styles.emptyState}>
+                            <FaUtensils style={{ fontSize: '60px', marginBottom: '20px', opacity: 0.1 }} />
+                            <p style={{fontSize:'20px', fontWeight:'900', color:'#333'}}>NO ACTIVE ORDERS</p>
+                        </div>
+                    ) : (
+                        orders.map((order) => (
+                            <div key={order._id} style={styles.card}>
+                                <div style={styles.cardHeader}>
+                                    <div>
+                                        <h2 style={styles.tableNumber}>
+                                            {order.tableNumber === "Takeaway" ? "🛍️ Takeaway" : `🍽️ Table ${order.tableNumber}`}
+                                        </h2>
+                                        <p style={styles.orderId}>ID: #{order._id?.slice(-6).toUpperCase()}</p>
+                                    </div>
+                                    <span style={order.status === 'Cooking' ? styles.badgeCooking : (order.status === 'Ready' ? styles.badgeReady : styles.badgeNew)}>
+                                        ● {order.status === "PLACED" ? "NEW ORDER" : order.status.toUpperCase()}
+                                    </span>
+                                </div>
+
+                                <div style={styles.metaContainer}>
+                                    <span style={styles.metaItem}><FaRegClock style={styles.metaIcon} /> {new Date(order.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                                    <span style={styles.metaItem}><FaUser style={styles.metaIcon} /> {order.customerName || "Guest"}</span>
+                                </div>
+
+                                <div style={styles.itemsContainer}>
+                                    {order.items.map((item, idx) => (
+                                        <div key={idx} style={styles.itemRow}>
+                                            <div style={{ display: 'flex', alignItems: 'flex-start' }}>
+                                                <FaCircle style={styles.itemBullet} />
+                                                <span>
+                                                    <span style={styles.itemName}>{item.name}</span>
+                                                    {item.customizations && item.customizations.length > 0 && (
+                                                        <div style={styles.specsContainer}>
+                                                            {item.customizations.map((spec, sIdx) => (
+                                                                <span key={sIdx} style={styles.specTag}>🚨 {spec}</span>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </span>
+                                            </div>
+                                            <span style={styles.itemQuantity}>×{item.quantity}</span>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <div style={styles.actionContainer}>
+                                    <button onClick={() => handlePrint(order)} style={styles.btnPrint}>
+                                        <FaPrint style={{ marginRight: '8px' }} /> PRINT KOT
+                                    </button>
+
+                                    <div style={{marginTop: '12px'}}>
+                                        {(order.status === "PLACED" || order.status === "Pending") && (
+                                            <button onClick={() => updateOrderStatus(order._id, "Cooking")} style={styles.btnStart}>
+                                                <FaFire style={{ marginRight: '8px' }} /> START PREPARING
+                                            </button>
+                                        )}
+                                        {order.status === "Cooking" && (
+                                            <button onClick={() => updateOrderStatus(order._id, "Ready")} style={styles.btnReady}>
+                                                <FaCheck style={{ marginRight: '8px' }} /> MARK AS READY
+                                            </button>
+                                        )}
+                                        {order.status === "Ready" && (
+                                            <button onClick={() => handleDeleteOrder(order._id)} style={styles.btnClear}>
+                                                <FaRocket style={{ marginRight: '8px' }} /> DISMISS ORDER
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        ))
+                    )}
+                </div>
+            )}
+
+            {/* --- VIEW: STOCK CONTROL --- */}
+            {activeChefTab === "stock" && (
+                <div style={styles.grid}>
+                    {dishes.map(dish => (
+                        <div key={dish._id} style={{ ...styles.card, padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+                                <img src={dish.image} style={{ width: '50px', height: '50px', borderRadius: '12px', objectFit: 'cover', opacity: dish.isAvailable ? 1 : 0.3 }} alt="" />
+                                <div>
+                                    <h3 style={{ margin: 0, fontSize: '16px', color: dish.isAvailable ? 'white' : '#555' }}>{dish.name}</h3>
+                                    <p style={{ margin: 0, fontSize: '10px', color: dish.isAvailable ? '#22c55e' : '#ef4444', fontWeight: '900' }}>
+                                        {dish.isAvailable ? "● AVAILABLE" : "● OUT OF STOCK"}
+                                    </p>
+                                </div>
+                            </div>
+                            <button 
+                                onClick={() => toggleDishAvailability(dish._id, dish.isAvailable)}
+                                style={{ 
+                                    background: dish.isAvailable ? '#ef4444' : '#22c55e', 
+                                    color: 'white', border: 'none', padding: '10px 15px', borderRadius: '10px', fontWeight: '900', fontSize: '12px', cursor: 'pointer' 
+                                }}
+                            >
+                                {dish.isAvailable ? "MARK SOLD OUT" : "MARK AVAILABLE"}
+                            </button>
+                        </div>
+                    ))}
+                </div>
+            )}
                   
             {/* 🖨️ HIDDEN PRINT TEMPLATE (KOT) */}
             {printingOrder && (
@@ -374,7 +373,7 @@ const ChefDashboard = () => {
     );
 };
 
-// --- STYLES (Your Dark Theme + Print Button) ---
+// --- STYLES ---
 const styles = {
     dashboardContainer: { minHeight: '100vh', background: '#080a0f', color: 'white', padding: '30px', fontFamily: "'Inter', sans-serif" },
     loadingContainer: { minHeight: '100vh', background: '#080a0f', color: 'white', display: 'flex', justifyContent: 'center', alignItems: 'center' },
@@ -386,6 +385,7 @@ const styles = {
     iconButton: { background: '#1f2937', border: '1px solid #374151', color: '#f3f4f6', padding: '12px', borderRadius: '12px', cursor: 'pointer', fontSize: '18px' },
     iconButtonText: { background: '#1f2937', border: '1px solid #374151', color: '#f3f4f6', padding: '12px 20px', borderRadius: '12px', cursor: 'pointer', fontWeight: '800', display: 'flex', alignItems: 'center', fontSize: '13px' },
     iconButtonRed: { background: '#450a0a', border: '1px solid #7f1d1d', color: '#f87171', padding: '12px 20px', borderRadius: '12px', cursor: 'pointer', fontWeight: '800', display: 'flex', alignItems: 'center', fontSize: '13px' },
+    tabButton: { border: '1px solid #374151', color: 'white', padding: '15px 25px', borderRadius: '15px', cursor: 'pointer', fontWeight: '900', display: 'flex', alignItems: 'center', fontSize: '14px', transition: '0.3s' },
     grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '30px' },
     emptyState: { gridColumn: '1/-1', textAlign: 'center', padding: '120px 0', color: '#1f2937', background: '#0a0d14', borderRadius: '32px', border: '3px dashed #111827' },
     card: { background: '#111827', borderRadius: '28px', border: '1px solid #1f2937', overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.3)' },
@@ -406,10 +406,7 @@ const styles = {
     specsContainer: { display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '8px' },
     specTag: { background: 'rgba(239, 68, 68, 0.1)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.2)', fontSize: '10px', padding: '4px 10px', borderRadius: '6px', fontWeight: '900' },
     actionContainer: { padding: '25px', background: '#080a0f', borderTop: '1px solid #1f2937' },
-    
-    // 🟢 PRINT BUTTON STYLE
     btnPrint: { width: '100%', background: '#f3f4f6', color: '#111827', border: 'none', padding: '16px', borderRadius: '14px', fontWeight: '900', cursor: 'pointer', fontSize: '14px' },
-    
     btnStart: { width: '100%', background: '#f97316', border: 'none', color: 'white', padding: '16px', borderRadius: '14px', fontWeight: '900', cursor: 'pointer', fontSize: '14px', boxShadow: '0 10px 15px -3px rgba(249, 115, 22, 0.3)' },
     btnReady: { width: '100%', background: '#22c55e', border: 'none', color: 'white', padding: '16px', borderRadius: '14px', fontWeight: '900', cursor: 'pointer', fontSize: '14px', boxShadow: '0 10px 15px -3px rgba(34, 197, 94, 0.3)' },
     btnClear: { width: '100%', background: '#1f2937', border: '1px solid #374151', color: '#d1d5db', padding: '16px', borderRadius: '14px', fontWeight: '900', cursor: 'pointer', fontSize: '14px' },
