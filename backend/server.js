@@ -5,7 +5,8 @@ import mongoose from 'mongoose';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import rateLimit from 'express-rate-limit';
-import https from "https";
+import https from "https"; // ✅ Correctly imported here
+
 // --- IMPORT ROUTES ---
 import authRoutes from './routes/authRoutes.js';
 import dishRoutes from './routes/dishRoutes.js';
@@ -25,11 +26,10 @@ const limiter = rateLimit({
 });
 
 // --- 🔒 SECURITY: CORS CONFIG ---
-// Fixed to include your specific Netlify preview URL
 const allowedOrigins = [
     "http://localhost:5173",           
     "https://smartmenuss.netlify.app",
-    "https://694915c413d9f40008f38924--smartmenuss.netlify.app" // Added this to fix your error
+    "https://694915c413d9f40008f38924--smartmenuss.netlify.app" 
 ];
 
 const io = new Server(httpServer, {
@@ -44,7 +44,6 @@ const io = new Server(httpServer, {
 app.use(limiter); 
 app.use(cors({ 
     origin: function (origin, callback) {
-        // Allow requests with no origin (like mobile apps) or if in allowedOrigins
         if (!origin || allowedOrigins.indexOf(origin) !== -1) {
             callback(null, true);
         } else {
@@ -108,22 +107,18 @@ httpServer.listen(PORT, () => {
     console.log(`🚀 Production Server running on port ${PORT}`);
 });
 
+// --- 7. SELF-PING (KEEP ALIVE) ---
+/* NOTE: I changed the URL to ping your home route ('/') instead of '/api/products'.
+   This is lighter on your server/database.
+*/
+const renderUrl = "https://smart-menu-backend-5ge7.onrender.com/"; 
 
-
-// --- PASTE THIS AT THE BOTTOM OF YOUR SERVER FILE ---
-
-const https = require("https");
-
-const url = "https://smart-menu-backend-5ge7.onrender.com/api/products"; 
-
-// Ping the server every 14 minutes (840,000 ms) 
-// Render sleeps after 15 mins of inactivity, so 14 mins is safe.
+// Ping the server every 14 minutes (840,000 ms)
 setInterval(() => {
-  https.get(url, (res) => {
-    console.log(`Self-ping sent to ${url} - Status: ${res.statusCode}`);
-  }).on("error", (e) => {
-    console.error(`Self-ping error: ${e.message}`);
-  });
-}, 840000); 
-
-// ----------------------------------------------------
+    // We reuse the 'https' variable we imported at the top!
+    https.get(renderUrl, (res) => {
+        console.log(`Self-ping sent to ${renderUrl} - Status: ${res.statusCode}`);
+    }).on("error", (e) => {
+        console.error(`Self-ping error: ${e.message}`);
+    });
+}, 840000);
