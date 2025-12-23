@@ -1,0 +1,353 @@
+/* Base Reset */
+.tracker-container {
+    background-color: #050505;
+    min-height: 100vh;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    color: white;
+    padding: 25px; /* Increased padding */
+    padding-bottom: 80px;
+    max-width: 600px; /* INCREASED WIDTH (was 480px) */
+    margin: 0 auto;
+}
+
+.loading-screen {
+    background: #050505;
+    height: 100vh;
+    color: #FF5200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px; /* Larger loading text */
+}
+
+/* Headings */
+h1 { font-size: 28px; font-weight: 800; margin: 0 0 20px 0; } /* Larger H1 */
+h3 { font-size: 18px; font-weight: 700; margin: 0 0 15px 0; color: #e5e5e5; } /* Larger H3 */
+
+/* Cards */
+.card {
+    background-color: #121212;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 24px; /* More rounded */
+    padding: 25px; /* More breathing room */
+    margin-bottom: 30px;
+    position: relative;
+    overflow: hidden;
+}
+
+/* 1. Header Card */
+.header-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+.label { font-size: 12px; text-transform: uppercase; letter-spacing: 1.2px; color: #888; font-weight: 700; margin-bottom: 6px; }
+.value { font-size: 20px; font-weight: 700; } /* Larger ID */
+.sub-value { color: #888; font-size: 14px; margin-top: 6px; }
+
+.eta-badge {
+    background: rgba(255, 82, 0, 0.1);
+    border: 1px solid rgba(255, 82, 0, 0.3);
+    color: #FF5200;
+    padding: 8px 16px; /* Larger badge */
+    border-radius: 14px;
+    font-size: 14px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* 2. Stepper Layout */
+.stepper-wrapper {
+    position: relative;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 15px 15px 40px 15px; /* More spacing */
+}
+.progress-bg { position: absolute; top: 18px; left: 0; width: 100%; height: 4px; background: #333; z-index: 0; }
+.progress-fill { position: absolute; top: 18px; left: 0; height: 4px; background: linear-gradient(90deg, #d34400, #FF5200); z-index: 0; transition: width 0.5s ease; box-shadow: 0 0 10px #FF5200; }
+
+.step-item { z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 10px; width: 60px; }
+.step-icon {
+    width: 40px; height: 40px; /* Larger Icons */
+    border-radius: 50%;
+    background: #121212;
+    border: 2px solid #444;
+    color: #666;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+    transition: all 0.3s;
+}
+.step-icon.active {
+    border-color: #FF5200;
+    color: #FF5200;
+    background: #1a1a1a;
+    box-shadow: 0 0 15px rgba(255, 82, 0, 0.4);
+    transform: scale(1.1);
+}
+.step-label { font-size: 10px; text-transform: uppercase; font-weight: 700; color: #666; }
+.step-label.active { color: white; }
+
+/* 3. Sweet Cravings List */
+.cravings-list { margin-bottom: 30px; }
+.upsell-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #181818;
+    border: 1px solid rgba(255,255,255,0.05);
+    padding: 15px; /* Larger touch area */
+    border-radius: 18px;
+    margin-bottom: 15px;
+}
+.upsell-left { display: flex; align-items: center; gap: 15px; }
+.upsell-img { width: 60px; height: 60px; border-radius: 12px; object-fit: cover; } /* Larger images */
+.upsell-info p { margin: 0; }
+.item-name { font-weight: 700; font-size: 15px; }
+.item-price { color: #888; font-size: 13px; }
+
+.add-btn {
+    background: #FF5200;
+    color: white;
+    border: none;
+    padding: 10px 20px; /* Bigger button */
+    border-radius: 25px;
+    font-size: 13px;
+    font-weight: 800;
+    cursor: pointer;
+    display: flex; align-items: center; gap: 6px;
+}
+
+/* 4. Scan To Pay & Split */
+.split-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+.split-toggle { 
+    background: rgba(255,255,255,0.1); border: none; color: #ccc; 
+    padding: 8px 16px; border-radius: 20px; font-size: 13px; font-weight: 700; cursor: pointer;
+    display: flex; align-items: center; gap: 8px;
+}
+.qr-layout { display: flex; gap: 20px; align-items: center; margin-top: 15px; }
+.qr-box { background: white; padding: 10px; border-radius: 15px; }
+.qr-info { flex: 1; }
+.price-large { font-size: 32px; font-weight: 800; margin: 0; line-height: 1; color: #FF5200; }
+.split-controls { display: flex; align-items: center; gap: 15px; margin: 15px 0; }
+.control-btn { width: 35px; height: 35px; border-radius: 8px; background: #333; color: white; border: none; font-weight: bold; cursor: pointer; font-size: 18px; } /* Bigger +/- buttons */
+.split-number { font-weight: bold; font-size: 18px; }
+.per-person { font-size: 12px; color: #666; font-weight: normal; }
+.total-items-count { font-size: 12px; color: #666; margin-top: 5px; }
+
+/* 5. Action Buttons (Footer) */
+.action-row { display: flex; gap: 15px; margin-bottom: 30px; }
+.btn-download {
+    flex: 2;
+    background: #FF5200;
+    color: white;
+    height: 60px; /* Taller button */
+    border: none;
+    border-radius: 18px;
+    font-weight: 700;
+    font-size: 14px; /* Larger Text */
+    text-transform: uppercase;
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(255, 82, 0, 0.3);
+}
+.btn-staff {
+    flex: 1;
+    background: #1a1a1a;
+    color: #FF5200;
+    height: 60px; /* Taller button */
+    border: 1px solid rgba(255, 82, 0, 0.3);
+    border-radius: 18px;
+    font-weight: 700;
+    font-size: 14px;
+    text-transform: uppercase;
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    cursor: pointer;
+}
+
+/* 6. Basket Summary */
+.basket-item { display: flex; justify-content: space-between; margin-bottom: 12px; border-bottom: 1px solid #222; padding-bottom: 12px; }
+.basket-name { font-weight: 600; font-size: 16px; }
+.basket-qty { font-size: 12px; color: #888; }
+.basket-price { font-weight: bold; font-size: 16px; }
+.total-row { display: flex; justify-content: space-between; margin-top: 20px; border-top: 1px dashed #333; padding-top: 20px; }
+.grand-total-label { color: #888; font-size: 16px; }
+.total-price { color: #FF5200; font-size: 24px; font-weight: 900; }
+
+/* 7. Feedback & Footer */
+.feedback-card { text-align: center; }
+.stars-row { display: flex; justify-content: center; gap: 15px; margin-bottom: 20px; }
+.submit-btn { width: 100%; height: 50px; border-radius: 15px; font-size: 16px; font-weight: bold; background: #FF5200; color: white; border:none; cursor: pointer; }
+.thank-you-msg { text-align: center; color: #FF5200; font-weight: bold; font-size: 18px; }
+.footer-link { display: flex; align-items: center; justify-content: center; gap: 10px; color: #666; text-decoration: none; font-size: 14px; font-weight: 700; text-transform: uppercase; margin-top: 20px;}
+
+/* --- PAYMENT APPS & BANNERS --- */
+
+/* Success Banner */
+.success-banner {
+    background: #28a745; 
+    color: white;
+    padding: 20px;
+    border-radius: 16px;
+    margin-bottom: 25px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    font-weight: bold;
+    font-size: 16px;
+    animation: fadeIn 0.5s ease;
+}
+
+/* Status Banners */
+.status-banner {
+    padding: 15px 20px;
+    border-radius: 16px;
+    margin-bottom: 25px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    animation: fadeIn 0.5s ease;
+}
+
+.status-banner.yellow {
+    background: rgba(255, 173, 0, 0.15);
+    border: 1px solid #FFAD00;
+    color: #FFAD00;
+}
+
+.status-banner.green {
+    background: #28a745;
+    color: white;
+    font-weight: bold;
+}
+
+.spin-slow {
+    animation: spin 3s linear infinite;
+    font-size: 20px;
+}
+
+/* Payment App Buttons */
+.payment-apps-row {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+.app-btn {
+    flex: 1;
+    border: none;
+    border-radius: 14px;
+    height: 55px; /* Taller Buttons */
+    font-weight: bold;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    cursor: pointer;
+    font-size: 15px; /* Larger text */
+    transition: transform 0.2s;
+}
+
+.app-btn:active {
+    transform: scale(0.95);
+}
+
+.gpay {
+    background-color: #1f1f1f;
+    border: 1px solid #5f6368;
+}
+
+.phonepe {
+    background-color: #5f259f;
+}
+
+.fampay {
+    width: 100%;
+    background-color: #FFAD00;
+    color: black;
+    margin-bottom: 25px;
+}
+
+.divider-text {
+    text-align: center;
+    color: #555;
+    font-size: 12px;
+    font-weight: bold;
+    margin: 20px 0;
+    letter-spacing: 1.5px;
+}
+
+/* UPI Input Field */
+.upi-input-field {
+    width: 100%;
+    padding: 16px; /* Larger Input */
+    background: #2a2a2a;
+    border: 1px solid #444;
+    border-radius: 12px;
+    color: white;
+    font-size: 18px; /* Larger typing text */
+    outline: none;
+    text-align: center;
+    font-weight: bold;
+    letter-spacing: 1px;
+}
+
+.upi-input-field::placeholder {
+    color: #666;
+    font-weight: normal;
+    font-size: 14px;
+}
+
+.upi-input-field:focus {
+    border-color: #FF5200;
+    background: #333;
+}
+
+/* Spinner Animation */
+.spinner {
+    width: 50px;
+    height: 50px;
+    border: 5px solid rgba(255, 82, 0, 0.3);
+    border-radius: 50%;
+    border-top-color: #FF5200;
+    animation: spin 1s ease-in-out infinite;
+    margin: 0 auto 20px auto;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* --- PIN Pad (Cashier Mode) --- */
+.pin-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px; /* More space between buttons */
+    max-width: 300px;
+    margin: 0 auto;
+}
+
+.pin-btn {
+    background: #222;
+    border: 1px solid #444;
+    color: white;
+    font-size: 22px; /* Large Numbers */
+    font-weight: bold;
+    padding: 20px; /* Big touch area */
+    border-radius: 15px;
+    cursor: pointer;
+    transition: background 0.1s;
+}
+
+.pin-btn:active {
+    background: #444;
+}
