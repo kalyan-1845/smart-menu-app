@@ -4,7 +4,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-d
 // --- COMPONENT IMPORTS ---
 import Menu from "./Menu.jsx"; 
 import Cart from "./Cart.jsx";
-import ChefDashboard from "./ChefDashboard.jsx"; // This is your "Kitchen Tab" file
+import ChefDashboard from "./ChefDashboard.jsx"; 
 import OwnerLogin from "./OwnerLogin.jsx";
 import AdminPanel from "./AdminPanel.jsx";
 import Register from "./Register.jsx";
@@ -142,14 +142,22 @@ function App() {
         {/* 🛡️ MANAGER LOGIN ROUTE */}
         <Route path="/manager-login" element={<ProtectedRoute><ManagerLogin /></ProtectedRoute>} />
 
-        {/* ⚙️ ADMIN PANEL (Requires standard Login AND Manager Password) */}
+        {/* ⚙️ ADMIN PANEL ROUTES */}
+        {/* Route for just "/admin" */}
         <Route path="/admin" element={
             <ManagerProtectedRoute>
                 <AdminPanel />
             </ManagerProtectedRoute>
         } />
+        
+        {/* ✅ FIXED: Added specific route for "/admin/dashboard" */}
+        <Route path="/admin/dashboard" element={
+            <ManagerProtectedRoute>
+                <AdminPanel />
+            </ManagerProtectedRoute>
+        } />
 
-        {/* --- SUPER ADMIN (Fixed path for easier access) --- */}
+        {/* --- SUPER ADMIN --- */}
         <Route path="/superadmin" element={<SuperAdmin />} />
 
       </Routes>
