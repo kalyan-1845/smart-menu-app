@@ -3,7 +3,8 @@ import bcrypt from 'bcryptjs';
 
 /**
  * User Model
- * Includes Role-Based Access (RBAC) and Subscription/Trial Tracking.
+ * Includes Role-Based Access (RBAC), Subscription/Trial Tracking,
+ * and Payment Configuration.
  */
 const userSchema = new mongoose.Schema(
     {
@@ -34,7 +35,14 @@ const userSchema = new mongoose.Schema(
             required: true,
         },
 
-        // 💰 SAAS SUBSCRIPTION LOGIC
+        // 💰 PAYMENT CONFIGURATION (New Field)
+        upiId: {
+            type: String,
+            default: "", // Stores the merchant's UPI ID (e.g., merchant@okaxis)
+            trim: true
+        },
+
+        // 🚀 SAAS SUBSCRIPTION LOGIC
         isPro: {
             type: Boolean,
             default: false // Becomes true after they pay ₹999/mo
