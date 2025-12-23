@@ -1,214 +1,275 @@
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import { useNavigate, Link } from 'react-router-dom';
+import React, { useState } from "react";
+import axios from "axios";
+import { Link, useNavigate } from "react-router-dom";
 
-/**
- * Register Component
- * Allows new restaurant owners to create an account.
- * Automatically logs them in and redirects to the Chef Dashboard upon success.
- */
+// 🚀 REGISTRATION COMPONENT
 const Register = () => {
-    const [formData, setFormData] = useState({
-        restaurantName: '',
-        username: '',
-        email: '',
-        password: '',
+  const navigate = useNavigate();
+
+  // --- 1. STATE MANAGEMENT ---
+  const [formData, setFormData] = useState({
+    restaurantName: "",
+    username: "",
+    email: "",
+    password: ""
+  });
+  
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  // --- 2. LOGIC: AUTO-GENERATE EMAIL ---
+  const handleNameChange = (e) => {
+    const rawName = e.target.value;
+    
+    // Create a clean ID: remove spaces, special chars, and make lowercase
+    // Example: "Kalyan Resto & Bar" -> "kalyanrestobar"
+    const cleanId = rawName.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+
+    setFormData({
+      restaurantName: rawName,
+      username: cleanId,             // Auto-fill Username
+      email: cleanId ? `${cleanId}@gmail.com` : "", // Auto-fill Email
+      password: formData.password    // Keep password same
     });
-    const [error, setError] = useState('');
-    const [loading, setLoading] = useState(false);
-    const navigate = useNavigate();
+  };
 
-    // 🎯 Clear any existing session data when the user lands on the register page
-    useEffect(() => {
-        localStorage.removeItem('ownerToken');
-        localStorage.removeItem('ownerId');
-        localStorage.removeItem('ownerUsername');
-    }, []);
+  const handlePasswordChange = (e) => {
+    setFormData({ ...formData, password: e.target.value });
+  };
 
-    const handleChange = (e) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
-    };
+  // --- 3. SUBMIT HANDLER ---
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setError('');
-        setLoading(true);
+    if(!formData.username) {
+        setError("Please enter a valid restaurant name.");
+        setLoading(false);
+        return;
+    }
 
-        // Simple client-side validation
-        if (formData.password.length < 6) {
-            setError("Password must be at least 6 characters long.");
-            setLoading(false);
-            return;
-        }
+    try {
+      // Adjust this URL to match your actual backend URL
+      const res = await axios.post("https://smart-menu-backend-5ge7.onrender.com/api/auth/register", formData);
+      
+      // If successful, save token and redirect
+      if (res.data) {
+        alert("Registration Successful! Please Login.");
+        navigate("/login");
+      }
+    } catch (err) {
+      console.error(err);
+      if (err.response && err.response.data.message) {
+        setError(err.response.data.message);
+      } else {
+        setError("Server error. Try again later.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
-        try {
-            /** * ✅ FIXED URL: Removed concatenated 'localhost' strings.
-             * Ensure your backend is deployed and running on this Render URL.
-             */
-            const response = await axios.post(
-                'https://smart-menu-backend-5ge7.onrender.com/api/auth/register', 
-                formData
-            );
-            
-            // The backend returns the token, the new MongoDB _id, and the username
-            const { token, _id, username } = response.data;
+  // --- 4. RENDER ---
+  return (
+    <div style={styles.container}>
+      <div style={styles.card}>
+        
+        {/* HEADER */}
+        <h1 style={styles.title}>🚀 Launch Your Menu</h1>
+        <p style={styles.subtitle}>Create your restaurant account and start taking orders.</p>
 
-            if (token && _id) {
-                // 🎯 Store credentials for the session
-                localStorage.setItem('ownerToken', token);
-                localStorage.setItem('ownerId', _id);
-                localStorage.setItem('ownerUsername', username || formData.username);
+        {/* ERROR MESSAGE */}
+        {error && <div style={styles.errorBox}>{error}</div>}
 
-                alert(`✅ Registration successful! Welcome, ${formData.restaurantName}.`);
-                
-                // 🎯 Hard Redirect
-                // Using window.location.href forces a clean state refresh for the dashboard
-                window.location.href = '/chef'; 
-            } else {
-                // Fallback if backend registers but doesn't provide a session token
-                alert("✅ Account created! Please log in.");
-                navigate('/login');
-            }
+        <form onSubmit={handleSubmit} style={styles.form}>
+          
+          {/* 1. RESTAURANT NAME (Main Input) */}
+          <div style={styles.inputGroup}>
+            <label style={styles.label}>Restaurant Name</label>
+            <input
+              type="text"
+              required
+              placeholder="e.g. Kalyan Resto"
+              value={formData.restaurantName}
+              onChange={handleNameChange}
+              style={styles.input}
+            />
+          </div>
 
-        } catch (err) {
-            console.error('Registration error:', err);
-            
-            // Extracts specific error message from the backend or provides a fallback
-            const msg = err.response?.data?.message || 
-                        'Registration failed. Server might be down or Username/Email already taken.';
-            setError(msg);
-        } finally {
-            setLoading(false);
-        }
-    };
+          {/* 2. USERNAME (Auto-Filled & Read-Only) */}
+          <div style={styles.inputGroup}>
+            <label style={styles.label}>Username (Public ID)</label>
+            <input
+              type="text"
+              readOnly
+              value={formData.username}
+              style={{ ...styles.input, ...styles.readOnlyInput }}
+              title="Auto-generated from restaurant name"
+            />
+          </div>
 
-    return (
-        <div className="min-h-screen flex items-center justify-center bg-[#0A0F18] p-6 font-sans selection:bg-[#FF9933] selection:text-white">
-            <div className="bg-[#181D2A] p-8 md:p-10 rounded-3xl shadow-2xl w-full max-w-md border border-gray-700/50">
-                
-                {/* --- Header --- */}
-                <div className="text-center mb-8">
-                    <h1 className="text-3xl font-extrabold text-[#FF9933] mb-2">
-                        🚀 Launch Your Menu
-                    </h1>
-                    <p className="text-gray-400 text-sm leading-relaxed">
-                        Create your restaurant account and start taking orders.
-                    </p>
-                </div>
+          {/* 3. EMAIL (Auto-Filled & Read-Only - BLOCKED PERSONAL EMAILS) */}
+          <div style={styles.inputGroup}>
+            <label style={styles.label}>Business Email (Security Locked)</label>
+            <input
+              type="email"
+              readOnly
+              value={formData.email}
+              style={{ ...styles.input, ...styles.readOnlyInput }}
+              title="Email is locked to the restaurant name for security"
+            />
+            <p style={styles.helperText}>*Email is automatically generated to prevent duplicates.</p>
+          </div>
 
-                {/* --- Registration Form --- */}
-                <form onSubmit={handleSubmit} className="space-y-5">
-                    {/* Restaurant Name */}
-                    <div>
-                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 ml-1" htmlFor="restaurantName">
-                            Restaurant Name
-                        </label>
-                        <input
-                            type="text"
-                            name="restaurantName"
-                            id="restaurantName"
-                            value={formData.restaurantName}
-                            onChange={handleChange}
-                            required
-                            className="w-full p-3 rounded-xl bg-gray-800/50 border border-gray-700 focus:ring-2 focus:ring-[#FF9933] focus:border-transparent text-white transition outline-none placeholder:text-gray-600"
-                            placeholder="e.g., Kalyan's Pizza Hub"
-                        />
-                    </div>
+          {/* 4. PASSWORD */}
+          <div style={styles.inputGroup}>
+            <label style={styles.label}>Password</label>
+            <input
+              type="password"
+              required
+              placeholder="••••••••"
+              value={formData.password}
+              onChange={handlePasswordChange}
+              style={styles.input}
+            />
+          </div>
 
-                    {/* Username */}
-                    <div>
-                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 ml-1" htmlFor="username">
-                            Username (Public ID)
-                        </label>
-                        <input
-                            type="text"
-                            name="username"
-                            id="username"
-                            value={formData.username}
-                            onChange={handleChange}
-                            required
-                            className="w-full p-3 rounded-xl bg-gray-800/50 border border-gray-700 focus:ring-2 focus:ring-[#FF9933] focus:border-transparent text-white transition outline-none placeholder:text-gray-600"
-                            placeholder="e.g., kalyanresto"
-                        />
-                    </div>
+          {/* SUBMIT BUTTON */}
+          <button 
+            type="submit" 
+            disabled={loading} 
+            style={loading ? styles.buttonDisabled : styles.button}
+          >
+            {loading ? "Creating Account..." : "Create Account & Access 🚀"}
+          </button>
 
-                    {/* Email */}
-                    <div>
-                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 ml-1" htmlFor="email">
-                            Business Email
-                        </label>
-                        <input
-                            type="email"
-                            name="email"
-                            id="email"
-                            value={formData.email}
-                            onChange={handleChange}
-                            required
-                            className="w-full p-3 rounded-xl bg-gray-800/50 border border-gray-700 focus:ring-2 focus:ring-[#FF9933] focus:border-transparent text-white transition outline-none placeholder:text-gray-600"
-                            placeholder="contact@restaurant.com"
-                        />
-                    </div>
+        </form>
 
-                    {/* Password */}
-                    <div>
-                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 ml-1" htmlFor="password">
-                            Password
-                        </label>
-                        <input
-                            type="password"
-                            name="password"
-                            id="password"
-                            value={formData.password}
-                            onChange={handleChange}
-                            required
-                            className="w-full p-3 rounded-xl bg-gray-800/50 border border-gray-700 focus:ring-2 focus:ring-[#FF9933] focus:border-transparent text-white transition outline-none placeholder:text-gray-600"
-                            placeholder="Min. 6 characters"
-                        />
-                    </div>
-
-                    {/* Error Display */}
-                    {error && (
-                        <div className="text-red-400 bg-red-900/20 p-3 rounded-xl text-sm border border-red-800/50 text-center animate-pulse">
-                            {error}
-                        </div>
-                    )}
-
-                    {/* Submit Button */}
-                    <button
-                        type="submit"
-                        disabled={loading}
-                        className="w-full bg-[#138808] hover:bg-[#19ac0b] text-white font-black py-4 rounded-2xl shadow-lg shadow-green-900/20 transition transform active:scale-95 disabled:opacity-50 uppercase tracking-widest text-sm mt-2"
-                    >
-                        {loading ? (
-                            <span className="flex items-center justify-center gap-2">
-                                <svg className="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                                Creating Kitchen...
-                            </span>
-                        ) : (
-                            'Create Account & Access 🚀'
-                        )}
-                    </button>
-                </form>
-
-                {/* --- Footer Links --- */}
-                <div className="mt-8 text-center pt-6 border-t border-gray-700/30">
-                    <p className="text-gray-400 text-sm">
-                        Already have a restaurant account? 
-                        <Link to="/login" className="text-[#FF9933] hover:text-orange-400 hover:underline ml-1 font-bold transition">
-                            Log In Here
-                        </Link>
-                    </p>
-                </div>
-            </div>
-            {/* Version Disclaimer */}
-            <p className="fixed bottom-6 text-gray-700 text-[10px] uppercase tracking-widest">
-                Restaurant SaaS Platform v2.0 • Data Encryption Active
-            </p>
+        {/* FOOTER */}
+        <div style={styles.footer}>
+            Already have a restaurant account? 
+            <Link to="/login" style={styles.link}> Log In Here</Link>
         </div>
-    );
+        <div style={styles.version}>
+            Restaurant SaaS Platform v2.0 • Data Encryption Active
+        </div>
+
+      </div>
+    </div>
+  );
+};
+
+// --- INLINE STYLES (No CSS File Needed) ---
+const styles = {
+  container: {
+    minHeight: "100vh",
+    backgroundColor: "#000",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: "20px",
+    fontFamily: "'Inter', sans-serif",
+    color: "#fff",
+  },
+  card: {
+    width: "100%",
+    maxWidth: "450px",
+    padding: "10px", // Minimal padding to match your screenshot
+  },
+  title: {
+    fontSize: "32px",
+    fontWeight: "800",
+    marginBottom: "10px",
+    marginTop: "0",
+  },
+  subtitle: {
+    color: "#ccc",
+    marginBottom: "20px",
+    fontSize: "14px",
+  },
+  form: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "15px",
+  },
+  inputGroup: {
+    display: "flex",
+    flexDirection: "column",
+  },
+  label: {
+    fontSize: "14px",
+    marginBottom: "5px",
+    color: "#ddd",
+  },
+  input: {
+    padding: "12px",
+    borderRadius: "4px",
+    border: "1px solid #444",
+    backgroundColor: "#222",
+    color: "#fff",
+    fontSize: "16px",
+    outline: "none",
+  },
+  readOnlyInput: {
+    backgroundColor: "#333", // Darker background to show it's locked
+    color: "#888",
+    cursor: "not-allowed",
+    border: "1px solid #333",
+  },
+  button: {
+    padding: "15px",
+    backgroundColor: "#666", // Greyish button like in screenshot
+    color: "#fff",
+    border: "none",
+    borderRadius: "20px", // Rounded pill shape
+    fontSize: "16px",
+    fontWeight: "bold",
+    cursor: "pointer",
+    marginTop: "10px",
+    transition: "background 0.3s",
+  },
+  buttonDisabled: {
+    padding: "15px",
+    backgroundColor: "#444",
+    color: "#888",
+    border: "none",
+    borderRadius: "20px",
+    cursor: "not-allowed",
+    marginTop: "10px",
+  },
+  errorBox: {
+    backgroundColor: "rgba(255, 0, 0, 0.1)",
+    border: "1px solid red",
+    color: "red",
+    padding: "10px",
+    borderRadius: "5px",
+    marginBottom: "15px",
+    fontSize: "14px",
+  },
+  footer: {
+    marginTop: "20px",
+    fontSize: "14px",
+    color: "#ccc",
+  },
+  link: {
+    color: "#4a90e2",
+    textDecoration: "none",
+    marginLeft: "5px",
+  },
+  helperText: {
+    fontSize: "11px",
+    color: "#666",
+    marginTop: "4px",
+    fontStyle: "italic"
+  },
+  version: {
+    marginTop: "30px",
+    fontSize: "12px",
+    color: "#fff",
+    borderTop: "1px solid #333",
+    paddingTop: "10px"
+  }
 };
 
 export default Register;
