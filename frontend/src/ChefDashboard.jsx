@@ -4,7 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import io from "socket.io-client";
 // 🎨 ICONS
 import { 
-    FaUtensils, FaCog, FaLock, FaVolumeUp, FaVolumeMute, FaRegClock, 
+    FaUtensils, FaLock, FaVolumeUp, FaVolumeMute, FaRegClock, 
     FaUser, FaCircle, FaFire, FaCheck, FaRocket, FaBell, 
     FaExternalLinkAlt, FaUserTie, FaWalking, FaPrint, FaBoxOpen
 } from "react-icons/fa";
@@ -33,6 +33,16 @@ const ChefDashboard = () => {
     const socketRef = useRef();
 
     // --- 2. DATA FETCHING ---
+
+    // 🟢 OPTIMIZATION: Fetch Name ONLY ONCE
+    const fetchRestaurantProfile = async () => {
+        if (!ownerId || !token) return;
+        try {
+            const config = { headers: { Authorization: `Bearer ${token}` } };
+            const nameRes = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/auth/restaurant/${ownerId}`, config);
+            setRestaurantName(nameRes.data.username || nameRes.data.restaurantName);
+        } catch (e) { console.error("Profile load error"); }
+    };
     
     // Fetch Dishes for Stock Control
     const fetchDishes = async () => {
@@ -42,18 +52,18 @@ const ChefDashboard = () => {
         } catch (e) { console.error("Dish sync failed"); }
     };
 
-    // Fetch Live Orders
+    // Fetch Live Orders (Polled frequently)
     const fetchOrders = async () => {
         if (!ownerId || !token) { navigate("/login"); return; }
         try {
             const config = { headers: { Authorization: `Bearer ${token}` } };
-            const nameRes = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/auth/restaurant/${ownerId}`, config);
-            setRestaurantName(nameRes.data.username || nameRes.data.restaurantName);
-
+            // Removed the redundant Name Fetch here
+            
             const res = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/orders?restaurantId=${ownerId}`, config);
             const activeOrders = res.data.filter(o => o.status !== "SERVED");
 
             setOrders(prevOrders => {
+                // Play sound if new order comes in
                 if (activeOrders.length > prevOrders.length && prevOrders.length !== 0 && !isMuted) {
                     audioRef.current.currentTime = 0; 
                     audioRef.current.play().catch(() => console.log("Audio blocked"));
@@ -69,9 +79,15 @@ const ChefDashboard = () => {
 
     // --- 3. EFFECTS ---
 
-    // Initial Load & Socket Setup
+    // Initial Load
     useEffect(() => {
-        fetchOrders(); 
+        if (!ownerId) return navigate("/login");
+        fetchRestaurantProfile(); // Load name once
+        fetchOrders();            // Load orders immediately
+    }, []);
+
+    // Socket & Polling Setup
+    useEffect(() => {
         socketRef.current = io("https://smart-menu-backend-5ge7.onrender.com");
         const socket = socketRef.current;
         
@@ -94,7 +110,7 @@ const ChefDashboard = () => {
             }
         });
 
-        const interval = setInterval(fetchOrders, 15000); 
+        const interval = setInterval(fetchOrders, 10000); // Poll every 10 seconds
         return () => { clearInterval(interval); socket.disconnect(); };
     }, [ownerId, isMuted]);
 
@@ -168,7 +184,9 @@ const ChefDashboard = () => {
         <div style={styles.loadingContainer}>
             <div style={{ textAlign: 'center' }}>
                 <div style={styles.spinner}></div>
-                <p style={{fontWeight:'bold', marginTop:'10px'}}>Syncing Kitchen...</p>
+                <p style={{fontWeight:'bold', marginTop:'10px'}}>Connecting to Kitchen Node...</p>
+                {/* 🟢 Helper Text so users know why it's slow */}
+                <p style={{fontSize:'10px', color:'#666', marginTop:'5px'}}>Waking up server...</p>
             </div>
         </div>
     );
@@ -220,9 +238,6 @@ const ChefDashboard = () => {
 
                     <Link to="/waiter"><button style={styles.iconButtonText}><FaUserTie style={{ marginRight: '8px' }}/> Waiter Dashboard</button></Link>
                     
-                    {/* 🔴 MANAGE MENU LINK (COMMENTED OUT AS REQUESTED) */}
-                    {/* <Link to="/admin"><button style={styles.iconButtonText}><FaCog style={{ marginRight: '8px' }}/> Manage Menu</button></Link> */}
-
                     <button onClick={handleLogout} style={styles.iconButtonRed}><FaLock style={{ marginRight: '8px' }}/> Log Out</button>
                 </div>
             </header>
