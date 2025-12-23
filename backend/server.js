@@ -107,3 +107,23 @@ const PORT = process.env.PORT || 5000;
 httpServer.listen(PORT, () => {
     console.log(`🚀 Production Server running on port ${PORT}`);
 });
+
+
+
+// --- PASTE THIS AT THE BOTTOM OF YOUR SERVER FILE ---
+
+const https = require("https");
+
+const url = "https://smart-menu-backend-5ge7.onrender.com/api/products"; 
+
+// Ping the server every 14 minutes (840,000 ms) 
+// Render sleeps after 15 mins of inactivity, so 14 mins is safe.
+setInterval(() => {
+  https.get(url, (res) => {
+    console.log(`Self-ping sent to ${url} - Status: ${res.statusCode}`);
+  }).on("error", (e) => {
+    console.error(`Self-ping error: ${e.message}`);
+  });
+}, 840000); 
+
+// ----------------------------------------------------

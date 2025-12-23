@@ -4,277 +4,378 @@ import axios from "axios";
 import io from "socket.io-client";
 import { QRCodeSVG } from "qrcode.react"; 
 import { 
-    FaStar, FaHistory, FaReceipt, FaBullhorn, FaArrowLeft, 
-    FaCheckCircle, FaUtensils, FaFire, FaClock, FaDownload 
+    FaCheck, FaUtensils, FaClock, FaConciergeBell, 
+    FaDownload, FaPhoneAlt, FaArrowLeft, FaPlus,
+    FaCalculator, FaUserFriends, FaStar
 } from "react-icons/fa";
-import { generateCustomerReceipt } from "./ReceiptGenerator";
 
-/**
- * OrderTracker Component
- * Provides real-time visibility, instant UPI payments, and feedback loop.
- */
 const OrderTracker = () => {
-    const { id } = useParams(); // Order ID from URL
+    const { id } = useParams();
+    
+    // --- STATE ---
     const [order, setOrder] = useState(null);
     const [restaurant, setRestaurant] = useState(null);
     const [history, setHistory] = useState([]);
     const [feedback, setFeedback] = useState({ rating: 5, comment: "" });
     const [submitted, setSubmitted] = useState(false);
+    const [showSplit, setShowSplit] = useState(false);
+    const [splitCount, setSplitCount] = useState(2);
+    const [eta, setEta] = useState(25); 
 
-    // --- 1. DATA FETCHING & REAL-TIME SYNC ---
+    // --- MOCK UPSELL DATA ---
+    const upsellItems = [
+        { name: "Choco Lava", price: 120, img: "https://images.unsplash.com/photo-1624353365286-3f8d62daad51?w=200&q=80" },
+        { name: "Gulab Jamun", price: 80, img: "https://images.unsplash.com/photo-1589119908995-c6837fa14848?w=200&q=80" },
+        { name: "Vanilla Scoop", price: 60, img: "https://images.unsplash.com/photo-1560008581-09826d1de69e?w=200&q=80" }
+    ];
+
+    // --- DATA FETCHING ---
     useEffect(() => {
         const fetchOrderDetails = async () => {
             try {
-                // Fetch specific Order data
+                // Replace with your actual API calls
                 const res = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/orders/track/${id}`);
                 setOrder(res.data);
-                
-                // Fetch Restaurant Info for the UPI ID and Name
                 const restRes = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/auth/restaurant/${res.data.owner}`);
                 setRestaurant(restRes.data);
-
-                // Update Local Order History
-                const savedHistory = JSON.parse(localStorage.getItem("smartMenu_History") || "[]");
-                if (id && !savedHistory.includes(id)) {
-                    const newHistory = [id, ...savedHistory].slice(0, 10);
-                    localStorage.setItem("smartMenu_History", JSON.stringify(newHistory));
-                    setHistory(newHistory);
-                } else {
-                    setHistory(savedHistory);
-                }
-            } catch (e) {
-                console.error("Order Sync Error:", e);
+            } catch (e) { 
+                console.error(e); 
             }
         };
-
         fetchOrderDetails();
-
-        // Socket.io Connection for live status changes from the Chef
+        
         const socket = io("https://smart-menu-backend-5ge7.onrender.com");
         socket.on("order-updated", (updatedOrder) => {
-            if (updatedOrder._id === id) {
-                setOrder(updatedOrder);
-                // Notification sound if status becomes READY
-                if (updatedOrder.status.toUpperCase() === "READY") {
-                    new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3").play().catch(() => {});
-                }
-            }
+            if (updatedOrder._id === id) setOrder(updatedOrder);
         });
-
         return () => socket.disconnect();
     }, [id]);
 
-    // --- 2. PROGRESS MAP LOGIC ---
+    // --- LOGIC ---
     const stages = [
-        { id: "PLACED", label: "Confirmed", icon: <FaCheckCircle /> },
+        { id: "PLACED", label: "Confirmed", icon: <FaCheck /> },
         { id: "PREPARING", label: "Cooking", icon: <FaUtensils /> },
-        { id: "READY", label: "Ready", icon: <FaFire /> },
-        { id: "SERVED", label: "Served", icon: <FaClock /> }
+        { id: "READY", label: "Ready", icon: <FaClock /> },
+        { id: "SERVED", label: "Served", icon: <FaConciergeBell /> }
     ];
-    
-    // Normalize status to match stage IDs
+
     const currentStatus = order?.status?.toUpperCase() || "PLACED";
-    const currentStageIndex = stages.findIndex(s => s.id === currentStatus || (currentStatus === "COOKING" && s.id === "PREPARING"));
+    const currentStepIndex = stages.findIndex(s => s.id === currentStatus || (currentStatus === "COOKING" && s.id === "PREPARING"));
+    const upiLink = `upi://pay?pa=${restaurant?.upiId}&pn=${restaurant?.username}&am=${order?.totalAmount}&cu=INR`;
 
-    // --- 3. HANDLERS ---
-    const submitReview = async () => {
-        if (!feedback.comment.trim()) return alert("Please add a quick comment!");
-        try {
-            await axios.post(`https://smart-menu-backend-5ge7.onrender.com/api/orders/${id}/review`, feedback);
-            setSubmitted(true);
-            alert("Thank you for your feedback! ❤️");
-        } catch (e) {
-            alert("Submission failed. Please try again.");
-        }
-    };
-
-    const notifyStaff = async (type) => {
-        try {
-            await axios.post("https://smart-menu-backend-5ge7.onrender.com/api/orders/call-waiter", {
-                restaurantId: order.owner,
-                tableNumber: order.tableNumber,
-                type: type
-            });
-            alert(`✅ Staff notified for ${type === 'bill' ? 'the bill' : 'assistance'}!`);
-        } catch (err) {
-            alert("Staff notification failed. Please wave to a waiter.");
-        }
-    };
-
-    if (!order) {
-        return (
-            <div className="min-h-screen bg-[#080808] flex items-center justify-center text-white font-black animate-pulse uppercase tracking-[2px]">
-                Connecting to Kitchen...
-            </div>
-        );
-    }
-
-    // UPI Link for QR Generation
-    // Format: upi://pay?pa=[VPA]&pn=[NAME]&am=[AMOUNT]&cu=INR
-    const upiID = restaurant?.upiId || localStorage.getItem("restaurantUPI");
-    const upiLink = `upi://pay?pa=${upiID}&pn=${restaurant?.username}&am=${order.totalAmount}&cu=INR`;
+    if (!order) return <div style={{background: '#000', height: '100vh', color: '#FF5200', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>Loading...</div>;
 
     return (
-        <div className="min-h-screen bg-[#080808] text-white p-6 font-sans relative pb-40">
-            <div className="max-w-xl mx-auto">
+        <div className="tracker-container">
+            {/* --- CSS STYLES (Embedded for Instant Styling) --- */}
+            <style>{`
+                /* Base Reset */
+                .tracker-container {
+                    background-color: #050505;
+                    min-height: 100vh;
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+                    color: white;
+                    padding: 20px;
+                    padding-bottom: 50px;
+                    max-width: 480px;
+                    margin: 0 auto;
+                }
                 
-                {/* 1. HEADER */}
-                <header className="flex justify-between items-center mb-8">
-                    <div>
-                        <h1 className="text-2xl font-black text-[#FF9933]">Order Tracker</h1>
-                        <p className="text-gray-600 text-[10px] font-bold uppercase tracking-widest">ID: #{id.slice(-6).toUpperCase()}</p>
-                    </div>
-                    <Link to="/">
-                        <div className="bg-white/5 p-3 rounded-2xl border border-white/10 text-gray-400 relative">
-                            <FaHistory />
-                            {history.length > 0 && <span className="absolute -top-1 -right-1 bg-[#FF9933] text-black text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center">{history.length}</span>}
-                        </div>
-                    </Link>
-                </header>
+                /* Headings */
+                h1 { font-size: 24px; font-weight: 700; margin: 0 0 15px 0; }
+                h3 { font-size: 16px; font-weight: 700; margin: 0 0 10px 0; color: #e5e5e5; }
+                
+                /* Cards */
+                .card {
+                    background-color: #121212;
+                    border: 1px solid rgba(255, 255, 255, 0.1);
+                    border-radius: 20px;
+                    padding: 20px;
+                    margin-bottom: 25px;
+                    position: relative;
+                    overflow: hidden;
+                }
 
-                {/* 2. LIVE PROGRESS MAP (Visual Stepper) */}
-                <div className="bg-[#111] p-8 rounded-[40px] border border-gray-800 mb-6 shadow-2xl overflow-hidden relative">
-                    <div className="flex justify-between items-center mb-10">
-                        <span className="text-[10px] font-black text-gray-500 uppercase tracking-[3px]">Live Journey</span>
-                        <div className="flex items-center gap-2">
-                            <span className={`w-2 h-2 rounded-full animate-ping ${currentStatus === 'SERVED' ? 'bg-green-500' : 'bg-orange-500'}`}></span>
-                            <span className={`text-[10px] font-black uppercase ${currentStatus === 'SERVED' ? 'text-green-500' : 'text-orange-500'}`}>
-                                {currentStatus === 'SERVED' ? 'Completed' : 'Active'}
-                            </span>
-                        </div>
-                    </div>
+                /* 1. Header Card Layout */
+                .header-card {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: flex-start;
+                }
+                .label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #888; font-weight: 700; margin-bottom: 4px; }
+                .value { font-size: 16px; font-weight: 600; }
+                .eta-badge {
+                    background: rgba(255, 82, 0, 0.1);
+                    border: 1px solid rgba(255, 82, 0, 0.3);
+                    color: #FF5200;
+                    padding: 6px 12px;
+                    border-radius: 12px;
+                    font-size: 12px;
+                    font-weight: 700;
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                }
 
-                    <div className="flex justify-between relative px-2">
-                        {/* Progress Line Tracks */}
-                        <div className="absolute top-5 left-10 right-10 h-0.5 bg-gray-800 z-0"></div>
-                        <div 
-                            className="absolute top-5 left-10 h-0.5 bg-[#FF9933] z-0 transition-all duration-1000 ease-out" 
-                            style={{ width: `${(currentStageIndex / (stages.length - 1)) * 80}%` }}
-                        ></div>
+                /* 2. Stepper Layout */
+                .stepper-wrapper {
+                    position: relative;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin: 10px 10px 30px 10px;
+                }
+                .progress-bg { position: absolute; top: 15px; left: 0; width: 100%; height: 3px; background: #333; z-index: 0; }
+                .progress-fill { position: absolute; top: 15px; left: 0; height: 3px; background: linear-gradient(90deg, #d34400, #FF5200); z-index: 0; transition: width 0.5s ease; box-shadow: 0 0 10px #FF5200; }
+                .step-item { z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; width: 50px; }
+                .step-icon {
+                    width: 32px; height: 32px;
+                    border-radius: 50%;
+                    background: #121212;
+                    border: 2px solid #444;
+                    color: #666;
+                    display: flex; alignItems: center; justifyContent: center;
+                    font-size: 12px;
+                    transition: all 0.3s;
+                }
+                .step-icon.active {
+                    border-color: #FF5200;
+                    color: #FF5200;
+                    background: #1a1a1a;
+                    box-shadow: 0 0 15px rgba(255, 82, 0, 0.4);
+                    transform: scale(1.1);
+                }
+                .step-label { font-size: 9px; text-transform: uppercase; font-weight: 700; color: #666; }
+                .step-label.active { color: white; }
 
-                        {stages.map((stage, index) => (
-                            <div key={stage.id} className="z-10 flex flex-col items-center gap-3">
-                                <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-700 ${index <= currentStageIndex ? 'bg-[#FF9933] text-black shadow-[0_0_20px_rgba(255,153,51,0.4)]' : 'bg-gray-900 text-gray-600'}`}>
-                                    {stage.icon}
-                                </div>
-                                <span className={`text-[8px] font-black uppercase tracking-tighter ${index <= currentStageIndex ? 'text-white' : 'text-gray-700'}`}>{stage.label}</span>
-                            </div>
-                        ))}
-                    </div>
+                /* 3. Sweet Cravings List */
+                .upsell-item {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    background: #181818;
+                    border: 1px solid rgba(255,255,255,0.05);
+                    padding: 10px;
+                    border-radius: 16px;
+                    margin-bottom: 10px;
+                }
+                .upsell-left { display: flex; align-items: center; gap: 12px; }
+                .upsell-img { width: 48px; height: 48px; border-radius: 10px; object-fit: cover; }
+                .upsell-info p { margin: 0; }
+                .add-btn {
+                    background: #FF5200;
+                    color: white;
+                    border: none;
+                    padding: 8px 16px;
+                    border-radius: 20px;
+                    font-size: 11px;
+                    font-weight: 800;
+                    cursor: pointer;
+                    display: flex; align-items: center; gap: 4px;
+                }
+
+                /* 4. Scan To Pay Layout */
+                .split-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+                .split-toggle { 
+                    background: rgba(255,255,255,0.1); border: none; color: #ccc; 
+                    padding: 5px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; cursor: pointer;
+                    display: flex; align-items: center; gap: 6px;
+                }
+                .qr-layout { display: flex; gap: 15px; align-items: center; }
+                .qr-box { background: white; padding: 8px; border-radius: 12px; }
+                .price-large { font-size: 28px; font-weight: 800; margin: 0; line-height: 1; }
+                .split-controls { display: flex; align-items: center; gap: 10px; margin: 10px 0; }
+                .control-btn { width: 25px; height: 25px; border-radius: 5px; background: #333; color: white; border: none; font-weight: bold; }
+
+                /* 5. Bottom Buttons */
+                .action-row { display: flex; gap: 10px; margin-bottom: 25px; }
+                .btn-download {
+                    flex: 2;
+                    background: #FF5200;
+                    color: white;
+                    height: 50px;
+                    border: none;
+                    border-radius: 16px;
+                    font-weight: 700;
+                    font-size: 12px;
+                    text-transform: uppercase;
+                    display: flex; align-items: center; justify-content: center; gap: 8px;
+                    cursor: pointer;
+                    box-shadow: 0 4px 15px rgba(255, 82, 0, 0.3);
+                }
+                .btn-staff {
+                    flex: 1;
+                    background: #1a1a1a;
+                    color: #FF5200;
+                    height: 50px;
+                    border: 1px solid rgba(255, 82, 0, 0.3);
+                    border-radius: 16px;
+                    font-weight: 700;
+                    font-size: 12px;
+                    text-transform: uppercase;
+                    display: flex; align-items: center; justify-content: center; gap: 8px;
+                    cursor: pointer;
+                }
+
+                /* 6. Basket Summary */
+                .basket-item { display: flex; justify-content: space-between; margin-bottom: 10px; border-bottom: 1px solid #222; padding-bottom: 10px; }
+                .total-row { display: flex; justify-content: space-between; margin-top: 15px; border-top: 1px dashed #333; padding-top: 15px; }
+                .total-price { color: #FF5200; font-size: 20px; font-weight: 900; }
+
+                /* Footer */
+                .footer-link { display: flex; align-items: center; justify-content: center; gap: 8px; color: #666; text-decoration: none; font-size: 12px; font-weight: 700; text-transform: uppercase; }
+            `}</style>
+
+            {/* --- 1. HEADER CARD --- */}
+            <h1>Order Tracker</h1>
+            <div className="card header-card">
+                <div>
+                    <div className="label">Order ID</div>
+                    <div className="value">#{id.slice(-6).toUpperCase()}</div>
+                    <div style={{color: '#888', fontSize: '12px', marginTop: '4px'}}>Table {order.tableNumber}</div>
                 </div>
-
-                
-
-                {/* 3. DYNAMIC UPI QR CODE (Conditional) */}
-                {order.paymentMethod === "UPI" && currentStatus !== "SERVED" && (
-                    <div className="bg-white p-8 rounded-[40px] mb-6 text-center shadow-2xl transform hover:scale-[1.01] transition">
-                        <p className="text-black text-[10px] font-black uppercase tracking-[3px] mb-6">Scan to Pay Restaurant</p>
-                        <div className="flex justify-center mb-6">
-                            <QRCodeSVG value={upiLink} size={200} level={"H"} includeMargin={true} />
-                        </div>
-                        <h2 className="text-black text-4xl font-black tracking-tighter">₹{order.totalAmount}</h2>
-                        <p className="text-gray-400 text-[10px] font-bold mt-2 italic uppercase">Payable to: {restaurant?.username}</p>
+                {currentStatus !== "SERVED" && (
+                    <div className="eta-badge">
+                        <FaClock /> {eta} MINS
                     </div>
                 )}
+            </div>
 
-                {/* 4. RECEIPT SUMMARY & PDF DOWNLOAD */}
-                <div className="bg-[#111] p-8 rounded-[40px] border border-gray-800 mb-8 shadow-xl">
-                    <h3 className="text-xs font-black text-gray-600 uppercase tracking-widest mb-6">Your Basket</h3>
-                    <div className="space-y-4">
-                        {order.items.map((item, idx) => (
-                            <div key={idx} className="flex justify-between items-start border-b border-white/5 pb-4">
-                                <div>
-                                    <p className="font-bold text-gray-200">{item.name}</p>
-                                    <p className="text-[10px] text-orange-500 font-black uppercase">Qty: {item.quantity} • Table {order.tableNumber}</p>
+            {/* --- 2. STEPPER (TRACKING) --- */}
+            <div className="stepper-wrapper">
+                <div className="progress-bg"></div>
+                <div className="progress-fill" style={{ width: `${(currentStepIndex / (stages.length - 1)) * 100}%` }}></div>
+                {stages.map((stage, index) => {
+                    const isActive = index <= currentStepIndex;
+                    return (
+                        <div key={stage.id} className="step-item">
+                            <div className={`step-icon ${isActive ? 'active' : ''}`}>
+                                {stage.icon}
+                            </div>
+                            <div className={`step-label ${isActive ? 'active' : ''}`}>{stage.label}</div>
+                        </div>
+                    );
+                })}
+            </div>
+
+            {/* --- 3. SWEET CRAVINGS (UPSELL) --- */}
+            {currentStatus !== "SERVED" && (
+                <>
+                    <h3>Sweet Cravings?</h3>
+                    <div style={{ marginBottom: '30px' }}>
+                        {upsellItems.map((item, idx) => (
+                            <div key={idx} className="upsell-item">
+                                <div className="upsell-left">
+                                    <img src={item.img} alt={item.name} className="upsell-img" />
+                                    <div className="upsell-info">
+                                        <p style={{fontWeight:'700', fontSize:'13px'}}>{item.name}</p>
+                                        <p style={{color:'#888', fontSize:'11px'}}>₹{item.price}</p>
+                                    </div>
                                 </div>
-                                <span className="font-mono font-bold">₹{item.price * item.quantity}</span>
+                                <button className="add-btn"><FaPlus size={10}/> Add</button>
                             </div>
                         ))}
                     </div>
+                </>
+            )}
 
-                    <div className="mt-8 pt-6 border-t border-dashed border-gray-800">
-                        <div className="flex justify-between items-center mb-6">
-                            <span className="text-2xl font-black text-white">₹{order.totalAmount}</span>
-                            <span className="bg-orange-500/10 text-orange-500 px-4 py-1 rounded-full text-[10px] font-black uppercase">
-                                {order.paymentMethod}
-                            </span>
-                        </div>
-
-                        {/* 🟢 PDF DOWNLOAD TRIGGER */}
-                        <button 
-                            onClick={() => generateCustomerReceipt(order, restaurant)}
-                            className="w-full bg-white/5 border border-white/10 text-white py-4 rounded-2xl font-black text-[10px] uppercase tracking-[2px] flex items-center justify-center gap-3 hover:bg-[#FF9933] hover:text-black transition-all"
-                        >
-                            <FaDownload /> Download Digital Bill
+            {/* --- 4. SCAN TO PAY --- */}
+            {order.paymentMethod === "UPI" && currentStatus !== "SERVED" && (
+                <>
+                    <div className="split-header">
+                        <h3>Scan to Pay</h3>
+                        <button className="split-toggle" onClick={() => setShowSplit(!showSplit)}>
+                            <FaUserFriends /> {showSplit ? "Close Split" : "Split Bill"}
                         </button>
                     </div>
-                </div>
-
-                {/* 5. FEEDBACK SYSTEM (Post-Meal) */}
-                {currentStatus === "SERVED" && (
-                    <div className="animate-in fade-in slide-in-from-bottom duration-1000">
-                        {!submitted ? (
-                            <div className="bg-[#111] p-8 rounded-[40px] border border-gray-800 mb-20 shadow-2xl">
-                                <h3 className="text-xl font-black mb-2">How was your meal?</h3>
-                                <p className="text-gray-500 text-xs mb-6 font-bold uppercase tracking-widest">Help us improve</p>
-                                
-                                <div className="flex gap-3 mb-8">
-                                    {[1, 2, 3, 4, 5].map(star => (
-                                        <button 
-                                            key={star} 
-                                            onClick={() => setFeedback({...feedback, rating: star})} 
-                                            className={`text-4xl transition-all ${feedback.rating >= star ? 'text-yellow-500 scale-110 drop-shadow-lg' : 'text-gray-800 hover:text-gray-600'}`}
-                                        >
-                                            ★
-                                        </button>
-                                    ))}
+                    <div className="card qr-layout">
+                        <div className="qr-box">
+                            <QRCodeSVG value={upiLink} size={85} />
+                        </div>
+                        <div style={{flex: 1}}>
+                            {showSplit ? (
+                                <div>
+                                    <p className="label">SPLIT AMONGST</p>
+                                    <div className="split-controls">
+                                        <button className="control-btn" onClick={() => setSplitCount(Math.max(1, splitCount - 1))}>-</button>
+                                        <span style={{fontWeight:'bold'}}>{splitCount}</span>
+                                        <button className="control-btn" onClick={() => setSplitCount(splitCount + 1)}>+</button>
+                                    </div>
+                                    <p className="price-large" style={{color: '#FF5200', fontSize: '20px'}}>
+                                        ₹{Math.ceil(order.totalAmount / splitCount)} <span style={{fontSize:'10px', color:'#666', fontWeight:'normal'}}>/person</span>
+                                    </p>
                                 </div>
-
-                                <textarea 
-                                    placeholder="Food quality, staff behavior, etc..." 
-                                    className="w-full bg-black border border-gray-800 p-5 rounded-3xl text-sm mb-6 outline-none focus:border-[#FF9933] transition h-32 text-white"
-                                    onChange={(e) => setFeedback({...feedback, comment: e.target.value})}
-                                />
-                                <button 
-                                    onClick={submitReview} 
-                                    className="w-full bg-[#FF9933] text-black font-black py-5 rounded-[20px] shadow-xl hover:bg-orange-400 transition uppercase tracking-widest text-xs"
-                                >
-                                    Submit Review
-                                </button>
-                            </div>
-                        ) : (
-                            <div className="text-center bg-green-500/10 border border-green-500/20 p-10 rounded-[40px] mb-20">
-                                <p className="text-green-500 font-black uppercase tracking-widest">Feedback Received! Thank you ❤️</p>
-                            </div>
-                        )}
+                            ) : (
+                                <div>
+                                    <p className="price-large">₹{order.totalAmount}</p>
+                                    <p className="label" style={{marginTop:'5px'}}>UPI: {restaurant?.upiId?.split('@')[0]}</p>
+                                    <p style={{fontSize:'10px', color:'#666'}}>Total Items: {order.items.length}</p>
+                                </div>
+                            )}
+                        </div>
                     </div>
-                )}
+                </>
+            )}
 
-                {/* 6. QUICK ACTION FLOATERS */}
-                <div className="fixed bottom-8 left-1/2 -translate-x-1/2 w-full max-w-sm px-6 flex gap-4 z-[100]">
-                    <button 
-                        onClick={() => notifyStaff("bill")} 
-                        className="flex-1 bg-white text-black h-20 rounded-[30px] shadow-2xl flex flex-col items-center justify-center gap-1 border-4 border-[#080808] active:scale-95 transition"
-                    >
-                        <FaReceipt className="text-xl" />
-                        <span className="text-[9px] font-black uppercase">Get Bill</span>
-                    </button>
-                    <button 
-                        onClick={() => notifyStaff("help")} 
-                        className="flex-1 bg-[#FF9933] text-black h-20 rounded-[30px] shadow-2xl flex flex-col items-center justify-center gap-1 border-4 border-[#080808] active:scale-95 transition"
-                    >
-                        <FaBullhorn className="text-xl" />
-                        <span className="text-[9px] font-black uppercase">Call Staff</span>
-                    </button>
-                </div>
-
-                <div className="text-center pb-10 opacity-30">
-                    <Link to="/" className="text-white text-[10px] font-black uppercase tracking-widest underline decoration-2 underline-offset-8">
-                        ← Back to Menu
-                    </Link>
-                </div>
-
+            {/* --- 5. ACTION BUTTONS --- */}
+            <div className="action-row">
+                <button className="btn-download" onClick={() => generateCustomerReceipt(order, restaurant)}>
+                    <FaDownload /> Digital Bill
+                </button>
+                <button className="btn-staff" onClick={() => alert("Staff Notified!")}>
+                    <FaPhoneAlt /> Staff
+                </button>
             </div>
+
+            {/* --- 6. BASKET --- */}
+            <div className="card">
+                <p className="label" style={{marginBottom: '15px'}}>Your Basket</p>
+                {order.items.map((item, idx) => (
+                    <div key={idx} className="basket-item">
+                        <div>
+                            <div style={{fontWeight:'600', fontSize:'14px'}}>{item.name}</div>
+                            <div style={{fontSize:'10px', color:'#888'}}>Qty: {item.quantity}</div>
+                        </div>
+                        <div style={{fontWeight:'bold'}}>₹{item.price * item.quantity}</div>
+                    </div>
+                ))}
+                <div className="total-row">
+                    <span style={{color:'#888', fontSize:'14px'}}>Grand Total</span>
+                    <span className="total-price">₹{order.totalAmount}</span>
+                </div>
+            </div>
+
+            {/* --- 7. FEEDBACK (After Served) --- */}
+            {currentStatus === "SERVED" && (
+                <div className="card">
+                    <h3 style={{textAlign:'center', marginBottom:'15px'}}>Rate Experience</h3>
+                    {!submitted ? (
+                        <>
+                            <div style={{display:'flex', justifyContent:'center', gap:'10px', marginBottom:'15px'}}>
+                                {[1,2,3,4,5].map(star => (
+                                    <FaStar 
+                                        key={star} 
+                                        size={24} 
+                                        color={feedback.rating >= star ? "#FF5200" : "#333"}
+                                        onClick={() => setFeedback({...feedback, rating: star})}
+                                        style={{cursor:'pointer'}}
+                                    />
+                                ))}
+                            </div>
+                            <button className="btn-download" style={{width:'100%', height:'40px'}} onClick={() => setSubmitted(true)}>
+                                Submit Feedback
+                            </button>
+                        </>
+                    ) : (
+                        <div style={{textAlign:'center', color:'#FF5200', fontWeight:'bold'}}>Thanks for your feedback!</div>
+                    )}
+                </div>
+            )}
+
+            {/* --- FOOTER --- */}
+            <Link to="/" className="footer-link">
+                <FaArrowLeft /> Back to Menu
+            </Link>
         </div>
     );
 };

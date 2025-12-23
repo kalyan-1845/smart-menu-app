@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+
 // --- COMPONENT IMPORTS ---
 import Menu from "./Menu.jsx"; 
 import Cart from "./Cart.jsx";
-import ChefDashboard from "./ChefDashboard.jsx";
+import ChefDashboard from "./ChefDashboard.jsx"; // This is your "Kitchen Tab" file
 import OwnerLogin from "./OwnerLogin.jsx";
 import AdminPanel from "./AdminPanel.jsx";
 import Register from "./Register.jsx";
@@ -121,11 +122,16 @@ function App() {
         <Route path="/track/:id" element={<OrderTracker />} />
 
         {/* --- STAFF PROTECTED ROUTES --- */}
+        
+        {/* The Chef/Kitchen Dashboard */}
         <Route path="/chef" element={
             <ProtectedRoute>
                 <ChefDashboard />
             </ProtectedRoute>
         } />
+
+        {/* Added this so "/kitchen" also works */}
+        <Route path="/kitchen" element={<Navigate to="/chef" replace />} />
 
         <Route path="/waiter" element={
             <ProtectedRoute>

@@ -205,6 +205,19 @@ const ChefDashboard = () => {
                     <button onClick={() => setIsMuted(!isMuted)} style={styles.iconButton} title="Notification Sound">
                         {isMuted ? <FaVolumeMute /> : <FaVolumeUp />}
                     </button>
+                    
+                    {/* 🔥 ADDED: LIVE CUSTOMER MENU LINK */}
+                    <a 
+                        href={`/menu/${ownerId}`} 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        style={{ textDecoration: 'none' }}
+                    >
+                        <button style={{ ...styles.iconButtonText, background: '#059669', borderColor: '#047857' }}>
+                            <FaExternalLinkAlt style={{ marginRight: '8px' }}/> Live Customer Menu
+                        </button>
+                    </a>
+
                     <Link to="/waiter"><button style={styles.iconButtonText}><FaUserTie style={{ marginRight: '8px' }}/> Waiter Dashboard</button></Link>
                     <Link to="/admin"><button style={styles.iconButtonText}><FaCog style={{ marginRight: '8px' }}/> Manage Menu</button></Link>
                     <button onClick={handleLogout} style={styles.iconButtonRed}><FaLock style={{ marginRight: '8px' }}/> Log Out</button>
