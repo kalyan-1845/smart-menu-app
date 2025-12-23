@@ -206,7 +206,7 @@ const ChefDashboard = () => {
                         {isMuted ? <FaVolumeMute /> : <FaVolumeUp />}
                     </button>
                     
-                    {/* 🔥 ADDED: LIVE CUSTOMER MENU LINK */}
+                    {/* 🔥 LIVE CUSTOMER MENU LINK */}
                     <a 
                         href={`/menu/${ownerId}`} 
                         target="_blank" 
@@ -219,7 +219,10 @@ const ChefDashboard = () => {
                     </a>
 
                     <Link to="/waiter"><button style={styles.iconButtonText}><FaUserTie style={{ marginRight: '8px' }}/> Waiter Dashboard</button></Link>
-                    <Link to="/admin"><button style={styles.iconButtonText}><FaCog style={{ marginRight: '8px' }}/> Manage Menu</button></Link>
+                    
+                    {/* 🔴 MANAGE MENU LINK (COMMENTED OUT AS REQUESTED) */}
+                    {/* <Link to="/admin"><button style={styles.iconButtonText}><FaCog style={{ marginRight: '8px' }}/> Manage Menu</button></Link> */}
+
                     <button onClick={handleLogout} style={styles.iconButtonRed}><FaLock style={{ marginRight: '8px' }}/> Log Out</button>
                 </div>
             </header>
