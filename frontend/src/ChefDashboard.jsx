@@ -4,10 +4,14 @@ import { Link, useNavigate } from "react-router-dom";
 import io from "socket.io-client";
 // 🎨 ICONS
 import { 
-    FaUtensils, FaLock, FaVolumeUp, FaVolumeMute, FaRegClock, 
+    FaUtensils, FaCog, FaLock, FaVolumeUp, FaVolumeMute, FaRegClock, 
     FaUser, FaCircle, FaFire, FaCheck, FaRocket, FaBell, 
     FaExternalLinkAlt, FaUserTie, FaWalking, FaPrint, FaBoxOpen
 } from "react-icons/fa";
+
+// 🖼️ IMAGE CONSTANTS (Update these URLs to your specific assets)
+const DEFAULT_DISH_IMG = "https://cdn-icons-png.flaticon.com/512/706/706164.png"; 
+const DASHBOARD_LOGO = "https://cdn-icons-png.flaticon.com/512/1830/1830839.png"; 
 
 const ChefDashboard = () => {
     const navigate = useNavigate();
@@ -33,16 +37,6 @@ const ChefDashboard = () => {
     const socketRef = useRef();
 
     // --- 2. DATA FETCHING ---
-
-    // 🟢 OPTIMIZATION: Fetch Name ONLY ONCE
-    const fetchRestaurantProfile = async () => {
-        if (!ownerId || !token) return;
-        try {
-            const config = { headers: { Authorization: `Bearer ${token}` } };
-            const nameRes = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/auth/restaurant/${ownerId}`, config);
-            setRestaurantName(nameRes.data.username || nameRes.data.restaurantName);
-        } catch (e) { console.error("Profile load error"); }
-    };
     
     // Fetch Dishes for Stock Control
     const fetchDishes = async () => {
@@ -52,18 +46,19 @@ const ChefDashboard = () => {
         } catch (e) { console.error("Dish sync failed"); }
     };
 
-    // Fetch Live Orders (Polled frequently)
+    // Fetch Live Orders
     const fetchOrders = async () => {
         if (!ownerId || !token) { navigate("/login"); return; }
         try {
             const config = { headers: { Authorization: `Bearer ${token}` } };
-            // Removed the redundant Name Fetch here
-            
+            const nameRes = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/auth/restaurant/${ownerId}`, config);
+            setRestaurantName(nameRes.data.username || nameRes.data.restaurantName);
+
             const res = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/orders?restaurantId=${ownerId}`, config);
             const activeOrders = res.data.filter(o => o.status !== "SERVED");
 
             setOrders(prevOrders => {
-                // Play sound if new order comes in
+                // Play sound only if new orders arrive and list grows
                 if (activeOrders.length > prevOrders.length && prevOrders.length !== 0 && !isMuted) {
                     audioRef.current.currentTime = 0; 
                     audioRef.current.play().catch(() => console.log("Audio blocked"));
@@ -79,15 +74,9 @@ const ChefDashboard = () => {
 
     // --- 3. EFFECTS ---
 
-    // Initial Load
+    // Initial Load & Socket Setup
     useEffect(() => {
-        if (!ownerId) return navigate("/login");
-        fetchRestaurantProfile(); // Load name once
-        fetchOrders();            // Load orders immediately
-    }, []);
-
-    // Socket & Polling Setup
-    useEffect(() => {
+        fetchOrders(); 
         socketRef.current = io("https://smart-menu-backend-5ge7.onrender.com");
         const socket = socketRef.current;
         
@@ -110,7 +99,7 @@ const ChefDashboard = () => {
             }
         });
 
-        const interval = setInterval(fetchOrders, 10000); // Poll every 10 seconds
+        const interval = setInterval(fetchOrders, 15000); 
         return () => { clearInterval(interval); socket.disconnect(); };
     }, [ownerId, isMuted]);
 
@@ -184,9 +173,7 @@ const ChefDashboard = () => {
         <div style={styles.loadingContainer}>
             <div style={{ textAlign: 'center' }}>
                 <div style={styles.spinner}></div>
-                <p style={{fontWeight:'bold', marginTop:'10px'}}>Connecting to Kitchen Node...</p>
-                {/* 🟢 Helper Text so users know why it's slow */}
-                <p style={{fontSize:'10px', color:'#666', marginTop:'5px'}}>Waking up server...</p>
+                <p style={{fontWeight:'bold', marginTop:'10px'}}>Syncing Kitchen...</p>
             </div>
         </div>
     );
@@ -210,13 +197,17 @@ const ChefDashboard = () => {
 
             {/* --- STICKY HEADER --- */}
             <header style={styles.header}>
-                <div>
-                    <h1 style={styles.headerTitle}>
-                        <FaUtensils style={{ color: '#f97316', marginRight: '12px' }} /> Kitchen Console
-                    </h1>
-                    <p style={styles.headerSubtitle}>
-                        Restaurant: {restaurantName} <span style={{ color: '#22c55e', margin: '0 8px' }}>•</span> <span style={{ color: '#22c55e' }}>Live Sync Active</span>
-                    </p>
+                <div style={{display: 'flex', alignItems: 'center', gap: '15px'}}>
+                    {/* 🆕 UPDATED HEADER LOGO */}
+                    <img src={DASHBOARD_LOGO} alt="Logo" style={{width: '50px', height: '50px'}} />
+                    <div>
+                        <h1 style={styles.headerTitle}>
+                             Kitchen Console
+                        </h1>
+                        <p style={styles.headerSubtitle}>
+                            Restaurant: {restaurantName} <span style={{ color: '#22c55e', margin: '0 8px' }}>•</span> <span style={{ color: '#22c55e' }}>Live Sync Active</span>
+                        </p>
+                    </div>
                 </div>
 
                 <div style={styles.headerButtons}>
@@ -342,7 +333,13 @@ const ChefDashboard = () => {
                     {dishes.map(dish => (
                         <div key={dish._id} style={{ ...styles.card, padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
-                                <img src={dish.image} style={{ width: '50px', height: '50px', borderRadius: '12px', objectFit: 'cover', opacity: dish.isAvailable ? 1 : 0.3 }} alt="" />
+                                {/* 🆕 UPDATED IMAGE HANDLING */}
+                                <img 
+                                    src={dish.image || DEFAULT_DISH_IMG} 
+                                    onError={(e) => { e.target.onerror = null; e.target.src = DEFAULT_DISH_IMG; }}
+                                    style={{ width: '50px', height: '50px', borderRadius: '12px', objectFit: 'cover', opacity: dish.isAvailable ? 1 : 0.3 }} 
+                                    alt={dish.name} 
+                                />
                                 <div>
                                     <h3 style={{ margin: 0, fontSize: '16px', color: dish.isAvailable ? 'white' : '#555' }}>{dish.name}</h3>
                                     <p style={{ margin: 0, fontSize: '10px', color: dish.isAvailable ? '#22c55e' : '#ef4444', fontWeight: '900' }}>
