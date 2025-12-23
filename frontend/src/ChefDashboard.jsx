@@ -6,10 +6,10 @@ import io from "socket.io-client";
 import { 
     FaUtensils, FaCog, FaLock, FaVolumeUp, FaVolumeMute, FaRegClock, 
     FaUser, FaCircle, FaFire, FaCheck, FaRocket, FaBell, 
-    FaExternalLinkAlt, FaUserTie, FaWalking, FaPrint, FaBoxOpen
+    FaExternalLinkAlt, FaUserTie, FaWalking, FaPrint, FaBoxOpen, FaKey
 } from "react-icons/fa";
 
-// 🖼️ IMAGE CONSTANTS (Update these URLs to your specific assets)
+// 🖼️ IMAGE CONSTANTS
 const DEFAULT_DISH_IMG = "https://cdn-icons-png.flaticon.com/512/706/706164.png"; 
 const DASHBOARD_LOGO = "https://cdn-icons-png.flaticon.com/512/1830/1830839.png"; 
 
@@ -25,8 +25,13 @@ const ChefDashboard = () => {
     
     // 🟢 STOCK & TAB STATES
     const [dishes, setDishes] = useState([]);
-    const [activeChefTab, setActiveChefTab] = useState("orders"); // "orders" or "stock"
+    const [activeChefTab, setActiveChefTab] = useState("orders");
     const [printingOrder, setPrintingOrder] = useState(null);
+
+    // 🔒 SECURITY STATE (Added)
+    const [showWaiterModal, setShowWaiterModal] = useState(false);
+    const [waiterPin, setWaiterPin] = useState("");
+    const [pinError, setPinError] = useState("");
     
     const ownerId = localStorage.getItem("ownerId");
     const token = localStorage.getItem("ownerToken");
@@ -37,8 +42,6 @@ const ChefDashboard = () => {
     const socketRef = useRef();
 
     // --- 2. DATA FETCHING ---
-    
-    // Fetch Dishes for Stock Control
     const fetchDishes = async () => {
         try {
             const res = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/dishes?restaurantId=${ownerId}`);
@@ -46,7 +49,6 @@ const ChefDashboard = () => {
         } catch (e) { console.error("Dish sync failed"); }
     };
 
-    // Fetch Live Orders
     const fetchOrders = async () => {
         if (!ownerId || !token) { navigate("/login"); return; }
         try {
@@ -58,7 +60,6 @@ const ChefDashboard = () => {
             const activeOrders = res.data.filter(o => o.status !== "SERVED");
 
             setOrders(prevOrders => {
-                // Play sound only if new orders arrive and list grows
                 if (activeOrders.length > prevOrders.length && prevOrders.length !== 0 && !isMuted) {
                     audioRef.current.currentTime = 0; 
                     audioRef.current.play().catch(() => console.log("Audio blocked"));
@@ -73,8 +74,6 @@ const ChefDashboard = () => {
     };
 
     // --- 3. EFFECTS ---
-
-    // Initial Load & Socket Setup
     useEffect(() => {
         fetchOrders(); 
         socketRef.current = io("https://smart-menu-backend-5ge7.onrender.com");
@@ -103,18 +102,15 @@ const ChefDashboard = () => {
         return () => { clearInterval(interval); socket.disconnect(); };
     }, [ownerId, isMuted]);
 
-    // Fetch dishes when switching to stock tab
     useEffect(() => {
         if (activeChefTab === "stock") fetchDishes();
     }, [activeChefTab]);
 
     // --- 4. ACTIONS ---
-
     const toggleDishAvailability = async (dishId, currentStatus) => {
         try {
             const newStatus = !currentStatus;
             setDishes(prev => prev.map(d => d._id === dishId ? { ...d, isAvailable: newStatus } : d));
-            
             await axios.put(`https://smart-menu-backend-5ge7.onrender.com/api/dishes/${dishId}`, 
                 { isAvailable: newStatus }, 
                 { headers: { Authorization: `Bearer ${token}` } }
@@ -167,8 +163,26 @@ const ChefDashboard = () => {
 
     const handleLogout = () => { localStorage.clear(); window.location.href = "/"; };
 
-    // --- 5. RENDER LOGIC ---
+    // 🔐 WAITER LOGIN LOGIC (Added)
+    const handleWaiterClick = () => {
+        setWaiterPin("");
+        setPinError("");
+        setShowWaiterModal(true);
+    };
 
+    const submitWaiterPin = (e) => {
+        e.preventDefault();
+        // 🔑 PIN CHECK: bb1972
+        if (waiterPin === "bb1972") {
+            setShowWaiterModal(false);
+            navigate("/waiter");
+        } else {
+            setPinError("❌ Incorrect PIN. Access Denied.");
+            setWaiterPin("");
+        }
+    };
+
+    // --- 5. RENDER LOGIC ---
     if (loading) return (
         <div style={styles.loadingContainer}>
             <div style={{ textAlign: 'center' }}>
@@ -181,7 +195,7 @@ const ChefDashboard = () => {
     return (
         <div style={styles.dashboardContainer}>
             
-            {/* 🛎️ TOP ALERTS: SERVICE REQUESTS */}
+            {/* 🛎️ TOP ALERTS */}
             {serviceCalls.length > 0 && (
                 <div style={styles.alertContainer}>
                     {serviceCalls.map((call, idx) => (
@@ -198,12 +212,9 @@ const ChefDashboard = () => {
             {/* --- STICKY HEADER --- */}
             <header style={styles.header}>
                 <div style={{display: 'flex', alignItems: 'center', gap: '15px'}}>
-                    {/* 🆕 UPDATED HEADER LOGO */}
                     <img src={DASHBOARD_LOGO} alt="Logo" style={{width: '50px', height: '50px'}} />
                     <div>
-                        <h1 style={styles.headerTitle}>
-                             Kitchen Console
-                        </h1>
+                        <h1 style={styles.headerTitle}>Kitchen Console</h1>
                         <p style={styles.headerSubtitle}>
                             Restaurant: {restaurantName} <span style={{ color: '#22c55e', margin: '0 8px' }}>•</span> <span style={{ color: '#22c55e' }}>Live Sync Active</span>
                         </p>
@@ -215,19 +226,16 @@ const ChefDashboard = () => {
                         {isMuted ? <FaVolumeMute /> : <FaVolumeUp />}
                     </button>
                     
-                    {/* 🔥 LIVE CUSTOMER MENU LINK */}
-                    <a 
-                        href={`/menu/${ownerId}`} 
-                        target="_blank" 
-                        rel="noopener noreferrer" 
-                        style={{ textDecoration: 'none' }}
-                    >
+                    <a href={`/menu/${ownerId}`} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
                         <button style={{ ...styles.iconButtonText, background: '#059669', borderColor: '#047857' }}>
                             <FaExternalLinkAlt style={{ marginRight: '8px' }}/> Live Customer Menu
                         </button>
                     </a>
 
-                    <Link to="/waiter"><button style={styles.iconButtonText}><FaUserTie style={{ marginRight: '8px' }}/> Waiter Dashboard</button></Link>
+                    {/* 🔐 PROTECTED WAITER BUTTON */}
+                    <button onClick={handleWaiterClick} style={styles.iconButtonText}>
+                        <FaUserTie style={{ marginRight: '8px' }}/> Waiter Dashboard
+                    </button>
                     
                     <button onClick={handleLogout} style={styles.iconButtonRed}><FaLock style={{ marginRight: '8px' }}/> Log Out</button>
                 </div>
@@ -333,7 +341,6 @@ const ChefDashboard = () => {
                     {dishes.map(dish => (
                         <div key={dish._id} style={{ ...styles.card, padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
-                                {/* 🆕 UPDATED IMAGE HANDLING */}
                                 <img 
                                     src={dish.image || DEFAULT_DISH_IMG} 
                                     onError={(e) => { e.target.onerror = null; e.target.src = DEFAULT_DISH_IMG; }}
@@ -361,7 +368,40 @@ const ChefDashboard = () => {
                 </div>
             )}
                   
-            {/* 🖨️ HIDDEN PRINT TEMPLATE (KOT) */}
+            {/* 🔐 SECURITY PIN MODAL (Added) */}
+            {showWaiterModal && (
+                <div style={styles.modalOverlay}>
+                    <div style={styles.modalBox}>
+                        <div style={{marginBottom: '20px'}}>
+                            <FaKey style={{fontSize: '40px', color: '#f97316'}} />
+                        </div>
+                        <h2 style={{margin: '0 0 10px 0'}}>Security Check</h2>
+                        <p style={{margin: '0 0 20px 0', color: '#9ca3af', fontSize: '14px'}}>
+                            Enter PIN to access Waiter Dashboard for:<br/>
+                            <strong style={{color: 'white', fontSize:'16px'}}>{restaurantName.toUpperCase()}</strong>
+                        </p>
+                        
+                        <form onSubmit={submitWaiterPin}>
+                            <input 
+                                type="password" 
+                                autoFocus
+                                value={waiterPin}
+                                onChange={(e) => setWaiterPin(e.target.value)}
+                                placeholder="Enter PIN (e.g. bb1972)"
+                                style={styles.pinInput}
+                            />
+                            {pinError && <p style={{color: '#ef4444', fontWeight: 'bold', fontSize: '13px'}}>{pinError}</p>}
+                            
+                            <div style={{display: 'flex', gap: '10px', marginTop: '20px'}}>
+                                <button type="button" onClick={() => setShowWaiterModal(false)} style={styles.cancelBtn}>Cancel</button>
+                                <button type="submit" style={styles.confirmBtn}>Unlock Access</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* 🖨️ HIDDEN PRINT TEMPLATE */}
             {printingOrder && (
                 <div id="kot-receipt" style={{ display: 'none' }}>
                     <div style={{ textAlign: 'center', borderBottom: '1px dashed black', paddingBottom: '10px', marginBottom: '10px' }}>
@@ -441,7 +481,14 @@ const styles = {
     alertContainer: { position: 'fixed', top: '30px', left: '50%', transform: 'translateX(-50%)', zIndex: 1000, width: '95%', maxWidth: '550px' },
     alertBanner: { background: '#f97316', padding: '20px 25px', borderRadius: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)', marginBottom: '12px', border: '2px solid rgba(255,255,255,0.2)' },
     alertText: { fontWeight: '900', fontSize: '18px', color: 'white' },
-    attendBtn: { background: 'white', color: '#f97316', border: 'none', padding: '10px 20px', borderRadius: '12px', fontWeight: '900', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }
+    attendBtn: { background: 'white', color: '#f97316', border: 'none', padding: '10px 20px', borderRadius: '12px', fontWeight: '900', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' },
+    
+    // 🔐 MODAL STYLES (Added)
+    modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(5px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 2000 },
+    modalBox: { background: '#111827', padding: '40px', borderRadius: '20px', border: '1px solid #1f2937', textAlign: 'center', maxWidth: '400px', width: '90%', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' },
+    pinInput: { width: '100%', padding: '15px', fontSize: '20px', textAlign: 'center', borderRadius: '10px', border: '1px solid #374151', background: '#000', color: 'white', letterSpacing: '5px', fontWeight: 'bold', outline: 'none', marginBottom: '10px' },
+    confirmBtn: { background: '#f97316', color: 'white', padding: '12px 20px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontWeight: 'bold', flex: 1 },
+    cancelBtn: { background: 'transparent', color: '#9ca3af', padding: '12px 20px', borderRadius: '10px', border: '1px solid #374151', cursor: 'pointer', fontWeight: 'bold', flex: 1 }
 };
 
 export default ChefDashboard;
