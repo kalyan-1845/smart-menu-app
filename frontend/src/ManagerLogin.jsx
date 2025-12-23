@@ -44,6 +44,8 @@ const ManagerLogin = () => {
                     <label style={{ fontSize: '10px', fontWeight: 'bold', color: '#4b5563', textTransform: 'uppercase', marginLeft: '10px' }}>Secret Manager Password</label>
                     <input 
                         type="password" 
+                        /* ✅ FIXED: Added autocomplete to resolve browser warning */
+                        autoComplete="current-password"
                         placeholder="••••••" 
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}

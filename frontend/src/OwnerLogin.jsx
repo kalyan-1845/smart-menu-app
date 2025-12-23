@@ -64,6 +64,8 @@ const OwnerLogin = () => {
                             <input 
                                 type="text" 
                                 name="username"
+                                /* ✅ Added autocomplete for username */
+                                autoComplete="username"
                                 placeholder="e.g. kalyanresto"
                                 value={formData.username}
                                 onChange={handleChange}
@@ -79,6 +81,8 @@ const OwnerLogin = () => {
                             <input 
                                 type="password" 
                                 name="password"
+                                /* ✅ Added autocomplete to fix the warning */
+                                autoComplete="current-password"
                                 placeholder="••••••••"
                                 value={formData.password}
                                 onChange={handleChange}
