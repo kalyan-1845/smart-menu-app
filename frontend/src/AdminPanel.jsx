@@ -4,20 +4,20 @@ import { Link, useNavigate } from "react-router-dom";
 import io from "socket.io-client";
 import confetti from "canvas-confetti";
 import { generateMonthlyReport } from "./utils/ReportGenerator";
-import "./AdminPanel.css"; // Import the CSS file
+import "./AdminPanel.css"; 
 
 // 🎨 Icons
 import { 
     FaPlus, FaTrash, FaDownload, FaCog, FaUtensils, FaWallet, 
-    FaBell, FaCheckCircle, FaCircle, FaCrown 
+    FaBell, FaCheckCircle, FaCircle, FaCrown, FaSignOutAlt, FaRocket
 } from "react-icons/fa";
 
 // --- SUB-COMPONENT: SETUP WIZARD ---
 const SetupWizard = ({ dishesCount, upiId, pushEnabled }) => {
     const steps = [
-        { id: 1, label: "Add 3 dishes", done: dishesCount >= 3, icon: <FaUtensils />, hint: "Go to Menu tab" },
-        { id: 2, label: "Add UPI ID", done: !!upiId, icon: <FaWallet />, hint: "Go to Settings" },
-        { id: 3, label: "Enable Alerts", done: pushEnabled, icon: <FaBell />, hint: "Click Notification button" }
+        { id: 1, label: "Add 3 dishes", done: dishesCount >= 3, hint: "Go to Menu tab" },
+        { id: 2, label: "Add UPI ID", done: !!upiId, hint: "Go to Settings" },
+        { id: 3, label: "Enable Alerts", done: pushEnabled, hint: "Click Notification button" }
     ];
 
     const completed = steps.filter(s => s.done).length;
@@ -30,34 +30,40 @@ const SetupWizard = ({ dishesCount, upiId, pushEnabled }) => {
     }, [completed]);
 
     if (completed === 3) return (
-        <div className="bg-green-500/10 border-2 border-green-500/20 p-6 rounded-[30px] mb-10 flex items-center justify-between animate-pop">
-            <div>
-                <h2 className="text-xl font-black text-green-500 uppercase">Your Shop is Live! 🎉</h2>
-                <p className="text-xs text-gray-400 font-bold uppercase">System operational.</p>
+        <div className="glass-card" style={{ borderColor: '#22c55e', background: 'rgba(34, 197, 94, 0.05)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                    <h2 style={{ fontSize: '20px', color: '#22c55e', margin: 0, fontWeight: 900, textTransform: 'uppercase' }}>Your Shop is Live! 🎉</h2>
+                    <p style={{ fontSize: '12px', color: '#888', margin: 0, fontWeight: 700 }}>System operational.</p>
+                </div>
+                <FaCheckCircle size={32} color="#22c55e" />
             </div>
-            <FaCheckCircle className="text-4xl text-green-500" />
         </div>
     );
 
     return (
-        <div className="bg-[#111] border border-gray-800 rounded-[40px] p-8 mb-10 shadow-2xl">
-            <div className="flex justify-between items-end mb-6">
+        <div className="glass-card">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '10px' }}>
                 <div>
-                    <h2 className="text-xl font-black text-white uppercase tracking-tighter">🚀 Setup Progress</h2>
-                    <p className="text-gray-500 text-[10px] font-bold uppercase mt-1">Complete steps to go live</p>
+                    <h2 style={{ fontSize: '18px', fontWeight: 900, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <FaRocket color="#FF9933" /> Setup Progress
+                    </h2>
+                    <p style={{ fontSize: '10px', color: '#666', fontWeight: 700, textTransform: 'uppercase' }}>Complete steps to go live</p>
                 </div>
-                <span className="text-[#FF9933] font-black text-xs">{percent}% READY</span>
+                <span style={{ color: '#FF9933', fontWeight: 900, fontSize: '12px' }}>{percent}% READY</span>
             </div>
-            <div className="w-full bg-gray-900 h-1.5 rounded-full mb-8 overflow-hidden">
-                <div className="bg-[#FF9933] h-full transition-all duration-1000" style={{ width: `${percent}%` }}></div>
+            
+            <div className="setup-progress-bar">
+                <div className="setup-progress-fill" style={{ width: `${percent}%` }}></div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
                 {steps.map(step => (
-                    <div key={step.id} className={`p-4 rounded-2xl border flex items-center gap-3 transition-colors ${step.done ? 'bg-green-500/5 border-green-500/10 opacity-50' : 'bg-white/5 border-white/5'}`}>
-                        {step.done ? <FaCheckCircle className="text-green-500" /> : <FaCircle className="text-gray-700" />}
+                    <div key={step.id} className="step-row" style={{ opacity: step.done ? 0.5 : 1 }}>
+                        {step.done ? <FaCheckCircle color="#22c55e" /> : <FaCircle color="#333" />}
                         <div>
-                            <p className="text-xs font-black uppercase tracking-tight">{step.label}</p>
-                            {!step.done && <p className="text-[9px] text-gray-500">{step.hint}</p>}
+                            <p style={{ fontWeight: 800, fontSize: '12px', margin: 0, textTransform: 'uppercase' }}>{step.label}</p>
+                            {!step.done && <p style={{ fontSize: '10px', color: '#666', margin: 0 }}>{step.hint}</p>}
                         </div>
                     </div>
                 ))}
@@ -92,7 +98,6 @@ const AdminPanel = () => {
     
     // Settings State
     const [upiId, setUpiId] = useState(localStorage.getItem("restaurantUPI") || "");
-    const [isUpiSaved, setIsUpiSaved] = useState(false);
     const [formData, setFormData] = useState({ name: "", price: "", category: "Starters" });
 
     // --- API SYNC ---
@@ -144,7 +149,10 @@ const AdminPanel = () => {
     }, [ownerId]);
 
     // --- HANDLERS ---
-    const handleLogout = () => { localStorage.clear(); navigate("/"); };
+    const handleLogout = () => { 
+        localStorage.clear();
+        navigate("/"); 
+    };
 
     const subscribeToPush = async () => {
         const permission = await Notification.requestPermission();
@@ -174,11 +182,11 @@ const AdminPanel = () => {
 
     const handleSaveUPI = () => {
         localStorage.setItem("restaurantUPI", upiId);
-        setIsUpiSaved(true);
-        setTimeout(() => setIsUpiSaved(false), 2000);
+        alert("UPI ID Saved!");
     };
 
     const calculateDaysLeft = (date) => {
+        if (!date) return 0;
         const diff = new Date(date) - new Date();
         return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
     };
@@ -188,61 +196,60 @@ const AdminPanel = () => {
     const totalExpenses = expenses.reduce((s, e) => s + (e.amount || 0), 0);
     const netProfit = totalRevenue - totalExpenses;
 
-    if (loading) return <div className="min-h-screen bg-[#0A0F18] flex items-center justify-center text-white font-black animate-pulse">CONNECTING TO CLOUD...</div>;
+    if (loading) return <div className="admin-container" style={{display:'flex', justifyContent:'center', alignItems:'center'}}>LOADING CLOUD DATA...</div>;
 
     return (
-        <div className="min-h-screen bg-[#0A0F18] text-white p-4 md:p-8 font-sans selection:bg-[#FF9933] selection:text-black">
+        <div className="admin-container">
             
-            {/* BROADCAST BANNER */}
+            {/* 1. BROADCAST BANNER */}
             {broadcast && (
-                <div className="fixed top-0 left-0 w-full bg-blue-600 text-white p-3 z-[2000] flex justify-between items-center animate-pulse">
-                    <p className="text-[10px] font-black uppercase tracking-widest mx-auto">📢 {broadcast.title}: {broadcast.message}</p>
-                    <button onClick={() => setBroadcast(null)} className="mr-4 font-black">✕</button>
+                <div className="broadcast-banner">
+                    <span>📢 {broadcast.title}: {broadcast.message}</span>
+                    <button onClick={() => setBroadcast(null)} className="broadcast-close">✕</button>
                 </div>
             )}
 
-            {/* LIVE ALERTS (TOASTS) */}
-            <div className="fixed top-20 right-6 z-[1000] space-y-4 w-80">
+            {/* 2. LIVE ALERTS (TOASTS) */}
+            <div className="toast-container">
                 {activeAlerts.map((alert, i) => (
-                    <div key={i} className="bg-[#FF9933] text-black p-5 rounded-2xl shadow-2xl animate-pop flex justify-between items-center border-4 border-white">
+                    <div key={i} className="toast-alert">
                         <div>
-                            <p className="text-[10px] font-black uppercase">🛎️ Table {alert.tableNumber}</p>
-                            <p className="font-black text-lg">{alert.type?.toUpperCase()}!</p>
+                            <p style={{fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', margin:0}}>🛎️ Table {alert.tableNumber}</p>
+                            <p style={{fontWeight: 900, fontSize: '16px', margin:0}}>{alert.type?.toUpperCase()}!</p>
                         </div>
-                        <button onClick={() => setActiveAlerts(prev => prev.filter((_, idx) => idx !== i))} className="bg-black text-white px-3 py-1 rounded-lg font-bold text-xs">OK</button>
+                        <button onClick={() => setActiveAlerts(prev => prev.filter((_, idx) => idx !== i))} style={{background:'black', color:'white', border:'none', borderRadius:'5px', padding:'5px 10px', cursor:'pointer', fontWeight:'bold'}}>OK</button>
                     </div>
                 ))}
             </div>
 
-            <main className="max-w-6xl mx-auto">
-                {/* HEADER */}
-                <header className="flex flex-col md:flex-row justify-between items-center mb-10 pt-10 border-b border-gray-800 pb-10 gap-6">
-                    <div>
-                        <div className="flex items-center gap-3">
-                            <h1 className="text-4xl font-black text-white tracking-tighter uppercase">{restaurantName}</h1>
-                            {isPro ? (
-                                <span className="bg-[#FF9933]/10 text-[#FF9933] border border-[#FF9933]/20 px-3 py-1 rounded-full text-[9px] font-black flex items-center gap-1"><FaCrown/> PRO</span>
-                            ) : (
-                                <span className="bg-blue-600/10 text-blue-400 border border-blue-500/20 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest">
-                                    Trial: {calculateDaysLeft(trialEndsAt)} Days Left
-                                </span>
-                            )}
+            <div className="max-w-wrapper">
+                {/* 3. HEADER */}
+                <header className="admin-header">
+                    <div className="header-top">
+                        <div>
+                            <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
+                                <h1 className="shop-title">{restaurantName}</h1>
+                                {isPro ? <span className="badge-pro"><FaCrown/> PRO</span> : 
+                                    <span className="badge-pro" style={{color:'#60a5fa', borderColor:'#60a5fa'}}>
+                                        Trial: {calculateDaysLeft(trialEndsAt)} Days
+                                    </span>
+                                }
+                            </div>
+                            <p style={{color:'#666', fontSize:'12px', fontWeight:700, marginTop:'5px', textTransform:'uppercase'}}>Node v2.8 • Role: {userRole}</p>
                         </div>
-                        <p className="text-gray-500 text-[10px] font-black tracking-[4px] mt-2">Node v2.8 • Role: {userRole}</p>
                     </div>
-                    <div className="flex gap-3">
-                        <Link to="/chef">
-                            <button className="bg-white/5 px-8 py-3 rounded-2xl text-[10px] font-black transition hover:bg-white/10 uppercase tracking-widest border border-white/5">
-                                Kitchen Node
-                            </button>
+                    
+                    <div className="header-actions">
+                        <Link to="/chef" target="_blank">
+                            <button className="btn-glass"><FaUtensils /> Kitchen Node</button>
                         </Link>
-                        <button onClick={handleLogout} className="bg-red-600/10 text-red-500 px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-red-500/10 hover:bg-red-600 hover:text-white transition">
-                            Logout
+                        <button onClick={handleLogout} className="btn-glass" style={{borderColor:'rgba(239, 68, 68, 0.3)', color:'#ef4444'}}>
+                            <FaSignOutAlt /> Logout
                         </button>
                     </div>
                 </header>
 
-                {/* SETUP WIZARD */}
+                {/* 4. SETUP WIZARD */}
                 {userRole === "OWNER" && (
                     <SetupWizard 
                         dishesCount={dishes.length} 
@@ -251,107 +258,106 @@ const AdminPanel = () => {
                     />
                 )}
 
-                {/* NAVIGATION TABS */}
-                <nav className="flex flex-wrap gap-2 mb-10 bg-[#111] p-1.5 rounded-3xl border border-gray-800 shadow-2xl sticky top-4 z-50">
+                {/* 5. NAVIGATION TABS */}
+                <nav className="nav-tabs">
                     {['menu', 'history', 'settings'].map(tab => (
-                        <button key={tab} onClick={() => setActiveTab(tab)} className={`flex-1 min-w-[100px] py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition ${activeTab === tab ? 'bg-[#FF9933] text-black shadow-xl scale-105' : 'text-gray-500 hover:text-white'}`}>
+                        <button key={tab} onClick={() => setActiveTab(tab)} className={`tab-btn ${activeTab === tab ? 'active' : ''}`}>
                             {tab}
                         </button>
                     ))}
                 </nav>
 
-                {/* CONTENT AREA */}
-                <div className="animate-fade-in">
-                    
-                    {/* --- TAB: MENU --- */}
-                    {activeTab === "menu" && (
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-                            <section className="bg-[#111] p-10 rounded-[45px] border border-gray-800 shadow-2xl">
-                                <h2 className="text-xl font-black mb-8 uppercase text-[#FF9933] flex items-center gap-3"><FaPlus /> Create Item</h2>
-                                <form onSubmit={handleAddDish} className="space-y-5">
-                                    <input value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="Dish Name" className="w-full bg-black border border-gray-800 p-5 rounded-2xl outline-none focus:border-[#FF9933] transition" required />
-                                    <div className="grid grid-cols-2 gap-5">
-                                        <input type="number" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} placeholder="Price ₹" className="w-full bg-black border border-gray-800 p-5 rounded-2xl outline-none focus:border-[#FF9933] transition" required />
-                                        <select value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} className="w-full bg-black border border-gray-800 p-5 rounded-2xl outline-none focus:border-[#FF9933] text-gray-400">
-                                            <option>Starters</option><option>Main Course</option><option>Dessert</option><option>Drinks</option>
-                                        </select>
-                                    </div>
-                                    <button type="submit" className="w-full bg-[#FF9933] text-black font-black py-6 rounded-3xl shadow-xl uppercase text-xs tracking-widest hover:scale-[1.02] transition">Publish to Menu</button>
-                                </form>
-                            </section>
-                            
-                            <section className="bg-[#111] p-10 rounded-[45px] border border-gray-800 h-[600px] overflow-y-auto custom-scrollbar">
-                                <h2 className="text-xl font-black mb-8 uppercase tracking-widest">Active Dishes ({dishes.length})</h2>
-                                {dishes.length === 0 ? <p className="text-gray-600 text-center mt-20">No dishes yet. Add one!</p> : null}
+                {/* 6. CONTENT AREA */}
+                
+                {/* --- TAB: MENU --- */}
+                {activeTab === "menu" && (
+                    <div className="menu-grid">
+                        <div className="glass-card">
+                            <h2 style={{ fontSize: '18px', fontWeight: 900, textTransform: 'uppercase', marginBottom:'20px', color: '#FF9933' }}><FaPlus /> Create Item</h2>
+                            <form onSubmit={handleAddDish}>
+                                <input className="input-dark" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="Dish Name" required />
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                                    <input className="input-dark" type="number" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} placeholder="Price ₹" required />
+                                    <select className="input-dark" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})}>
+                                        <option>Starters</option><option>Main Course</option><option>Dessert</option><option>Drinks</option>
+                                    </select>
+                                </div>
+                                <button type="submit" className="btn-primary">Publish to Menu</button>
+                            </form>
+                        </div>
+                        
+                        <div className="glass-card">
+                            <h2 style={{ fontSize: '18px', fontWeight: 900, textTransform: 'uppercase', marginBottom:'20px' }}>Active Dishes ({dishes.length})</h2>
+                            <div style={{ maxHeight: '400px', overflowY: 'auto', paddingRight: '5px' }}>
                                 {dishes.map(dish => (
-                                    <div key={dish._id} className="bg-black/50 p-5 rounded-3xl border border-gray-800 flex justify-between items-center mb-4 group hover:border-[#FF9933]/50 transition">
-                                        <div className="flex gap-4 items-center">
-                                            <div className="w-14 h-14 bg-gray-900 rounded-2xl flex items-center justify-center text-gray-700"><FaUtensils size={20}/></div>
+                                    <div key={dish._id} className="dish-item">
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                                            <FaUtensils color="#444" size={20} />
                                             <div>
-                                                <p className="font-black text-white text-lg">{dish.name}</p>
-                                                <p className="text-[10px] text-[#FF9933] font-black uppercase tracking-widest">₹{dish.price} • {dish.category}</p>
+                                                <p style={{ fontWeight: 800, margin: 0, fontSize: '14px' }}>{dish.name}</p>
+                                                <p style={{ margin: 0, fontSize: '11px', color: '#FF9933', fontWeight: 700, textTransform: 'uppercase' }}>₹{dish.price} • {dish.category}</p>
                                             </div>
                                         </div>
-                                        <button onClick={() => handleDeleteDish(dish._id)} className="text-gray-700 hover:text-red-500 p-3 bg-white/5 rounded-xl transition"><FaTrash /></button>
+                                        <button onClick={() => handleDeleteDish(dish._id)} style={{ background: 'none', border: 'none', color: '#666', cursor: 'pointer' }}><FaTrash /></button>
                                     </div>
                                 ))}
-                            </section>
-                        </div>
-                    )}
-
-                    {/* --- TAB: HISTORY --- */}
-                    {activeTab === "history" && (
-                        <div className="space-y-10">
-                            <div className="flex justify-between items-center">
-                                <h2 className="text-2xl font-black uppercase tracking-tighter">Business Analytics</h2>
-                                <button 
-                                    onClick={() => generateMonthlyReport(restaurantName, historyData, expenses, dishes)}
-                                    className="bg-white text-black px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 hover:bg-[#FF9933] transition-all"
-                                >
-                                    <FaDownload /> Download Report
-                                </button>
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                <div className="bg-[#111] p-10 rounded-[45px] border border-gray-800 hover:border-[#FF9933]/30 transition"><p className="text-gray-500 text-[10px] font-black uppercase mb-2">Total Revenue</p><p className="text-4xl font-black">₹{totalRevenue.toLocaleString()}</p></div>
-                                <div className="bg-[#111] p-10 rounded-[45px] border border-gray-800 hover:border-red-500/30 transition"><p className="text-gray-500 text-[10px] font-black uppercase mb-2">Total Costs</p><p className="text-4xl font-black text-red-500">₹{totalExpenses.toLocaleString()}</p></div>
-                                <div className={`p-10 rounded-[45px] border ${netProfit >= 0 ? 'bg-green-500/5 border-green-500/20' : 'bg-red-500/5 border-red-500/20'}`}>
-                                    <p className="text-gray-500 text-[10px] font-black uppercase mb-2">Net Profit</p>
-                                    <p className={`text-5xl font-black ${netProfit >= 0 ? 'text-green-500' : 'text-red-500'}`}>₹{netProfit.toLocaleString()}</p>
-                                </div>
                             </div>
                         </div>
-                    )}
+                    </div>
+                )}
 
-                    {/* --- TAB: SETTINGS --- */}
-                    {activeTab === "settings" && (
-                        <div className="max-w-2xl mx-auto space-y-8">
-                            <div className="bg-[#111] p-12 rounded-[50px] border border-gray-800 shadow-2xl">
-                                <h2 className="text-2xl font-black mb-10 text-[#FF9933] flex items-center gap-4 uppercase tracking-tighter"><FaCog /> Configuration</h2>
-                                
-                                <div className="mb-10">
-                                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-[3px] mb-4 block">Push Alerts (PWA)</label>
-                                    <button onClick={subscribeToPush} className={`w-full py-5 rounded-3xl font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-3 ${pushEnabled ? 'bg-green-600/10 text-green-500 border border-green-500/20 cursor-default' : 'bg-[#FF9933] text-black hover:scale-[1.02]'}`}>
-                                        <FaBell /> {pushEnabled ? 'NOTIFICATIONS ACTIVE' : 'ENABLE ORDER NOTIFICATIONS'}
-                                    </button>
-                                </div>
+                {/* --- TAB: HISTORY --- */}
+                {activeTab === "history" && (
+                    <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <h2 style={{ fontSize: '24px', fontWeight: 900, textTransform: 'uppercase', margin:0 }}>Business Analytics</h2>
+                            <button onClick={() => generateMonthlyReport(restaurantName, historyData, expenses, dishes)} className="btn-download">
+                                <FaDownload /> Download Report
+                            </button>
+                        </div>
 
-                                <div className="mb-10">
-                                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-[3px] mb-4 block">Merchant UPI ID (For QR)</label>
-                                    <div className="flex gap-3">
-                                        <input value={upiId} onChange={e => setUpiId(e.target.value)} placeholder="restaurant@okaxis" className="flex-1 bg-black border border-gray-800 p-5 rounded-2xl outline-none font-bold focus:border-[#FF9933] transition" />
-                                        <button onClick={handleSaveUPI} className={`px-10 rounded-2xl font-black text-xs uppercase transition-all ${isUpiSaved ? 'bg-green-600 text-white' : 'bg-white text-black hover:bg-gray-200'}`}>
-                                            {isUpiSaved ? 'SAVED' : 'SAVE'}
-                                        </button>
-                                    </div>
-                                </div>
+                        <div className="stats-grid">
+                            <div className="stat-card">
+                                <p style={{ fontSize: '10px', color: '#888', fontWeight: 700, textTransform: 'uppercase' }}>Total Revenue</p>
+                                <p className="stat-val">₹{totalRevenue.toLocaleString()}</p>
+                            </div>
+                            <div className="stat-card" style={{ borderColor: 'rgba(239, 68, 68, 0.3)' }}>
+                                <p style={{ fontSize: '10px', color: '#888', fontWeight: 700, textTransform: 'uppercase' }}>Total Costs</p>
+                                <p className="stat-val text-red">₹{totalExpenses.toLocaleString()}</p>
+                            </div>
+                            <div className="stat-card" style={{ borderColor: netProfit >= 0 ? 'rgba(34, 197, 94, 0.3)' : 'rgba(239, 68, 68, 0.3)', background: netProfit >= 0 ? 'rgba(34, 197, 94, 0.05)' : 'rgba(239, 68, 68, 0.05)' }}>
+                                <p style={{ fontSize: '10px', color: '#888', fontWeight: 700, textTransform: 'uppercase' }}>Net Profit</p>
+                                <p className={`stat-val ${netProfit >= 0 ? 'text-green' : 'text-red'}`}>₹{netProfit.toLocaleString()}</p>
                             </div>
                         </div>
-                    )}
-                </div>
-            </main>
+                    </div>
+                )}
+
+                {/* --- TAB: SETTINGS --- */}
+                {activeTab === "settings" && (
+                    <div className="glass-card" style={{ maxWidth: '600px', margin: '0 auto' }}>
+                        <h2 style={{ fontSize: '20px', fontWeight: 900, textTransform: 'uppercase', marginBottom:'30px', color: '#FF9933', display:'flex', alignItems:'center', gap:'10px' }}><FaCog /> Configuration</h2>
+                        
+                        <div style={{ marginBottom: '30px' }}>
+                            <label style={{ fontSize: '10px', fontWeight: 900, color: '#666', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '10px', display: 'block' }}>Push Alerts (PWA)</label>
+                            <button onClick={subscribeToPush} className="btn-primary" style={{ background: pushEnabled ? 'rgba(34, 197, 94, 0.1)' : null, color: pushEnabled ? '#22c55e' : 'white', border: pushEnabled ? '1px solid #22c55e' : 'none' }}>
+                                <FaBell /> {pushEnabled ? ' NOTIFICATIONS ACTIVE' : ' ENABLE ORDER NOTIFICATIONS'}
+                            </button>
+                        </div>
+
+                        <div>
+                            <label style={{ fontSize: '10px', fontWeight: 900, color: '#666', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '10px', display: 'block' }}>Merchant UPI ID</label>
+                            <div style={{ display: 'flex', gap: '10px' }}>
+                                <input className="input-dark" style={{ marginBottom: 0 }} value={upiId} onChange={e => setUpiId(e.target.value)} placeholder="restaurant@okaxis" />
+                                <button onClick={handleSaveUPI} className="btn-glass" style={{ background: 'white', color: 'black' }}>SAVE</button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
             
-            <footer className="max-w-6xl mx-auto mt-20 text-center pb-20 opacity-20 hover:opacity-100 transition duration-500">
-                <p className="text-[10px] font-black uppercase tracking-[10px]">Smart Menu Cloud v2.8 • Secured System</p>
+            <footer style={{ marginTop: '50px', textAlign: 'center', opacity: 0.3, paddingBottom: '30px' }}>
+                <p style={{ fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '2px' }}>Smart Menu Cloud v2.8 • Secured System</p>
             </footer>
         </div>
     );
