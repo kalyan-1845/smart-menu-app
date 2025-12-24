@@ -116,64 +116,8 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                 </div>
             </div>
 
-            {/* 4. CART ITEMS LIST */}
-            {cart.length === 0 ? (
-                <div style={{textAlign: 'center', padding: '40px', color: '#444'}}>
-                    <p>Your cart is empty.</p>
-                </div>
-            ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '30px' }}>
-                    {cart.map((item) => (
-                        <div key={item._id} style={{ background: '#111', padding: '15px', borderRadius: '24px', border: '1px solid #1a1a1a', display: 'flex', gap: '15px', alignItems: 'center' }}>
-                             {item.image ? <img src={item.image} alt="" style={{ width: '60px', height: '60px', borderRadius: '14px', objectFit: 'cover' }} /> : <div style={{width:'60px', height:'60px', background:'#222', borderRadius:'14px'}}></div>}
-                            <div style={{ flex: 1 }}>
-                                <h4 style={{ margin: 0, fontSize: '14px' }}>{item.name}</h4>
-                                <p style={{ margin: 0, color: '#f97316', fontWeight: '900' }}>₹{item.price * item.quantity}</p>
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', background: '#080808', padding: '6px 14px', borderRadius: '12px' }}>
-                                <button onClick={() => updateQuantity(item._id, item.quantity - 1)} style={{ background: 'none', border: 'none', color: '#555', fontSize: '20px', cursor: 'pointer' }}>-</button>
-                                <span style={{ fontSize: '14px', fontWeight: '900' }}>{item.quantity}</span>
-                                <button onClick={() => updateQuantity(item._id, item.quantity + 1)} style={{ background: 'none', border: 'none', color: '#f97316', fontSize: '20px', cursor: 'pointer' }}>+</button>
-                            </div>
-                            <button onClick={() => removeFromCart(item._id)} style={{background: 'none', border: 'none', color: '#333', cursor: 'pointer', padding: '5px'}}><FaTrash size={12}/></button>
-                        </div>
-                    ))}
-                </div>
-            )}
 
-            {/* 5. PAYMENT SECTION (Updated) */}
-            <div style={{ background: '#111', padding: '25px', borderRadius: '28px', marginBottom: '20px', border: '1px solid #1a1a1a' }}>
-                <p style={{ color: '#555', fontSize: '10px', fontWeight: '900', letterSpacing: '1px', marginBottom: '15px' }}>PAYMENT METHOD</p>
-                
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '20px' }}>
-                    <button onClick={() => setPaymentMethod("UPI")} 
-                        style={{ padding: '15px', borderRadius: '18px', border: '2px solid', borderColor: paymentMethod === 'UPI' ? '#f97316' : '#222', background: paymentMethod === 'UPI' ? 'rgba(249, 115, 22, 0.1)' : 'transparent', color: paymentMethod === 'UPI' ? '#f97316' : '#555', transition: '0.3s', cursor: 'pointer' }}>
-                        <FaQrcode size={20} style={{ marginBottom: '5px' }} /><br/>
-                        <span style={{ fontSize: '10px', fontWeight: '900' }}>SCAN & PAY</span>
-                    </button>
-                    <button onClick={() => setPaymentMethod("CASH")} 
-                        style={{ padding: '15px', borderRadius: '18px', border: '2px solid', borderColor: paymentMethod === 'CASH' ? '#22c55e' : '#222', background: paymentMethod === 'CASH' ? 'rgba(34, 197, 94, 0.1)' : 'transparent', color: paymentMethod === 'CASH' ? '#22c55e' : '#555', transition: '0.3s', cursor: 'pointer' }}>
-                        <FaMoneyBillWave size={20} style={{ marginBottom: '5px' }} /><br/>
-                        <span style={{ fontSize: '10px', fontWeight: '900' }}>CASH</span>
-                    </button>
-                </div>
 
-                {/* 🟢 CONDITIONAL INPUT: Only show if UPI is selected */}
-                {paymentMethod === "UPI" && (
-                    <div style={{animation: 'fadeIn 0.5s'}}>
-                        <p style={{ color: '#f97316', fontSize: '11px', marginBottom: '8px', fontWeight:'bold' }}>VERIFY PAYMENT 👇</p>
-                        <input 
-                            type="text" 
-                            placeholder="Enter last 4 digits of UTR / Ref No." 
-                            value={utrNumber}
-                            onChange={(e) => setUtrNumber(e.target.value)}
-                            maxLength={12}
-                            style={{ width: '100%', padding: '15px', background: '#080808', border: '1px solid #f97316', borderRadius: '14px', color: 'white', outline: 'none', fontWeight: 'bold', fontSize:'14px' }} 
-                        />
-                        <p style={{ color: '#666', fontSize: '10px', marginTop: '8px' }}>*Scan the QR at the table, pay, and enter the reference number here.</p>
-                    </div>
-                )}
-            </div>
 
             {/* 6. FIXED BOTTOM CHECKOUT BAR */}
             <div style={{ position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: '480px', padding: '25px', background: 'rgba(8, 8, 8, 0.95)', backdropFilter: 'blur(10px)', borderTop: '1px solid #222' }}>
