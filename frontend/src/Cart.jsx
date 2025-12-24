@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-import { FaArrowLeft, FaTrash, FaGoogle, FaMobileAlt, FaWallet, FaMoneyBillWave, FaCopy, FaCheck } from "react-icons/fa";
+import { FaArrowLeft, FaTrash, FaGoogle, FaMobileAlt, FaWallet, FaMoneyBillWave, FaCopy, FaCheck, FaTimes } from "react-icons/fa";
 
 const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, tableNum, setTableNum }) => {
     const navigate = useNavigate();
@@ -110,7 +110,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
     return (
         <div style={{ 
             minHeight: '100vh', background: '#050505', color: 'white', 
-            padding: '15px', paddingBottom: '120px', 
+            padding: '15px', paddingBottom: '100px', // Reduced padding bottom slightly
             width: '100%', maxWidth: '600px', margin: '0 auto', 
             fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
             overflowX: 'hidden', boxSizing: 'border-box'
@@ -236,16 +236,20 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                             </button>
                         </div>
 
-                        {/* MANUAL UPI COPY SECTION (NEW) */}
+                        {/* MANUAL UPI COPY SECTION (UPDATED) */}
                         <div style={{ marginTop: '20px', background: '#111', borderRadius: '16px', padding: '15px', border: '1px dashed #333', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                             <div style={{ overflow: 'hidden' }}>
-                                <p style={{ margin: 0, fontSize: '10px', color: '#666', fontWeight: 'bold', textTransform: 'uppercase' }}>PAYING FROM ANOTHER PHONE?</p>
+                                <p style={{ margin: 0, fontSize: '10px', color: '#666', fontWeight: 'bold', textTransform: 'uppercase' }}>PAY MANUALLY</p>
                                 <p style={{ margin: '4px 0 0 0', fontSize: '14px', color: '#fff', fontWeight: 'bold', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                     {restaurant?.upiId || "UPI Not Available"}
                                 </p>
+                                {/* Added Price Display */}
+                                <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#f97316', fontWeight: 'bold' }}>
+                                    Pay Amount: ₹{totalPrice}
+                                </p>
                             </div>
-                            <button onClick={copyToClipboard} style={{ background: copied ? '#22c55e' : '#222', border: 'none', borderRadius: '8px', padding: '10px', color: 'white', cursor: 'pointer', transition: '0.2s', minWidth: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                {copied ? <FaCheck size={14}/> : <FaCopy size={14}/>}
+                            <button onClick={copyToClipboard} style={{ background: copied ? '#22c55e' : '#222', border: 'none', borderRadius: '8px', padding: '12px', color: 'white', cursor: 'pointer', transition: '0.2s', minWidth: '45px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                {copied ? <FaCheck size={16}/> : <FaCopy size={16}/>}
                             </button>
                         </div>
                     </>
@@ -291,25 +295,26 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                 )}
             </div>
 
-            {/* 6. FIXED BOTTOM TOTAL - FIXED LAYOUT & WIDTH */}
+            {/* 6. FIXED BOTTOM TOTAL - COMPACT & FIXED */}
             {paymentStage === 'selection' && (
                 <div style={{ 
                     position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', 
                     width: '100%', maxWidth: '600px', 
-                    padding: '15px 20px', 
+                    padding: '12px 20px', // Reduced padding
                     background: 'rgba(5, 5, 5, 0.95)', backdropFilter: 'blur(15px)', 
                     borderTop: '1px solid #222', 
                     display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '15px'
                 }}>
                     <div style={{display:'flex', flexDirection:'column'}}>
-                        <span style={{ color: '#888', fontWeight: 'bold', fontSize: '11px', textTransform: 'uppercase' }}>Total</span>
-                        <span style={{ fontSize: '26px', fontWeight: '900', color: 'white' }}>₹{totalPrice}</span>
+                        <span style={{ color: '#888', fontWeight: 'bold', fontSize: '10px', textTransform: 'uppercase' }}>Total</span>
+                        <span style={{ fontSize: '22px', fontWeight: '900', color: 'white' }}>₹{totalPrice}</span>
                     </div>
                     
                     <button onClick={() => handlePaymentClick("Cash")} disabled={isSubmitting}
                         style={{ 
-                            flex: 1, height: '50px', borderRadius: '14px', border: 'none', 
-                            background: '#f97316', color: 'white', fontSize: '14px', fontWeight: '900', 
+                            flex: 1, height: '45px', // Reduced Height
+                            borderRadius: '12px', border: 'none', 
+                            background: '#f97316', color: 'white', fontSize: '13px', fontWeight: '900', 
                             textTransform: 'uppercase', letterSpacing: '1px',
                             cursor: isSubmitting ? 'not-allowed' : 'pointer', 
                             boxShadow: '0 4px 15px rgba(249, 115, 22, 0.4)'
