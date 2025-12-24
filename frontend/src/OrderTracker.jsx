@@ -45,7 +45,7 @@ const OrderTracker = () => {
                 const res = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/orders/track/${id}`);
                 setOrder(res.data);
                 
-                // Set initial payment status based on DB
+                // Set initial payment status based on Database
                 if(res.data.paymentStatus === 'Paid') {
                     setPaymentStatus("completed");
                 }
@@ -84,7 +84,6 @@ const OrderTracker = () => {
     }, [id]);
 
     // --- 💰 TOTAL CALCULATION LOGIC ---
-    // If the main order is unpaid, mainDebt = order total. If paid, mainDebt = 0.
     const isMainPaidInDB = order?.paymentStatus === 'Paid';
     const mainDebt = (isMainPaidInDB || paymentStatus === "completed") ? 0 : (order?.totalAmount || 0);
     const extraDebt = extraItem ? extraItem.price : 0;
@@ -234,7 +233,7 @@ const OrderTracker = () => {
                 </>
             )}
 
-            {/* PAYMENT COMPONENT - Only shows if debt exists */}
+            {/* PAYMENT COMPONENT */}
             {totalPayableNow > 0 && paymentStatus !== "verifying_bg" && (
                 <div className="payment-root">
                     <div className="split-header">
@@ -256,18 +255,12 @@ const OrderTracker = () => {
                                 </>
                             ) : (
                                 <div className="pin-pad-container">
-                                    <h3>Staff Only</h3>
-                                    <div className="pin-dots">
-                                        {[...Array(6)].map((_, i) => (
-                                            <div key={i} className={`dot ${waiterPin.length > i ? 'filled' : ''}`}></div>
-                                        ))}
-                                    </div>
                                     <div className="pin-grid">
                                         {[1,2,3,4,5,6,7,8,9].map(num => (
-                                            <button key={num} onClick={() => setWaiterPin(p => p.length < 6 ? p + num : p)}>{num}</button>
+                                            <button key={num} onClick={() => setWaiterPin(p => p.length < 4 ? p + num : p)}>{num}</button>
                                         ))}
-                                        <button className="clear" onClick={() => setWaiterPin("")}>C</button>
-                                        <button onClick={() => setWaiterPin(p => p.length < 6 ? p + "0" : p)}>0</button>
+                                        <button onClick={() => setWaiterPin("")}>C</button>
+                                        <button onClick={() => setWaiterPin(p => p.length < 4 ? p + "0" : p)}>0</button>
                                         <button className="ok" onClick={verifyWaiterPin}>OK</button>
                                     </div>
                                     <button className="cancel-text-btn" onClick={() => {setShowPinPad(false); setWaiterPin("");}}>Back</button>
@@ -289,6 +282,13 @@ const OrderTracker = () => {
                         </div>
                     ) : (
                         <div className="card payment-card">
+                            <div className="qr-layout">
+                                <div className="qr-box"><QRCodeSVG value={qrLink} size={90} /></div>
+                                <div className="qr-info">
+                                    <p className="upi-id">{restaurant?.upiId}</p>
+                                    <p className="qr-total">Pay: ₹{totalPayableNow}</p>
+                                </div>
+                            </div>
                             <div className="payment-apps-row">
                                 <button className="app-btn gpay" onClick={() => handleAppPayment("gpay")}><FaGoogle /> GPay</button>
                                 <button className="app-btn phonepe" onClick={() => handleAppPayment("phonepe")}><FaMobileAlt /> PhonePe</button>
@@ -296,14 +296,6 @@ const OrderTracker = () => {
                             <div className="payment-apps-row" style={{marginTop:'10px'}}>
                                 <button className="app-btn generic" onClick={() => handleAppPayment("generic")}><FaWallet /> UPI</button>
                                 <button className="app-btn cash" onClick={() => setPaymentStatus("cash_mode")}><FaMoneyBillWave /> Cash</button>
-                            </div>
-                            <div className="divider-text">OR SCAN QR</div>
-                            <div className="qr-layout">
-                                <div className="qr-box"><QRCodeSVG value={qrLink} size={90} /></div>
-                                <div className="qr-info">
-                                    <p className="upi-id">{restaurant?.upiId}</p>
-                                    <p className="qr-total">Pay: ₹{totalPayableNow}</p>
-                                </div>
                             </div>
                             <button onClick={() => setPaymentStatus("input_upi")} className="verify-trigger-btn">Already Paid? Verify</button>
                         </div>

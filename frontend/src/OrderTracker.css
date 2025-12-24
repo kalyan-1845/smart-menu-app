@@ -1,10 +1,9 @@
 /* --- OrderTracker.css --- */
 
-/* Base Reset */
 .tracker-container {
     background-color: #050505;
     min-height: 100vh;
-    font-family: 'Inter', -apple-system, sans-serif;
+    font-family: 'Inter', sans-serif;
     color: white;
     padding: 25px;
     padding-bottom: 100px;
@@ -17,16 +16,15 @@
     height: 100vh;
     color: #FF5200;
     display: flex;
-    flex-direction: column;
-    align-items: center;
     justify-content: center;
+    align-items: center;
     font-size: 18px;
     font-weight: bold;
 }
 
-/* Headings */
+/* Typography */
 .tracker-header h1 { font-size: 28px; font-weight: 800; margin: 0; }
-.tracker-header p { color: #888; font-size: 14px; margin: 5px 0 25px 0; }
+.tracker-header p { color: #888; font-size: 14px; margin-top: 5px; }
 .section-title { font-size: 18px; font-weight: 700; margin: 25px 0 15px 0; color: #e5e5e5; }
 
 /* Cards */
@@ -36,19 +34,12 @@
     border-radius: 24px;
     padding: 25px;
     margin-bottom: 25px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
 }
 
-/* 1. Header Card */
-.header-card {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-.label { font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: #666; font-weight: 800; }
-.value { font-size: 22px; font-weight: 800; color: #fff; margin-top: 4px; }
-.sub-value { color: #FF5200; font-size: 14px; font-weight: 700; }
-
+/* Info Card */
+.header-card { display: flex; justify-content: space-between; align-items: center; }
+.label { font-size: 11px; text-transform: uppercase; color: #666; font-weight: 800; }
+.value { font-size: 22px; font-weight: 800; margin-top: 4px; }
 .eta-badge {
     background: rgba(255, 82, 0, 0.1);
     border: 1px solid rgba(255, 82, 0, 0.3);
@@ -57,21 +48,18 @@
     border-radius: 16px;
     font-size: 13px;
     font-weight: 800;
-    display: flex;
-    align-items: center;
-    gap: 8px;
 }
 
-/* 2. Stepper Tracker */
+/* Progress Stepper */
 .stepper-wrapper {
     position: relative;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin: 20px 10px 45px 10px;
+    margin: 30px 10px 45px 10px;
 }
-.progress-bg { position: absolute; top: 20px; left: 0; width: 100%; height: 4px; background: #222; z-index: 0; border-radius: 2px; }
-.progress-fill { position: absolute; top: 20px; left: 0; height: 4px; background: #FF5200; z-index: 0; transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 0 15px rgba(255, 82, 0, 0.5); border-radius: 2px; }
+.progress-bg { position: absolute; top: 20px; left: 0; width: 100%; height: 4px; background: #222; z-index: 0; }
+.progress-fill { position: absolute; top: 20px; left: 0; height: 4px; background: #FF5200; z-index: 0; transition: width 0.8s ease; }
 
 .step-item { z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 12px; width: 70px; }
 .step-icon {
@@ -81,106 +69,26 @@
     border: 2px solid #333;
     color: #444;
     display: flex; align-items: center; justify-content: center;
-    font-size: 16px;
-    transition: all 0.4s ease;
 }
-.step-icon.active {
-    border-color: #FF5200;
-    color: #fff;
-    background: #FF5200;
-    box-shadow: 0 0 20px rgba(255, 82, 0, 0.4);
-    transform: scale(1.1);
-}
-.step-label { font-size: 10px; text-transform: uppercase; font-weight: 800; color: #444; letter-spacing: 0.5px; }
+.step-icon.active { border-color: #FF5200; color: #fff; background: #FF5200; box-shadow: 0 0 20px rgba(255, 82, 0, 0.4); }
+.step-label { font-size: 10px; text-transform: uppercase; font-weight: 800; color: #444; }
 .step-label.active { color: #fff; }
 
-/* 3. Upsell Items */
-.cravings-list { display: flex; flex-direction: column; gap: 12px; }
-.upsell-item {
-    display: flex; justify-content: space-between; align-items: center;
-    background: #181818; padding: 14px; border-radius: 20px;
-    border: 1px solid rgba(255,255,255,0.03);
-}
-.upsell-left { display: flex; align-items: center; gap: 15px; }
-.upsell-img { width: 55px; height: 55px; border-radius: 14px; object-fit: cover; }
-.item-name { font-weight: 700; font-size: 15px; margin: 0; }
-.item-price { color: #FF5200; font-size: 13px; font-weight: 800; margin: 2px 0 0 0; }
-.add-btn { background: #fff; color: #000; border: none; padding: 8px 16px; border-radius: 12px; font-size: 12px; font-weight: 800; cursor: pointer; }
-
-/* 4. Payment Section & Banners */
-.status-banner {
-    padding: 16px 20px; border-radius: 18px; margin-bottom: 25px;
-    display: flex; align-items: center; gap: 15px; font-size: 14px;
-}
-.status-banner.yellow { background: rgba(255, 173, 0, 0.1); border: 1px solid rgba(255, 173, 0, 0.3); color: #FFAD00; }
-.status-banner.green { background: #22c55e; color: white; font-weight: 800; }
-
-.highlight-price { color: #FF5200; font-weight: 900; }
-
-/* QR Layout */
-.qr-layout { display: flex; gap: 20px; align-items: center; background: #1a1a1a; padding: 15px; border-radius: 18px; margin: 15px 0; }
-.qr-box { background: white; padding: 8px; border-radius: 12px; line-height: 0; }
-.upi-id { font-size: 13px; font-weight: 700; color: #fff; margin: 0; }
-.qr-total { font-size: 12px; color: #888; margin: 4px 0 0 0; }
-
-/* Payment Buttons */
-.payment-apps-row { display: flex; gap: 12px; }
+/* Payment UI */
+.payment-apps-row { display: flex; gap: 10px; }
 .app-btn {
-    flex: 1; height: 50px; border: none; border-radius: 15px;
-    font-weight: 800; color: white; display: flex; align-items: center; justify-content: center; gap: 8px;
+    flex: 1; height: 50px; border-radius: 12px; border: none; font-weight: 800;
+    display: flex; align-items: center; justify-content: center; gap: 8px; color: white;
 }
 .gpay { background: #1f1f1f; border: 1px solid #333; }
 .phonepe { background: #5f259f; }
-.cash { background: #1a1a1a; border: 1px solid #333; }
-.generic { background: #FFAD00; color: #000; }
+.generic { background: #f97316; }
+.cash { background: #14532d; }
 
-/* 5. PIN PAD (Staff Verification) */
-.cash-box { text-align: center; border: 2px dashed #333; }
-.cash-amount { font-size: 36px; font-weight: 900; color: #FF5200; margin: 0; }
-.cash-instruction { font-size: 13px; color: #888; margin: 10px 0 20px 0; }
-.waiter-pin-trigger { 
-    width: 100%; background: #222; border: 1px solid #333; color: #fff; 
-    padding: 14px; border-radius: 15px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 10px;
-}
-
-.pin-dots { display: flex; gap: 12px; justify-content: center; margin: 20px 0; }
-.dot { width: 14px; height: 14px; border-radius: 50%; background: #222; border: 1px solid #444; }
-.dot.filled { background: #FF5200; border-color: #FF5200; box-shadow: 0 0 10px rgba(255, 82, 0, 0.5); }
-
-.pin-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; max-width: 280px; margin: 0 auto; }
-.pin-grid button { 
-    background: #1a1a1a; border: 1px solid #333; color: #fff; padding: 18px; 
-    font-size: 20px; font-weight: 800; border-radius: 16px; 
-}
-.pin-grid button.ok { background: #FF5200; border: none; }
-.pin-grid button.clear { color: #FF5200; }
-
-/* 6. Basket Recap */
-.basket-card { border-left: 4px solid #FF5200; }
-.section-label { font-size: 12px; font-weight: 800; color: #666; text-transform: uppercase; margin-bottom: 15px; }
-.basket-row { display: flex; justify-content: space-between; margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px solid #1a1a1a; }
-.basket-row.pending { color: #FFAD00; font-style: italic; }
-.item-meta { display: flex; flex-direction: column; }
-.b-name { font-weight: 700; font-size: 15px; }
-.b-qty { font-size: 12px; color: #666; }
-.b-price { font-weight: 800; font-size: 15px; }
-.grand-total-row { display: flex; justify-content: space-between; align-items: center; margin-top: 5px; }
-.grand-total-row span:first-child { font-weight: 700; color: #888; }
-.final-price { font-size: 22px; font-weight: 900; color: #FF5200; }
-
-/* 7. Footer Actions */
-.action-row { display: flex; gap: 12px; margin-top: 10px; }
-.action-btn { 
-    flex: 1; height: 55px; border-radius: 18px; border: none; font-weight: 800; 
-    display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 13px;
-}
-.action-btn.download { background: #FF5200; color: #fff; }
-.action-btn.help { background: #1a1a1a; color: #fff; border: 1px solid #333; }
-
-.back-link { 
-    display: flex; align-items: center; justify-content: center; gap: 8px; 
-    margin-top: 30px; color: #555; text-decoration: none; font-weight: 700; font-size: 13px;
-}
+.qr-layout { display: flex; gap: 20px; align-items: center; background: #1a1a1a; padding: 15px; border-radius: 18px; margin-bottom: 10px; }
+.qr-box { background: white; padding: 8px; border-radius: 12px; }
+.qr-total { font-size: 24px; font-weight: 900; color: #f97316; margin: 0; }
+.upi-id { font-size: 11px; color: #666; }
 
 .utr-input {
     width: 100%; padding: 18px; background: #000; border: 1px solid #333; 
@@ -189,10 +97,27 @@
 }
 .utr-input:focus { border-color: #FF5200; }
 
-.cancel-text-btn { 
-    background: none; border: none; color: #666; font-size: 12px; 
-    font-weight: 700; text-decoration: underline; margin-top: 15px; cursor: pointer;
-}
+.pin-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; max-width: 280px; margin: 0 auto; }
+.pin-grid button { background: #1a1a1a; border: 1px solid #333; color: white; padding: 15px; border-radius: 12px; font-weight: 800; font-size: 18px; }
+.pin-grid button.ok { background: #FF5200; border: none; }
+
+/* Status Banners */
+.status-banner { padding: 16px 20px; border-radius: 18px; margin-bottom: 25px; display: flex; align-items: center; gap: 15px; font-size: 14px; }
+.status-banner.yellow { background: rgba(255, 173, 0, 0.1); border: 1px solid #FFAD00; color: #FFAD00; }
+.status-banner.green { background: #22c55e; color: white; font-weight: bold; }
+
+/* Basket Recap */
+.basket-card { border-left: 4px solid #FF5200; }
+.basket-row { display: flex; justify-content: space-between; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid #1a1a1a; }
+.final-price { font-size: 22px; font-weight: 900; color: #FF5200; }
+
+/* Footer Actions */
+.action-row { display: flex; gap: 12px; margin-top: 10px; }
+.action-btn { flex: 1; height: 55px; border-radius: 18px; border: none; font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 13px; }
+.action-btn.download { background: #FF5200; color: #fff; }
+.action-btn.help { background: #1a1a1a; color: #fff; border: 1px solid #333; }
+
+.back-link { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 30px; color: #555; text-decoration: none; font-weight: 700; font-size: 13px; }
 
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 .spin-slow { animation: spin 3s linear infinite; }
