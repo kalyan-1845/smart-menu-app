@@ -9,7 +9,7 @@ import "./AdminPanel.css";
 // 🎨 Icons
 import { 
     FaPlus, FaTrash, FaDownload, FaCog, FaUtensils, FaWallet, 
-    FaBell, FaCheckCircle, FaCircle, FaCrown, FaSignOutAlt, FaRocket, FaImage
+    FaBell, FaCheckCircle, FaCircle, FaCrown, FaSignOutAlt, FaRocket
 } from "react-icons/fa";
 
 // --- SUB-COMPONENT: SETUP WIZARD ---
@@ -98,8 +98,7 @@ const AdminPanel = () => {
     
     // Settings State
     const [upiId, setUpiId] = useState(localStorage.getItem("restaurantUPI") || "");
-    // 🟢 UPDATED FORM STATE: Added 'image'
-    const [formData, setFormData] = useState({ name: "", price: "", category: "Starters", image: "" });
+    const [formData, setFormData] = useState({ name: "", price: "", category: "Starters" });
 
     // --- API SYNC ---
     const fetchData = async () => {
@@ -118,14 +117,8 @@ const AdminPanel = () => {
             setRestaurantName(nameRes.data.username || "Owner");
             setTrialEndsAt(nameRes.data.trialEndsAt);
             setIsPro(nameRes.data.isPro);
-            
-            if (nameRes.data.upiId) {
-                setUpiId(nameRes.data.upiId);
-                localStorage.setItem("restaurantUPI", nameRes.data.upiId);
-            }
-
             setDishes(dishRes.data || []);
-            setHistoryData(Array.isArray(historyRes.data) ? historyRes.data : []); 
+            setHistoryData(historyRes.data || []);
             setExpenses(expRes.data || []);
 
         } catch (error) {
@@ -138,6 +131,7 @@ const AdminPanel = () => {
     useEffect(() => {
         fetchData();
         
+        // Socket Connection
         const socket = io("https://smart-menu-backend-5ge7.onrender.com");
         socket.emit("join-owner-room", ownerId);
         
@@ -172,8 +166,7 @@ const AdminPanel = () => {
         e.preventDefault();
         try {
             await axios.post(`${API_BASE}/dishes`, { ...formData, owner: ownerId }, { headers: { Authorization: `Bearer ${token}` } });
-            // 🟢 RESET FORM INCLUDING IMAGE
-            setFormData({ name: "", price: "", category: "Starters", image: "" });
+            setFormData({ name: "", price: "", category: "Starters" });
             fetchData();
         } catch (e) { alert("Error saving dish."); }
     };
@@ -187,18 +180,9 @@ const AdminPanel = () => {
         }
     };
 
-    const handleSaveUPI = async () => {
+    const handleSaveUPI = () => {
         localStorage.setItem("restaurantUPI", upiId);
-        try {
-            await axios.put(`${API_BASE}/auth/restaurant/${ownerId}`, 
-                { upiId: upiId }, 
-                { headers: { Authorization: `Bearer ${token}` } }
-            );
-            alert("UPI ID Saved & Synced to Cloud! ☁️");
-        } catch (e) {
-            console.error(e);
-            alert("UPI Saved locally (Cloud sync failed).");
-        }
+        alert("UPI ID Saved!");
     };
 
     const calculateDaysLeft = (date) => {
@@ -207,8 +191,9 @@ const AdminPanel = () => {
         return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
     };
 
-    const totalRevenue = historyData.reduce((s, o) => s + (parseFloat(o.totalAmount) || 0), 0);
-    const totalExpenses = expenses.reduce((s, e) => s + (parseFloat(e.amount) || 0), 0);
+    // --- CALCULATIONS ---
+    const totalRevenue = historyData.reduce((s, o) => s + (o.totalAmount || 0), 0);
+    const totalExpenses = expenses.reduce((s, e) => s + (e.amount || 0), 0);
     const netProfit = totalRevenue - totalExpenses;
 
     if (loading) return <div className="admin-container" style={{display:'flex', justifyContent:'center', alignItems:'center'}}>LOADING CLOUD DATA...</div>;
@@ -290,25 +275,7 @@ const AdminPanel = () => {
                         <div className="glass-card">
                             <h2 style={{ fontSize: '18px', fontWeight: 900, textTransform: 'uppercase', marginBottom:'20px', color: '#FF9933' }}><FaPlus /> Create Item</h2>
                             <form onSubmit={handleAddDish}>
-                                <input 
-                                    className="input-dark" 
-                                    value={formData.name} 
-                                    onChange={e => setFormData({...formData, name: e.target.value})} 
-                                    placeholder="Dish Name" 
-                                    required 
-                                />
-                                
-                                {/* 🟢 ADDED IMAGE INPUT */}
-                                <div style={{position: 'relative'}}>
-                                    <FaImage style={{position:'absolute', top: '15px', right: '15px', color: '#666'}}/>
-                                    <input 
-                                        className="input-dark" 
-                                        value={formData.image} 
-                                        onChange={e => setFormData({...formData, image: e.target.value})} 
-                                        placeholder="Image URL (Optional)" 
-                                    />
-                                </div>
-
+                                <input className="input-dark" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="Dish Name" required />
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
                                     <input className="input-dark" type="number" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} placeholder="Price ₹" required />
                                     <select className="input-dark" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})}>
@@ -325,11 +292,7 @@ const AdminPanel = () => {
                                 {dishes.map(dish => (
                                     <div key={dish._id} className="dish-item">
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                                            {/* Show Image if available, else show Icon */}
-                                            {dish.image ? 
-                                                <img src={dish.image} alt="" style={{width:'40px', height:'40px', borderRadius:'8px', objectFit:'cover'}} /> 
-                                                : <FaUtensils color="#444" size={20} />
-                                            }
+                                            <FaUtensils color="#444" size={20} />
                                             <div>
                                                 <p style={{ fontWeight: 800, margin: 0, fontSize: '14px' }}>{dish.name}</p>
                                                 <p style={{ margin: 0, fontSize: '11px', color: '#FF9933', fontWeight: 700, textTransform: 'uppercase' }}>₹{dish.price} • {dish.category}</p>

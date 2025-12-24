@@ -9,10 +9,6 @@ import {
     FaExternalLinkAlt, FaUserTie, FaWalking, FaPrint, FaBoxOpen
 } from "react-icons/fa";
 
-// 🖼️ IMAGE CONSTANTS (Update these URLs to your specific assets)
-const DEFAULT_DISH_IMG = "https://cdn-icons-png.flaticon.com/512/706/706164.png"; 
-const DASHBOARD_LOGO = "https://cdn-icons-png.flaticon.com/512/1830/1830839.png"; 
-
 const ChefDashboard = () => {
     const navigate = useNavigate();
     
@@ -58,7 +54,6 @@ const ChefDashboard = () => {
             const activeOrders = res.data.filter(o => o.status !== "SERVED");
 
             setOrders(prevOrders => {
-                // Play sound only if new orders arrive and list grows
                 if (activeOrders.length > prevOrders.length && prevOrders.length !== 0 && !isMuted) {
                     audioRef.current.currentTime = 0; 
                     audioRef.current.play().catch(() => console.log("Audio blocked"));
@@ -197,17 +192,13 @@ const ChefDashboard = () => {
 
             {/* --- STICKY HEADER --- */}
             <header style={styles.header}>
-                <div style={{display: 'flex', alignItems: 'center', gap: '15px'}}>
-                    {/* 🆕 UPDATED HEADER LOGO */}
-                    <img src={DASHBOARD_LOGO} alt="Logo" style={{width: '50px', height: '50px'}} />
-                    <div>
-                        <h1 style={styles.headerTitle}>
-                             Kitchen Console
-                        </h1>
-                        <p style={styles.headerSubtitle}>
-                            Restaurant: {restaurantName} <span style={{ color: '#22c55e', margin: '0 8px' }}>•</span> <span style={{ color: '#22c55e' }}>Live Sync Active</span>
-                        </p>
-                    </div>
+                <div>
+                    <h1 style={styles.headerTitle}>
+                        <FaUtensils style={{ color: '#f97316', marginRight: '12px' }} /> Kitchen Console
+                    </h1>
+                    <p style={styles.headerSubtitle}>
+                        Restaurant: {restaurantName} <span style={{ color: '#22c55e', margin: '0 8px' }}>•</span> <span style={{ color: '#22c55e' }}>Live Sync Active</span>
+                    </p>
                 </div>
 
                 <div style={styles.headerButtons}>
@@ -229,6 +220,9 @@ const ChefDashboard = () => {
 
                     <Link to="/waiter"><button style={styles.iconButtonText}><FaUserTie style={{ marginRight: '8px' }}/> Waiter Dashboard</button></Link>
                     
+                    {/* 🔴 MANAGE MENU LINK (COMMENTED OUT AS REQUESTED) */}
+                    {/* <Link to="/admin"><button style={styles.iconButtonText}><FaCog style={{ marginRight: '8px' }}/> Manage Menu</button></Link> */}
+
                     <button onClick={handleLogout} style={styles.iconButtonRed}><FaLock style={{ marginRight: '8px' }}/> Log Out</button>
                 </div>
             </header>
@@ -333,13 +327,7 @@ const ChefDashboard = () => {
                     {dishes.map(dish => (
                         <div key={dish._id} style={{ ...styles.card, padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
-                                {/* 🆕 UPDATED IMAGE HANDLING */}
-                                <img 
-                                    src={dish.image || DEFAULT_DISH_IMG} 
-                                    onError={(e) => { e.target.onerror = null; e.target.src = DEFAULT_DISH_IMG; }}
-                                    style={{ width: '50px', height: '50px', borderRadius: '12px', objectFit: 'cover', opacity: dish.isAvailable ? 1 : 0.3 }} 
-                                    alt={dish.name} 
-                                />
+                                <img src={dish.image} style={{ width: '50px', height: '50px', borderRadius: '12px', objectFit: 'cover', opacity: dish.isAvailable ? 1 : 0.3 }} alt="" />
                                 <div>
                                     <h3 style={{ margin: 0, fontSize: '16px', color: dish.isAvailable ? 'white' : '#555' }}>{dish.name}</h3>
                                     <p style={{ margin: 0, fontSize: '10px', color: dish.isAvailable ? '#22c55e' : '#ef4444', fontWeight: '900' }}>
