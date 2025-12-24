@@ -15,7 +15,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
     // Payment Verification State
     const [paymentStage, setPaymentStage] = useState("selection"); // 'selection' | 'verifying'
     const [selectedApp, setSelectedApp] = useState(null);
-    const [transactionId, setTransactionId] = useState(""); // Last 5 digits
+    const [transactionId, setTransactionId] = useState(""); 
 
     // Track selected specifications
     const [selectedSpecs, setSelectedSpecs] = useState({});
@@ -38,29 +38,30 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
         fetchRestaurant();
     }, [restaurantId]);
 
-    // --- 2. HANDLE APP CLICK (REDIRECT) ---
+    // --- 2. HANDLE APP CLICK (LOGIC START) ---
     const handlePaymentClick = (appName) => {
-        // Validation
+        // Basic Validation
         if (!customerName.trim()) { alert("Please enter your name!"); return; }
         if (!tableNum) { setShowTableModal(true); return; }
         if (cart.length === 0) { alert("Your cart is empty!"); return; }
-        if (!restaurant?.upiId) { alert("Restaurant UPI not set up."); return; }
+        if (appName !== "Cash" && !restaurant?.upiId) { alert("Restaurant UPI not set up."); return; }
 
+        // --- CASH LOGIC: DIRECT REDIRECT ---
         if (appName === "Cash") {
-            // Cash goes straight to submission
-            submitOrder("Cash", "CASH-PAY");
+            // We pass "PAY_AT_TABLE" as the transaction ID for admin clarity
+            submitOrder("Cash", "PAY_AT_TABLE"); 
             return;
         }
 
-        // 1. Construct Deep Link
+        // --- UPI LOGIC: APP REDIRECT ---
+        // 1. Construct Deep Link for GPay/PhonePe/etc.
         const cleanName = restaurant.username.replace(/\s/g, '');
-        // We use a temporary transaction ref. The real verification happens manually.
         const upiLink = `upi://pay?pa=${restaurant.upiId}&pn=${cleanName}&am=${totalPrice}&cu=INR`;
 
-        // 2. Redirect User
+        // 2. Open the App
         window.location.href = upiLink;
 
-        // 3. Update UI to "Verify" mode
+        // 3. Update UI to "Verify" screen (waiting for user to return)
         setSelectedApp(appName);
         setPaymentStage("verifying");
     };
@@ -80,19 +81,22 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
             })),
             totalAmount: totalPrice,
             paymentMethod: paymentMethod,
-            transactionId: txnId, // Save the 5 digits or 'CASH'
+            transactionId: txnId, 
             owner: restaurantId,
-            status: "PLACED"
+            status: "PLACED" // This status triggers the "New Order" alert on Backend
         };
 
         try {
+            // This API call notifies the server -> server notifies Admin/Waiter via Socket
             const response = await axios.post("https://smart-menu-backend-5ge7.onrender.com/api/orders", orderData);
             
-            // Save to History
+            // Save order to history
             const history = JSON.parse(localStorage.getItem("smartMenu_History") || "[]");
             localStorage.setItem("smartMenu_History", JSON.stringify([response.data._id, ...history]));
             
             clearCart(); 
+            
+            // DIRECT REDIRECT TO TRACKER
             navigate(`/track/${response.data._id}`);
 
         } catch (error) {
@@ -181,17 +185,17 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                 </div>
             )}
 
-            {/* 5. PAYMENT SECTION */}
+            {/* 5. PAYMENT SECTION (MEDIUM ICONS) */}
             <div style={{ marginBottom: '100px' }}>
                 <p style={{ color: '#555', fontSize: '10px', fontWeight: '900', letterSpacing: '1px', marginBottom: '15px', textTransform: 'uppercase' }}>Select Payment</p>
                 
                 {paymentStage === 'selection' ? (
-                    // --- SELECTION GRID (Medium Size, Side by Side) ---
-                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px' }}>
+                    // --- SELECTION GRID (4 Columns, Medium Icons) ---
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
                         
                         {/* GPay */}
                         <button onClick={() => handlePaymentClick("Google Pay")}
-                            style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '15px 5px', borderRadius: '18px', background: '#1a1a1a', border: '1px solid #333', color: 'white', cursor: 'pointer' }}>
+                            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '15px 5px', borderRadius: '18px', background: '#1a1a1a', border: '1px solid #333', color: 'white', cursor: 'pointer' }}>
                             <div style={{ width: '45px', height: '45px', borderRadius: '50%', background: '#1f1f1f', border: '1px solid #444', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
                                 <FaGoogle size={20} color="#fff"/>
                             </div>
@@ -200,7 +204,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
 
                         {/* PhonePe */}
                         <button onClick={() => handlePaymentClick("PhonePe")}
-                            style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '15px 5px', borderRadius: '18px', background: '#1a1a1a', border: '1px solid #333', color: 'white', cursor: 'pointer' }}>
+                            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '15px 5px', borderRadius: '18px', background: '#1a1a1a', border: '1px solid #333', color: 'white', cursor: 'pointer' }}>
                             <div style={{ width: '45px', height: '45px', borderRadius: '50%', background: '#5f259f', border: '1px solid #7848b0', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
                                 <FaMobileAlt size={20} color="#fff"/>
                             </div>
@@ -209,16 +213,16 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
 
                         {/* FamPay */}
                         <button onClick={() => handlePaymentClick("FamPay")}
-                            style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '15px 5px', borderRadius: '18px', background: '#1a1a1a', border: '1px solid #333', color: 'white', cursor: 'pointer' }}>
+                            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '15px 5px', borderRadius: '18px', background: '#1a1a1a', border: '1px solid #333', color: 'white', cursor: 'pointer' }}>
                             <div style={{ width: '45px', height: '45px', borderRadius: '50%', background: '#FFAD00', border: '1px solid #ffbf40', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
                                 <FaWallet size={20} color="#000"/>
                             </div>
                             <span style={{ fontSize: '11px', fontWeight: 'bold' }}>FamPay</span>
                         </button>
 
-                        {/* Cash */}
+                        {/* Cash - TRIGGERS DIRECT REDIRECT */}
                         <button onClick={() => handlePaymentClick("Cash")}
-                            style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '15px 5px', borderRadius: '18px', background: '#1a1a1a', border: '1px solid #333', color: 'white', cursor: 'pointer' }}>
+                            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '15px 5px', borderRadius: '18px', background: '#1a1a1a', border: '1px solid #333', color: 'white', cursor: 'pointer' }}>
                             <div style={{ width: '45px', height: '45px', borderRadius: '50%', background: '#22c55e', border: '1px solid #4ade80', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
                                 <FaMoneyBillWave size={20} color="#fff"/>
                             </div>
@@ -227,7 +231,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
 
                     </div>
                 ) : (
-                    // --- VERIFICATION UI (Shows after returning from app) ---
+                    // --- VERIFICATION UI (Only for UPI apps) ---
                     <div style={{ background: '#111', padding: '20px', borderRadius: '24px', border: '1px solid #333', textAlign: 'center' }}>
                         <FaCheckCircle size={40} color="#f97316" style={{ marginBottom: '15px' }} />
                         <h3 style={{ margin: '0 0 10px 0', fontSize: '18px' }}>Confirm {selectedApp}</h3>
@@ -273,9 +277,11 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                         <span style={{ color: '#888', fontWeight: 'bold', fontSize: '12px', display: 'block' }}>Total to Pay</span>
                         <span style={{ fontSize: '26px', fontWeight: '900', color: '#f97316' }}>₹{totalPrice}</span>
                     </div>
-                    <div style={{ color: '#666', fontSize: '12px', fontWeight: 'bold' }}>
-                        Select App Above ⬆
-                    </div>
+                    {/* Fallback 'Cash' button just in case user clicks the big orange one */}
+                    <button onClick={() => handlePaymentClick("Cash")} disabled={isSubmitting}
+                        style={{ padding: '14px 24px', borderRadius: '14px', border: 'none', background: '#f97316', color: 'white', fontSize: '14px', fontWeight: '900', cursor: isSubmitting ? 'not-allowed' : 'pointer' }}>
+                        {isSubmitting ? "PROCESSING..." : "PLACE ORDER"}
+                    </button>
                 </div>
             )}
         </div>
