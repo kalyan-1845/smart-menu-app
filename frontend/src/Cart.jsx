@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-import { FaArrowLeft, FaTrash, FaGoogle, FaMobileAlt, FaWallet, FaMoneyBillWave, FaCheckCircle, FaTimes } from "react-icons/fa";
+import { FaArrowLeft, FaTrash, FaGoogle, FaMobileAlt, FaWallet, FaMoneyBillWave, FaTimes } from "react-icons/fa";
 
 const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, tableNum, setTableNum }) => {
     const navigate = useNavigate();
@@ -12,16 +12,13 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
     const [showTableModal, setShowTableModal] = useState(!tableNum);
     const [isSubmitting, setIsSubmitting] = useState(false);
     
-    // Payment Logic State
-    // 'selection' = Showing icons
-    // 'verifying' = User came back, needs to enter UTR
+    // 'selection' = Showing icons | 'verifying' = User came back, needs to enter UTR
     const [paymentStage, setPaymentStage] = useState("selection"); 
     const [selectedApp, setSelectedApp] = useState(null);
     const [transactionId, setTransactionId] = useState(""); 
-
+    
     const [selectedSpecs, setSelectedSpecs] = useState({});
     const tableOptions = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, "Takeaway"];
-
     const totalPrice = cart.reduce((total, item) => total + (item.price * item.quantity), 0);
 
     // --- 1. FETCH RESTAURANT DETAILS ---
@@ -39,20 +36,21 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
         fetchRestaurant();
     }, [restaurantId]);
 
-    // --- 2. TRIGGER PAYMENT APP ---
+    // --- 2. HANDLE PAYMENT CLICK ---
     const handlePaymentClick = (appName) => {
         // Validation
         if (!customerName.trim()) { alert("Please enter your name!"); return; }
         if (!tableNum) { setShowTableModal(true); return; }
         if (cart.length === 0) { alert("Your cart is empty!"); return; }
-        
-        // Cash Logic
+
+        // --- CASH LOGIC ---
         if (appName === "Cash") {
-            submitOrder("Cash", "PAY_AT_TABLE");
+            // FIX: Sending "CASH" (uppercase) to satisfy backend enum
+            submitOrder("CASH", "PAY_AT_TABLE");
             return;
         }
 
-        // UPI Logic
+        // --- UPI LOGIC ---
         if (!restaurant?.upiId) { alert("Restaurant UPI not set up."); return; }
 
         // 1. Construct Deep Link
@@ -60,15 +58,15 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
         // Generates: upi://pay?pa=UPI_ID&pn=NAME&am=AMOUNT&cu=INR
         const upiLink = `upi://pay?pa=${restaurant.upiId}&pn=${cleanName}&am=${totalPrice}&cu=INR`;
 
-        // 2. Open App (GPay/PhonePe etc)
+        // 2. INSTANT REDIRECT (Go to Next Tab/App)
         window.location.href = upiLink;
 
-        // 3. Change UI to "Verify" mode
+        // 3. Update UI to "Verify" mode (Wait for user to return)
         setSelectedApp(appName);
         setPaymentStage("verifying");
     };
 
-    // --- 3. SUBMIT ORDER TO BACKEND ---
+    // --- 3. SUBMIT ORDER ---
     const submitOrder = async (paymentMethod, txnId) => {
         setIsSubmitting(true);
 
@@ -82,8 +80,8 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                 customizations: selectedSpecs[item._id] || [] 
             })),
             totalAmount: totalPrice,
-            paymentMethod: paymentMethod,
-            transactionId: txnId, // Sends UTR or 'PAY_AT_TABLE' to Admin
+            paymentMethod: paymentMethod, // Sending "CASH" or "Google Pay"
+            transactionId: txnId, 
             owner: restaurantId,
             status: "PLACED"
         };
@@ -96,14 +94,12 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
             localStorage.setItem("smartMenu_History", JSON.stringify([response.data._id, ...history]));
             
             clearCart(); 
-            
-            // DIRECT REDIRECT TO TRACKER
             navigate(`/track/${response.data._id}`);
 
         } catch (error) {
             console.error("Submission error:", error);
-            // If CORS error persists, it will show here
-            alert("Order Failed: " + (error.response?.data?.message || "Check Network/Server"));
+            // Show detailed error if backend rejects validation again
+            alert(`Order Failed: ${error.response?.data?.message || error.message}`);
             setIsSubmitting(false);
         }
     };
@@ -232,7 +228,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
 
                     </div>
                 ) : (
-                    // --- UTR ENTRY SCREEN (Shows after clicking app) ---
+                    // --- VERIFY UTR SCREEN ---
                     <div style={{ background: '#111', padding: '25px', borderRadius: '24px', border: '1px solid #333', textAlign: 'center', animation: 'fadeIn 0.3s ease' }}>
                         <div style={{display:'flex', justifyContent:'space-between', marginBottom:'15px'}}>
                             <h3 style={{ margin: 0, fontSize: '16px' }}>Verify {selectedApp}</h3>
@@ -240,8 +236,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                         </div>
                         
                         <p style={{ color: '#888', fontSize: '13px', marginBottom: '20px', lineHeight: '1.5' }}>
-                            You should have just paid <b>₹{totalPrice}</b> on {selectedApp}.<br/>
-                            Enter the <b>last 4 digits</b> of the UTR/Transaction ID below to confirm.
+                            Enter the <b>last 4 digits</b> of your UTR/Transaction ID to confirm payment.
                         </p>
                         
                         <input 
@@ -274,28 +269,28 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                 )}
             </div>
 
-            {/* 6. FIXED BOTTOM TOTAL - NEW LAYOUT (Grid) */}
+            {/* 6. FIXED BOTTOM TOTAL - FIXED LAYOUT & WIDTH */}
             {paymentStage === 'selection' && (
                 <div style={{ 
                     position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', 
-                    width: '100%', maxWidth: '600px', padding: '20px 25px', 
-                    background: 'rgba(5, 5, 5, 0.95)', backdropFilter: 'blur(15px)', borderTop: '1px solid #222', 
-                    display: 'grid', gridTemplateColumns: '1fr 1.5fr', alignItems: 'center', gap: '20px' 
+                    width: '100%', maxWidth: '600px', 
+                    padding: '15px 20px', 
+                    background: 'rgba(5, 5, 5, 0.95)', backdropFilter: 'blur(15px)', 
+                    borderTop: '1px solid #222', 
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '15px'
                 }}>
                     <div style={{display:'flex', flexDirection:'column'}}>
-                        <span style={{ color: '#888', fontWeight: 'bold', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total to Pay</span>
-                        <span style={{ fontSize: '28px', fontWeight: '900', color: 'white' }}>₹{totalPrice}</span>
+                        <span style={{ color: '#888', fontWeight: 'bold', fontSize: '11px', textTransform: 'uppercase' }}>Total</span>
+                        <span style={{ fontSize: '26px', fontWeight: '900', color: 'white' }}>₹{totalPrice}</span>
                     </div>
                     
-                    {/* The "Place Order" button now defaults to Cash if they didn't click an icon above, 
-                        OR acts as a "Cash" trigger. This matches the user's visual request for a big button. */}
                     <button onClick={() => handlePaymentClick("Cash")} disabled={isSubmitting}
                         style={{ 
-                            width: '100%', height: '55px', borderRadius: '16px', border: 'none', 
+                            flex: 1, height: '50px', borderRadius: '14px', border: 'none', 
                             background: '#f97316', color: 'white', fontSize: '14px', fontWeight: '900', 
                             textTransform: 'uppercase', letterSpacing: '1px',
                             cursor: isSubmitting ? 'not-allowed' : 'pointer', 
-                            boxShadow: '0 4px 20px rgba(249, 115, 22, 0.4)'
+                            boxShadow: '0 4px 15px rgba(249, 115, 22, 0.4)'
                         }}>
                         {isSubmitting ? "PROCESSING..." : "PLACE ORDER"}
                     </button>
