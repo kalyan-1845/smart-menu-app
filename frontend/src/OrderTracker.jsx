@@ -12,22 +12,21 @@ import {
 
 import "./OrderTracker.css";
 
+/**
+ * OrderTracker Component
+ * Premium real-time tracking interface for customers.
+ * Handles Live Kitchen Updates, UPI deep-linking, and Staff Verification.
+ */
 const OrderTracker = () => {
     const { id } = useParams();
     
     // --- STATE ---
     const [order, setOrder] = useState(null);
     const [restaurant, setRestaurant] = useState(null);
-    
-    // Statuses: "pending", "input_upi", "cash_mode", "verifying_bg", "completed", "rejected"
     const [paymentStatus, setPaymentStatus] = useState("pending"); 
     const [customerUpi, setCustomerUpi] = useState(""); 
-    
-    // Waiter PIN State
     const [showPinPad, setShowPinPad] = useState(false);
     const [waiterPin, setWaiterPin] = useState("");
-    
-    // Extra Item Logic (Upsell)
     const [extraItem, setExtraItem] = useState(null); 
     const [eta, setEta] = useState(25); 
 
@@ -38,14 +37,14 @@ const OrderTracker = () => {
         { id: 103, name: "Vanilla Scoop", price: 60, img: "https://images.unsplash.com/photo-1560008581-09826d1de69e?w=200&q=80" }
     ];
 
-    // --- DATA FETCHING & SOCKETS ---
+    // --- 1. DATA FETCHING & SOCKETS ---
     useEffect(() => {
         const fetchOrderDetails = async () => {
             try {
                 const res = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/orders/track/${id}`);
                 setOrder(res.data);
                 
-                // Set initial payment status based on Database
+                // Set status based on Database state
                 if(res.data.paymentStatus === 'Paid') {
                     setPaymentStatus("completed");
                 }
@@ -63,7 +62,7 @@ const OrderTracker = () => {
         
         const socket = io("https://smart-menu-backend-5ge7.onrender.com");
         
-        // Listen for Real-time Staff Approvals
+        // Listen for Real-time Approvals
         socket.on("payment-confirmed-by-staff", (data) => {
             if (data.orderId === id) handleSuccessfulPayment();
         });
@@ -75,7 +74,7 @@ const OrderTracker = () => {
             }
         });
 
-        // Listen for Kitchen Progress Updates
+        // Listen for Kitchen Progress
         socket.on("order-updated", (updatedOrder) => {
             if (updatedOrder._id === id) setOrder(updatedOrder);
         });
@@ -83,13 +82,13 @@ const OrderTracker = () => {
         return () => socket.disconnect();
     }, [id]);
 
-    // --- 💰 TOTAL CALCULATION LOGIC ---
+    // --- 2. DYNAMIC DEBT CALCULATION ---
     const isMainPaidInDB = order?.paymentStatus === 'Paid';
     const mainDebt = (isMainPaidInDB || paymentStatus === "completed") ? 0 : (order?.totalAmount || 0);
     const extraDebt = extraItem ? extraItem.price : 0;
     const totalPayableNow = mainDebt + extraDebt;
 
-    // --- HANDLERS ---
+    // --- 3. HANDLERS ---
     const handleSuccessfulPayment = () => {
         if(extraItem) {
             setOrder(prev => ({
@@ -149,7 +148,7 @@ const OrderTracker = () => {
         }
     };
 
-    // --- UI HELPERS ---
+    // UI Logic for Tracker Steps
     const stages = [
         { id: "PLACED", label: "Confirmed", icon: <FaCheck /> },
         { id: "PREPARING", label: "Cooking", icon: <FaUtensils /> },
@@ -161,31 +160,31 @@ const OrderTracker = () => {
     const currentStepIndex = stages.findIndex(s => s.id === normalizedStatus);
     const qrLink = `upi://pay?pa=${restaurant?.upiId}&pn=Resto&am=${totalPayableNow}&cu=INR`;
 
-    if (!order) return <div className="loading-screen">Loading Your Experience...</div>;
+    if (!order) return <div className="loading-screen">Syncing Kitchen Data...</div>;
 
     return (
         <div className="tracker-container">
             <header className="tracker-header">
                 <h1>Order Tracker</h1>
-                <p>Enjoy your meal at {restaurant?.username || "Our Kitchen"}</p>
+                <p>Dining at {restaurant?.username || "Our Kitchen"}</p>
             </header>
             
-            {/* --- TOP STATUS BANNERS --- */}
+            {/* Status Banners */}
             {paymentStatus === "verifying_bg" && (
                 <div className="status-banner yellow">
                     <FaHourglassHalf className="spin-slow"/> 
                     <div>
-                        <div style={{fontWeight:'bold'}}>Verifying Transaction</div>
-                        <div style={{fontSize:'10px'}}>Staff is checking ₹{totalPayableNow}...</div>
+                        <div style={{fontWeight:'bold'}}>Verifying Payment...</div>
+                        <div style={{fontSize:'10px'}}>Staff is checking ₹{totalPayableNow}</div>
                     </div>
                 </div>
             )}
             
             {paymentStatus === "completed" && totalPayableNow === 0 && (
-                <div className="status-banner green"><FaCheckCircle /> All Bills Paid. Thank you!</div>
+                <div className="status-banner green"><FaCheckCircle /> Payment Verified. Order is live!</div>
             )}
 
-            {/* ORDER HEADER */}
+            {/* Main Order Card */}
             <div className="card header-card">
                 <div>
                     <div className="label">Order ID</div>
@@ -195,7 +194,7 @@ const OrderTracker = () => {
                 {currentStatus !== "SERVED" && <div className="eta-badge"><FaClock /> {eta} MINS</div>}
             </div>
 
-            {/* PROGRESS STEPPER */}
+            {/* Stepper */}
             <div className="stepper-wrapper">
                 <div className="progress-bg"></div>
                 <div className="progress-fill" style={{ width: `${(currentStepIndex / (stages.length - 1)) * 100}%` }}></div>
@@ -210,15 +209,15 @@ const OrderTracker = () => {
                 })}
             </div>
 
-            {/* UPSELL SECTION */}
+            {/* Upsell */}
             {currentStatus !== "SERVED" && (
-                <>
+                <div className="card-upsell">
                     <h3 className="section-title">Sweet Cravings?</h3>
                     <div className="cravings-list">
                         {upsellItems.map((item, idx) => (
                             <div key={idx} className="upsell-item">
                                 <div className="upsell-left">
-                                    <img src={item.img} alt={item.name} className="upsell-img" />
+                                    <img src={item.img} alt="" className="upsell-img" />
                                     <div className="upsell-info">
                                         <p className="item-name">{item.name}</p>
                                         <p className="item-price">₹{item.price}</p>
@@ -230,37 +229,33 @@ const OrderTracker = () => {
                             </div>
                         ))}
                     </div>
-                </>
+                </div>
             )}
 
-            {/* PAYMENT COMPONENT */}
+            {/* Payment Section */}
             {totalPayableNow > 0 && paymentStatus !== "verifying_bg" && (
                 <div className="payment-root">
-                    <div className="split-header">
-                        <h3>Payable Amount: <span className="highlight-price">₹{totalPayableNow}</span></h3>
-                    </div>
-
+                    <h3 className="section-title">Scan to Pay</h3>
+                    
                     {paymentStatus === "cash_mode" ? (
                         <div className="card cash-box">
                             {!showPinPad ? (
                                 <>
                                     <h2 className="cash-amount">₹{totalPayableNow}</h2>
-                                    <p className="cash-instruction">Hand cash to the waiter.</p>
+                                    <p className="cash-instruction">Please hand cash to the waiter.</p>
                                     <button className="waiter-pin-trigger" onClick={() => setShowPinPad(true)}>
-                                        <FaLock size={12}/> Waiter PIN Verification
+                                        <FaLock size={12}/> Waiter Verification
                                     </button>
-                                    <button className="cancel-text-btn" onClick={() => setPaymentStatus("pending")}>
-                                        Online Payment
-                                    </button>
+                                    <button className="cancel-text-btn" onClick={() => setPaymentStatus("pending")}>Pay Online</button>
                                 </>
                             ) : (
                                 <div className="pin-pad-container">
                                     <div className="pin-grid">
                                         {[1,2,3,4,5,6,7,8,9].map(num => (
-                                            <button key={num} onClick={() => setWaiterPin(p => p.length < 4 ? p + num : p)}>{num}</button>
+                                            <button key={num} onClick={() => setWaiterPin(p => p.length < 6 ? p + num : p)}>{num}</button>
                                         ))}
                                         <button onClick={() => setWaiterPin("")}>C</button>
-                                        <button onClick={() => setWaiterPin(p => p.length < 4 ? p + "0" : p)}>0</button>
+                                        <button onClick={() => setWaiterPin(p => p.length < 6 ? p + "0" : p)}>0</button>
                                         <button className="ok" onClick={verifyWaiterPin}>OK</button>
                                     </div>
                                     <button className="cancel-text-btn" onClick={() => {setShowPinPad(false); setWaiterPin("");}}>Back</button>
@@ -269,15 +264,14 @@ const OrderTracker = () => {
                         </div>
                     ) : paymentStatus === "input_upi" || paymentStatus === "rejected" ? (
                         <div className="card verify-card">
-                            {paymentStatus === "rejected" && <p className="err-txt">❌ Verification Failed</p>}
-                            <p className="verify-title">Verify UPI Payment</p>
+                            <p className="verify-title">Verify UPI Transaction</p>
                             <input 
                                 type="tel" maxLength="4" placeholder="Last 4 digits of UTR" 
                                 value={customerUpi} 
                                 onChange={(e) => setCustomerUpi(e.target.value.replace(/\D/g,''))} 
                                 className="utr-input"
                             />
-                            <button className="btn-primary" onClick={handlePaymentSubmit}>Confirm ₹{totalPayableNow}</button>
+                            <button className="btn-primary" style={{width:'100%', padding:'18px', background:'#FF5200', border:'none', borderRadius:'15px', color:'white', fontWeight:'bold'}} onClick={handlePaymentSubmit}>Verify ₹{totalPayableNow}</button>
                             <button className="cancel-text-btn" onClick={() => setPaymentStatus("pending")}>Cancel</button>
                         </div>
                     ) : (
@@ -285,8 +279,8 @@ const OrderTracker = () => {
                             <div className="qr-layout">
                                 <div className="qr-box"><QRCodeSVG value={qrLink} size={90} /></div>
                                 <div className="qr-info">
-                                    <p className="upi-id">{restaurant?.upiId}</p>
-                                    <p className="qr-total">Pay: ₹{totalPayableNow}</p>
+                                    <p className="price-large">₹{totalPayableNow}</p>
+                                    <p className="upi-id">UPI ID: {restaurant?.upiId}</p>
                                 </div>
                             </div>
                             <div className="payment-apps-row">
@@ -294,18 +288,18 @@ const OrderTracker = () => {
                                 <button className="app-btn phonepe" onClick={() => handleAppPayment("phonepe")}><FaMobileAlt /> PhonePe</button>
                             </div>
                             <div className="payment-apps-row" style={{marginTop:'10px'}}>
-                                <button className="app-btn generic" onClick={() => handleAppPayment("generic")}><FaWallet /> UPI</button>
+                                <button className="app-btn generic" onClick={() => handleAppPayment("generic")}><FaWallet /> Other</button>
                                 <button className="app-btn cash" onClick={() => setPaymentStatus("cash_mode")}><FaMoneyBillWave /> Cash</button>
                             </div>
-                            <button onClick={() => setPaymentStatus("input_upi")} className="verify-trigger-btn">Already Paid? Verify</button>
+                            <button onClick={() => setPaymentStatus("input_upi")} className="verify-trigger-btn">Already Paid? Verify Here</button>
                         </div>
                     )}
                 </div>
             )}
             
-            {/* BASKET SUMMARY */}
+            {/* Basket Summary */}
             <div className="card basket-card">
-                <p className="section-label">Order Summary</p>
+                <p className="section-label">Basket Items</p>
                 <div className="basket-items-list">
                     {order.items.map((item, idx) => (
                         <div key={idx} className="basket-row">
@@ -320,24 +314,25 @@ const OrderTracker = () => {
                         <div className="basket-row pending">
                             <div className="item-meta">
                                 <span className="b-name">{extraItem.name}</span>
-                                <span className="b-status">(New Item)</span>
+                                <span className="b-status">(New)</span>
                             </div>
                             <span className="b-price">₹{extraItem.price}</span>
                         </div>
                     )}
                 </div>
                 <div className="grand-total-row">
-                    <span>Grand Total</span>
+                    <span>Total Amount</span>
                     <span className="final-price">₹{totalPayableNow + (isMainPaidInDB ? order.totalAmount : 0)}</span>
                 </div>
             </div>
 
+            {/* Footer Buttons */}
             <div className="action-row">
-                <button className="action-btn download" onClick={() => alert("Bill downloading...")}><FaDownload /> Receipt</button>
-                <button className="action-btn help" onClick={() => alert("Staff called!")}><FaPhoneAlt /> Staff</button>
+                <button className="btn-download" onClick={() => alert("Digital Bill is generating...")}><FaDownload /> Digital Bill</button>
+                <button className="btn-staff" onClick={() => alert("Staff called to table " + order.tableNumber)}><FaPhoneAlt /> Call Staff</button>
             </div>
             
-            <Link to="/" className="back-link"><FaArrowLeft /> Back to Menu</Link>
+            <Link to="/" className="back-link"><FaArrowLeft /> Return to Menu</Link>
         </div>
     );
 };
