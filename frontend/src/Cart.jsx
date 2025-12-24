@@ -10,70 +10,71 @@ const Cart = ({ cart, clearCart, updateQuantity, restaurantId, tableNum, setTabl
     const [customerName, setCustomerName] = useState("");
     const [showTableModal, setShowTableModal] = useState(!tableNum);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [selectedSpecs, setSelectedSpecs] = useState({});
 
     const tableOptions = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, "Takeaway"];
     const totalPrice = cart.reduce((total, item) => total + (item.price * item.quantity), 0);
 
-    // --- LOGIC: AUTOMATIC SUBMISSION ---
-    // This effect triggers if the user has already provided their name and table.
-    // It fulfills your "No time wasted for Chef" requirement.
-    useEffect(() => {
-        if (customerName.trim() && tableNum && cart.length > 0 && !isSubmitting) {
-            handlePlaceOrder();
-        }
-    }, [customerName, tableNum]);
+    // --- 400 ERROR FIX: Get ID from URL if state is lost ---
+    // If you refresh the page, restaurantId might become null. This fixes it.
+    const finalRestaurantId = restaurantId || localStorage.getItem("lastRestId");
 
     const handlePlaceOrder = async () => {
-        if (!customerName.trim() || !tableNum || cart.length === 0 || isSubmitting) return;
+        // Validation
+        if (!customerName.trim()) return alert("Please enter your name!");
+        if (!tableNum) return setShowTableModal(true);
+        if (cart.length === 0) return alert("Cart is empty!");
+        if (!finalRestaurantId) return alert("Error: Restaurant ID missing. Go back to menu.");
 
         setIsSubmitting(true);
 
+        // --- THE DATA PAYLOAD (Strictly formatted for your Backend) ---
         const orderData = {
             customerName: customerName,
             tableNumber: tableNum.toString(),
+            owner: finalRestaurantId, // Ensure this isn't null
             items: cart.map(item => ({
+                dishId: item._id, // ✅ FIX: Most backends require the MongoDB _id
                 name: item.name,
                 quantity: item.quantity,
-                price: item.price,
-                customizations: selectedSpecs[item._id] || [] 
+                price: item.price
             })),
             totalAmount: totalPrice,
-            paymentMethod: "PENDING", 
-            paymentId: "NOT_SET",
-            owner: restaurantId,
-            status: "PLACED"
+            status: "PLACED",
+            paymentStatus: "Pending"
         };
 
         try {
+            console.log("Attempting to place order...", orderData);
             const response = await axios.post("https://smart-menu-backend-5ge7.onrender.com/api/orders", orderData);
             
-            // Save to history
+            // Save order ID so user can find it later
             const history = JSON.parse(localStorage.getItem("smartMenu_History") || "[]");
             localStorage.setItem("smartMenu_History", JSON.stringify([response.data._id, ...history]));
 
             clearCart();
-            // Redirect straight to your updated OrderTracker
-            navigate(`/track-order/${response.data._id}`);
+            // Go to tracker
+            navigate(`/track/${response.data._id}`);
             
         } catch (error) {
-            console.error("Submission error:", error);
             setIsSubmitting(false);
+            // This shows you the EXACT reason the backend said 400
+            const errorMsg = error.response?.data?.message || "Check Console for details";
+            console.error("BACKEND REJECTION:", error.response?.data);
+            alert("Order Failed: " + errorMsg);
         }
     };
 
     return (
-        <div style={{ minHeight: '100vh', background: '#080808', color: 'white', padding: '20px', paddingBottom: '160px', maxWidth: '480px', margin: '0 auto', fontFamily: 'sans-serif' }}>
-            
-            {/* 1. TABLE MODAL (Forces choice so order can be sent immediately) */}
+        <div style={{ minHeight: '100vh', background: '#080808', color: 'white', padding: '20px', maxWidth: '480px', margin: '0 auto' }}>
+            {/* Table Selection Modal */}
             {showTableModal && (
-                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.95)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-                    <div style={{ background: '#111', width: '100%', maxWidth: '400px', borderRadius: '32px', padding: '30px', border: '1px solid #222' }}>
-                        <h2 style={{ textAlign: 'center', marginBottom: '8px' }}>Select Table</h2>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.9)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ background: '#111', width: '90%', borderRadius: '25px', padding: '25px' }}>
+                        <h2 style={{ textAlign: 'center' }}>Select Table</h2>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
                             {tableOptions.map((opt) => (
                                 <button key={opt} onClick={() => { setTableNum(opt); setShowTableModal(false); }} 
-                                    style={{ padding: '18px', borderRadius: '16px', border: '1px solid #333', background: tableNum === opt ? '#f97316' : '#1a1a1a', color: 'white', fontWeight: 'bold' }}>
+                                    style={{ padding: '15px', borderRadius: '12px', background: tableNum === opt ? '#f97316' : '#222', color: 'white', border: 'none' }}>
                                     {opt}
                                 </button>
                             ))}
@@ -82,55 +83,48 @@ const Cart = ({ cart, clearCart, updateQuantity, restaurantId, tableNum, setTabl
                 </div>
             )}
 
-            {/* 2. HEADER */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '30px' }}>
-                <button onClick={() => navigate(-1)} style={{ border: 'none', color: 'white', background: '#1a1a1a', width: '45px', height: '45px', borderRadius: '15px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><FaArrowLeft /></button>
-                <h1 style={{ fontSize: '24px', fontWeight: '900', margin: 0 }}>Review Basket</h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '20px' }}>
+                <button onClick={() => navigate(-1)} style={{ background: '#222', color: 'white', border: 'none', padding: '10px 15px', borderRadius: '10px' }}>←</button>
+                <h1 style={{ fontSize: '20px' }}>Review Basket</h1>
             </div>
 
-            {/* 3. NAME INPUT (The "Trigger" for auto-ordering) */}
-            <div style={{ background: '#111', padding: '25px', borderRadius: '28px', marginBottom: '20px', border: '1px solid #1a1a1a' }}>
-                <p style={{ color: '#555', fontSize: '10px', fontWeight: '900', letterSpacing: '1px', marginBottom: '10px' }}>ENTER NAME TO CONFIRM ORDER</p>
+            <div style={{ background: '#111', padding: '20px', borderRadius: '20px', marginBottom: '20px' }}>
+                <p style={{ color: '#666', fontSize: '12px' }}>NAME</p>
                 <input 
                     type="text" 
-                    placeholder="E.g. Kalyan Reddy" 
+                    placeholder="Enter your name" 
                     value={customerName} 
                     onChange={(e) => setCustomerName(e.target.value)}
-                    style={{ width: '100%', padding: '15px', background: '#080808', border: '1px solid #222', borderRadius: '14px', color: 'white', outline: 'none', fontWeight: 'bold' }} 
+                    style={{ width: '100%', padding: '12px', background: '#000', border: '1px solid #333', borderRadius: '10px', color: 'white' }} 
                 />
-                <p style={{ fontSize: '11px', color: '#444', marginTop: '10px' }}>Order will be sent to kitchen immediately after entering name.</p>
             </div>
 
-            {/* 4. ITEM LIST */}
-            <div style={{ background: '#111', borderRadius: '28px', padding: '20px', border: '1px solid #1a1a1a', marginBottom: '20px' }}>
-                <p style={{ color: '#555', fontSize: '10px', fontWeight: '900', letterSpacing: '1px', marginBottom: '15px' }}>YOUR SELECTIONS</p>
+            <div style={{ background: '#111', borderRadius: '20px', padding: '20px' }}>
                 {cart.map((item) => (
-                    <div key={item._id} style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '15px', paddingBottom: '15px', borderBottom: '1px solid #1a1a1a' }}>
-                        <img src={item.image} alt={item.name} style={{ width: '50px', height: '50px', borderRadius: '12px', objectFit: 'cover' }} />
-                        <div style={{ flex: 1 }}>
-                            <h4 style={{ margin: 0, fontSize: '14px' }}>{item.name}</h4>
-                            <p style={{ margin: '5px 0 0', color: '#f97316', fontWeight: '900' }}>₹{item.price}</p>
+                    <div key={item._id} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px' }}>
+                        <div>
+                            <div style={{ fontWeight: 'bold' }}>{item.name}</div>
+                            <div style={{ color: '#f97316' }}>₹{item.price} x {item.quantity}</div>
                         </div>
-                        <div style={{ fontWeight: 'bold' }}>x{item.quantity}</div>
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                            <button onClick={() => updateQuantity(item._id, -1)} style={{ background: '#222', color: 'white', border: 'none', width: '30px', borderRadius: '5px' }}>-</button>
+                            <button onClick={() => updateQuantity(item._id, 1)} style={{ background: '#222', color: 'white', border: 'none', width: '30px', borderRadius: '5px' }}>+</button>
+                        </div>
                     </div>
                 ))}
             </div>
 
-            {/* 5. AUTO-SUBMIT STATUS */}
-            <div style={{ position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: '480px', padding: '25px', background: 'rgba(8, 8, 8, 0.95)', backdropFilter: 'blur(10px)', borderTop: '1px solid #222' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px' }}>
-                    <span style={{ color: '#888', fontWeight: 'bold' }}>Total</span>
-                    <span style={{ fontSize: '26px', fontWeight: '900' }}>₹{totalPrice}</span>
+            <div style={{ position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: '480px', padding: '20px', background: '#080808', borderTop: '1px solid #222' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+                    <span>Total Bill</span>
+                    <span style={{ fontSize: '20px', fontWeight: 'bold' }}>₹{totalPrice}</span>
                 </div>
                 <button 
-                    disabled={isSubmitting || !customerName.trim()}
-                    style={{ 
-                        width: '100%', padding: '20px', borderRadius: '18px', border: 'none', 
-                        background: (isSubmitting || !customerName.trim()) ? '#333' : '#f97316', 
-                        color: 'white', fontSize: '16px', fontWeight: '900'
-                    }}
+                    onClick={handlePlaceOrder}
+                    disabled={isSubmitting}
+                    style={{ width: '100%', padding: '15px', borderRadius: '12px', border: 'none', background: '#f97316', color: 'white', fontWeight: 'bold' }}
                 >
-                    {isSubmitting ? "SENDING TO KITCHEN..." : "READY TO ORDER"}
+                    {isSubmitting ? "ORDERING..." : "CONFIRM ORDER"}
                 </button>
             </div>
         </div>
