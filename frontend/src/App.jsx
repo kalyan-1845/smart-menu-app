@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 
 // --- COMPONENT IMPORTS ---
@@ -14,15 +14,15 @@ import SuperAdmin from './SuperAdmin.jsx';
 import OrderSuccess from './OrderSuccess.jsx';
 import ManagerLogin from "./ManagerLogin.jsx"; 
 
-// --- PROTECTED ROUTE MIDDLEWARE ---
+// --- 🛡️ PROTECTED ROUTE MIDDLEWARE ---
 // Standard protection for staff areas (Chef, Waiter)
 const ProtectedRoute = ({ children }) => {
   const token = localStorage.getItem("ownerToken");
   return token ? children : <Navigate to="/login" replace />;
 };
 
-// 🔒 MANAGER PROTECTION MIDDLEWARE
-// Specifically for the Admin/Manage Menu area
+// 🔒 MANAGER PROTECTION GATE
+// Specifically for the Admin/Manage Menu area - Requires PIN (bb1972)
 const ManagerProtectedRoute = ({ children }) => {
   const token = localStorage.getItem("ownerToken");
   const isManagerAuth = localStorage.getItem("managerAuthenticated") === "true";
@@ -33,16 +33,21 @@ const ManagerProtectedRoute = ({ children }) => {
   return children;
 };
 
-// --- HOME REDIRECT ---
-const Home = () => (
-    <Navigate to="/login" replace />
-);
+// --- REDIRECT LOGIC ---
+const Home = () => <Navigate to="/login" replace />;
 
 function App() {
   // --- GLOBAL STATE ---
   const [cart, setCart] = useState([]);
-  const [restaurantId, setRestaurantId] = useState(null);
+  const [restaurantId, setRestaurantId] = useState(localStorage.getItem("activeRestId"));
   const [tableNum, setTableNum] = useState(""); 
+
+  // Sync restaurantId with localStorage to prevent loss on refresh
+  useEffect(() => {
+    if (restaurantId) {
+      localStorage.setItem("activeRestId", restaurantId);
+    }
+  }, [restaurantId]);
 
   // --- CART FUNCTIONS ---
   const addToCart = (dish) => {
@@ -61,9 +66,7 @@ function App() {
       return;
     }
     setCart((prev) => 
-      prev.map((item) => 
-        item._id === id ? { ...item, quantity: newQuantity } : item
-      )
+      prev.map((item) => item._id === id ? { ...item, quantity: newQuantity } : item)
     );
   };
 
@@ -74,46 +77,33 @@ function App() {
     <Router>
       <Routes>
         
-        {/* --- PUBLIC ROUTES --- */}
+        {/* --- PUBLIC / AUTH ROUTES --- */}
         <Route path="/" element={<Home />} /> 
         <Route path="/login" element={<OwnerLogin />} />
         <Route path="/register" element={<Register />} />
         
-        {/* Customer Experience Routes */}
+        {/* --- CUSTOMER EXPERIENCE --- */}
+        {/* Supports both direct menu access and table-specific QR scans */}
         <Route 
           path="/menu/:id/:table" 
-          element={
-            <Menu 
-                cart={cart} 
-                addToCart={addToCart} 
-                setRestaurantId={setRestaurantId} 
-                setTableNum={setTableNum} 
-            />
-          } 
+          element={<Menu cart={cart} addToCart={addToCart} setRestaurantId={setRestaurantId} setTableNum={setTableNum} />} 
         />
         <Route 
           path="/menu/:id" 
-          element={
-            <Menu 
-                cart={cart} 
-                addToCart={addToCart} 
-                setRestaurantId={setRestaurantId} 
-                setTableNum={setTableNum} 
-            />
-          } 
+          element={<Menu cart={cart} addToCart={addToCart} setRestaurantId={setRestaurantId} setTableNum={setTableNum} />} 
         />
         
         <Route 
           path="/cart" 
           element={
             <Cart 
-                cart={cart} 
-                removeFromCart={removeFromCart} 
-                clearCart={clearCart} 
-                updateQuantity={updateQuantity} 
-                restaurantId={restaurantId} 
-                tableNum={tableNum} 
-                setTableNum={setTableNum} 
+              cart={cart} 
+              removeFromCart={removeFromCart} 
+              clearCart={clearCart} 
+              updateQuantity={updateQuantity} 
+              restaurantId={restaurantId} 
+              tableNum={tableNum} 
+              setTableNum={setTableNum} 
             />
           } 
         />
@@ -121,44 +111,45 @@ function App() {
         <Route path="/order-success" element={<OrderSuccess />} />
         <Route path="/track/:id" element={<OrderTracker />} />
 
-        {/* --- STAFF PROTECTED ROUTES --- */}
-        
-        {/* The Chef/Kitchen Dashboard */}
+        {/* --- STAFF PROTECTED DASHBOARDS --- */}
         <Route path="/chef" element={
-            <ProtectedRoute>
-                <ChefDashboard />
-            </ProtectedRoute>
+          <ProtectedRoute>
+            <ChefDashboard />
+          </ProtectedRoute>
         } />
-
-        {/* Added this so "/kitchen" also works */}
         <Route path="/kitchen" element={<Navigate to="/chef" replace />} />
 
         <Route path="/waiter" element={
-            <ProtectedRoute>
-                <WaiterDashboard />
-            </ProtectedRoute>
+          <ProtectedRoute>
+            <WaiterDashboard />
+          </ProtectedRoute>
         } />
 
-        {/* 🛡️ MANAGER LOGIN ROUTE */}
-        <Route path="/manager-login" element={<ProtectedRoute><ManagerLogin /></ProtectedRoute>} />
+        {/* --- 🔒 MANAGER SECURITY GATE --- */}
+        <Route path="/manager-login" element={
+          <ProtectedRoute>
+            <ManagerLogin />
+          </ProtectedRoute>
+        } />
 
-        {/* ⚙️ ADMIN PANEL ROUTES */}
-        {/* Route for just "/admin" */}
+        {/* --- ⚙️ ADMIN / MANAGEMENT AREA --- */}
         <Route path="/admin" element={
-            <ManagerProtectedRoute>
-                <AdminPanel />
-            </ManagerProtectedRoute>
+          <ManagerProtectedRoute>
+            <AdminPanel />
+          </ManagerProtectedRoute>
         } />
         
-        {/* ✅ FIXED: Added specific route for "/admin/dashboard" */}
         <Route path="/admin/dashboard" element={
-            <ManagerProtectedRoute>
-                <AdminPanel />
-            </ManagerProtectedRoute>
+          <ManagerProtectedRoute>
+            <AdminPanel />
+          </ManagerProtectedRoute>
         } />
 
-        {/* --- SUPER ADMIN --- */}
+        {/* --- SUPER ADMIN (GLOBAL CONTROL) --- */}
         <Route path="/superadmin" element={<SuperAdmin />} />
+
+        {/* Fallback Catch-all */}
+        <Route path="*" element={<Navigate to="/" replace />} />
 
       </Routes>
     </Router>
