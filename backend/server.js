@@ -5,7 +5,8 @@ import mongoose from 'mongoose';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import rateLimit from 'express-rate-limit';
-import https from "https";
+import https from "https"; // Imported once here for the self-ping logic
+
 // --- IMPORT ROUTES ---
 import authRoutes from './routes/authRoutes.js';
 import dishRoutes from './routes/dishRoutes.js';
@@ -25,11 +26,10 @@ const limiter = rateLimit({
 });
 
 // --- 🔒 SECURITY: CORS CONFIG ---
-// Fixed to include your specific Netlify preview URL
 const allowedOrigins = [
     "http://localhost:5173",           
     "https://smartmenuss.netlify.app",
-    "https://694915c413d9f40008f38924--smartmenuss.netlify.app" // Added this to fix your error
+    "https://694915c413d9f40008f38924--smartmenuss.netlify.app" // Your specific Netlify preview
 ];
 
 const io = new Server(httpServer, {
@@ -44,10 +44,11 @@ const io = new Server(httpServer, {
 app.use(limiter); 
 app.use(cors({ 
     origin: function (origin, callback) {
-        // Allow requests with no origin (like mobile apps) or if in allowedOrigins
+        // Allow requests with no origin (like mobile apps/curl) or if in allowedOrigins
         if (!origin || allowedOrigins.indexOf(origin) !== -1) {
             callback(null, true);
         } else {
+            console.log("Blocked Origin:", origin); // Optional: Log blocked origins for debugging
             callback(new Error('CORS Policy: Origin not allowed'));
         }
     }, 
@@ -74,7 +75,7 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/superadmin', superAdminRoutes);
 app.use('/api/broadcast', broadcastRoutes);
 
-// Test Route
+// Test Route (Health Check)
 app.get('/', (req, res) => res.send('Smart Menu Cloud API v2.8 Active...'));
 
 // --- 4. GLOBAL ERROR HANDLER ---
@@ -102,28 +103,20 @@ io.on('connection', (socket) => {
     socket.on('disconnect', () => console.log('⚡ Connection Terminated'));
 });
 
-// --- 6. START SERVER ---
+// --- 6. SELF-PING MECHANISM (Keep-Alive) ---
+// This prevents Render free tier from sleeping
+const pingUrl = "https://smart-menu-backend-5ge7.onrender.com/"; // Pings the root '/' route
+
+setInterval(() => {
+    https.get(pingUrl, (res) => {
+        console.log(`Self-ping sent to ${pingUrl} - Status: ${res.statusCode}`);
+    }).on("error", (e) => {
+        console.error(`Self-ping error: ${e.message}`);
+    });
+}, 840000); // 14 minutes (Render sleeps after 15)
+
+// --- 7. START SERVER ---
 const PORT = process.env.PORT || 5000;
 httpServer.listen(PORT, () => {
     console.log(`🚀 Production Server running on port ${PORT}`);
 });
-
-
-
-// --- PASTE THIS AT THE BOTTOM OF YOUR SERVER FILE ---
-
-const https = require("https");
-
-const url = "https://smart-menu-backend-5ge7.onrender.com/api/products"; 
-
-// Ping the server every 14 minutes (840,000 ms) 
-// Render sleeps after 15 mins of inactivity, so 14 mins is safe.
-setInterval(() => {
-  https.get(url, (res) => {
-    console.log(`Self-ping sent to ${url} - Status: ${res.statusCode}`);
-  }).on("error", (e) => {
-    console.error(`Self-ping error: ${e.message}`);
-  });
-}, 840000); 
-
-// ----------------------------------------------------
