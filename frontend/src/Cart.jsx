@@ -11,9 +11,8 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
     const [restaurant, setRestaurant] = useState(null);
     const [showTableModal, setShowTableModal] = useState(!tableNum);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [copied, setCopied] = useState(false); // For Copy Feedback
+    const [copied, setCopied] = useState(false); 
     
-    // 'selection' = Showing icons | 'verifying' = User came back, needs to enter UTR
     const [paymentStage, setPaymentStage] = useState("selection"); 
     const [selectedApp, setSelectedApp] = useState(null);
     const [transactionId, setTransactionId] = useState(""); 
@@ -52,19 +51,16 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
         if (!tableNum) { setShowTableModal(true); return; }
         if (cart.length === 0) { alert("Your cart is empty!"); return; }
 
-        // --- CASH LOGIC ---
         if (appName === "Cash") {
-            submitOrder("CASH", "PAY_AT_TABLE"); // Sends uppercase CASH
+            submitOrder("CASH", "PAY_AT_TABLE"); 
             return;
         }
 
-        // --- UPI LOGIC ---
         if (!restaurant?.upiId) { alert("Restaurant UPI not set up."); return; }
 
         const cleanName = restaurant.username.replace(/\s/g, '');
         const upiLink = `upi://pay?pa=${restaurant.upiId}&pn=${cleanName}&am=${totalPrice}&cu=INR`;
 
-        // Redirect & Switch to Verify Mode
         window.location.href = upiLink;
         setSelectedApp(appName);
         setPaymentStage("verifying");
@@ -110,7 +106,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
     return (
         <div style={{ 
             minHeight: '100vh', background: '#050505', color: 'white', 
-            padding: '15px', paddingBottom: '100px', // Reduced padding bottom slightly
+            padding: '15px', paddingBottom: '90px', 
             width: '100%', maxWidth: '600px', margin: '0 auto', 
             fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
             overflowX: 'hidden', boxSizing: 'border-box'
@@ -236,14 +232,13 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                             </button>
                         </div>
 
-                        {/* MANUAL UPI COPY SECTION (UPDATED) */}
+                        {/* MANUAL UPI COPY SECTION */}
                         <div style={{ marginTop: '20px', background: '#111', borderRadius: '16px', padding: '15px', border: '1px dashed #333', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <div style={{ overflow: 'hidden' }}>
+                            <div style={{ overflow: 'hidden', paddingRight: '10px' }}>
                                 <p style={{ margin: 0, fontSize: '10px', color: '#666', fontWeight: 'bold', textTransform: 'uppercase' }}>PAY MANUALLY</p>
                                 <p style={{ margin: '4px 0 0 0', fontSize: '14px', color: '#fff', fontWeight: 'bold', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                     {restaurant?.upiId || "UPI Not Available"}
                                 </p>
-                                {/* Added Price Display */}
                                 <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#f97316', fontWeight: 'bold' }}>
                                     Pay Amount: ₹{totalPrice}
                                 </p>
@@ -300,24 +295,25 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                 <div style={{ 
                     position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', 
                     width: '100%', maxWidth: '600px', 
-                    padding: '12px 20px', // Reduced padding
+                    padding: '10px 15px', // Reduced Padding for compactness
                     background: 'rgba(5, 5, 5, 0.95)', backdropFilter: 'blur(15px)', 
                     borderTop: '1px solid #222', 
                     display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '15px'
                 }}>
                     <div style={{display:'flex', flexDirection:'column'}}>
                         <span style={{ color: '#888', fontWeight: 'bold', fontSize: '10px', textTransform: 'uppercase' }}>Total</span>
-                        <span style={{ fontSize: '22px', fontWeight: '900', color: 'white' }}>₹{totalPrice}</span>
+                        <span style={{ fontSize: '20px', fontWeight: '900', color: 'white' }}>₹{totalPrice}</span>
                     </div>
                     
                     <button onClick={() => handlePaymentClick("Cash")} disabled={isSubmitting}
                         style={{ 
-                            flex: 1, height: '45px', // Reduced Height
-                            borderRadius: '12px', border: 'none', 
+                            flex: 1, height: '42px', // Reduced Height
+                            borderRadius: '4px', // SHARP EDGES (Rectangular)
+                            border: 'none', 
                             background: '#f97316', color: 'white', fontSize: '13px', fontWeight: '900', 
                             textTransform: 'uppercase', letterSpacing: '1px',
                             cursor: isSubmitting ? 'not-allowed' : 'pointer', 
-                            boxShadow: '0 4px 15px rgba(249, 115, 22, 0.4)'
+                            boxShadow: 'none' // Removed shadow for flat look
                         }}>
                         {isSubmitting ? "PROCESSING..." : "PLACE ORDER"}
                     </button>
