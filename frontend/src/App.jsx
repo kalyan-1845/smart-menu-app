@@ -3,7 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-d
 
 // --- PAGES ---
 import LandingPage from "./pages/LandingPage"; // Ensure you have this
-import Menu from "./pages/Menu"; 
+import Menu from "./pages/menu"; 
 import Cart from "./pages/Cart";
 import OrderSuccess from "./pages/OrderSuccess";
 import OrderTracker from "./pages/OrderTracker";
