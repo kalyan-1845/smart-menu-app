@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 
 // --- COMPONENT IMPORTS ---
@@ -14,7 +14,6 @@ import SuperAdmin from './SuperAdmin.jsx';
 import OrderSuccess from './OrderSuccess.jsx';
 import ManagerLogin from "./ManagerLogin.jsx"; 
 
-// --- PROTECTED ROUTE MIDDLEWARE ---
 const ProtectedRoute = ({ children }) => {
   const token = localStorage.getItem("ownerToken");
   return token ? children : <Navigate to="/login" replace />;
@@ -28,17 +27,17 @@ const ManagerProtectedRoute = ({ children }) => {
   return children;
 };
 
-const Home = () => (
-    <Navigate to="/login" replace />
-);
-
 function App() {
-  // --- GLOBAL STATE ---
   const [cart, setCart] = useState([]);
-  const [restaurantId, setRestaurantId] = useState(null);
-  const [tableNum, setTableNum] = useState(""); 
+  const [restaurantId, setRestaurantId] = useState(localStorage.getItem("activeResId") || null);
+  const [tableNum, setTableNum] = useState(localStorage.getItem("activeTable") || ""); 
 
-  // --- CART FUNCTIONS ---
+  // Persistence: Save IDs so Cart doesn't break on refresh
+  useEffect(() => {
+    if (restaurantId) localStorage.setItem("activeResId", restaurantId);
+    if (tableNum) localStorage.setItem("activeTable", tableNum);
+  }, [restaurantId, tableNum]);
+
   const addToCart = (dish) => {
     setCart((prev) => {
       const exists = prev.find((item) => item._id === dish._id);
@@ -67,39 +66,18 @@ function App() {
   return (
     <Router>
       <Routes>
-        {/* --- PUBLIC ROUTES --- */}
-        <Route path="/" element={<Home />} /> 
+        <Route path="/" element={<Navigate to="/login" replace />} /> 
         <Route path="/login" element={<OwnerLogin />} />
         <Route path="/register" element={<Register />} />
         
-        {/* Customer Experience Routes */}
-        <Route 
-          path="/menu/:id/:table" 
-          element={
-            <Menu 
-                cart={cart} 
-                addToCart={addToCart} 
-                setRestaurantId={setRestaurantId} 
-                setTableNum={setTableNum} 
-            />
-          } 
-        />
-        <Route 
-          path="/menu/:id" 
-          element={
-            <Menu 
-                cart={cart} 
-                addToCart={addToCart} 
-                setRestaurantId={setRestaurantId} 
-                setTableNum={setTableNum} 
-            />
-          } 
-        />
+        <Route path="/menu/:id/:table" element={
+            <Menu cart={cart} addToCart={addToCart} setRestaurantId={setRestaurantId} setTableNum={setTableNum} />
+        } />
+        <Route path="/menu/:id" element={
+            <Menu cart={cart} addToCart={addToCart} setRestaurantId={setRestaurantId} setTableNum={setTableNum} />
+        } />
         
-        {/* Cart - Now handles the auto-placement logic */}
-        <Route 
-          path="/cart" 
-          element={
+        <Route path="/cart" element={
             <Cart 
                 cart={cart} 
                 removeFromCart={removeFromCart} 
@@ -109,25 +87,16 @@ function App() {
                 tableNum={tableNum} 
                 setTableNum={setTableNum} 
             />
-          } 
-        />
+        } />
 
-        <Route path="/order-success" element={<OrderSuccess />} />
-        
-        {/* ✅ SYNCED: This ID matches the navigation in your Cart.jsx */}
         <Route path="/track/:id" element={<OrderTracker />} />
+        <Route path="/order-success" element={<OrderSuccess />} />
 
-        {/* --- STAFF PROTECTED ROUTES --- */}
+        {/* Staff Routes */}
         <Route path="/chef" element={<ProtectedRoute><ChefDashboard /></ProtectedRoute>} />
-        <Route path="/kitchen" element={<Navigate to="/chef" replace />} />
         <Route path="/waiter" element={<ProtectedRoute><WaiterDashboard /></ProtectedRoute>} />
         <Route path="/manager-login" element={<ProtectedRoute><ManagerLogin /></ProtectedRoute>} />
-
-        {/* ⚙️ ADMIN PANEL ROUTES */}
         <Route path="/admin" element={<ManagerProtectedRoute><AdminPanel /></ManagerProtectedRoute>} />
-        <Route path="/admin/dashboard" element={<ManagerProtectedRoute><AdminPanel /></ManagerProtectedRoute>} />
-
-        {/* --- SUPER ADMIN --- */}
         <Route path="/superadmin" element={<SuperAdmin />} />
       </Routes>
     </Router>
