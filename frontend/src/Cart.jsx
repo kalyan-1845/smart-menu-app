@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-import { FaArrowLeft, FaTrash, FaGoogle, FaMobileAlt, FaWallet, FaMoneyBillWave, FaCheckCircle } from "react-icons/fa";
+import { FaArrowLeft, FaTrash, FaGoogle, FaMobileAlt, FaWallet, FaMoneyBillWave, FaCheckCircle, FaTimes } from "react-icons/fa";
 
 const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, tableNum, setTableNum }) => {
     const navigate = useNavigate();
@@ -12,12 +12,13 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
     const [showTableModal, setShowTableModal] = useState(!tableNum);
     const [isSubmitting, setIsSubmitting] = useState(false);
     
-    // Payment Verification State
-    const [paymentStage, setPaymentStage] = useState("selection"); // 'selection' | 'verifying'
+    // Payment Logic State
+    // 'selection' = Showing icons
+    // 'verifying' = User came back, needs to enter UTR
+    const [paymentStage, setPaymentStage] = useState("selection"); 
     const [selectedApp, setSelectedApp] = useState(null);
     const [transactionId, setTransactionId] = useState(""); 
 
-    // Track selected specifications
     const [selectedSpecs, setSelectedSpecs] = useState({});
     const tableOptions = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, "Takeaway"];
 
@@ -38,35 +39,36 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
         fetchRestaurant();
     }, [restaurantId]);
 
-    // --- 2. HANDLE APP CLICK (LOGIC START) ---
+    // --- 2. TRIGGER PAYMENT APP ---
     const handlePaymentClick = (appName) => {
-        // Basic Validation
+        // Validation
         if (!customerName.trim()) { alert("Please enter your name!"); return; }
         if (!tableNum) { setShowTableModal(true); return; }
         if (cart.length === 0) { alert("Your cart is empty!"); return; }
-        if (appName !== "Cash" && !restaurant?.upiId) { alert("Restaurant UPI not set up."); return; }
-
-        // --- CASH LOGIC: DIRECT REDIRECT ---
+        
+        // Cash Logic
         if (appName === "Cash") {
-            // We pass "PAY_AT_TABLE" as the transaction ID for admin clarity
-            submitOrder("Cash", "PAY_AT_TABLE"); 
+            submitOrder("Cash", "PAY_AT_TABLE");
             return;
         }
 
-        // --- UPI LOGIC: APP REDIRECT ---
-        // 1. Construct Deep Link for GPay/PhonePe/etc.
+        // UPI Logic
+        if (!restaurant?.upiId) { alert("Restaurant UPI not set up."); return; }
+
+        // 1. Construct Deep Link
         const cleanName = restaurant.username.replace(/\s/g, '');
+        // Generates: upi://pay?pa=UPI_ID&pn=NAME&am=AMOUNT&cu=INR
         const upiLink = `upi://pay?pa=${restaurant.upiId}&pn=${cleanName}&am=${totalPrice}&cu=INR`;
 
-        // 2. Open the App
+        // 2. Open App (GPay/PhonePe etc)
         window.location.href = upiLink;
 
-        // 3. Update UI to "Verify" screen (waiting for user to return)
+        // 3. Change UI to "Verify" mode
         setSelectedApp(appName);
         setPaymentStage("verifying");
     };
 
-    // --- 3. SUBMIT ORDER (FINAL STEP) ---
+    // --- 3. SUBMIT ORDER TO BACKEND ---
     const submitOrder = async (paymentMethod, txnId) => {
         setIsSubmitting(true);
 
@@ -81,16 +83,15 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
             })),
             totalAmount: totalPrice,
             paymentMethod: paymentMethod,
-            transactionId: txnId, 
+            transactionId: txnId, // Sends UTR or 'PAY_AT_TABLE' to Admin
             owner: restaurantId,
-            status: "PLACED" // This status triggers the "New Order" alert on Backend
+            status: "PLACED"
         };
 
         try {
-            // This API call notifies the server -> server notifies Admin/Waiter via Socket
             const response = await axios.post("https://smart-menu-backend-5ge7.onrender.com/api/orders", orderData);
             
-            // Save order to history
+            // Save to History
             const history = JSON.parse(localStorage.getItem("smartMenu_History") || "[]");
             localStorage.setItem("smartMenu_History", JSON.stringify([response.data._id, ...history]));
             
@@ -101,7 +102,8 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
 
         } catch (error) {
             console.error("Submission error:", error);
-            alert("Network Error: Please check your internet connection.");
+            // If CORS error persists, it will show here
+            alert("Order Failed: " + (error.response?.data?.message || "Check Network/Server"));
             setIsSubmitting(false);
         }
     };
@@ -185,12 +187,11 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                 </div>
             )}
 
-            {/* 5. PAYMENT SECTION (MEDIUM ICONS) */}
+            {/* 5. PAYMENT SECTION (ICONS) */}
             <div style={{ marginBottom: '100px' }}>
                 <p style={{ color: '#555', fontSize: '10px', fontWeight: '900', letterSpacing: '1px', marginBottom: '15px', textTransform: 'uppercase' }}>Select Payment</p>
                 
                 {paymentStage === 'selection' ? (
-                    // --- SELECTION GRID (4 Columns, Medium Icons) ---
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
                         
                         {/* GPay */}
@@ -220,7 +221,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                             <span style={{ fontSize: '11px', fontWeight: 'bold' }}>FamPay</span>
                         </button>
 
-                        {/* Cash - TRIGGERS DIRECT REDIRECT */}
+                        {/* Cash */}
                         <button onClick={() => handlePaymentClick("Cash")}
                             style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '15px 5px', borderRadius: '18px', background: '#1a1a1a', border: '1px solid #333', color: 'white', cursor: 'pointer' }}>
                             <div style={{ width: '45px', height: '45px', borderRadius: '50%', background: '#22c55e', border: '1px solid #4ade80', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
@@ -231,55 +232,71 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
 
                     </div>
                 ) : (
-                    // --- VERIFICATION UI (Only for UPI apps) ---
-                    <div style={{ background: '#111', padding: '20px', borderRadius: '24px', border: '1px solid #333', textAlign: 'center' }}>
-                        <FaCheckCircle size={40} color="#f97316" style={{ marginBottom: '15px' }} />
-                        <h3 style={{ margin: '0 0 10px 0', fontSize: '18px' }}>Confirm {selectedApp}</h3>
-                        <p style={{ color: '#888', fontSize: '12px', marginBottom: '20px' }}>
-                            Please enter the last 5 digits of your UPI Transaction ID (UTR) to track your order.
+                    // --- UTR ENTRY SCREEN (Shows after clicking app) ---
+                    <div style={{ background: '#111', padding: '25px', borderRadius: '24px', border: '1px solid #333', textAlign: 'center', animation: 'fadeIn 0.3s ease' }}>
+                        <div style={{display:'flex', justifyContent:'space-between', marginBottom:'15px'}}>
+                            <h3 style={{ margin: 0, fontSize: '16px' }}>Verify {selectedApp}</h3>
+                            <button onClick={() => setPaymentStage("selection")} style={{background:'none', border:'none', color:'#666'}}><FaTimes/></button>
+                        </div>
+                        
+                        <p style={{ color: '#888', fontSize: '13px', marginBottom: '20px', lineHeight: '1.5' }}>
+                            You should have just paid <b>₹{totalPrice}</b> on {selectedApp}.<br/>
+                            Enter the <b>last 4 digits</b> of the UTR/Transaction ID below to confirm.
                         </p>
                         
                         <input 
                             type="tel" 
-                            maxLength={5}
-                            placeholder="Last 5 Digits (e.g. 89432)"
+                            maxLength={4}
+                            placeholder="Last 4 Digits (e.g. 8832)"
                             value={transactionId}
                             onChange={(e) => setTransactionId(e.target.value.replace(/\D/g,''))}
                             style={{ 
-                                width: '100%', padding: '15px', borderRadius: '12px', background: '#080808', 
-                                border: '1px solid #333', color: 'white', fontSize: '20px', textAlign: 'center', 
-                                letterSpacing: '4px', fontWeight: 'bold', marginBottom: '20px'
+                                width: '100%', padding: '18px', borderRadius: '16px', background: '#080808', 
+                                border: '1px solid #333', color: 'white', fontSize: '22px', textAlign: 'center', 
+                                letterSpacing: '6px', fontWeight: '900', marginBottom: '20px', outline: 'none'
                             }}
                         />
 
-                        <div style={{ display: 'flex', gap: '10px' }}>
-                            <button onClick={() => setPaymentStage("selection")} style={{ flex: 1, padding: '15px', borderRadius: '14px', background: 'transparent', border: '1px solid #333', color: '#888', fontWeight: 'bold', cursor: 'pointer' }}>Back</button>
-                            <button 
-                                onClick={() => submitOrder(selectedApp, transactionId)}
-                                disabled={transactionId.length < 5 || isSubmitting}
-                                style={{ 
-                                    flex: 2, padding: '15px', borderRadius: '14px', border: 'none', 
-                                    background: transactionId.length < 5 ? '#333' : '#f97316', 
-                                    color: transactionId.length < 5 ? '#666' : 'white', 
-                                    fontWeight: 'bold', cursor: transactionId.length < 5 ? 'not-allowed' : 'pointer'
-                                }}>
-                                {isSubmitting ? "Verifying..." : "Confirm & Track"}
-                            </button>
-                        </div>
+                        <button 
+                            onClick={() => submitOrder(selectedApp, transactionId)}
+                            disabled={transactionId.length < 4 || isSubmitting}
+                            style={{ 
+                                width: '100%', padding: '18px', borderRadius: '16px', border: 'none', 
+                                background: transactionId.length < 4 ? '#333' : '#f97316', 
+                                color: transactionId.length < 4 ? '#666' : 'white', 
+                                fontWeight: '900', fontSize: '16px',
+                                cursor: transactionId.length < 4 ? 'not-allowed' : 'pointer',
+                                transition: '0.3s'
+                            }}>
+                            {isSubmitting ? "VERIFYING..." : "CONFIRM PAYMENT"}
+                        </button>
                     </div>
                 )}
             </div>
 
-            {/* 6. FIXED BOTTOM TOTAL */}
+            {/* 6. FIXED BOTTOM TOTAL - NEW LAYOUT (Grid) */}
             {paymentStage === 'selection' && (
-                <div style={{ position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: '600px', padding: '20px', background: 'rgba(5, 5, 5, 0.95)', backdropFilter: 'blur(10px)', borderTop: '1px solid #222', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div>
-                        <span style={{ color: '#888', fontWeight: 'bold', fontSize: '12px', display: 'block' }}>Total to Pay</span>
-                        <span style={{ fontSize: '26px', fontWeight: '900', color: '#f97316' }}>₹{totalPrice}</span>
+                <div style={{ 
+                    position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', 
+                    width: '100%', maxWidth: '600px', padding: '20px 25px', 
+                    background: 'rgba(5, 5, 5, 0.95)', backdropFilter: 'blur(15px)', borderTop: '1px solid #222', 
+                    display: 'grid', gridTemplateColumns: '1fr 1.5fr', alignItems: 'center', gap: '20px' 
+                }}>
+                    <div style={{display:'flex', flexDirection:'column'}}>
+                        <span style={{ color: '#888', fontWeight: 'bold', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total to Pay</span>
+                        <span style={{ fontSize: '28px', fontWeight: '900', color: 'white' }}>₹{totalPrice}</span>
                     </div>
-                    {/* Fallback 'Cash' button just in case user clicks the big orange one */}
+                    
+                    {/* The "Place Order" button now defaults to Cash if they didn't click an icon above, 
+                        OR acts as a "Cash" trigger. This matches the user's visual request for a big button. */}
                     <button onClick={() => handlePaymentClick("Cash")} disabled={isSubmitting}
-                        style={{ padding: '14px 24px', borderRadius: '14px', border: 'none', background: '#f97316', color: 'white', fontSize: '14px', fontWeight: '900', cursor: isSubmitting ? 'not-allowed' : 'pointer' }}>
+                        style={{ 
+                            width: '100%', height: '55px', borderRadius: '16px', border: 'none', 
+                            background: '#f97316', color: 'white', fontSize: '14px', fontWeight: '900', 
+                            textTransform: 'uppercase', letterSpacing: '1px',
+                            cursor: isSubmitting ? 'not-allowed' : 'pointer', 
+                            boxShadow: '0 4px 20px rgba(249, 115, 22, 0.4)'
+                        }}>
                         {isSubmitting ? "PROCESSING..." : "PLACE ORDER"}
                     </button>
                 </div>
