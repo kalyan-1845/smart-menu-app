@@ -1,176 +1,362 @@
-import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import { useParams, Link } from "react-router-dom";
 import axios from "axios";
-import { FaArrowLeft, FaQrcode, FaMoneyBillWave, FaEdit } from "react-icons/fa";
+import io from "socket.io-client";
+import { QRCodeSVG } from "qrcode.react"; 
+import { 
+    FaCheck, FaUtensils, FaClock, FaConciergeBell, 
+    FaDownload, FaPhoneAlt, FaArrowLeft, FaPlus,
+    FaGoogle, FaMobileAlt, FaWallet, 
+    FaCheckCircle, FaHourglassHalf, FaMoneyBillWave, FaLock
+} from "react-icons/fa";
 
-const Cart = ({ cart, clearCart, updateQuantity, restaurantId, tableNum, setTableNum }) => {
-    const navigate = useNavigate();
+import "./OrderTracker.css";
 
-    // --- STATE ---
-    const [customerName, setCustomerName] = useState("");
-    const [showTableModal, setShowTableModal] = useState(!tableNum);
-    const [isSubmitting, setIsSubmitting] = useState(false);
+const OrderTracker = () => {
+    const { id } = useParams();
     
-    // RESTORED: Payment Method Toggle (from your video)
-    const [paymentMethod, setPaymentMethod] = useState("Online"); // "Online" or "Cash"
+    // --- STATE ---
+    const [order, setOrder] = useState(null);
+    const [restaurant, setRestaurant] = useState(null);
+    
+    // Payment Status Options: "pending", "input_upi", "cash_mode", "verifying_bg", "completed", "rejected"
+    const [paymentStatus, setPaymentStatus] = useState("pending"); 
+    const [customerUpi, setCustomerUpi] = useState(""); 
+    
+    // Waiter PIN State
+    const [showPinPad, setShowPinPad] = useState(false);
+    const [waiterPin, setWaiterPin] = useState("");
+    
+    // Extra Item Logic
+    const [extraItem, setExtraItem] = useState(null); 
+    const [eta, setEta] = useState(25); 
 
-    const tableOptions = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, "Takeaway"];
-    const totalPrice = cart.reduce((total, item) => total + (item.price * item.quantity), 0);
+    // Mock Upsell Data
+    const upsellItems = [
+        { id: 101, name: "Choco Lava", price: 120, img: "https://images.unsplash.com/photo-1624353365286-3f8d62daad51?w=200&q=80" },
+        { id: 102, name: "Gulab Jamun", price: 80, img: "https://images.unsplash.com/photo-1589119908995-c6837fa14848?w=200&q=80" },
+        { id: 103, name: "Vanilla Scoop", price: 60, img: "https://images.unsplash.com/photo-1560008581-09826d1de69e?w=200&q=80" }
+    ];
 
-    // --- LOGIC FIX: Persistence ---
-    const finalRestaurantId = restaurantId || localStorage.getItem("activeResId");
+    // --- DATA FETCHING ---
+    useEffect(() => {
+        const fetchOrderDetails = async () => {
+            try {
+                const res = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/orders/track/${id}`);
+                setOrder(res.data);
+                
+                // If main order is paid, update local status
+                if(res.data.paymentStatus === 'Paid') setPaymentStatus("completed");
 
-    const handlePlaceOrder = async () => {
-        // Validation
-        if (!tableNum) return setShowTableModal(true);
-        if (!customerName.trim()) return alert("Please enter your name!");
-        if (cart.length === 0) return alert("Cart is empty!");
-        if (!finalRestaurantId) return alert("Error: Restaurant ID missing. Please rescan menu.");
-
-        setIsSubmitting(true);
-
-        // Data Payload
-        const orderData = {
-            customerName: customerName,
-            tableNumber: tableNum.toString(),
-            owner: finalRestaurantId,
-            items: cart.map(item => ({
-                dishId: item._id, // Critical for Backend
-                name: item.name,
-                quantity: item.quantity,
-                price: item.price
-            })),
-            totalAmount: totalPrice,
-            status: "PLACED",
-            paymentStatus: paymentMethod === "Cash" ? "Cash_Pending" : "Pending",
-            paymentMethod: paymentMethod // Sending the method to backend
+                if(res.data && res.data.owner) {
+                    const restRes = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/auth/restaurant/${res.data.owner}`);
+                    setRestaurant(restRes.data);
+                }
+            } catch (e) { console.error(e); }
         };
 
-        try {
-            const response = await axios.post("https://smart-menu-backend-5ge7.onrender.com/api/orders", orderData);
-            
-            // Save History
-            const history = JSON.parse(localStorage.getItem("smartMenu_History") || "[]");
-            localStorage.setItem("smartMenu_History", JSON.stringify([response.data._id, ...history]));
+        fetchOrderDetails();
+        
+        const socket = io("https://smart-menu-backend-5ge7.onrender.com");
+        
+        // Listen for Approval
+        socket.on("payment-confirmed-by-staff", (data) => {
+            if (data.orderId === id) {
+                handleSuccessfulPayment();
+            }
+        });
 
-            clearCart();
-            // Redirect to Tracker
-            navigate(`/track/${response.data._id}`);
+        // Listen for Rejection
+        socket.on("payment-rejected-by-staff", (data) => {
+            if (data.orderId === id) {
+                setPaymentStatus("rejected");
+                alert("Payment Verification Failed. Please check transaction details.");
+            }
+        });
+
+        socket.on("order-updated", (updatedOrder) => {
+            if (updatedOrder._id === id) setOrder(updatedOrder);
+        });
+
+        return () => socket.disconnect();
+    }, [id, extraItem]);
+
+    // --- HELPER: CALCULATE TOTAL ---
+    // This solves the "Skipping" issue. It sums up everything owed.
+    const isMainPaid = order?.paymentStatus === 'Paid' || paymentStatus === 'completed';
+    const mainDebt = isMainPaid ? 0 : order?.totalAmount || 0;
+    const extraDebt = extraItem ? extraItem.price : 0;
+    const totalPayable = mainDebt + extraDebt;
+
+    // --- HELPER FUNCTIONS ---
+
+    const handleSuccessfulPayment = () => {
+        if(extraItem) {
+            // Add extra item to list visually
+            setOrder(prev => ({
+                ...prev, 
+                items: [...prev.items, { ...extraItem, quantity: 1 }],
+                totalAmount: prev.totalAmount + extraItem.price,
+                paymentStatus: 'Paid' // Ensure we mark as paid locally
+            }));
+            setExtraItem(null);
+        } else {
+             setOrder(prev => ({ ...prev, paymentStatus: 'Paid' }));
+        }
+        setPaymentStatus("completed");
+        setShowPinPad(false);
+    };
+
+    const handleAddUpsell = (item) => {
+        setExtraItem(item);
+        setPaymentStatus("pending"); 
+        setTimeout(() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }), 100);
+    };
+
+    const handleAppPayment = (appName) => {
+        if (!order || !restaurant) return;
+        
+        const note = extraItem ? `Order #${id.slice(-4)} + ${extraItem.name}` : `Order #${id.slice(-4)}`;
+        const upiLink = `upi://pay?pa=${restaurant.upiId}&pn=${restaurant.username}&am=${totalPayable}&cu=INR&tn=${note}`;
+        
+        window.location.href = upiLink;
+        setPaymentStatus("input_upi");
+    };
+
+    const handlePaymentSubmit = () => {
+        if (!customerUpi.trim()) { alert("Please enter the last 4 digits of UTR"); return; }
+        
+        setPaymentStatus("verifying_bg");
+        
+        const socket = io("https://smart-menu-backend-5ge7.onrender.com");
+        // Sends TOTAL amount + Extra item details
+        socket.emit("customer-payment-claim", { 
+            orderId: id, 
+            amount: totalPayable, // Sending Grand Total
+            customerUpi: customerUpi, 
+            extraItemName: extraItem ? extraItem.name : null 
+        });
+    };
+
+    const verifyWaiterPin = () => {
+        // Waiter PIN check (e.g., 1234)
+        if (waiterPin === "1234") {
+            const socket = io("https://smart-menu-backend-5ge7.onrender.com");
+            socket.emit("staff-cash-collected", { 
+                orderId: id, 
+                amount: totalPayable, // Waiter collected EVERYTHING
+                collectedBy: "Waiter_PIN",
+                extraItemName: extraItem ? extraItem.name : null // Add item if it was pending
+            });
             
-        } catch (error) {
-            console.error("Order Error:", error);
-            alert("Order Failed: " + (error.response?.data?.message || "Check connection"));
-            setIsSubmitting(false);
+            handleSuccessfulPayment();
+            alert(`Confirmed receipt of ₹${totalPayable} Cash`);
+        } else {
+            alert("❌ Incorrect PIN");
+            setWaiterPin("");
         }
     };
 
+    const generateCustomerReceipt = () => { alert("Downloading Receipt..."); };
+
+    // --- UI CALCULATIONS ---
+    const stages = [
+        { id: "PLACED", label: "Confirmed", icon: <FaCheck /> },
+        { id: "PREPARING", label: "Cooking", icon: <FaUtensils /> },
+        { id: "READY", label: "Ready", icon: <FaClock /> },
+        { id: "SERVED", label: "Served", icon: <FaConciergeBell /> }
+    ];
+    const currentStatus = order?.status?.toUpperCase() || "PLACED";
+    const normalizedStatus = currentStatus === "COOKING" ? "PREPARING" : currentStatus;
+    const currentStepIndex = stages.findIndex(s => s.id === normalizedStatus);
+    
+    const qrLink = `upi://pay?pa=${restaurant?.upiId}&pn=Resto&am=${totalPayable}&cu=INR`;
+
+    if (!order) return <div className="loading-screen">Loading Order...</div>;
+
+    // Show payment section if there is ANY debt (Main or Extra)
+    const showPaymentSection = totalPayable > 0 && paymentStatus !== "verifying_bg";
+
     return (
-        <div style={{ minHeight: '100vh', background: '#080808', color: 'white', padding: '20px', paddingBottom: '120px', maxWidth: '480px', margin: '0 auto', fontFamily: 'sans-serif' }}>
+        <div className="tracker-container">
+            <h1>Order Tracker</h1>
             
-            {/* --- 1. TABLE MODAL --- */}
-            {showTableModal && (
-                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.95)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-                    <div style={{ background: '#111', width: '100%', maxWidth: '400px', borderRadius: '25px', padding: '30px', border: '1px solid #333' }}>
-                        <h2 style={{ textAlign: 'center', marginBottom: '20px' }}>Select Table</h2>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '15px' }}>
-                            {tableOptions.map((opt) => (
-                                <button key={opt} onClick={() => { setTableNum(opt); setShowTableModal(false); }} 
-                                    style={{ padding: '15px', borderRadius: '12px', background: tableNum === opt ? '#f97316' : '#222', color: 'white', border: '1px solid #333', fontWeight: 'bold' }}>
-                                    {opt}
-                                </button>
-                            ))}
-                        </div>
+            {/* --- STATUS BANNERS --- */}
+            {paymentStatus === "verifying_bg" && (
+                <div className="status-banner yellow">
+                    <FaHourglassHalf className="spin-slow"/> 
+                    <div>
+                        <div style={{fontWeight:'bold'}}>Payment Submitted</div>
+                        <div style={{fontSize:'10px'}}>Staff is verifying... (Food is being prepared)</div>
                     </div>
                 </div>
             )}
+            
+            {paymentStatus === "completed" && totalPayable === 0 && (
+                <div className="status-banner green"><FaCheckCircle /> Payment Received!</div>
+            )}
 
-            {/* --- 2. HEADER --- */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '25px' }}>
-                <button onClick={() => navigate(-1)} style={{ background: '#222', color: 'white', border: 'none', padding: '12px', borderRadius: '12px', display: 'flex', alignItems: 'center' }}><FaArrowLeft /></button>
-                <h1 style={{ fontSize: '22px', margin: 0 }}>Review Order</h1>
+            {/* HEADER CARD */}
+            <div className="card header-card">
+                <div>
+                    <div className="label">Order ID</div>
+                    <div className="value">#{id.slice(-6).toUpperCase()}</div>
+                    <div className="sub-value">Table {order.tableNumber}</div>
+                </div>
+                {currentStatus !== "SERVED" && <div className="eta-badge"><FaClock /> {eta} MINS</div>}
             </div>
 
-            {/* --- 3. CUSTOMER DETAILS CARD --- */}
-            <div style={{ background: '#111', padding: '20px', borderRadius: '20px', marginBottom: '20px', border: '1px solid #222' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-                    <div>
-                        <p style={{ color: '#888', fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '5px' }}>DELIVERING TO</p>
-                        <h3 style={{ margin: 0, color: '#f97316' }}>{tableNum ? `Table ${tableNum}` : "Not Selected"}</h3>
-                    </div>
-                    {/* FIXED: Edit Button opens modal now */}
-                    <button onClick={() => setShowTableModal(true)} style={{ background: '#222', border: 'none', color: 'white', padding: '8px 15px', borderRadius: '8px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>
-                        Edit
-                    </button>
-                </div>
-
-                <div style={{ paddingTop: '15px', borderTop: '1px dashed #333' }}>
-                    <p style={{ color: '#888', fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '8px' }}>YOUR NAME</p>
-                    <input 
-                        type="text" 
-                        placeholder="Who is eating?" 
-                        value={customerName} 
-                        onChange={(e) => setCustomerName(e.target.value)}
-                        style={{ width: '100%', padding: '12px', background: '#000', border: '1px solid #333', borderRadius: '10px', color: 'white', outline: 'none' }} 
-                    />
-                </div>
+            {/* TRACKER */}
+            <div className="stepper-wrapper">
+                <div className="progress-bg"></div>
+                <div className="progress-fill" style={{ width: `${(currentStepIndex / (stages.length - 1)) * 100}%` }}></div>
+                {stages.map((stage, index) => {
+                    const isActive = index <= currentStepIndex;
+                    return (
+                        <div key={stage.id} className="step-item">
+                            <div className={`step-icon ${isActive ? 'active' : ''}`}>{stage.icon}</div>
+                            <div className={`step-label ${isActive ? 'active' : ''}`}>{stage.label}</div>
+                        </div>
+                    );
+                })}
             </div>
 
-            {/* --- 4. ITEMS LIST --- */}
-            <div style={{ background: '#111', borderRadius: '20px', padding: '20px', border: '1px solid #222', marginBottom: '20px' }}>
-                {cart.map((item) => (
-                    <div key={item._id} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px', borderBottom: '1px solid #222', paddingBottom: '15px' }}>
-                        <div style={{ display: 'flex', gap: '15px' }}>
-                            {/* Uses item image if available */}
-                            <img src={item.image} alt="" style={{width: '50px', height: '50px', borderRadius: '10px', objectFit: 'cover', background: '#333'}} />
-                            <div>
-                                <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>{item.name}</div>
-                                <div style={{ color: '#f97316', fontSize: '14px' }}>₹{item.price}</div>
+            {/* UPSELLS */}
+            {currentStatus !== "SERVED" && (
+                <>
+                    <h3>Sweet Cravings?</h3>
+                    <div className="cravings-list">
+                        {upsellItems.map((item, idx) => (
+                            <div key={idx} className="upsell-item">
+                                <div className="upsell-left">
+                                    <img src={item.img} alt={item.name} className="upsell-img" />
+                                    <div className="upsell-info"><p className="item-name">{item.name}</p><p className="item-price">₹{item.price}</p></div>
+                                </div>
+                                <button className="add-btn" onClick={() => handleAddUpsell(item)}><FaPlus size={10}/> Add</button>
                             </div>
+                        ))}
+                    </div>
+                </>
+            )}
+
+            {/* PAYMENT SECTION */}
+            {showPaymentSection && (
+                <>
+                    <div className="split-header">
+                        <h3>
+                            Total Payable: <span style={{color: '#FF5200', marginLeft:'5px'}}>₹{totalPayable}</span>
+                        </h3>
+                    </div>
+
+                    {/* --- MODE 1: CASH / WAITER PIN --- */}
+                    {paymentStatus === "cash_mode" ? (
+                        <div className="card" style={{padding: '30px', textAlign: 'center', border: '2px dashed #fff'}}>
+                            {!showPinPad ? (
+                                <>
+                                    <h2 style={{margin: '0 0 10px 0', color: '#FF5200'}}>₹{totalPayable}</h2>
+                                    <p style={{fontSize: '12px', color: '#aaa', marginBottom: '20px'}}>Please hand cash to the waiter.</p>
+                                    
+                                    <button 
+                                        onClick={() => setShowPinPad(true)}
+                                        style={{background:'#333', border:'1px solid #555', padding:'12px', borderRadius:'10px', width:'100%', display:'flex', alignItems:'center', justifyContent:'center', gap:'10px', color:'white', fontWeight:'bold'}}
+                                    >
+                                        <FaLock size={12}/> Staff Only: Confirm Receipt
+                                    </button>
+
+                                    <button style={{background:'transparent', border:'none', color:'#FF5200', textDecoration:'underline', marginTop:'20px', fontSize:'12px'}} onClick={() => setPaymentStatus("pending")}>
+                                        Cancel / Pay Online
+                                    </button>
+                                </>
+                            ) : (
+                                /* PIN PAD */
+                                <div>
+                                    <h3 style={{marginBottom:'15px'}}>Enter Staff PIN</h3>
+                                    <div style={{display:'flex', gap:'10px', justifyContent:'center', marginBottom:'20px'}}>
+                                        {[1,2,3,4].map((_, i) => (
+                                            <div key={i} style={{width:'15px', height:'15px', borderRadius:'50%', background: waiterPin.length > i ? '#FF5200' : '#333', border:'1px solid #555'}}></div>
+                                        ))}
+                                    </div>
+                                    <div className="pin-grid">
+                                        {[1,2,3,4,5,6,7,8,9].map(num => (
+                                            <button key={num} className="pin-btn" onClick={() => setWaiterPin(prev => (prev.length < 4 ? prev + num : prev))}>{num}</button>
+                                        ))}
+                                        <button className="pin-btn" style={{color:'#FF5200'}} onClick={() => setWaiterPin("")}>C</button>
+                                        <button className="pin-btn" onClick={() => setWaiterPin(prev => (prev.length < 4 ? prev + "0" : prev))}>0</button>
+                                        <button className="pin-btn" style={{background:'#FF5200', color:'white'}} onClick={verifyWaiterPin}>OK</button>
+                                    </div>
+                                    <button style={{marginTop:'15px', background:'transparent', border:'none', color:'#888', fontSize:'12px'}} onClick={() => {setShowPinPad(false); setWaiterPin("");}}>Cancel</button>
+                                </div>
+                            )}
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#222', padding: '5px 10px', borderRadius: '10px', height: 'fit-content' }}>
-                            <button onClick={() => updateQuantity(item._id, -1)} style={{ background: 'none', color: 'white', border: 'none', fontSize: '16px' }}>-</button>
-                            <span style={{ fontSize: '14px', fontWeight: 'bold' }}>{item.quantity}</span>
-                            <button onClick={() => updateQuantity(item._id, 1)} style={{ background: 'none', color: 'white', border: 'none', fontSize: '16px' }}>+</button>
+                    ) : paymentStatus === "input_upi" || paymentStatus === "rejected" ? (
+                        /* --- MODE 2: UTR INPUT (ONLINE) --- */
+                        <div className="card" style={{padding: '20px', border: paymentStatus === 'rejected' ? '1px solid red' : '1px solid #FF5200'}}>
+                            {paymentStatus === "rejected" && <p style={{color: 'red', fontSize:'12px', marginBottom:'10px', textAlign:'center'}}>❌ Failed. Check Transaction ID.</p>}
+                            <p style={{textAlign:'center', fontSize:'14px'}}>Verify Payment for <b>₹{totalPayable}</b></p>
+                            <p style={{fontSize:'11px', color:'#aaa', marginBottom:'5px'}}>Enter last 4 digits of UTR / Transaction ID:</p>
+                            
+                            <input 
+                                type="tel" maxLength="4" placeholder="e.g. 8821" 
+                                value={customerUpi} 
+                                onChange={(e) => setCustomerUpi(e.target.value.replace(/\D/g,''))} 
+                                className="upi-input-field" 
+                                style={{fontSize: '20px', letterSpacing: '5px'}} 
+                            />
+                            
+                            <button className="btn-download" onClick={handlePaymentSubmit} style={{width: '100%', marginTop: '15px'}}>{paymentStatus === 'rejected' ? "Retry" : "Verify Payment"}</button>
+                            <button style={{background:'none', border:'none', color:'#aaa', width:'100%', marginTop:'10px', fontSize:'12px'}} onClick={() => { setExtraItem(null); setPaymentStatus("pending"); }}>Cancel</button>
                         </div>
+                    ) : (
+                        /* --- MODE 3: MENU --- */
+                        <div className="card payment-card">
+                            <div className="payment-apps-row">
+                                <button className="app-btn gpay" onClick={() => handleAppPayment("gpay")}><FaGoogle /> GPay</button>
+                                <button className="app-btn phonepe" onClick={() => handleAppPayment("phonepe")}><FaMobileAlt /> PhonePe</button>
+                            </div>
+                            <div style={{display: 'flex', gap: '10px', marginBottom: '15px'}}>
+                                <button className="app-btn fampay" style={{margin:0}} onClick={() => handleAppPayment("generic")}><FaWallet /> Other</button>
+                                <button className="app-btn" style={{margin:0, background: '#333', border: '1px solid #555'}} onClick={() => setPaymentStatus("cash_mode")}><FaMoneyBillWave /> Cash</button>
+                            </div>
+                            <div className="divider-text">OR SCAN QR</div>
+                            <div className="qr-layout">
+                                <div className="qr-box"><QRCodeSVG value={qrLink} size={85} /></div>
+                                <div className="qr-info"><p style={{color: '#fff', fontWeight: 'bold'}}>{restaurant?.upiId}</p><p className="total-items-count">Total: ₹{totalPayable}</p></div>
+                            </div>
+                            <button onClick={() => setPaymentStatus("input_upi")} style={{marginTop:'15px', background:'#333', color:'#fff', border:'1px solid #555', padding:'10px', borderRadius:'10px', width:'100%'}}>Verify Online Payment</button>
+                        </div>
+                    )}
+                </>
+            )}
+            
+            {/* Basket Section */}
+            <div className="card">
+                <p className="label" style={{marginBottom: '15px'}}>Your Basket</p>
+                {order.items.map((item, idx) => (
+                    <div key={idx} className="basket-item">
+                        <div><div className="basket-name">{item.name}</div><div className="basket-qty">Qty: {item.quantity}</div></div>
+                        <div className="basket-price">₹{item.price * item.quantity}</div>
                     </div>
                 ))}
-            </div>
-
-            {/* --- 5. PAYMENT METHOD TOGGLE (Restored from Video) --- */}
-            <div style={{ background: '#111', padding: '20px', borderRadius: '20px', border: '1px solid #222', marginBottom: '20px' }}>
-                <p style={{ color: '#888', fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '12px' }}>PAYMENT METHOD</p>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                    <button 
-                        onClick={() => setPaymentMethod("Online")}
-                        style={{ flex: 1, padding: '15px', borderRadius: '12px', border: paymentMethod === "Online" ? '1px solid #f97316' : '1px solid #333', background: paymentMethod === "Online" ? 'rgba(249, 115, 22, 0.1)' : '#080808', color: paymentMethod === "Online" ? '#f97316' : '#888', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer' }}
-                    >
-                        <FaQrcode /> SCAN & PAY
-                    </button>
-                    <button 
-                        onClick={() => setPaymentMethod("Cash")}
-                        style={{ flex: 1, padding: '15px', borderRadius: '12px', border: paymentMethod === "Cash" ? '1px solid #f97316' : '1px solid #333', background: paymentMethod === "Cash" ? 'rgba(249, 115, 22, 0.1)' : '#080808', color: paymentMethod === "Cash" ? '#f97316' : '#888', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer' }}
-                    >
-                        <FaMoneyBillWave /> CASH
-                    </button>
+                {extraItem && (
+                    <div className="basket-item" style={{opacity: 0.6}}>
+                        <div><div className="basket-name">{extraItem.name} (Pending)</div><div className="basket-qty">Qty: 1</div></div>
+                        <div className="basket-price">₹{extraItem.price}</div>
+                    </div>
+                )}
+                <div className="total-row">
+                    <span className="grand-total-label">Grand Total</span>
+                    <span className="total-price">₹{totalPayable + (isMainPaid ? order.totalAmount : 0)}</span>
                 </div>
             </div>
 
-            {/* --- 6. BOTTOM BAR --- */}
-            <div style={{ position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: '480px', padding: '20px', background: 'rgba(8,8,8,0.95)', borderTop: '1px solid #333', backdropFilter: 'blur(10px)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px' }}>
-                    <span style={{color: '#888'}}>Total Bill</span>
-                    <span style={{ fontSize: '20px', fontWeight: 'bold' }}>₹{totalPrice}</span>
-                </div>
-                <button 
-                    onClick={handlePlaceOrder}
-                    disabled={isSubmitting}
-                    style={{ width: '100%', padding: '18px', borderRadius: '15px', border: 'none', background: '#f97316', color: 'white', fontWeight: '900', fontSize: '16px', letterSpacing: '1px' }}
-                >
-                    {isSubmitting ? "PROCESSING..." : "CONFIRM ORDER"}
-                </button>
+            <div className="action-row">
+                <button className="btn-download" onClick={generateCustomerReceipt}><FaDownload /> Digital Bill</button>
+                <button className="btn-staff" onClick={() => alert("Staff Notified!")}><FaPhoneAlt /> Staff</button>
             </div>
+            
+             <Link to="/" className="footer-link"><FaArrowLeft /> Back to Menu</Link>
         </div>
     );
 };
 
-export default Cart;
+export default OrderTracker;
