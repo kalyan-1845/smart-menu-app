@@ -3,37 +3,36 @@ import axios from "axios";
 import { Link, useNavigate } from "react-router-dom";
 import io from "socket.io-client";
 import confetti from "canvas-confetti";
-import { generateMonthlyReport } from "./utils/ReportGenerator";
 import "./AdminPanel.css"; 
 
 // 🎨 Icons
 import { 
-    FaPlus, FaTrash, FaDownload, FaCog, FaUtensils, FaWallet, 
+    FaPlus, FaTrash, FaCog, FaUtensils, 
     FaBell, FaCheckCircle, FaCircle, FaCrown, FaSignOutAlt, FaRocket
 } from "react-icons/fa";
 
 // --- SUB-COMPONENT: SETUP WIZARD ---
-const SetupWizard = ({ dishesCount, upiId, pushEnabled }) => {
+const SetupWizard = ({ dishesCount, pushEnabled }) => {
+    // Removed UPI Step
     const steps = [
         { id: 1, label: "Add 3 dishes", done: dishesCount >= 3, hint: "Go to Menu tab" },
-        { id: 2, label: "Add UPI ID", done: !!upiId, hint: "Go to Settings" },
-        { id: 3, label: "Enable Alerts", done: pushEnabled, hint: "Click Notification button" }
+        { id: 2, label: "Enable Alerts", done: pushEnabled, hint: "Click Notification button" }
     ];
 
     const completed = steps.filter(s => s.done).length;
     const percent = Math.round((completed / steps.length) * 100);
 
     useEffect(() => {
-        if (completed === 3) {
+        if (completed === 2) {
             confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 }, colors: ['#FF9933', '#ffffff', '#00ff00'] });
         }
     }, [completed]);
 
-    if (completed === 3) return (
+    if (completed === 2) return (
         <div className="glass-card" style={{ borderColor: '#22c55e', background: 'rgba(34, 197, 94, 0.05)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
-                    <h2 style={{ fontSize: '20px', color: '#22c55e', margin: 0, fontWeight: 900, textTransform: 'uppercase' }}>Your Shop is Live! 🎉</h2>
+                    <h2 style={{ fontSize: '20px', color: '#22c55e', margin: 0, fontWeight: 900, textTransform: 'uppercase' }}>Shop Live! 🎉</h2>
                     <p style={{ fontSize: '12px', color: '#888', margin: 0, fontWeight: 700 }}>System operational.</p>
                 </div>
                 <FaCheckCircle size={32} color="#22c55e" />
@@ -48,7 +47,6 @@ const SetupWizard = ({ dishesCount, upiId, pushEnabled }) => {
                     <h2 style={{ fontSize: '18px', fontWeight: 900, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <FaRocket color="#FF9933" /> Setup Progress
                     </h2>
-                    <p style={{ fontSize: '10px', color: '#666', fontWeight: 700, textTransform: 'uppercase' }}>Complete steps to go live</p>
                 </div>
                 <span style={{ color: '#FF9933', fontWeight: 900, fontSize: '12px' }}>{percent}% READY</span>
             </div>
@@ -93,11 +91,6 @@ const AdminPanel = () => {
 
     // Data State
     const [dishes, setDishes] = useState([]);
-    const [historyData, setHistoryData] = useState([]);
-    const [expenses, setExpenses] = useState([]);
-    
-    // Settings State
-    const [upiId, setUpiId] = useState(localStorage.getItem("restaurantUPI") || "");
     const [formData, setFormData] = useState({ name: "", price: "", category: "Starters" });
 
     // --- API SYNC ---
@@ -107,19 +100,16 @@ const AdminPanel = () => {
             setLoading(true);
             const config = { headers: { Authorization: `Bearer ${token}` } };
             
-            const [nameRes, dishRes, historyRes, expRes] = await Promise.all([
+            // Removed History/Expense API calls
+            const [nameRes, dishRes] = await Promise.all([
                 axios.get(`${API_BASE}/auth/restaurant/${ownerId}`, config),
                 axios.get(`${API_BASE}/dishes?restaurantId=${ownerId}`, config),
-                axios.get(`${API_BASE}/orders?restaurantId=${ownerId}`, config),
-                axios.get(`${API_BASE}/expenses?restaurantId=${ownerId}`, config),
             ]);
 
             setRestaurantName(nameRes.data.username || "Owner");
             setTrialEndsAt(nameRes.data.trialEndsAt);
             setIsPro(nameRes.data.isPro);
             setDishes(dishRes.data || []);
-            setHistoryData(historyRes.data || []);
-            setExpenses(expRes.data || []);
 
         } catch (error) {
             console.error("Portal Sync Error:", error);
@@ -131,7 +121,6 @@ const AdminPanel = () => {
     useEffect(() => {
         fetchData();
         
-        // Socket Connection
         const socket = io("https://smart-menu-backend-5ge7.onrender.com");
         socket.emit("join-owner-room", ownerId);
         
@@ -151,7 +140,7 @@ const AdminPanel = () => {
     // --- HANDLERS ---
     const handleLogout = () => { 
         localStorage.clear();
-        navigate("/"); 
+        navigate("/login"); // Redirect to new Login page
     };
 
     const subscribeToPush = async () => {
@@ -180,23 +169,13 @@ const AdminPanel = () => {
         }
     };
 
-    const handleSaveUPI = () => {
-        localStorage.setItem("restaurantUPI", upiId);
-        alert("UPI ID Saved!");
-    };
-
     const calculateDaysLeft = (date) => {
         if (!date) return 0;
         const diff = new Date(date) - new Date();
         return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
     };
 
-    // --- CALCULATIONS ---
-    const totalRevenue = historyData.reduce((s, o) => s + (o.totalAmount || 0), 0);
-    const totalExpenses = expenses.reduce((s, e) => s + (e.amount || 0), 0);
-    const netProfit = totalRevenue - totalExpenses;
-
-    if (loading) return <div className="admin-container" style={{display:'flex', justifyContent:'center', alignItems:'center'}}>LOADING CLOUD DATA...</div>;
+    if (loading) return <div className="admin-container" style={{display:'flex', justifyContent:'center', alignItems:'center', color: 'white'}}>LOADING DASHBOARD...</div>;
 
     return (
         <div className="admin-container">
@@ -241,7 +220,7 @@ const AdminPanel = () => {
                     
                     <div className="header-actions">
                         <Link to="/chef" target="_blank">
-                            <button className="btn-glass"><FaUtensils /> Kitchen Node</button>
+                            <button className="btn-glass"><FaUtensils /> Kitchen</button>
                         </Link>
                         <button onClick={handleLogout} className="btn-glass" style={{borderColor:'rgba(239, 68, 68, 0.3)', color:'#ef4444'}}>
                             <FaSignOutAlt /> Logout
@@ -253,14 +232,13 @@ const AdminPanel = () => {
                 {userRole === "OWNER" && (
                     <SetupWizard 
                         dishesCount={dishes.length} 
-                        upiId={upiId} 
                         pushEnabled={pushEnabled} 
                     />
                 )}
 
-                {/* 5. NAVIGATION TABS */}
+                {/* 5. NAVIGATION TABS (Removed History) */}
                 <nav className="nav-tabs">
-                    {['menu', 'history', 'settings'].map(tab => (
+                    {['menu', 'settings'].map(tab => (
                         <button key={tab} onClick={() => setActiveTab(tab)} className={`tab-btn ${activeTab === tab ? 'active' : ''}`}>
                             {tab}
                         </button>
@@ -306,51 +284,16 @@ const AdminPanel = () => {
                     </div>
                 )}
 
-                {/* --- TAB: HISTORY --- */}
-                {activeTab === "history" && (
-                    <div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <h2 style={{ fontSize: '24px', fontWeight: 900, textTransform: 'uppercase', margin:0 }}>Business Analytics</h2>
-                            <button onClick={() => generateMonthlyReport(restaurantName, historyData, expenses, dishes)} className="btn-download">
-                                <FaDownload /> Download Report
-                            </button>
-                        </div>
-
-                        <div className="stats-grid">
-                            <div className="stat-card">
-                                <p style={{ fontSize: '10px', color: '#888', fontWeight: 700, textTransform: 'uppercase' }}>Total Revenue</p>
-                                <p className="stat-val">₹{totalRevenue.toLocaleString()}</p>
-                            </div>
-                            <div className="stat-card" style={{ borderColor: 'rgba(239, 68, 68, 0.3)' }}>
-                                <p style={{ fontSize: '10px', color: '#888', fontWeight: 700, textTransform: 'uppercase' }}>Total Costs</p>
-                                <p className="stat-val text-red">₹{totalExpenses.toLocaleString()}</p>
-                            </div>
-                            <div className="stat-card" style={{ borderColor: netProfit >= 0 ? 'rgba(34, 197, 94, 0.3)' : 'rgba(239, 68, 68, 0.3)', background: netProfit >= 0 ? 'rgba(34, 197, 94, 0.05)' : 'rgba(239, 68, 68, 0.05)' }}>
-                                <p style={{ fontSize: '10px', color: '#888', fontWeight: 700, textTransform: 'uppercase' }}>Net Profit</p>
-                                <p className={`stat-val ${netProfit >= 0 ? 'text-green' : 'text-red'}`}>₹{netProfit.toLocaleString()}</p>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* --- TAB: SETTINGS --- */}
+                {/* --- TAB: SETTINGS (Removed UPI ID) --- */}
                 {activeTab === "settings" && (
                     <div className="glass-card" style={{ maxWidth: '600px', margin: '0 auto' }}>
                         <h2 style={{ fontSize: '20px', fontWeight: 900, textTransform: 'uppercase', marginBottom:'30px', color: '#FF9933', display:'flex', alignItems:'center', gap:'10px' }}><FaCog /> Configuration</h2>
                         
-                        <div style={{ marginBottom: '30px' }}>
+                        <div style={{ marginBottom: '10px' }}>
                             <label style={{ fontSize: '10px', fontWeight: 900, color: '#666', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '10px', display: 'block' }}>Push Alerts (PWA)</label>
                             <button onClick={subscribeToPush} className="btn-primary" style={{ background: pushEnabled ? 'rgba(34, 197, 94, 0.1)' : null, color: pushEnabled ? '#22c55e' : 'white', border: pushEnabled ? '1px solid #22c55e' : 'none' }}>
                                 <FaBell /> {pushEnabled ? ' NOTIFICATIONS ACTIVE' : ' ENABLE ORDER NOTIFICATIONS'}
                             </button>
-                        </div>
-
-                        <div>
-                            <label style={{ fontSize: '10px', fontWeight: 900, color: '#666', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '10px', display: 'block' }}>Merchant UPI ID</label>
-                            <div style={{ display: 'flex', gap: '10px' }}>
-                                <input className="input-dark" style={{ marginBottom: 0 }} value={upiId} onChange={e => setUpiId(e.target.value)} placeholder="restaurant@okaxis" />
-                                <button onClick={handleSaveUPI} className="btn-glass" style={{ background: 'white', color: 'black' }}>SAVE</button>
-                            </div>
                         </div>
                     </div>
                 )}

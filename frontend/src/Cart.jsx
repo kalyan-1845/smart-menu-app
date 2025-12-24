@@ -74,11 +74,10 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                 const cleanName = restaurant.username.replace(/\s/g, '');
                 const upiLink = `upi://pay?pa=${restaurant.upiId}&pn=${cleanName}&am=${totalPrice}&cu=INR`;
                 
-                // Open Payment App (User request: "waiter will take the qr code" - this supports both: 
-                // if they pay now, great. If not, the order is placed and waiter sees "UPI_ONLINE")
+                // Open Payment App (Waiter will bring QR if this fails or user prefers)
                 window.location.href = upiLink;
 
-                // Move to Tracker after a short delay (so they see the tracker when they switch back)
+                // Move to Tracker after a short delay
                 setTimeout(() => {
                     navigate(`/track/${response.data._id}`);
                 }, 1000);
@@ -98,7 +97,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
     return (
         <div style={{ 
             minHeight: '100vh', background: '#050505', color: 'white', 
-            padding: '15px', paddingBottom: '120px', 
+            padding: '15px', paddingBottom: '140px', // Extra padding for the fixed footer
             width: '100%', maxWidth: '600px', margin: '0 auto', 
             fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
             overflowX: 'hidden', boxSizing: 'border-box'
@@ -152,7 +151,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                     <p>Your cart is empty.</p>
                 </div>
             ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '25px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                     {cart.map((item) => (
                         <div key={item._id} style={{ background: '#111', padding: '12px', borderRadius: '20px', border: '1px solid #1a1a1a' }}>
                             <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
@@ -179,47 +178,47 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                 </div>
             )}
 
-            {/* 5. SIMPLIFIED PAYMENT OPTIONS (Fixed at Bottom) */}
+            {/* 5. SIMPLIFIED FOOTER (Pay Online & Cash) */}
             <div style={{ 
                 position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', 
                 width: '100%', maxWidth: '600px', 
-                padding: '20px', 
+                padding: '20px 30px', // Increased side padding to make buttons "not width of mobile"
                 background: 'rgba(5, 5, 5, 0.98)', backdropFilter: 'blur(15px)', 
                 borderTop: '1px solid #222', 
-                display: 'flex', flexDirection: 'column', gap: '15px'
+                display: 'flex', flexDirection: 'column', gap: '12px'
             }}>
                 <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
-                    <span style={{ color: '#888', fontWeight: 'bold', fontSize: '12px', textTransform: 'uppercase' }}>Total to Pay</span>
+                    <span style={{ color: '#888', fontWeight: 'bold', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>TOTAL TO PAY</span>
                     <span style={{ fontSize: '24px', fontWeight: '900', color: 'white' }}>₹{totalPrice}</span>
                 </div>
 
-                <div style={{ display: 'flex', gap: '10px' }}>
-                    {/* BUTTON 1: PAY ONLINE */}
+                <div style={{ display: 'flex', gap: '12px' }}>
+                    {/* PAY ONLINE BUTTON */}
                     <button 
                         onClick={() => processOrder("ONLINE")} 
                         disabled={isSubmitting}
                         style={{ 
-                            flex: 1, height: '55px', borderRadius: '12px', border: '1px solid #333', 
-                            background: '#1a1a1a', color: '#f97316', fontSize: '14px', fontWeight: 'bold', 
+                            flex: 1, height: '50px', borderRadius: '12px', border: '1px solid #333', 
+                            background: '#1a1a1a', color: '#f97316', fontSize: '13px', fontWeight: 'bold', 
                             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
                             cursor: isSubmitting ? 'not-allowed' : 'pointer'
                         }}
                     >
-                        <FaMobileAlt size={18} /> Pay Online
+                        <FaMobileAlt size={16} /> Pay Online
                     </button>
 
-                    {/* BUTTON 2: CASH ON COUNTER */}
+                    {/* CASH ON COUNTER BUTTON */}
                     <button 
                         onClick={() => processOrder("CASH")} 
                         disabled={isSubmitting}
                         style={{ 
-                            flex: 1, height: '55px', borderRadius: '12px', border: 'none', 
-                            background: '#f97316', color: 'white', fontSize: '14px', fontWeight: 'bold', 
+                            flex: 1, height: '50px', borderRadius: '12px', border: 'none', 
+                            background: '#f97316', color: 'white', fontSize: '13px', fontWeight: 'bold', 
                             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
                             cursor: isSubmitting ? 'not-allowed' : 'pointer'
                         }}
                     >
-                        <FaMoneyBillWave size={18} /> Cash on Counter
+                        <FaMoneyBillWave size={16} /> Cash on Counter
                     </button>
                 </div>
             </div>
