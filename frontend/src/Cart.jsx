@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-import { FaArrowLeft, FaTrash, FaGoogle, FaMobileAlt, FaWallet, FaMoneyBillWave, FaCopy, FaCheck, FaTimes } from "react-icons/fa";
+import { FaArrowLeft, FaTrash, FaMobileAlt, FaMoneyBillWave } from "react-icons/fa";
 
 const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, tableNum, setTableNum }) => {
     const navigate = useNavigate();
@@ -11,11 +11,6 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
     const [restaurant, setRestaurant] = useState(null);
     const [showTableModal, setShowTableModal] = useState(!tableNum);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [copied, setCopied] = useState(false); 
-    
-    const [paymentStage, setPaymentStage] = useState("selection"); 
-    const [selectedApp, setSelectedApp] = useState(null);
-    const [transactionId, setTransactionId] = useState(""); 
     
     const [selectedSpecs, setSelectedSpecs] = useState({});
     const tableOptions = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, "Takeaway"];
@@ -36,40 +31,16 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
         fetchRestaurant();
     }, [restaurantId]);
 
-    // --- 2. COPY UPI FUNCTION ---
-    const copyToClipboard = () => {
-        if (restaurant?.upiId) {
-            navigator.clipboard.writeText(restaurant.upiId);
-            setCopied(true);
-            setTimeout(() => setCopied(false), 2000);
-        }
-    };
-
-    // --- 3. HANDLE PAYMENT CLICK ---
-    const handlePaymentClick = (appName) => {
+    // --- 2. SUBMIT ORDER FUNCTION ---
+    const processOrder = async (paymentMethod) => {
+        // Validation
         if (!customerName.trim()) { alert("Please enter your name!"); return; }
         if (!tableNum) { setShowTableModal(true); return; }
         if (cart.length === 0) { alert("Your cart is empty!"); return; }
 
-        if (appName === "Cash") {
-            submitOrder("CASH", "PAY_AT_TABLE"); 
-            return;
-        }
-
-        if (!restaurant?.upiId) { alert("Restaurant UPI not set up."); return; }
-
-        const cleanName = restaurant.username.replace(/\s/g, '');
-        const upiLink = `upi://pay?pa=${restaurant.upiId}&pn=${cleanName}&am=${totalPrice}&cu=INR`;
-
-        window.location.href = upiLink;
-        setSelectedApp(appName);
-        setPaymentStage("verifying");
-    };
-
-    // --- 4. SUBMIT ORDER ---
-    const submitOrder = async (paymentMethod, txnId) => {
         setIsSubmitting(true);
 
+        // Prepare Order Data
         const orderData = {
             customerName: customerName,
             tableNumber: tableNum.toString(),
@@ -80,20 +51,41 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                 customizations: selectedSpecs[item._id] || [] 
             })),
             totalAmount: totalPrice,
-            paymentMethod: paymentMethod, 
-            transactionId: txnId, 
+            // Map frontend selection to backend enum
+            paymentMethod: paymentMethod === "ONLINE" ? "UPI_ONLINE" : "CASH", 
+            transactionId: paymentMethod === "ONLINE" ? "AUTO_REDIRECT" : "PAY_AT_COUNTER", 
             owner: restaurantId,
             status: "PLACED"
         };
 
         try {
+            // 1. Send Order to Backend
             const response = await axios.post("https://smart-menu-backend-5ge7.onrender.com/api/orders", orderData);
             
+            // 2. Save to Local History
             const history = JSON.parse(localStorage.getItem("smartMenu_History") || "[]");
             localStorage.setItem("smartMenu_History", JSON.stringify([response.data._id, ...history]));
             
             clearCart(); 
-            navigate(`/track/${response.data._id}`);
+
+            // 3. Handle Redirections based on Method
+            if (paymentMethod === "ONLINE" && restaurant?.upiId) {
+                // Construct UPI Link
+                const cleanName = restaurant.username.replace(/\s/g, '');
+                const upiLink = `upi://pay?pa=${restaurant.upiId}&pn=${cleanName}&am=${totalPrice}&cu=INR`;
+                
+                // Open Payment App (User request: "waiter will take the qr code" - this supports both: 
+                // if they pay now, great. If not, the order is placed and waiter sees "UPI_ONLINE")
+                window.location.href = upiLink;
+
+                // Move to Tracker after a short delay (so they see the tracker when they switch back)
+                setTimeout(() => {
+                    navigate(`/track/${response.data._id}`);
+                }, 1000);
+            } else {
+                // Cash -> Go straight to tracker
+                navigate(`/track/${response.data._id}`);
+            }
 
         } catch (error) {
             console.error("Submission error:", error);
@@ -106,7 +98,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
     return (
         <div style={{ 
             minHeight: '100vh', background: '#050505', color: 'white', 
-            padding: '15px', paddingBottom: '90px', 
+            padding: '15px', paddingBottom: '120px', 
             width: '100%', maxWidth: '600px', margin: '0 auto', 
             fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
             overflowX: 'hidden', boxSizing: 'border-box'
@@ -187,138 +179,50 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                 </div>
             )}
 
-            {/* 5. PAYMENT SECTION */}
-            <div style={{ marginBottom: '20px' }}>
-                <p style={{ color: '#555', fontSize: '10px', fontWeight: '900', letterSpacing: '1px', marginBottom: '15px', textTransform: 'uppercase' }}>Select Payment</p>
-                
-                {paymentStage === 'selection' ? (
-                    <>
-                        {/* ICONS GRID */}
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
-                            {/* GPay */}
-                            <button onClick={() => handlePaymentClick("Google Pay")}
-                                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '15px 5px', borderRadius: '18px', background: '#1a1a1a', border: '1px solid #333', color: 'white', cursor: 'pointer' }}>
-                                <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#1f1f1f', border: '1px solid #444', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
-                                    <FaGoogle size={18} color="#fff"/>
-                                </div>
-                                <span style={{ fontSize: '10px', fontWeight: 'bold' }}>GPay</span>
-                            </button>
+            {/* 5. SIMPLIFIED PAYMENT OPTIONS (Fixed at Bottom) */}
+            <div style={{ 
+                position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', 
+                width: '100%', maxWidth: '600px', 
+                padding: '20px', 
+                background: 'rgba(5, 5, 5, 0.98)', backdropFilter: 'blur(15px)', 
+                borderTop: '1px solid #222', 
+                display: 'flex', flexDirection: 'column', gap: '15px'
+            }}>
+                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                    <span style={{ color: '#888', fontWeight: 'bold', fontSize: '12px', textTransform: 'uppercase' }}>Total to Pay</span>
+                    <span style={{ fontSize: '24px', fontWeight: '900', color: 'white' }}>₹{totalPrice}</span>
+                </div>
 
-                            {/* PhonePe */}
-                            <button onClick={() => handlePaymentClick("PhonePe")}
-                                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '15px 5px', borderRadius: '18px', background: '#1a1a1a', border: '1px solid #333', color: 'white', cursor: 'pointer' }}>
-                                <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#5f259f', border: '1px solid #7848b0', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
-                                    <FaMobileAlt size={18} color="#fff"/>
-                                </div>
-                                <span style={{ fontSize: '10px', fontWeight: 'bold' }}>PhonePe</span>
-                            </button>
-
-                            {/* FamPay */}
-                            <button onClick={() => handlePaymentClick("FamPay")}
-                                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '15px 5px', borderRadius: '18px', background: '#1a1a1a', border: '1px solid #333', color: 'white', cursor: 'pointer' }}>
-                                <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#FFAD00', border: '1px solid #ffbf40', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
-                                    <FaWallet size={18} color="#000"/>
-                                </div>
-                                <span style={{ fontSize: '10px', fontWeight: 'bold' }}>FamPay</span>
-                            </button>
-
-                            {/* Cash */}
-                            <button onClick={() => handlePaymentClick("Cash")}
-                                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '15px 5px', borderRadius: '18px', background: '#1a1a1a', border: '1px solid #333', color: 'white', cursor: 'pointer' }}>
-                                <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#22c55e', border: '1px solid #4ade80', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
-                                    <FaMoneyBillWave size={18} color="#fff"/>
-                                </div>
-                                <span style={{ fontSize: '10px', fontWeight: 'bold' }}>Cash</span>
-                            </button>
-                        </div>
-
-                        {/* MANUAL UPI COPY SECTION */}
-                        <div style={{ marginTop: '20px', background: '#111', borderRadius: '16px', padding: '15px', border: '1px dashed #333', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <div style={{ overflow: 'hidden', paddingRight: '10px' }}>
-                                <p style={{ margin: 0, fontSize: '10px', color: '#666', fontWeight: 'bold', textTransform: 'uppercase' }}>PAY MANUALLY</p>
-                                <p style={{ margin: '4px 0 0 0', fontSize: '14px', color: '#fff', fontWeight: 'bold', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                    {restaurant?.upiId || "UPI Not Available"}
-                                </p>
-                                <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#f97316', fontWeight: 'bold' }}>
-                                    Pay Amount: ₹{totalPrice}
-                                </p>
-                            </div>
-                            <button onClick={copyToClipboard} style={{ background: copied ? '#22c55e' : '#222', border: 'none', borderRadius: '8px', padding: '12px', color: 'white', cursor: 'pointer', transition: '0.2s', minWidth: '45px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                {copied ? <FaCheck size={16}/> : <FaCopy size={16}/>}
-                            </button>
-                        </div>
-                    </>
-                ) : (
-                    // --- VERIFY UTR SCREEN ---
-                    <div style={{ background: '#111', padding: '25px', borderRadius: '24px', border: '1px solid #333', textAlign: 'center', animation: 'fadeIn 0.3s ease' }}>
-                        <div style={{display:'flex', justifyContent:'space-between', marginBottom:'15px'}}>
-                            <h3 style={{ margin: 0, fontSize: '16px' }}>Verify {selectedApp}</h3>
-                            <button onClick={() => setPaymentStage("selection")} style={{background:'none', border:'none', color:'#666'}}><FaTimes/></button>
-                        </div>
-                        
-                        <p style={{ color: '#888', fontSize: '13px', marginBottom: '20px', lineHeight: '1.5' }}>
-                            Enter the <b>last 4 digits</b> of your UTR/Transaction ID to confirm payment.
-                        </p>
-                        
-                        <input 
-                            type="tel" 
-                            maxLength={4}
-                            placeholder="Last 4 Digits"
-                            value={transactionId}
-                            onChange={(e) => setTransactionId(e.target.value.replace(/\D/g,''))}
-                            style={{ 
-                                width: '100%', padding: '15px', borderRadius: '16px', background: '#080808', 
-                                border: '1px solid #333', color: 'white', fontSize: '22px', textAlign: 'center', 
-                                letterSpacing: '6px', fontWeight: '900', marginBottom: '20px', outline: 'none'
-                            }}
-                        />
-
-                        <button 
-                            onClick={() => submitOrder(selectedApp, transactionId)}
-                            disabled={transactionId.length < 4 || isSubmitting}
-                            style={{ 
-                                width: '100%', padding: '18px', borderRadius: '16px', border: 'none', 
-                                background: transactionId.length < 4 ? '#333' : '#f97316', 
-                                color: transactionId.length < 4 ? '#666' : 'white', 
-                                fontWeight: '900', fontSize: '16px',
-                                cursor: transactionId.length < 4 ? 'not-allowed' : 'pointer',
-                                transition: '0.3s'
-                            }}>
-                            {isSubmitting ? "VERIFYING..." : "CONFIRM PAYMENT"}
-                        </button>
-                    </div>
-                )}
-            </div>
-
-            {/* 6. FIXED BOTTOM TOTAL - COMPACT & FIXED */}
-            {paymentStage === 'selection' && (
-                <div style={{ 
-                    position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', 
-                    width: '100%', maxWidth: '600px', 
-                    padding: '10px 15px', // Reduced Padding for compactness
-                    background: 'rgba(5, 5, 5, 0.95)', backdropFilter: 'blur(15px)', 
-                    borderTop: '1px solid #222', 
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '15px'
-                }}>
-                    <div style={{display:'flex', flexDirection:'column'}}>
-                        <span style={{ color: '#888', fontWeight: 'bold', fontSize: '10px', textTransform: 'uppercase' }}>Total</span>
-                        <span style={{ fontSize: '20px', fontWeight: '900', color: 'white' }}>₹{totalPrice}</span>
-                    </div>
-                    
-                    <button onClick={() => handlePaymentClick("Cash")} disabled={isSubmitting}
+                <div style={{ display: 'flex', gap: '10px' }}>
+                    {/* BUTTON 1: PAY ONLINE */}
+                    <button 
+                        onClick={() => processOrder("ONLINE")} 
+                        disabled={isSubmitting}
                         style={{ 
-                            flex: 1, height: '42px', // Reduced Height
-                            borderRadius: '4px', // SHARP EDGES (Rectangular)
-                            border: 'none', 
-                            background: '#f97316', color: 'white', fontSize: '13px', fontWeight: '900', 
-                            textTransform: 'uppercase', letterSpacing: '1px',
-                            cursor: isSubmitting ? 'not-allowed' : 'pointer', 
-                            boxShadow: 'none' // Removed shadow for flat look
-                        }}>
-                        {isSubmitting ? "PROCESSING..." : "PLACE ORDER"}
+                            flex: 1, height: '55px', borderRadius: '12px', border: '1px solid #333', 
+                            background: '#1a1a1a', color: '#f97316', fontSize: '14px', fontWeight: 'bold', 
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                            cursor: isSubmitting ? 'not-allowed' : 'pointer'
+                        }}
+                    >
+                        <FaMobileAlt size={18} /> Pay Online
+                    </button>
+
+                    {/* BUTTON 2: CASH ON COUNTER */}
+                    <button 
+                        onClick={() => processOrder("CASH")} 
+                        disabled={isSubmitting}
+                        style={{ 
+                            flex: 1, height: '55px', borderRadius: '12px', border: 'none', 
+                            background: '#f97316', color: 'white', fontSize: '14px', fontWeight: 'bold', 
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                            cursor: isSubmitting ? 'not-allowed' : 'pointer'
+                        }}
+                    >
+                        <FaMoneyBillWave size={18} /> Cash on Counter
                     </button>
                 </div>
-            )}
+            </div>
         </div>
     );
 };
