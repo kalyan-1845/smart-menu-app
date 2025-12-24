@@ -15,25 +15,19 @@ import OrderSuccess from './OrderSuccess.jsx';
 import ManagerLogin from "./ManagerLogin.jsx"; 
 
 // --- PROTECTED ROUTE MIDDLEWARE ---
-// Standard protection for staff areas (Chef, Waiter)
 const ProtectedRoute = ({ children }) => {
   const token = localStorage.getItem("ownerToken");
   return token ? children : <Navigate to="/login" replace />;
 };
 
-// 🔒 MANAGER PROTECTION MIDDLEWARE
-// Specifically for the Admin/Manage Menu area
 const ManagerProtectedRoute = ({ children }) => {
   const token = localStorage.getItem("ownerToken");
   const isManagerAuth = localStorage.getItem("managerAuthenticated") === "true";
-  
   if (!token) return <Navigate to="/login" replace />;
   if (!isManagerAuth) return <Navigate to="/manager-login" replace />;
-  
   return children;
 };
 
-// --- HOME REDIRECT ---
 const Home = () => (
     <Navigate to="/login" replace />
 );
@@ -55,15 +49,15 @@ function App() {
     });
   };
 
-  const updateQuantity = (id, newQuantity) => {
-    if (newQuantity <= 0) {
-      removeFromCart(id);
-      return;
-    }
+  const updateQuantity = (id, change) => {
     setCart((prev) => 
-      prev.map((item) => 
-        item._id === id ? { ...item, quantity: newQuantity } : item
-      )
+      prev.map((item) => {
+        if (item._id === id) {
+          const newQty = item.quantity + change;
+          return newQty > 0 ? { ...item, quantity: newQty } : item;
+        }
+        return item;
+      }).filter(item => item.quantity > 0)
     );
   };
 
@@ -73,7 +67,6 @@ function App() {
   return (
     <Router>
       <Routes>
-        
         {/* --- PUBLIC ROUTES --- */}
         <Route path="/" element={<Home />} /> 
         <Route path="/login" element={<OwnerLogin />} />
@@ -103,6 +96,7 @@ function App() {
           } 
         />
         
+        {/* Cart - Now handles the auto-placement logic */}
         <Route 
           path="/cart" 
           element={
@@ -119,47 +113,22 @@ function App() {
         />
 
         <Route path="/order-success" element={<OrderSuccess />} />
+        
+        {/* ✅ SYNCED: This ID matches the navigation in your Cart.jsx */}
         <Route path="/track/:id" element={<OrderTracker />} />
 
         {/* --- STAFF PROTECTED ROUTES --- */}
-        
-        {/* The Chef/Kitchen Dashboard */}
-        <Route path="/chef" element={
-            <ProtectedRoute>
-                <ChefDashboard />
-            </ProtectedRoute>
-        } />
-
-        {/* Added this so "/kitchen" also works */}
+        <Route path="/chef" element={<ProtectedRoute><ChefDashboard /></ProtectedRoute>} />
         <Route path="/kitchen" element={<Navigate to="/chef" replace />} />
-
-        <Route path="/waiter" element={
-            <ProtectedRoute>
-                <WaiterDashboard />
-            </ProtectedRoute>
-        } />
-
-        {/* 🛡️ MANAGER LOGIN ROUTE */}
+        <Route path="/waiter" element={<ProtectedRoute><WaiterDashboard /></ProtectedRoute>} />
         <Route path="/manager-login" element={<ProtectedRoute><ManagerLogin /></ProtectedRoute>} />
 
         {/* ⚙️ ADMIN PANEL ROUTES */}
-        {/* Route for just "/admin" */}
-        <Route path="/admin" element={
-            <ManagerProtectedRoute>
-                <AdminPanel />
-            </ManagerProtectedRoute>
-        } />
-        
-        {/* ✅ FIXED: Added specific route for "/admin/dashboard" */}
-        <Route path="/admin/dashboard" element={
-            <ManagerProtectedRoute>
-                <AdminPanel />
-            </ManagerProtectedRoute>
-        } />
+        <Route path="/admin" element={<ManagerProtectedRoute><AdminPanel /></ManagerProtectedRoute>} />
+        <Route path="/admin/dashboard" element={<ManagerProtectedRoute><AdminPanel /></ManagerProtectedRoute>} />
 
         {/* --- SUPER ADMIN --- */}
         <Route path="/superadmin" element={<SuperAdmin />} />
-
       </Routes>
     </Router>
   );
