@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import axios from "axios";
 import { Link, useNavigate } from "react-router-dom";
-import "./Register.css"; // 👈 IMPORT THE CSS FILE HERE
+import "./Registers.css"; // 👈 IMPORT THE CSS FILE HERE
 import { FaLock } from "react-icons/fa"; // Ensure you have react-icons installed
 
 const Register = () => {
