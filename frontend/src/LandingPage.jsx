@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { 
     FaChartLine, FaMobileAlt, FaPrint, FaCheckCircle, FaWhatsapp 
 } from "react-icons/fa";
-import Pricing from "./Pricing"; 
+
 
 const LandingPage = () => {
     // Replace with your actual WhatsApp Sales Number
