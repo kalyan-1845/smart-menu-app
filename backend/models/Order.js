@@ -19,6 +19,7 @@ const orderSchema = new mongoose.Schema({
   // 📝 ITEMS: What the customer actually ordered
   items: [
     {
+      dishId: { type: String }, // ✅ Added this (Critical for Chef View)
       name: { type: String, required: true },
       quantity: { type: Number, required: true, default: 1 },
       price: { type: Number, required: true },
@@ -32,16 +33,25 @@ const orderSchema = new mongoose.Schema({
     type: Number, 
     required: true 
   },
+  
+  // ✅ FIX: Updated Enum to match your Frontend exactly
   paymentMethod: { 
     type: String, 
-    enum: ['CASH', 'UPI', 'CARD'], 
-    default: 'UPI' 
+    enum: ['CASH', 'Cash', 'UPI', 'CARD', 'Online', 'Card'], 
+    default: 'Online' 
+  },
+
+  paymentStatus: {
+    type: String,
+    enum: ['Pending', 'Paid', 'Cash_Pending', 'Failed'],
+    default: 'Pending'
   },
 
   // 🔄 WORKFLOW STATUS
-  // PLACED -> PREPARING -> SERVED -> CANCELLED
+  // PLACED -> PREPARING -> READY -> SERVED -> COMPLETED -> CANCELLED
   status: { 
     type: String, 
+    enum: ["PLACED", "COOKING", "PREPARING", "READY", "SERVED", "COMPLETED", "CANCELLED"],
     default: "PLACED",
     uppercase: true
   },
