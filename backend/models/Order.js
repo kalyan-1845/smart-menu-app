@@ -1,80 +1,59 @@
 import mongoose from 'mongoose';
 
 /**
- * Order Model
- * Central data structure for tracking sales, customer sentiment, 
- * and kitchen instructions.
+ * Dish Model (Simplified v2.8)
+ * Represents a menu item with its customizations and manual availability.
+ * Removed recipe/inventory link to match the new streamlined system.
  */
-const orderSchema = new mongoose.Schema({
-  customerName: { 
+const dishSchema = new mongoose.Schema({
+  name: { 
     type: String, 
     required: true,
     trim: true 
   },
-  tableNumber: { 
-    type: String, 
-    required: true 
-  },
-  
-  // 📝 ITEMS: What the customer actually ordered
-  items: [
-    {
-      dishId: { type: String }, // ✅ Added this (Critical for Chef View)
-      name: { type: String, required: true },
-      quantity: { type: Number, required: true, default: 1 },
-      price: { type: Number, required: true },
-      // 🟢 CUSTOMIZATIONS: Instructions like "Less Salt", "No Onion"
-      customizations: [String] 
-    }
-  ],
-
-  // 💰 FINANCIAL DATA
-  totalAmount: { 
+  price: { 
     type: Number, 
     required: true 
   },
-  
-  // ✅ FIX: Updated Enum to match your Frontend exactly
-  paymentMethod: { 
+  category: { 
     type: String, 
-    enum: ['CASH', 'Cash', 'UPI', 'CARD', 'Online', 'Card'], 
-    default: 'Online' 
+    required: true,
+    index: true 
+  },
+  image: { 
+    type: String 
+  },
+  description: { 
+    type: String 
   },
 
-  paymentStatus: {
-    type: String,
-    enum: ['Pending', 'Paid', 'Cash_Pending', 'Failed'],
-    default: 'Pending'
+  // 🔴 AVAILABILITY TOGGLE:
+  // Used by the Chef Dashboard to manually mark items as "Sold Out"
+  // This is the primary way stock is managed in the new system.
+  isAvailable: { 
+    type: Boolean, 
+    default: true 
   },
 
-  // 🔄 WORKFLOW STATUS
-  // PLACED -> PREPARING -> READY -> SERVED -> COMPLETED -> CANCELLED
-  status: { 
-    type: String, 
-    enum: ["PLACED", "COOKING", "PREPARING", "READY", "SERVED", "COMPLETED", "CANCELLED"],
-    default: "PLACED",
-    uppercase: true
-  },
+  // 🟢 CUSTOMIZATIONS: 
+  // Options like "No Onion", "Extra Spicy", "Eggless"
+  specifications: [
+    {
+      label: { type: String }, 
+      isAdded: { type: Boolean, default: false } 
+    }
+  ],
 
-  // ⭐ FEEDBACK: Sentiment tracking for the Owner Portal
-  feedback: {
-    rating: { type: Number, min: 1, max: 5 },
-    comment: { type: String, trim: true },
-    submittedAt: { type: Date }
-  },
-
-  // 🔒 OWNER LINK: Multi-tenant security
+  // 🔒 OWNER LINK:
+  // Ensures multi-tenant security for different restaurant owners.
+  // This ID must match the Owner's ID who created the dish.
   owner: { 
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'Owner', 
     required: true 
   }
-
 }, { 
-  timestamps: true // Automatically creates createdAt and updatedAt
+  timestamps: true // Manages createdAt (for "New Item" badges) and updatedAt
 });
 
-// Indexes for faster lookups in the Admin Analytics tab
-orderSchema.index({ owner: 1, createdAt: -1 });
-
-export default mongoose.model('Order', orderSchema);
+export default mongoose.model('Dish', dishSchema);

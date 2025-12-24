@@ -1,7 +1,8 @@
 import mongoose from 'mongoose';
 
 const supportTicketSchema = new mongoose.Schema({
-    restaurantId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    // ✅ Changed ref from 'User' to 'Owner'
+    restaurantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Owner', required: true },
     restaurantName: { type: String, required: true },
     subject: { type: String, required: true },
     status: { type: String, enum: ['OPEN', 'RESOLVED'], default: 'OPEN' },

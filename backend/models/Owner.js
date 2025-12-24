@@ -1,6 +1,11 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 
+/**
+ * Owner Model (v2.8)
+ * Represents a Restaurant entity. 
+ * Includes fields for the 60-day trial and manual extensions.
+ */
 const ownerSchema = mongoose.Schema({
     restaurantName: { 
         type: String, 
@@ -9,7 +14,7 @@ const ownerSchema = mongoose.Schema({
     },
     username: {
         type: String,
-        required: [true, "Username is required"],
+        required: [true, "Restaurant ID (username) is required"],
         unique: true,
         trim: true
     },
@@ -24,28 +29,29 @@ const ownerSchema = mongoose.Schema({
         type: String,
         required: [true, "Password is required"],
     },
-    
-    // 💰 SUBSCRIPTION & TRIAL TRACKING
-    subscription: {
-        plan: { 
-            type: String, 
-            default: 'free_trial' 
-        },
-        trialEndsAt: { 
-            type: Date 
-        }, 
-        isPaid: { 
-            type: Boolean, 
-            default: false 
-        } 
+
+    // 💰 SIMPLIFIED SUBSCRIPTION TRACKING
+    // Flattened for easier access in SuperAdmin and Chef dashboards
+    isPro: { 
+        type: Boolean, 
+        default: false 
+    },
+    trialEndsAt: { 
+        type: Date,
+        required: true // Set automatically during registration (Day 0 + 60)
+    },
+    status: {
+        type: String,
+        enum: ['Active', 'Suspended', 'Blocked'],
+        default: 'Active'
     }
 }, {
-    timestamps: true,
+    timestamps: true, // Tracks when the account was created
 });
 
 /**
  * 🔒 PASSWORD ENCRYPTION
- * Automatically hashes the password before saving to the database.
+ * Hashes password before saving to the database.
  */
 ownerSchema.pre('save', async function (next) {
     if (!this.isModified('password')) {
@@ -57,7 +63,7 @@ ownerSchema.pre('save', async function (next) {
 
 /**
  * 🔓 PASSWORD VERIFICATION
- * Compares the plain text password from login with the hashed password in DB.
+ * Compares plain text login password with the hashed password in DB.
  */
 ownerSchema.methods.matchPassword = async function (enteredPassword) {
     return await bcrypt.compare(enteredPassword, this.password);

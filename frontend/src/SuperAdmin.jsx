@@ -1,441 +1,417 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-// 🎨 Icon Suite
 import { 
-    FaCrown, FaCalendarPlus, FaUserShield, FaStore, FaTrash, 
-    FaBan, FaCheckCircle, FaChartLine, FaMoneyBillWave, FaUsers,
-    FaHistory, FaFileInvoiceDollar, FaTimes, FaArrowRight,
-    FaBullhorn, FaEnvelope, FaComments
+    FaUserShield, FaStore, FaChartLine, FaUsers, FaCrown, FaBullhorn, 
+    FaComments, FaMoneyBillWave 
 } from "react-icons/fa";
 
+// --- INLINE CSS STYLES ---
+const styles = `
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;900&display=swap');
+
+/* --- GLOBAL & LOGIN --- */
+.register-container {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-family: 'Inter', sans-serif;
+  color: #fff;
+  background: radial-gradient(circle at 50% -10%, #5e2615 0%, #1a0a05 40%, #050505 100%);
+  padding: 20px;
+}
+
+/* --- GLASS CARD (Used for Login & Create Form) --- */
+.register-card {
+  width: 100%;
+  max-width: 450px;
+  padding: 40px 30px;
+  border-radius: 30px;
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
+  position: relative;
+  overflow: hidden;
+  margin: 0 auto; 
+}
+
+.register-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(249, 115, 22, 0.5), transparent);
+}
+
+/* --- TYPOGRAPHY --- */
+.title { font-size: 28px; font-weight: 700; text-align: center; margin: 10px 0 5px; letter-spacing: -0.5px; text-shadow: 0 2px 10px rgba(0,0,0,0.5); }
+.subtitle { color: #a1a1aa; text-align: center; font-size: 14px; margin-bottom: 30px; font-weight: 400; }
+.rocket-icon { font-size: 30px; display: block; text-align: center; margin-bottom: 10px; filter: drop-shadow(0 0 15px rgba(249, 115, 22, 0.6)); }
+
+/* --- INPUTS --- */
+.input-group { margin-bottom: 20px; }
+.input-label { display: block; font-size: 13px; color: #d4d4d8; margin-bottom: 8px; font-weight: 500; text-transform: uppercase; letter-spacing: 1px; }
+.form-input {
+  width: 100%; padding: 14px 16px; border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.4);
+  color: #fff; font-size: 15px; outline: none;
+  transition: all 0.3s ease; box-sizing: border-box;
+}
+.form-input:focus { border-color: #f97316; background: rgba(0, 0, 0, 0.6); box-shadow: 0 0 0 4px rgba(249, 115, 22, 0.1); }
+.input-locked { background: rgba(255, 255, 255, 0.03); color: #71717a; border-color: transparent; cursor: not-allowed; }
+
+/* --- BUTTONS --- */
+.submit-btn {
+  width: 100%; padding: 16px; margin-top: 10px; border: none; border-radius: 16px;
+  font-size: 16px; font-weight: 700; color: white; cursor: pointer;
+  background: linear-gradient(135deg, #ea580c 0%, #f97316 100%);
+  box-shadow: 0 4px 20px rgba(234, 88, 12, 0.4), inset 0 1px 0 rgba(255,255,255,0.2);
+  transition: transform 0.2s; position: relative; overflow: hidden;
+}
+.submit-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(234, 88, 12, 0.5); }
+.submit-btn:active { transform: translateY(0); }
+.submit-btn:disabled { background: #444; cursor: not-allowed; color: #888; }
+
+/* --- DASHBOARD SPECIFIC --- */
+.dashboard-container { min-height: 100vh; background: #050505; color: white; padding: 20px; font-family: 'Inter', sans-serif; }
+.dash-header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 20px; border-bottom: 1px solid #222; margin-bottom: 30px; }
+.dash-title { font-size: 24px; font-weight: 900; text-transform: uppercase; color: #fff; }
+.logout-btn { background: #1a1a1a; color: #ef4444; border: 1px solid #333; padding: 10px 20px; border-radius: 12px; font-weight: bold; cursor: pointer; }
+
+/* Stats Grid */
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 40px; }
+.stat-card { background: #111; padding: 25px; border-radius: 24px; border: 1px solid #222; }
+.stat-val { font-size: 32px; font-weight: 900; color: white; }
+.stat-label { font-size: 11px; font-weight: 700; color: #666; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; }
+
+/* Table */
+.table-container { background: #0a0a0a; border-radius: 24px; border: 1px solid #222; overflow-x: auto; margin-top: 40px; }
+.admin-table { width: 100%; text-align: left; border-collapse: collapse; }
+.admin-table th { background: #111; padding: 20px; font-size: 10px; text-transform: uppercase; color: #666; letter-spacing: 1px; font-weight: 900; }
+.admin-table td { padding: 20px; border-bottom: 1px solid #1a1a1a; font-size: 14px; font-weight: 600; vertical-align: middle; }
+.admin-table tr:hover { background: rgba(255,255,255,0.02); }
+
+/* Tabs */
+.nav-tabs { display: flex; gap: 10px; margin-bottom: 30px; overflow-x: auto; }
+.tab-btn { padding: 12px 24px; border-radius: 12px; font-size: 12px; font-weight: 800; text-transform: uppercase; border: 1px solid #222; background: #111; color: #666; cursor: pointer; }
+.tab-btn.active { background: #f97316; color: white; border-color: #f97316; }
+
+/* Extend Button */
+.btn-extend { background: #22c55e; color: black; border: none; padding: 8px 16px; borderRadius: 8px; font-weight: 900; cursor: pointer; font-size: 11px; display: flex; align-items: center; gap: 6px; margin-top: 5px; }
+.btn-extend:hover { transform: scale(1.05); }
+`;
+
 const SuperAdmin = () => {
-    // --- 1. STATE MANAGEMENT ---
-    const [activeTab, setActiveTab] = useState("dashboard"); // 'dashboard', 'support', 'broadcast'
-    const [owners, setOwners] = useState([]);
+    const API_BASE = "https://smart-menu-backend-5ge7.onrender.com/api";
+
+    // --- STATE ---
+    const [activeTab, setActiveTab] = useState("dashboard"); 
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [owners, setOwners] = useState([]);
     
-    // Payment History Sidebar States
-    const [showLogs, setShowLogs] = useState(false);
-    const [selectedLogs, setSelectedLogs] = useState([]);
-    const [selectedShopName, setSelectedShopName] = useState("");
-
-    // Support Ticket States
-    const [tickets, setTickets] = useState([]);
-    const [activeTicket, setActiveTicket] = useState(null);
-    const [replyText, setReplyText] = useState("");
-
-    // Broadcast States
-    const [broadcastForm, setBroadcastForm] = useState({ title: "", message: "", type: "UPDATE" });
+    // Create New Restaurant State
+    const [regData, setRegData] = useState({ restaurantName: "", username: "", password: "" });
 
     // Login Inputs
     const [usernameInput, setUsernameInput] = useState("");
     const [passwordInput, setPasswordInput] = useState("");
 
-    // 🔒 Master Credentials
+    // Support & Broadcast State
+    const [tickets, setTickets] = useState([]);
+    const [broadcastForm, setBroadcastForm] = useState({ title: "", message: "", type: "UPDATE" });
+
+    // Stats
+    const [stats, setStats] = useState({ totalClients: 0, proClients: 0, mrr: 0 });
+
     const ADMIN_USERNAME = "srinivas";
     const ADMIN_PASSWORD = "srividya"; 
 
-    // --- 2. INITIALIZATION & EFFECTS ---
+    // --- EFFECTS ---
     useEffect(() => {
         if (isAuthenticated) {
-            if (activeTab === "dashboard") fetchOwners();
-            if (activeTab === "support") fetchTickets();
+            if(activeTab === "dashboard") {
+                fetchOwners();
+                fetchStats();
+            }
+            if(activeTab === "support") fetchTickets();
         }
     }, [isAuthenticated, activeTab]);
 
-    // --- 3. CORE FUNCTIONS ---
-
+    // --- LOGIC ---
     const handleLogin = (e) => {
         e.preventDefault();
         if (usernameInput === ADMIN_USERNAME && passwordInput === ADMIN_PASSWORD) {
             setIsAuthenticated(true);
         } else {
-            alert("❌ Invalid Admin Credentials. Access Denied.");
+            alert("❌ Access Denied");
         }
     };
 
     const fetchOwners = async () => {
         setLoading(true);
         try {
-            const res = await axios.get("https://smart-menu-backend-5ge7.onrender.com/api/auth/admin/all-owners");
+            const res = await axios.get(`${API_BASE}/superadmin/all-owners`);
             setOwners(res.data);
+        } catch (error) { console.error("Fetch Error", error); } 
+        finally { setLoading(false); }
+    };
+
+    const fetchStats = async () => {
+        try {
+            const res = await axios.get(`${API_BASE}/superadmin/platform-stats`);
+            setStats(res.data);
+        } catch (e) {}
+    };
+
+    // Auto-generate ID from Name
+    const handleNameChange = (e) => {
+        const rawName = e.target.value;
+        const cleanId = rawName.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+        setRegData({ ...regData, restaurantName: rawName, username: cleanId });
+    };
+
+    const handleCreateOwner = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        try {
+            await axios.post(`${API_BASE}/auth/register`, {
+                restaurantName: regData.restaurantName,
+                username: regData.username,
+                email: `${regData.username}@smartmenu.com`,
+                password: regData.password
+            });
+            alert(`✅ PARTNER CREATED!\n\nID: ${regData.username}\nPass: ${regData.password}`);
+            setRegData({ restaurantName: "", username: "", password: "" });
+            fetchOwners();
         } catch (error) {
-            console.error("SuperAdmin Fetch Error", error);
-            setOwners([]);
+            alert("❌ Creation Failed. ID might be taken.");
         } finally {
             setLoading(false);
         }
     };
 
-    // --- SUPPORT FUNCTIONS ---
+    // ⚡ EXTENSION LOGIC
+    const handleExtend = async (owner) => {
+        const confirmMsg = `
+        💰 CASH COLLECTION CONFIRMATION
+        --------------------------------
+        Restaurant: ${owner.restaurantName}
+        Action: Extend Validity by 1 Month
+        
+        Did you collect ₹999 Cash?
+        `;
+
+        if (!window.confirm(confirmMsg)) return;
+
+        try {
+            await axios.put(`${API_BASE}/superadmin/extend/${owner._id}`);
+            alert("✅ SUCCESS! Plan extended by 30 days.");
+            fetchOwners();
+        } catch (e) {
+            alert("❌ Error extending plan.");
+        }
+    };
+
+    // Support Logic
     const fetchTickets = async () => {
-        try {
-            const res = await axios.get("https://smart-menu-backend-5ge7.onrender.com/api/support/all");
-            setTickets(res.data);
-        } catch (error) {
-            console.error("Error fetching tickets", error);
-        }
+        try { const res = await axios.get(`${API_BASE}/support/all`); setTickets(res.data); } catch (e) {}
     };
 
-    const sendReply = async (ticketId) => {
-        if(!replyText.trim()) return;
-        try {
-            await axios.put(`https://smart-menu-backend-5ge7.onrender.com/api/support/reply/${ticketId}`, 
-                { text: replyText, sender: 'SUPERADMIN' }
-            );
-            setReplyText("");
-            fetchTickets(); // Refresh list
-            // Update active ticket locally to see immediate change
-            const updatedTicket = tickets.find(t => t._id === ticketId);
-            if(updatedTicket) setActiveTicket({...updatedTicket, messages: [...updatedTicket.messages, { text: replyText, sender: 'SUPERADMIN' }]});
-        } catch (error) {
-            alert("Failed to send reply");
-        }
-    };
-
-    // --- BROADCAST FUNCTIONS ---
+    // Broadcast Logic
     const handleBroadcast = async (e) => {
         e.preventDefault();
         try {
-            await axios.post("https://smart-menu-backend-5ge7.onrender.com/api/broadcast/send", broadcastForm);
-            alert("📢 Broadcast Sent to all Owners!");
+            await axios.post(`${API_BASE}/broadcast/send`, broadcastForm);
+            alert("📢 Broadcast Sent!");
             setBroadcastForm({ title: "", message: "", type: "UPDATE" });
-        } catch (e) { alert("Broadcast failed."); }
+        } catch (e) { alert("Failed"); }
     };
 
-    // --- FINANCIAL & OWNER ACTIONS ---
-    const fetchShopLogs = async (id, name) => {
-        try {
-            const res = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/auth/admin/payments/${id}`);
-            setSelectedLogs(res.data);
-            setSelectedShopName(name);
-            setShowLogs(true);
-        } catch (e) {
-            alert("Could not retrieve transaction history.");
-        }
-    };
-
-    const updateSubscription = async (id, data, username) => {
-        try {
-            await axios.put(`https://smart-menu-backend-5ge7.onrender.com/api/auth/admin/update-subscription/${id}`, data);
-            alert(`✅ Subscription & Ledger updated for ${username}`);
-            fetchOwners(); 
-        } catch (error) {
-            alert("❌ Subscription update failed.");
-        }
-    };
-
-    const toggleStatus = async (id, currentStatus, username) => {
-        const newStatus = currentStatus === "Active" ? "Blocked" : "Active";
-        if (!window.confirm(`Change status for ${username} to ${newStatus}?`)) return;
-        try {
-            await axios.put(`https://smart-menu-backend-5ge7.onrender.com/api/auth/admin/update-status/${id}`, { status: newStatus });
-            fetchOwners();
-        } catch (e) { alert("Status update failed."); }
-    };
-
-    const handleDelete = async (id, username) => {
-        if (!window.confirm(`⚠️ PERMANENTLY DELETE '${username}'? This cannot be undone.`)) return;
-        try {
-            await axios.delete(`https://smart-menu-backend-5ge7.onrender.com/api/auth/admin/delete-owner/${id}`);
-            fetchOwners();
-        } catch (e) { alert("Delete failed."); }
-    };
-
-    // --- CALCULATIONS ---
-    const totalShops = owners.length;
-    const proShops = owners.filter(o => o.isPro).length;
-    const betaShops = totalShops - proShops;
-    const mrr = proShops * 999; 
-    
-    const getDaysLeft = (date) => {
-        const diff = new Date(date) - new Date();
-        return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
-    };
-
-    // --- 4. RENDER: LOGIN SCREEN ---
+    // --- 1. LOGIN SCREEN ---
     if (!isAuthenticated) {
         return (
-            <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-4 font-sans">
-                <div className="w-full max-w-sm bg-[#111] p-10 rounded-[40px] border border-gray-800 shadow-2xl">
-                    <div className="text-center mb-10">
-                        <FaUserShield className="text-6xl mx-auto text-red-600 mb-4 animate-pulse" />
-                        <h1 className="text-3xl font-black uppercase tracking-tighter">Master Node</h1>
-                        <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mt-2">Platform Control Hub</p>
-                    </div>
-                    <form onSubmit={handleLogin} className="space-y-4">
-                        <input type="text" placeholder="Admin ID" className="bg-black border border-gray-700 p-5 rounded-2xl w-full outline-none focus:border-red-600 transition-all font-bold" onChange={(e) => setUsernameInput(e.target.value)} value={usernameInput} required />
-                        <input type="password" placeholder="Pass Key" className="bg-black border border-gray-700 p-5 rounded-2xl w-full outline-none focus:border-red-600 transition-all font-bold" onChange={(e) => setPasswordInput(e.target.value)} value={passwordInput} required />
-                        <button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-black py-5 rounded-2xl uppercase tracking-widest transition-all shadow-xl">Decrypt Access 🔓</button>
-                    </form>
-                </div>
-            </div>
-        );
-    }
-
-    // --- 5. RENDER: MAIN DASHBOARD ---
-    return (
-        <div className="min-h-screen bg-black text-white p-6 md:p-12 font-sans relative overflow-x-hidden">
-            
-            {/* 👑 HEADER & NAVIGATION */}
-            <header className="mb-10 border-b border-gray-800 pb-8">
-                <div className="flex justify-between items-center mb-6">
-                    <div>
-                        <h1 className="text-4xl font-black uppercase tracking-tighter text-white">👑 Network Registry</h1>
-                        <p className="text-gray-500 mt-1 font-bold uppercase text-[10px] flex items-center gap-2">
-                            <span className="w-2 h-2 bg-green-500 rounded-full animate-ping"></span> Live Database Synchronization Active
-                        </p>
-                    </div>
-                    <button onClick={() => setIsAuthenticated(false)} className="bg-white/5 border border-white/10 text-gray-400 px-8 py-3 rounded-2xl font-black text-xs uppercase hover:bg-red-600 hover:text-white transition-all shadow-xl">Lock Console 🔒</button>
-                </div>
-
-                {/* TAB NAVIGATION */}
-                <div className="flex gap-4 overflow-x-auto no-scrollbar">
-                    <button onClick={() => setActiveTab("dashboard")} className={`px-6 py-3 rounded-xl font-bold uppercase text-xs transition-all ${activeTab === "dashboard" ? "bg-[#FF9933] text-black" : "bg-gray-900 text-gray-500 hover:bg-gray-800"}`}>
-                        <FaStore className="inline mb-1 mr-2"/> Dashboard
-                    </button>
-                    <button onClick={() => setActiveTab("support")} className={`px-6 py-3 rounded-xl font-bold uppercase text-xs transition-all ${activeTab === "support" ? "bg-[#FF9933] text-black" : "bg-gray-900 text-gray-500 hover:bg-gray-800"}`}>
-                        <FaComments className="inline mb-1 mr-2"/> Support Tickets
-                    </button>
-                    <button onClick={() => setActiveTab("broadcast")} className={`px-6 py-3 rounded-xl font-bold uppercase text-xs transition-all ${activeTab === "broadcast" ? "bg-[#FF9933] text-black" : "bg-gray-900 text-gray-500 hover:bg-gray-800"}`}>
-                        <FaBullhorn className="inline mb-1 mr-2"/> Broadcast
-                    </button>
-                </div>
-            </header>
-
-            {/* 📜 PAYMENT HISTORY SIDEBAR (Slide-over) */}
-            {showLogs && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[2000] flex justify-end transition-all">
-                    <div className="w-full max-w-md bg-[#0D1117] h-screen p-8 border-l border-gray-800 shadow-2xl flex flex-col animate-in slide-in-from-right duration-500">
-                        <div className="flex justify-between items-center mb-10">
-                            <div>
-                                <h2 className="text-2xl font-black text-[#FF9933]">Payment Ledger</h2>
-                                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">{selectedShopName}</p>
+            <>
+                <style>{styles}</style>
+                <div className="register-container">
+                    <div className="register-card">
+                        <div className="rocket-icon"><FaUserShield style={{color: '#f97316'}} /></div>
+                        <h1 className="title">Super Admin</h1>
+                        <p className="subtitle">Secure Network Access Protocol</p>
+                        
+                        <form onSubmit={handleLogin}>
+                            <div className="input-group">
+                                <label className="input-label">Admin ID</label>
+                                <input type="text" className="form-input" value={usernameInput} onChange={e => setUsernameInput(e.target.value)} />
                             </div>
-                            <button onClick={() => setShowLogs(false)} className="bg-white/5 p-4 rounded-full text-white hover:bg-red-600 transition-all"><FaTimes /></button>
-                        </div>
-
-                        <div className="flex-1 overflow-y-auto space-y-4 pr-2">
-                            {selectedLogs.length === 0 ? (
-                                <div className="text-center py-20 opacity-20"><FaFileInvoiceDollar size={50} className="mx-auto mb-4"/><p className="font-black uppercase">No records</p></div>
-                            ) : (
-                                selectedLogs.map((log, i) => (
-                                    <div key={i} className="bg-white/5 p-5 rounded-3xl border border-white/5 flex justify-between items-center hover:bg-white/10 transition">
-                                        <div>
-                                            <p className="text-xl font-black text-green-500">₹{log.amount}</p>
-                                            <p className="text-[10px] text-gray-500 font-bold uppercase">{new Date(log.paidAt).toLocaleDateString()} • {log.method}</p>
-                                        </div>
-                                        <span className="bg-[#FF9933]/10 text-[#FF9933] px-3 py-1 rounded-full text-[9px] font-black uppercase">+{log.monthsPaid} Mo</span>
-                                    </div>
-                                ))
-                            )}
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* ======================= TAB CONTENT ======================= */}
-
-            {/* 1. DASHBOARD TAB */}
-            {activeTab === "dashboard" && (
-                <>
-                    {/* STATS CARDS */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-                        <div className="bg-[#111] p-8 rounded-[45px] border border-green-500/20 shadow-2xl relative overflow-hidden group">
-                            <FaMoneyBillWave className="absolute -right-4 -top-4 text-green-500/10 group-hover:scale-110 transition-transform duration-500" size={120} />
-                            <p className="text-green-500 text-[10px] font-black uppercase tracking-[3px] mb-2 flex items-center gap-2"><FaChartLine /> Total Revenue (MRR)</p>
-                            <h2 className="text-5xl font-black text-white tracking-tighter">₹{mrr.toLocaleString()}</h2>
-                            <p className="text-gray-600 text-[9px] font-bold mt-4 uppercase tracking-widest italic">From {proShops} Active Subscriptions</p>
-                        </div>
-
-                        <div className="bg-[#111] p-8 rounded-[45px] border border-blue-500/20 shadow-2xl relative overflow-hidden group">
-                            <FaUsers className="absolute -right-4 -top-4 text-blue-500/10 group-hover:scale-110 transition-transform duration-500" size={120} />
-                            <p className="text-blue-500 text-[10px] font-black uppercase tracking-[3px] mb-2">Network Capacity</p>
-                            <h2 className="text-5xl font-black text-white tracking-tighter">{totalShops}</h2>
-                            <p className="text-gray-600 text-[9px] font-bold mt-4 uppercase tracking-widest">Connected Client Nodes</p>
-                        </div>
-
-                        <div className="bg-[#111] p-8 rounded-[45px] border border-orange-500/20 shadow-2xl relative overflow-hidden group">
-                            <FaHistory className="absolute -right-4 -top-4 text-orange-500/10 group-hover:scale-110 transition-transform duration-500" size={120} />
-                            <p className="text-[#FF9933] text-[10px] font-black uppercase tracking-[3px] mb-2">Trial Conversions</p>
-                            <h2 className="text-5xl font-black text-white tracking-tighter">{betaShops}</h2>
-                            <p className="text-gray-600 text-[9px] font-bold mt-4 uppercase tracking-widest">Active Beta/Testing Users</p>
-                        </div>
-                    </div>
-
-                    {/* OWNER TABLE */}
-                    <div className="overflow-x-auto bg-[#0a0a0a] rounded-[50px] border border-gray-800 shadow-2xl mb-20">
-                        <table className="w-full text-left">
-                            <thead>
-                                <tr className="bg-gray-900/50 text-gray-500 text-[10px] uppercase tracking-[3px]">
-                                    <th className="p-10">Client / Brand</th>
-                                    <th className="p-10 text-center">Plan Tier</th>
-                                    <th className="p-10 text-center">Time-to-Expiry</th>
-                                    <th className="p-10 text-right">Admin Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-800/50">
-                                {loading ? (
-                                    <tr><td colSpan="4" className="p-40 text-center font-black animate-pulse text-gray-700 tracking-widest">FETCHING ENCRYPTED DATA NODES...</td></tr>
-                                ) : (
-                                    owners.map((owner) => (
-                                        <tr key={owner._id} className="hover:bg-gray-900/20 transition-all group">
-                                            <td className="p-10">
-                                                <div className="flex items-center gap-6">
-                                                    <div className="w-16 h-16 bg-gradient-to-br from-red-600 to-orange-600 rounded-3xl flex items-center justify-center font-black shadow-2xl shadow-red-600/20 group-hover:scale-110 transition-transform"><FaStore size={24}/></div>
-                                                    <div>
-                                                        <p className="font-bold text-2xl group-hover:text-red-500 transition-colors">{owner.restaurantName || "Unnamed Shop"}</p>
-                                                        <p className="text-[10px] text-gray-600 font-black uppercase tracking-widest mt-1">UUID: {owner._id.slice(-8).toUpperCase()} • @{owner.username}</p>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            
-                                            <td className="p-10 text-center">
-                                                <div className={`inline-flex items-center gap-3 px-6 py-2.5 rounded-full border-2 ${owner.isPro ? 'bg-orange-500/10 border-orange-500/40 text-[#FF9933]' : 'bg-gray-800 border-gray-700 text-gray-500'}`}>
-                                                    <FaCrown className={owner.isPro ? 'animate-bounce' : 'opacity-20'} />
-                                                    <span className="text-[11px] font-black uppercase tracking-widest">{owner.isPro ? "PRO LICENSE" : "BETA TESTING"}</span>
-                                                </div>
-                                            </td>
-
-                                            <td className="p-10 text-center">
-                                                <p className={`text-2xl font-black ${getDaysLeft(owner.trialEndsAt) < 10 ? 'text-red-500 animate-pulse' : 'text-white'}`}>
-                                                    {getDaysLeft(owner.trialEndsAt)} Days
-                                                </p>
-                                                <p className="text-[10px] text-gray-600 font-bold uppercase mt-1">Exp: {new Date(owner.trialEndsAt).toLocaleDateString()}</p>
-                                            </td>
-
-                                            <td className="p-10 text-right flex justify-end gap-3 items-center">
-                                                {/* Actions */}
-                                                <button onClick={() => fetchShopLogs(owner._id, owner.restaurantName)} className="p-4 bg-purple-600/10 text-purple-500 rounded-2xl hover:bg-purple-600 hover:text-white transition-all shadow-lg" title="Financial History"><FaFileInvoiceDollar size={18}/></button>
-                                                <button onClick={() => updateSubscription(owner._id, { addMonths: 1 }, owner.username)} className="p-4 bg-blue-600/10 text-blue-500 rounded-2xl hover:bg-blue-600 hover:text-white transition-all shadow-lg" title="Add 1 Month License"><FaCalendarPlus size={18}/></button>
-                                                <button onClick={() => updateSubscription(owner._id, { isPro: !owner.isPro }, owner.username)} className={`px-5 py-3 rounded-2xl font-black text-[11px] uppercase transition-all shadow-xl ${owner.isPro ? 'bg-orange-500 text-black' : 'bg-gray-800 text-white hover:bg-gray-700'}`}>
-                                                    {owner.isPro ? "Revoke Pro" : "Enable Pro 💎"}
-                                                </button>
-                                                <button onClick={() => toggleStatus(owner._id, owner.status || "Active", owner.username)} className="p-4 bg-white/5 text-gray-500 rounded-2xl hover:bg-gray-800 transition-all">
-                                                    {owner.status === "Blocked" ? <FaCheckCircle className="text-green-500"/> : <FaBan/>}
-                                                </button>
-                                                <button onClick={() => handleDelete(owner._id, owner.username)} className="p-4 bg-red-600/10 text-red-500 rounded-2xl hover:bg-red-600 hover:text-white transition-all"><FaTrash/></button>
-                                            </td>
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                </>
-            )}
-
-            {/* 2. SUPPORT TAB */}
-            {activeTab === "support" && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-20">
-                    {/* Ticket List */}
-                    <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2">
-                        <h3 className="text-gray-500 font-black uppercase text-xs mb-4">Open Tickets</h3>
-                        {tickets.length === 0 && <p className="text-gray-700 font-bold">No active tickets.</p>}
-                        {tickets.map(t => (
-                            <div key={t._id} onClick={() => setActiveTicket(t)} className={`p-6 rounded-3xl border cursor-pointer transition-all ${activeTicket?._id === t._id ? 'bg-[#FF9933] text-black border-[#FF9933]' : 'bg-[#111] border-gray-800 hover:border-gray-600'}`}>
-                                <div className="flex justify-between items-start mb-2">
-                                    <p className="font-black uppercase text-[10px] tracking-widest opacity-80">{t.restaurantName}</p>
-                                    <span className={`text-[8px] font-black px-2 py-1 rounded-full ${t.status === 'Open' ? 'bg-green-500 text-black' : 'bg-gray-700 text-white'}`}>{t.status}</span>
-                                </div>
-                                <p className="font-bold text-lg leading-tight">{t.subject}</p>
+                            <div className="input-group">
+                                <label className="input-label">Pass Key</label>
+                                <input type="password" className="form-input" value={passwordInput} onChange={e => setPasswordInput(e.target.value)} />
                             </div>
-                        ))}
-                    </div>
-
-                    {/* Chat Area */}
-                    <div className="md:col-span-2 bg-[#111] rounded-[40px] border border-gray-800 p-8 h-[600px] flex flex-col relative">
-                        {activeTicket ? (
-                            <>
-                                <div className="border-b border-gray-800 pb-4 mb-4">
-                                    <h2 className="text-xl font-black">{activeTicket.subject}</h2>
-                                    <p className="text-gray-500 text-xs">Ticket ID: {activeTicket._id}</p>
-                                </div>
-                                <div className="flex-1 overflow-y-auto space-y-4 mb-6 pr-2">
-                                    {activeTicket.messages.map((m, i) => (
-                                        <div key={i} className={`max-w-[80%] p-4 rounded-2xl ${m.sender === 'SUPERADMIN' ? 'ml-auto bg-blue-600 text-white' : 'bg-gray-800 text-gray-300'}`}>
-                                            <p className="text-xs font-bold mb-1 opacity-50">{m.sender === 'SUPERADMIN' ? 'You' : 'Client'}</p>
-                                            <p className="text-sm">{m.text}</p>
-                                        </div>
-                                    ))}
-                                </div>
-                                <div className="flex gap-2">
-                                    <input 
-                                        value={replyText} 
-                                        onChange={e => setReplyText(e.target.value)} 
-                                        className="flex-1 bg-black border border-gray-800 p-4 rounded-xl outline-none text-white focus:border-[#FF9933]" 
-                                        placeholder="Type your reply here..." 
-                                    />
-                                    <button onClick={() => sendReply(activeTicket._id)} className="bg-[#FF9933] text-black px-6 rounded-xl font-black uppercase text-xs tracking-widest hover:bg-white transition-colors">
-                                        SEND <FaArrowRight className="inline ml-1"/>
-                                    </button>
-                                </div>
-                            </>
-                        ) : (
-                            <div className="flex flex-col items-center justify-center h-full opacity-20">
-                                <FaComments size={80} className="mb-4"/>
-                                <p className="font-black uppercase tracking-widest">Select a ticket to view messages</p>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            )}
-
-            {/* 3. BROADCAST TAB */}
-            {activeTab === "broadcast" && (
-                <div className="flex justify-center mb-20">
-                    <div className="w-full max-w-2xl bg-[#111] p-10 rounded-[40px] border border-gray-800 shadow-2xl">
-                        <h2 className="text-2xl font-black text-[#FF9933] mb-8 uppercase flex items-center gap-3">
-                            <FaBullhorn /> System Wide Broadcast
-                        </h2>
-                        <form onSubmit={handleBroadcast} className="space-y-6">
-                            <div>
-                                <label className="block text-gray-500 text-xs font-bold uppercase mb-2">Announcement Title</label>
-                                <input 
-                                    placeholder="e.g. Critical Security Update" 
-                                    className="w-full bg-black border border-gray-800 p-5 rounded-2xl outline-none text-white focus:border-[#FF9933] transition-colors"
-                                    value={broadcastForm.title}
-                                    onChange={e => setBroadcastForm({...broadcastForm, title: e.target.value})}
-                                />
-                            </div>
-                            
-                            <div>
-                                <label className="block text-gray-500 text-xs font-bold uppercase mb-2">Message Body</label>
-                                <textarea 
-                                    placeholder="Type your message to all restaurant owners..." 
-                                    className="w-full bg-black border border-gray-800 p-5 rounded-2xl outline-none h-40 text-white focus:border-[#FF9933] transition-colors resize-none"
-                                    value={broadcastForm.message}
-                                    onChange={e => setBroadcastForm({...broadcastForm, message: e.target.value})}
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-gray-500 text-xs font-bold uppercase mb-2">Alert Type</label>
-                                <select 
-                                    className="w-full bg-black border border-gray-800 p-5 rounded-2xl outline-none text-white focus:border-[#FF9933]"
-                                    value={broadcastForm.type}
-                                    onChange={e => setBroadcastForm({...broadcastForm, type: e.target.value})}
-                                >
-                                    <option value="UPDATE">Software Update</option>
-                                    <option value="MAINTENANCE">Scheduled Maintenance</option>
-                                    <option value="PROMO">Special Offer / Tip</option>
-                                    <option value="ALERT">Critical Alert</option>
-                                </select>
-                            </div>
-
-                            <button type="submit" className="w-full bg-[#FF9933] text-black font-black py-5 rounded-2xl uppercase tracking-widest hover:bg-white transition-all shadow-xl">
-                                SEND ANNOUNCEMENT 🚀
-                            </button>
+                            <button className="submit-btn">Decrypt Access 🔓</button>
                         </form>
                     </div>
                 </div>
-            )}
+            </>
+        );
+    }
 
-            <footer className="text-center opacity-20 pb-20">
-                <p className="text-[10px] font-black uppercase tracking-[10px]">Smart Menu Network Core v2.8 • Secured by srinivas</p>
-            </footer>
-        </div>
+    // --- 2. MAIN DASHBOARD ---
+    return (
+        <>
+            <style>{styles}</style>
+            <div className="dashboard-container">
+                <header className="dash-header">
+                    <div>
+                        <h1 className="dash-title"><FaCrown style={{color:'#f97316', marginRight:'10px'}}/> Master Control</h1>
+                        <p style={{fontSize:'11px', color:'#666', marginTop:'5px', fontWeight:'bold'}}>SYSTEM V2.8 • ONLINE</p>
+                    </div>
+                    <button onClick={() => setIsAuthenticated(false)} className="logout-btn">LOCK SYSTEM</button>
+                </header>
+
+                <nav className="nav-tabs">
+                    <button onClick={() => setActiveTab("dashboard")} className={`tab-btn ${activeTab === "dashboard" ? "active" : ""}`}><FaStore/> Dashboard</button>
+                    <button onClick={() => setActiveTab("support")} className={`tab-btn ${activeTab === "support" ? "active" : ""}`}><FaComments/> Support</button>
+                    <button onClick={() => setActiveTab("broadcast")} className={`tab-btn ${activeTab === "broadcast" ? "active" : ""}`}><FaBullhorn/> Broadcast</button>
+                </nav>
+
+                {/* === TAB: DASHBOARD === */}
+                {activeTab === "dashboard" && (
+                    <>
+                        <div className="stats-grid">
+                            <div className="stat-card">
+                                <p className="stat-label"><FaChartLine/> Monthly Revenue</p>
+                                <p className="stat-val" style={{color:'#22c55e'}}>₹{stats.mrr?.toLocaleString()}</p>
+                            </div>
+                            <div className="stat-card">
+                                <p className="stat-label"><FaUsers/> Active Partners</p>
+                                <p className="stat-val" style={{color:'#3b82f6'}}>{stats.totalClients}</p>
+                            </div>
+                            <div className="stat-card">
+                                <p className="stat-label"><FaCrown/> Pro Users</p>
+                                <p className="stat-val" style={{color:'#f97316'}}>{stats.proClients}</p>
+                            </div>
+                        </div>
+
+                        <div style={{display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '40px', alignItems: 'start'}}>
+                            
+                            {/* --- CREATE NEW RESTAURANT FORM --- */}
+                            <div>
+                                <div className="register-card" style={{margin: 0}}>
+                                    <div className="rocket-icon">🚀</div>
+                                    <h1 className="title" style={{fontSize:'22px'}}>Onboard Partner</h1>
+                                    <p className="subtitle" style={{marginBottom:'20px'}}>Create new restaurant license.</p>
+
+                                    <form onSubmit={handleCreateOwner}>
+                                        <div className="input-group">
+                                            <label className="input-label">Restaurant Name</label>
+                                            <input type="text" className="form-input" placeholder="e.g. Urban Grill" value={regData.restaurantName} onChange={handleNameChange} required />
+                                        </div>
+                                        <div className="input-group">
+                                            <label className="input-label">Generated ID</label>
+                                            <input type="text" className="form-input input-locked" value={regData.username} readOnly />
+                                        </div>
+                                        <div className="input-group">
+                                            <label className="input-label">Assign Password</label>
+                                            <input type="text" className="form-input" placeholder="Set a strong password" value={regData.password} onChange={e => setRegData({...regData, password: e.target.value})} required />
+                                        </div>
+                                        <button className="submit-btn" disabled={loading}>
+                                            {loading ? "Creating..." : "Generate License ⚡"}
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+
+                            {/* --- PARTNER LIST --- */}
+                            <div className="table-container" style={{marginTop:0}}>
+                                <table className="admin-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Client Details</th>
+                                            <th>Plan Status</th>
+                                            <th>Validity</th>
+                                            <th>Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {owners.map(owner => (
+                                            <tr key={owner._id}>
+                                                <td>
+                                                    <p style={{color:'white', fontSize:'15px'}}>{owner.restaurantName}</p>
+                                                    <p style={{color:'#666', fontSize:'11px', marginTop:'2px'}}>ID: {owner.username}</p>
+                                                </td>
+                                                <td>
+                                                    <span style={{padding:'4px 10px', borderRadius:'20px', background: owner.isPro ? 'rgba(249, 115, 22, 0.2)' : '#111', color: owner.isPro ? '#f97316' : '#666', fontSize:'10px'}}>
+                                                        {owner.isPro ? "PRO" : "TRIAL"}
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <p style={{color: owner.daysLeft <= 5 ? '#ef4444' : '#22c55e', fontWeight:'bold'}}>
+                                                        {owner.daysLeft < 0 ? "⚠️ EXPIRED" : `${owner.daysLeft} Days`}
+                                                    </p>
+                                                    <p style={{color:'#666', fontSize:'10px'}}>
+                                                        Exp: {new Date(owner.trialEndsAt).toLocaleDateString()}
+                                                    </p>
+                                                </td>
+                                                <td>
+                                                    <button onClick={() => handleExtend(owner)} className="btn-extend">
+                                                        <FaMoneyBillWave /> EXTEND
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </>
+                )}
+
+                {/* === TAB: SUPPORT === */}
+                {activeTab === "support" && (
+                    <div className="register-card" style={{maxWidth:'800px', margin:'0 auto'}}>
+                        <h2 className="title" style={{fontSize:'20px', textAlign:'left'}}>Support Inbox</h2>
+                        {tickets.length === 0 ? <p className="subtitle">No open tickets.</p> : (
+                            <div style={{marginTop:'20px'}}>
+                                {tickets.map(t => (
+                                    <div key={t._id} style={{background:'#111', padding:'15px', borderRadius:'15px', marginBottom:'10px', border:'1px solid #222'}}>
+                                        <div style={{display:'flex', justifyContent:'space-between'}}>
+                                            <h3 style={{fontWeight:'bold', color:'white'}}>{t.subject}</h3>
+                                            <span style={{fontSize:'10px', color:'#666'}}>{t.restaurantName}</span>
+                                        </div>
+                                        <p style={{fontSize:'13px', color:'#aaa', marginTop:'5px'}}>{t.messages[t.messages.length-1]?.text}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* === TAB: BROADCAST === */}
+                {activeTab === "broadcast" && (
+                    <div className="register-card">
+                        <div className="rocket-icon"><FaBullhorn/></div>
+                        <h1 className="title">System Broadcast</h1>
+                        <p className="subtitle">Send alerts to all connected restaurants.</p>
+                        
+                        <form onSubmit={handleBroadcast}>
+                            <div className="input-group">
+                                <label className="input-label">Title</label>
+                                <input className="form-input" value={broadcastForm.title} onChange={e => setBroadcastForm({...broadcastForm, title: e.target.value})} />
+                            </div>
+                            <div className="input-group">
+                                <label className="input-label">Message</label>
+                                <textarea className="form-input" style={{height:'100px', resize:'none'}} value={broadcastForm.message} onChange={e => setBroadcastForm({...broadcastForm, message: e.target.value})} />
+                            </div>
+                            <button className="submit-btn">Send Announcement 🚀</button>
+                        </form>
+                    </div>
+                )}
+
+            </div>
+        </>
     );
 };
 

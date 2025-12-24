@@ -1,5 +1,5 @@
 import express from 'express';
-import User from '../models/User.js';
+import Owner from '../models/Owner.js'; 
 import Payment from '../models/Payment.js';
 import { protect } from '../middleware/authMiddleware.js';
 
@@ -10,7 +10,6 @@ const router = express.Router();
  * Ensures that only the master admin (Srinivas) can access these routes.
  */
 const adminOnly = (req, res, next) => {
-    // We check the username from the protected req.user object
     if (req.user && req.user.username === "srinivas") {
         next();
     } else {
@@ -18,17 +17,41 @@ const adminOnly = (req, res, next) => {
     }
 };
 
+// ============================================================
+// 1. DASHBOARD & STATS
+// ============================================================
+
 /**
- * @route   GET /api/auth/admin/platform-stats
+ * @route   GET /api/superadmin/all-owners
+ * @desc    Fetch all restaurants with calculated days remaining
+ */
+router.get('/all-owners', protect, adminOnly, async (req, res) => {
+    try {
+        const owners = await Owner.find({}).select('-password').sort({ createdAt: -1 });
+        
+        const data = owners.map(owner => {
+            const diffTime = new Date(owner.trialEndsAt) - new Date();
+            const daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+            return { ...owner._doc, daysLeft };
+        });
+
+        res.json(data);
+    } catch (error) {
+        res.status(500).json({ message: "Error fetching owners" });
+    }
+});
+
+/**
+ * @route   GET /api/superadmin/platform-stats
  * @desc    Get total revenue, client counts, and conversion stats
  */
 router.get('/platform-stats', protect, adminOnly, async (req, res) => {
     try {
-        const totalClients = await User.countDocuments({ role: 'OWNER' });
-        const proClients = await User.countDocuments({ role: 'OWNER', isPro: true });
+        const totalClients = await Owner.countDocuments({});
+        const proClients = await Owner.countDocuments({ isPro: true });
         const activeTrials = totalClients - proClients;
         
-        // Potential Monthly Recurring Revenue (MRR)
+        // Potential Monthly Recurring Revenue (MRR) based on 999/mo rate
         const monthlyRecurringRevenue = proClients * 999;
 
         res.json({
@@ -42,51 +65,83 @@ router.get('/platform-stats', protect, adminOnly, async (req, res) => {
     }
 });
 
-/**
- * @route   PUT /api/auth/admin/update-subscription/:id
- * @desc    Renew subscription, add months, and log the payment
- */
+// ============================================================
+// 2. SUBSCRIPTION & PAYMENT MANAGEMENT
+// ============================================================
 
+/**
+ * @route   PUT /api/superadmin/extend/:id
+ * @desc    Quick Extend: Manually add 30 days and log cash payment
+ */
+router.put('/extend/:id', protect, adminOnly, async (req, res) => {
+    try {
+        const owner = await Owner.findById(req.params.id);
+        if (!owner) return res.status(404).json({ message: "Restaurant not found" });
+
+        // If trial already expired, start from today. If not, add to existing date.
+        const currentExpiry = new Date(owner.trialEndsAt) > new Date() 
+            ? new Date(owner.trialEndsAt) 
+            : new Date();
+        
+        owner.trialEndsAt = new Date(currentExpiry.getTime() + 30 * 24 * 60 * 60 * 1000);
+        owner.isPro = true; 
+
+        // 📜 CREATE PAYMENT LOG
+        await Payment.create({
+            restaurantId: owner._id,
+            restaurantName: owner.restaurantName,
+            amount: 999, 
+            method: 'Cash/Manual',
+            monthsPaid: 1
+        });
+
+        await owner.save();
+        res.json({ message: "Plan Extended & Cash Payment Logged", owner });
+    } catch (error) {
+        res.status(500).json({ message: "Extension Error" });
+    }
+});
+
+/**
+ * @route   PUT /api/superadmin/update-subscription/:id
+ * @desc    Flexible update for specific months/amounts
+ */
 router.put('/update-subscription/:id', protect, adminOnly, async (req, res) => {
     try {
         const { isPro, addMonths, amount, method } = req.body;
-        const user = await User.findById(req.params.id);
+        const owner = await Owner.findById(req.params.id);
 
-        if (!user) return res.status(404).json({ message: "Restaurant Owner not found" });
+        if (!owner) return res.status(404).json({ message: "Restaurant not found" });
 
-        // Update Pro Status if provided
-        if (isPro !== undefined) user.isPro = isPro;
+        if (isPro !== undefined) owner.isPro = isPro;
         
-        // Update Expiry Date if months are added
         if (addMonths) {
-            // If trial already expired, start from today. If not, add to existing date.
-            const currentExpiry = new Date(user.trialEndsAt) > new Date() 
-                ? new Date(user.trialEndsAt) 
+            const currentExpiry = new Date(owner.trialEndsAt) > new Date() 
+                ? new Date(owner.trialEndsAt) 
                 : new Date();
             
-            user.trialEndsAt = new Date(currentExpiry.getTime() + addMonths * 30 * 24 * 60 * 60 * 1000);
-            user.isPro = true; // Automatically make Pro if they pay for months
+            owner.trialEndsAt = new Date(currentExpiry.getTime() + addMonths * 30 * 24 * 60 * 60 * 1000);
+            owner.isPro = true; 
 
-            // 📜 CREATE PAYMENT LOG
             await Payment.create({
-                restaurantId: user._id,
-                restaurantName: user.restaurantName,
-                amount: amount || (addMonths * 999), // Fallback to standard rate
+                restaurantId: owner._id,
+                restaurantName: owner.restaurantName,
+                amount: amount || (addMonths * 999),
                 method: method || 'UPI',
                 monthsPaid: addMonths
             });
         }
 
-        await user.save();
-        res.json({ message: "Registry Updated & Payment Logged", user });
+        await owner.save();
+        res.json({ message: "Subscription Updated", owner });
     } catch (error) {
-        res.status(500).json({ message: "Subscription Update Error" });
+        res.status(500).json({ message: "Update Error" });
     }
 });
 
 /**
- * @route   GET /api/auth/admin/payments/:id
- * @desc    Get all historical payment logs for a specific restaurant
+ * @route   GET /api/superadmin/payments/:id
+ * @desc    Get all historical payment logs for a restaurant
  */
 router.get('/payments/:id', protect, adminOnly, async (req, res) => {
     try {

@@ -1,48 +1,80 @@
-import { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 
-// --- COMPONENT IMPORTS ---
-import Menu from "./Menu.jsx"; 
-import Cart from "./Cart.jsx";
-import ChefDashboard from "./ChefDashboard.jsx"; 
-import OwnerLogin from "./OwnerLogin.jsx";
-import AdminPanel from "./AdminPanel.jsx";
-import Register from "./Register.jsx";
-import OrderTracker from "./OrderTracker.jsx";
-import WaiterDashboard from "./WaiterDashboard.jsx";
-import SuperAdmin from './SuperAdmin.jsx';
-import OrderSuccess from './OrderSuccess.jsx';
-import ManagerLogin from "./ManagerLogin.jsx"; 
+// --- PAGES ---
+import LandingPage from "./pages/LandingPage"; // Ensure you have this
+import Menu from "./pages/Menu"; 
+import Cart from "./pages/Cart";
+import OrderSuccess from "./pages/OrderSuccess";
+import OrderTracker from "./pages/OrderTracker";
 
-// --- PROTECTED ROUTE MIDDLEWARE ---
-// Standard protection for staff areas (Chef, Waiter)
-const ProtectedRoute = ({ children }) => {
-  const token = localStorage.getItem("ownerToken");
-  return token ? children : <Navigate to="/login" replace />;
-};
+// --- STAFF PANELS ---
+import SuperAdmin from "./pages/SuperAdmin";
+import RestaurantAdmin from "./pages/RestaurantAdmin";
+import ChefDashboard from "./pages/ChefDashboard"; 
+import WaiterDashboard from "./pages/WaiterDashboard";
 
-// 🔒 MANAGER PROTECTION MIDDLEWARE
-// Specifically for the Admin/Manage Menu area
-const ManagerProtectedRoute = ({ children }) => {
-  const token = localStorage.getItem("ownerToken");
-  const isManagerAuth = localStorage.getItem("managerAuthenticated") === "true";
-  
-  if (!token) return <Navigate to="/login" replace />;
-  if (!isManagerAuth) return <Navigate to="/manager-login" replace />;
-  
-  return children;
-};
+// --- GLOBAL STYLES (Injected directly) ---
+const GlobalStyles = () => (
+  <style>{`
+    :root {
+      font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+      line-height: 1.5;
+      font-weight: 400;
+      color-scheme: light dark;
+      color: rgba(255, 255, 255, 0.87);
+      background-color: #050505;
+      font-synthesis: none;
+      text-rendering: optimizeLegibility;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
 
-// --- HOME REDIRECT ---
-const Home = () => (
-    <Navigate to="/login" replace />
+    body { margin: 0; min-width: 320px; min-height: 100vh; }
+
+    #root {
+      width: 100%;
+      margin: 0 auto;
+      text-align: center;
+      /* Removed padding to let dashboards use full screen */
+    }
+
+    .logo { height: 6em; padding: 1.5em; will-change: filter; transition: filter 300ms; }
+    .logo:hover { filter: drop-shadow(0 0 2em #646cffaa); }
+    .logo.react:hover { filter: drop-shadow(0 0 2em #61dafbaa); }
+
+    @keyframes logo-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+    @media (prefers-reduced-motion: no-preference) {
+      a:nth-of-type(2) .logo { animation: logo-spin infinite 20s linear; }
+    }
+
+    .card { padding: 2em; }
+    .read-the-docs { color: #888; }
+    
+    /* Scrollbar Styling */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #111; }
+    ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #f97316; }
+  `}</style>
 );
 
 function App() {
   // --- GLOBAL STATE ---
-  const [cart, setCart] = useState([]);
+  // Load cart from local storage to persist on refresh
+  const [cart, setCart] = useState(() => {
+      const saved = localStorage.getItem("smartMenu_Cart");
+      return saved ? JSON.parse(saved) : [];
+  });
+  
   const [restaurantId, setRestaurantId] = useState(null);
   const [tableNum, setTableNum] = useState(""); 
+
+  // Save cart to local storage whenever it changes
+  useEffect(() => {
+      localStorage.setItem("smartMenu_Cart", JSON.stringify(cart));
+  }, [cart]);
 
   // --- CART FUNCTIONS ---
   const addToCart = (dish) => {
@@ -61,9 +93,7 @@ function App() {
       return;
     }
     setCart((prev) => 
-      prev.map((item) => 
-        item._id === id ? { ...item, quantity: newQuantity } : item
-      )
+      prev.map((item) => item._id === id ? { ...item, quantity: newQuantity } : item)
     );
   };
 
@@ -72,14 +102,14 @@ function App() {
 
   return (
     <Router>
+      <GlobalStyles />
       <Routes>
         
-        {/* --- PUBLIC ROUTES --- */}
-        <Route path="/" element={<Home />} /> 
-        <Route path="/login" element={<OwnerLogin />} />
-        <Route path="/register" element={<Register />} />
+        {/* --- PUBLIC LANDING --- */}
+        <Route path="/" element={<LandingPage />} /> 
         
-        {/* Customer Experience Routes */}
+        {/* --- CUSTOMER ROUTES --- */}
+        {/* Menu with Table ID */}
         <Route 
           path="/menu/:id/:table" 
           element={
@@ -91,6 +121,7 @@ function App() {
             />
           } 
         />
+        {/* Menu for Takeaway (No Table) */}
         <Route 
           path="/menu/:id" 
           element={
@@ -103,6 +134,7 @@ function App() {
           } 
         />
         
+        {/* Cart & Checkout */}
         <Route 
           path="/cart" 
           element={
@@ -118,47 +150,28 @@ function App() {
           } 
         />
 
+        {/* Post-Order Pages */}
         <Route path="/order-success" element={<OrderSuccess />} />
         <Route path="/track/:id" element={<OrderTracker />} />
 
-        {/* --- STAFF PROTECTED ROUTES --- */}
+        {/* --- STAFF PORTALS (Dynamic URL Based) --- */}
         
-        {/* The Chef/Kitchen Dashboard */}
-        <Route path="/chef" element={
-            <ProtectedRoute>
-                <ChefDashboard />
-            </ProtectedRoute>
-        } />
-
-        {/* Added this so "/kitchen" also works */}
-        <Route path="/kitchen" element={<Navigate to="/chef" replace />} />
-
-        <Route path="/waiter" element={
-            <ProtectedRoute>
-                <WaiterDashboard />
-            </ProtectedRoute>
-        } />
-
-        {/* 🛡️ MANAGER LOGIN ROUTE */}
-        <Route path="/manager-login" element={<ProtectedRoute><ManagerLogin /></ProtectedRoute>} />
-
-        {/* ⚙️ ADMIN PANEL ROUTES */}
-        {/* Route for just "/admin" */}
-        <Route path="/admin" element={
-            <ManagerProtectedRoute>
-                <AdminPanel />
-            </ManagerProtectedRoute>
-        } />
-        
-        {/* ✅ FIXED: Added specific route for "/admin/dashboard" */}
-        <Route path="/admin/dashboard" element={
-            <ManagerProtectedRoute>
-                <AdminPanel />
-            </ManagerProtectedRoute>
-        } />
-
-        {/* --- SUPER ADMIN --- */}
+        {/* 1. Super Admin (Master Control) */}
         <Route path="/superadmin" element={<SuperAdmin />} />
+
+        {/* 2. Restaurant Owner Admin */}
+        <Route path="/:id/admin" element={<RestaurantAdmin />} />
+
+        {/* 3. Kitchen Display System (KDS) */}
+        <Route path="/:id/chef" element={<ChefDashboard />} />
+        {/* Alias for kitchen */}
+        <Route path="/:id/kitchen" element={<ChefDashboard />} />
+
+        {/* 4. Waiter Dashboard */}
+        <Route path="/:id/waiter" element={<WaiterDashboard />} />
+
+        {/* --- FALLBACK --- */}
+        <Route path="*" element={<Navigate to="/" replace />} />
 
       </Routes>
     </Router>

@@ -9,6 +9,8 @@ export const protect = async (req, res, next) => {
         try {
             token = req.headers.authorization.split(' ')[1];
             const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret');
+            
+            // Fetch the owner details (without password)
             req.user = await Owner.findById(decoded.id).select('-password');
 
             if (!req.user) {
@@ -27,7 +29,7 @@ export const protect = async (req, res, next) => {
   
 // 2. 💰 SUBSCRIPTION CHECK MIDDLEWARE
 export const checkSubscription = async (req, res, next) => {
-    const user = req.user;
-    // Free Mode enabled for launch
+    // Currently allows all access (Free Mode / Data Safe Mode)
+    // The "Expired" visual warning is handled on the Frontend.
     next();
 };

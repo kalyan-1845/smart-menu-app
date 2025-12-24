@@ -1,13 +1,14 @@
 import React from "react";
 import { Link } from "react-router-dom";
-// 🎨 Icons for the pitch
 import { 
-    FaUtensils, FaChartLine, FaMobileAlt, FaPrint, 
-    FaShieldAlt, FaRocket, FaCheckCircle, FaWhatsapp 
+    FaChartLine, FaMobileAlt, FaPrint, FaCheckCircle, FaWhatsapp 
 } from "react-icons/fa";
-import Pricing from "./Pricing"; // Import the pricing component we made
+import Pricing from "./Pricing"; 
 
 const LandingPage = () => {
+    // Replace with your actual WhatsApp Sales Number
+    const WHATSAPP_LINK = "https://wa.me/919876543210?text=I%20want%20to%20start%20my%20SmartMenu%20trial";
+
     return (
         <div className="min-h-screen bg-[#080808] text-white font-sans selection:bg-[#FF9933] selection:text-black">
             
@@ -22,9 +23,10 @@ const LandingPage = () => {
                     <a href="#pricing" className="hover:text-white transition">Pricing</a>
                     <a href="#support" className="hover:text-white transition">Support</a>
                 </div>
+                {/* LOGIN BUTTON: Updated to point to dynamic login check */}
                 <Link to="/login">
                     <button className="bg-white/5 border border-white/10 px-6 py-2.5 rounded-full font-black text-[10px] uppercase tracking-widest hover:bg-white hover:text-black transition-all">
-                        Owner Login
+                        Partner Login
                     </button>
                 </Link>
             </nav>
@@ -44,35 +46,38 @@ const LandingPage = () => {
                     Everything you need to scale from one table to a hundred.
                 </p>
                 <div className="flex flex-col md:flex-row gap-4 justify-center">
-                    <Link to="/register">
-                        <button className="bg-[#FF9933] text-black px-10 py-5 rounded-[20px] font-black text-xs uppercase tracking-widest shadow-2xl shadow-orange-500/20 hover:scale-105 transition-transform">
-                            Start Free 4-Month Trial
+                    {/* CHANGED: Link to WhatsApp instead of dead Register page */}
+                    <a href={WHATSAPP_LINK} target="_blank" rel="noopener noreferrer">
+                        <button className="bg-[#FF9933] text-black px-10 py-5 rounded-[20px] font-black text-xs uppercase tracking-widest shadow-2xl shadow-orange-500/20 hover:scale-105 transition-transform flex items-center justify-center gap-2">
+                            <FaWhatsapp size={18}/> Get Access Now
                         </button>
-                    </Link>
-                    <button className="bg-white/5 border border-white/10 text-white px-10 py-5 rounded-[20px] font-black text-xs uppercase tracking-widest hover:bg-white/10 transition">
-                        Watch Demo
-                    </button>
+                    </a>
+                    <a href="#features">
+                        <button className="bg-white/5 border border-white/10 text-white px-10 py-5 rounded-[20px] font-black text-xs uppercase tracking-widest hover:bg-white/10 transition">
+                            Explore Features
+                        </button>
+                    </a>
                 </div>
             </header>
 
-            {/* --- 3. THE "THREE PILLARS" SECTION --- */}
+            {/* --- 3. FEATURES SECTION --- */}
             <section id="features" className="py-24 px-6 max-w-7xl mx-auto">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                     
-                    {/* For Owners */}
+                    {/* Owners */}
                     <div className="bg-[#111] p-10 rounded-[45px] border border-white/5 hover:border-[#FF9933]/30 transition-all group">
-                        <FaChartLine className="text-4xl text-[#FF9933] mb-6 group-hover:bounce" />
+                        <FaChartLine className="text-4xl text-[#FF9933] mb-6 group-hover:scale-110 transition-transform" />
                         <h3 className="text-2xl font-black mb-4">For Owners</h3>
                         <ul className="space-y-3 text-gray-500 text-sm font-bold">
                             <li className="flex items-center gap-2"><FaCheckCircle className="text-green-500" /> Real-time Profit/Loss</li>
-                            <li className="flex items-center gap-2"><FaCheckCircle className="text-green-500" /> GST Ready Tax Invoices</li>
-                            <li className="flex items-center gap-2"><FaCheckCircle className="text-green-500" /> Staff Role Management</li>
+                            <li className="flex items-center gap-2"><FaCheckCircle className="text-green-500" /> GST Ready Invoices</li>
+                            <li className="flex items-center gap-2"><FaCheckCircle className="text-green-500" /> Staff Management</li>
                         </ul>
                     </div>
 
-                    {/* For Chefs */}
+                    {/* Kitchen */}
                     <div className="bg-[#111] p-10 rounded-[45px] border border-white/5 hover:border-blue-500/30 transition-all group">
-                        <FaPrint className="text-4xl text-blue-500 mb-6" />
+                        <FaPrint className="text-4xl text-blue-500 mb-6 group-hover:scale-110 transition-transform" />
                         <h3 className="text-2xl font-black mb-4">For Kitchens</h3>
                         <ul className="space-y-3 text-gray-500 text-sm font-bold">
                             <li className="flex items-center gap-2"><FaCheckCircle className="text-green-500" /> Digital KOT Receipts</li>
@@ -81,9 +86,9 @@ const LandingPage = () => {
                         </ul>
                     </div>
 
-                    {/* For Customers */}
+                    {/* Diners */}
                     <div className="bg-[#111] p-10 rounded-[45px] border border-white/5 hover:border-purple-500/30 transition-all group">
-                        <FaMobileAlt className="text-4xl text-purple-500 mb-6" />
+                        <FaMobileAlt className="text-4xl text-purple-500 mb-6 group-hover:scale-110 transition-transform" />
                         <h3 className="text-2xl font-black mb-4">For Diners</h3>
                         <ul className="space-y-3 text-gray-500 text-sm font-bold">
                             <li className="flex items-center gap-2"><FaCheckCircle className="text-green-500" /> Scan-to-Order QR</li>
@@ -106,22 +111,24 @@ const LandingPage = () => {
                 <p className="text-black font-bold text-lg mb-10 max-w-2xl mx-auto opacity-80">
                     Join the 4-month testing phase today. No credit card required. Cancel anytime.
                 </p>
-                <Link to="/register">
-                    <button className="bg-black text-white px-12 py-5 rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-105 transition-all shadow-2xl">
-                        Claim My Free License Now
+                <a href={WHATSAPP_LINK} target="_blank" rel="noopener noreferrer">
+                    <button className="bg-black text-white px-12 py-5 rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-105 transition-all shadow-2xl flex items-center justify-center gap-2 mx-auto">
+                        <FaWhatsapp size={18}/> Contact Sales to Join
                     </button>
-                </Link>
+                </a>
             </section>
 
             {/* --- 6. FOOTER --- */}
-            <footer className="py-20 px-8 max-w-7xl mx-auto border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-10">
+            <footer className="py-20 px-8 max-w-7xl mx-auto border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-10" id="support">
                 <div>
                     <span className="text-xl font-black tracking-tighter uppercase">SmartMenu<span className="text-[#FF9933]">Cloud</span></span>
                     <p className="text-gray-600 text-xs mt-2 font-bold uppercase tracking-widest">Built by Bhoompally Kalyan Reddy</p>
                 </div>
                 
                 <div className="flex gap-6">
-                    <button className="text-gray-400 hover:text-white transition text-2xl"><FaWhatsapp /></button>
+                    <a href={WHATSAPP_LINK} target="_blank" rel="noopener noreferrer">
+                        <button className="text-gray-400 hover:text-white transition text-2xl"><FaWhatsapp /></button>
+                    </a>
                     <button className="bg-white/5 p-4 rounded-xl text-xs font-black uppercase tracking-widest border border-white/10 hover:bg-[#FF9933] hover:text-black transition-all">
                         Support Center
                     </button>

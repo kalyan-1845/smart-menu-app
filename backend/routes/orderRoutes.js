@@ -1,38 +1,45 @@
 import express from 'express';
+import webpush from 'web-push';
 import Order from '../models/Order.js';
-import Call from '../models/Call.js'; // Ensure you have created this model
+import Call from '../models/Call.js';
+import Owner from '../models/Owner.js'; // Needed to fetch push subscription
 import { protect, checkSubscription } from '../middleware/authMiddleware.js';
 
-import webpush from 'web-push';
+const router = express.Router();
 
-// Configure VAPID keys
+// --- 1. PUSH NOTIFICATION CONFIG ---
 webpush.setVapidDetails(
   'mailto:your-email@example.com',
   process.env.VAPID_PUBLIC_KEY,
   process.env.VAPID_PRIVATE_KEY
 );
 
-// Trigger this inside your "Place Order" function
-export const sendOrderNotification = async (ownerSubscription, orderData) => {
-    const payload = JSON.stringify({
-        title: "🔥 New Order Received!",
-        body: `Table ${orderData.tableNumber} just ordered ${orderData.items.length} items. Total: ₹${orderData.totalAmount}`,
-        icon: "/logo192.png",
-    });
-
+/**
+ * Helper: Send Push Notification to Owner
+ */
+const sendOrderNotification = async (restaurantId, orderData) => {
     try {
-        await webpush.sendNotification(ownerSubscription, payload);
-        console.log("Push sent to Owner");
+        const owner = await Owner.findById(restaurantId);
+        // Only send if the owner has a saved push subscription
+        if (owner && owner.pushSubscription) {
+            const payload = JSON.stringify({
+                title: "🔥 New Order Received!",
+                body: `Table ${orderData.tableNumber} ordered ${orderData.items.length} items. Total: ₹${orderData.totalAmount}`,
+                icon: "/logo192.png",
+                data: { url: `/${owner.username}/admin` }
+            });
+            await webpush.sendNotification(JSON.parse(owner.pushSubscription), payload);
+        }
     } catch (err) {
-        console.error("Error sending push", err);
+        console.error("Push notification failed:", err);
     }
 };
-const router = express.Router();
 
-   
+// --- 2. PUBLIC ROUTES (Customer Facing) ---
+
 /**
- * 1. PLACE ORDER (Public)
- * Used by customers in Cart.jsx to send their selection to the kitchen.
+ * @route   POST /api/orders
+ * @desc    Place a new order (Public)
  */
 router.post('/', async (req, res) => {
     try {
@@ -50,10 +57,13 @@ router.post('/', async (req, res) => {
 
         const savedOrder = await newOrder.save();
 
-        // 🚀 Real-time alert to Chef & Waiter
+        // 🚀 Real-time alert to Chef & Waiter (Socket.io)
         if (req.io) {
-            req.io.emit('new-order', savedOrder);
+            req.io.to(owner).emit('new-order', savedOrder);
         }
+
+        // 🔔 Send Web Push to Owner's device
+        sendOrderNotification(owner, savedOrder);
 
         res.status(201).json(savedOrder);
     } catch (error) {
@@ -62,27 +72,26 @@ router.post('/', async (req, res) => {
 });
 
 /**
- * 2. CALL WAITER (Public)
- * Used by customers in OrderTracker.jsx for specific service requests.
+ * @route   POST /api/orders/call-waiter
+ * @desc    Service request from customer (Public)
  */
 router.post('/call-waiter', async (req, res) => {
     try {
-        const { restaurantId, tableNumber, type } = req.body; // type: 'help', 'bill', or 'water'
+        const { restaurantId, tableNumber, type } = req.body;
 
         if (!tableNumber || tableNumber === "Takeaway") {
             return res.status(400).json({ message: "Valid table number required." });
         }
 
-        // Save the request to the database so staff can see it even if they refresh
         const newCall = await Call.create({
             restaurantId,
             tableNumber,
             type: type || 'help'
         });
 
-        // 🚀 Real-time alert to Waiter Dashboard
+        // 🚀 Real-time alert to staff dashboard
         if (req.io) {
-            req.io.emit('new-waiter-call', newCall);
+            req.io.to(restaurantId).emit('new-waiter-call', newCall);
         }
 
         res.status(201).json({ message: "Staff notified!", call: newCall });
@@ -92,8 +101,8 @@ router.post('/call-waiter', async (req, res) => {
 });
 
 /**
- * 3. TRACK SINGLE ORDER (Public)
- * Used by OrderTracker.jsx to get live status updates.
+ * @route   GET /api/orders/track/:id
+ * @desc    Track status of a single order (Public)
  */
 router.get('/track/:id', async (req, res) => {
     try {
@@ -105,13 +114,15 @@ router.get('/track/:id', async (req, res) => {
     }
 });
 
+// --- 3. PROTECTED ROUTES (Staff Facing) ---
+
 /**
- * 4. GET ALL ACTIVE CALLS (Protected)
- * Used by WaiterDashboard.jsx to list current service requests.
+ * @route   GET /api/orders/calls
+ * @desc    Fetch active service requests (Protected)
  */
 router.get('/calls', protect, async (req, res) => {
     try {
-        const restaurantId = req.query.restaurantId;
+        const { restaurantId } = req.query;
         const calls = await Call.find({ restaurantId }).sort({ createdAt: 1 });
         res.json(calls);
     } catch (error) {
@@ -120,14 +131,14 @@ router.get('/calls', protect, async (req, res) => {
 });
 
 /**
- * 5. RESOLVE / DELETE CALL (Protected)
- * Used by staff to clear a request once the table is attended.
+ * @route   DELETE /api/orders/calls/:id
+ * @desc    Resolve a service request (Protected)
  */
 router.delete('/calls/:id', protect, async (req, res) => {
     try {
         const call = await Call.findByIdAndDelete(req.params.id);
         if (req.io && call) {
-            req.io.emit('call-resolved', { 
+            req.io.to(call.restaurantId.toString()).emit('call-resolved', { 
                 restaurantId: call.restaurantId, 
                 tableNumber: call.tableNumber 
             });
@@ -139,8 +150,8 @@ router.delete('/calls/:id', protect, async (req, res) => {
 });
 
 /**
- * 6. GET ALL ORDERS (Protected)
- * Used by dashboards to fetch current restaurant orders.
+ * @route   GET /api/orders
+ * @desc    Fetch all orders for owner dashboard (Protected)
  */
 router.get('/', protect, checkSubscription, async (req, res) => {
     try {
@@ -152,18 +163,18 @@ router.get('/', protect, checkSubscription, async (req, res) => {
 });
 
 /**
- * 7. UPDATE ORDER STATUS (Protected)
- * Used by Chef/Waiter to move order from PLACED -> COOKING -> READY -> SERVED.
+ * @route   PUT /api/orders/:id
+ * @desc    Update order status or payment status (Protected)
  */
 router.put('/:id', protect, checkSubscription, async (req, res) => {
     try {
         const order = await Order.findByIdAndUpdate(
             req.params.id, 
-            { status: req.body.status }, 
+            { $set: req.body }, // Can update status, paymentStatus, etc.
             { new: true }
         );
         
-        // 🚀 Emit update so customer's phone updates automatically
+        // 🚀 Socket emit so customer tracker updates live
         if (req.io) req.io.emit('order-updated', order);
         
         res.json(order);

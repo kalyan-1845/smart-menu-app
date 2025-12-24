@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useParams, Link } from "react-router-dom";
 // 🎨 Icons
-import { FaHistory, FaSearch, FaShoppingCart, FaBell } from "react-icons/fa";
+import { FaHistory, FaSearch, FaShoppingCart, FaBell, FaUtensils } from "react-icons/fa";
 
 const Menu = ({ cart = [], addToCart, setRestaurantId, setTableNum }) => {
     // --- STATE ---
@@ -29,10 +29,11 @@ const Menu = ({ cart = [], addToCart, setRestaurantId, setTableNum }) => {
                 const shopRes = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/auth/restaurant/${id}`);
                 setRestaurant({ name: shopRes.data.username || shopRes.data.restaurantName, _id: shopRes.data._id });
                 
+                // Update Global State
                 if(setRestaurantId) setRestaurantId(shopRes.data._id);
                 if (table && setTableNum) setTableNum(table);
 
-                // 3. Fetch Dishes (Back-end now returns recipe/stock data)
+                // 3. Fetch Dishes
                 const dishRes = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/dishes?restaurantId=${shopRes.data._id}`);
                 setDishes(dishRes.data);
 
@@ -46,12 +47,20 @@ const Menu = ({ cart = [], addToCart, setRestaurantId, setTableNum }) => {
     }, [id, table, setRestaurantId, setTableNum]);
 
     // --- HELPERS ---
-    const categories = ["All", ...new Set(dishes.map(d => d.category))];
+    // Ensure "All" is always first, then unique categories
+    const categories = ["All", ...new Set(dishes.map(d => d.category || "General"))];
     
     // Logic: Check if dish is out of stock based on ingredients
     const checkStock = (dish) => {
-        if (!dish.recipe || dish.recipe.length === 0) return true; // Available if no recipe defined
-        return dish.recipe.every(ing => ing.ingredientId.currentStock >= ing.quantityNeeded);
+        // If no recipe, it's always available (e.g., Water bottle)
+        if (!dish.recipe || dish.recipe.length === 0) return true; 
+        
+        // Check every ingredient
+        return dish.recipe.every(ing => {
+            // Safety check: if ingredient was deleted or not populated, assume available to prevent blocking
+            if (!ing.ingredientId || typeof ing.ingredientId !== 'object') return true;
+            return ing.ingredientId.currentStock >= ing.quantityNeeded;
+        });
     };
 
     const filteredDishes = dishes.filter(dish => 
@@ -61,18 +70,18 @@ const Menu = ({ cart = [], addToCart, setRestaurantId, setTableNum }) => {
 
     // --- LOGIC: Call Waiter ---
     const handleCallWaiter = async () => {
-        if (!table || table === "Takeaway") return alert("Table number required.");
+        if (!table || table === "Takeaway") return alert("Please scan a table QR code to call a waiter.");
         if (!window.confirm(`Call assistance for Table ${table}?`)) return;
 
         try {
-            await axios.post("https://smart-menu-backend-5ge7.onrender.com/api/orders/call-waiter", {
+            await axios.post("https://smart-menu-backend-5ge7.onrender.com/api/orders/calls", {
                 restaurantId: restaurant._id || id,
                 tableNumber: table,
                 type: "help"
             });
             alert("🛎️ Staff notified!");
         } catch (error) {
-            alert("🛎️ Staff Alerted!");
+            alert("Could not connect to staff system.");
         }
     };
 
@@ -94,7 +103,7 @@ const Menu = ({ cart = [], addToCart, setRestaurantId, setTableNum }) => {
                         {table && <span style={styles.tableBadge}>Table {table}</span>}
                         {lastOrderId && (
                             <Link to={`/track/${lastOrderId}`} style={{ textDecoration: 'none' }}>
-                                <span style={styles.historyBtn}><FaHistory /> Re-track</span>
+                                <span style={styles.historyBtn}><FaHistory /> Track Order</span>
                             </Link>
                         )}
                     </div>
@@ -128,30 +137,37 @@ const Menu = ({ cart = [], addToCart, setRestaurantId, setTableNum }) => {
 
             {/* 3. DISH GRID */}
             <div style={styles.grid}>
-                {filteredDishes.map((dish) => {
-                    const isAvailable = checkStock(dish);
-                    return (
-                        <div 
-                            key={dish._id} 
-                            onClick={() => isAvailable && addToCart(dish)} 
-                            style={{ ...styles.card, opacity: isAvailable ? 1 : 0.6, pointerEvents: isAvailable ? 'auto' : 'none' }}
-                        >
-                            {!isAvailable && <div style={styles.soldOutBadge}>Sold Out</div>}
-                            
-                            <img src={dish.image} alt={dish.name} style={styles.dishImg} loading="lazy" />
-                            <div style={styles.overlay}></div>
-                            
-                            <div style={styles.cardContent}>
-                                <p style={styles.price}>₹{dish.price}</p>
-                                <h3 style={styles.dishName}>{dish.name}</h3>
-                            </div>
+                {filteredDishes.length === 0 ? (
+                    <div style={{gridColumn: '1/-1', textAlign:'center', color:'#444', padding:'40px'}}>
+                        <FaUtensils size={30} style={{marginBottom:'10px'}}/>
+                        <p>No items found.</p>
+                    </div>
+                ) : (
+                    filteredDishes.map((dish) => {
+                        const isAvailable = checkStock(dish);
+                        return (
+                            <div 
+                                key={dish._id} 
+                                onClick={() => isAvailable && addToCart(dish)} 
+                                style={{ ...styles.card, opacity: isAvailable ? 1 : 0.5, pointerEvents: isAvailable ? 'auto' : 'none' }}
+                            >
+                                {!isAvailable && <div style={styles.soldOutBadge}>Sold Out</div>}
+                                
+                                <img src={dish.image || "https://via.placeholder.com/150"} alt={dish.name} style={styles.dishImg} loading="lazy" />
+                                <div style={styles.overlay}></div>
+                                
+                                <div style={styles.cardContent}>
+                                    <p style={styles.price}>₹{dish.price}</p>
+                                    <h3 style={styles.dishName}>{dish.name}</h3>
+                                </div>
 
-                            <div style={styles.addBtn}>
-                                <span>{isAvailable ? "+" : "✖"}</span>
+                                <div style={styles.addBtn}>
+                                    <span>{isAvailable ? "+" : "✖"}</span>
+                                </div>
                             </div>
-                        </div>
-                    );
-                })}
+                        );
+                    })
+                )}
             </div>
 
             {/* 4. CALL WAITER */}

@@ -13,6 +13,7 @@ import dishRoutes from './routes/dishRoutes.js';
 import orderRoutes from './routes/orderRoutes.js';
 import superAdminRoutes from './routes/superAdminRoutes.js';
 import broadcastRoutes from './routes/broadcastRoutes.js';
+import supportRoutes from './routes/supportRoutes.js'; 
 
 const app = express();
 const httpServer = createServer(app);
@@ -29,22 +30,16 @@ const allowedOrigins = [
 // ============================================================
 app.use((req, res, next) => {
     const origin = req.headers.origin;
-    
-    // Allow requests from our allowed origins
     if (allowedOrigins.includes(origin)) {
         res.setHeader("Access-Control-Allow-Origin", origin);
     }
-
-    // Set standard headers
     res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
     res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, Origin, X-Requested-With, Accept");
     res.header("Access-Control-Allow-Credentials", "true");
 
-    // Handle Preflight (OPTIONS) immediately
     if (req.method === "OPTIONS") {
         return res.status(200).end();
     }
-
     next();
 });
 
@@ -60,16 +55,15 @@ app.use(cors({
 // --- MIDDLEWARE ---
 app.use(express.json({ limit: '10mb' })); 
 
-// Rate Limiter
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, 
-    max: 300, 
+    max: 500, // Increased for busy restaurant hours
     standardHeaders: true,
     legacyHeaders: false,
 });
 app.use(limiter); 
 
-// Socket.io Setup
+// --- SOCKET.IO SETUP ---
 const io = new Server(httpServer, {
     cors: {
         origin: allowedOrigins,
@@ -78,7 +72,7 @@ const io = new Server(httpServer, {
     }
 });
 
-// Attach Socket to Request
+// Attach Socket to Request for use in Controllers
 app.use((req, res, next) => {
     req.io = io;
     next();
@@ -95,12 +89,29 @@ app.use('/api/dishes', dishRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/superadmin', superAdminRoutes);
 app.use('/api/broadcast', broadcastRoutes);
+app.use('/api/support', supportRoutes); 
 
-app.get('/', (req, res) => res.send('API is Running...'));
+app.get('/', (req, res) => res.send('Smart Menu API v2.8 Active'));
+
+// --- SOCKET LOGIC ---
+
+
+io.on('connection', (socket) => {
+    console.log(`🔌 Client Connected: ${socket.id}`);
+
+    // Multi-tenant room logic
+    socket.on('join-restaurant', (restaurantId) => {
+        socket.join(restaurantId);
+        console.log(`User joined restaurant room: ${restaurantId}`);
+    });
+
+    socket.on('disconnect', () => {
+        console.log('❌ Client Disconnected');
+    });
+});
 
 // --- ERROR HANDLER ---
 app.use((err, req, res, next) => {
-    console.error("Server Error:", err.message); 
     const statusCode = res.statusCode === 200 ? 500 : res.statusCode;
     res.status(statusCode).json({
         message: err.message,
@@ -108,19 +119,15 @@ app.use((err, req, res, next) => {
     });
 });
 
-// --- SOCKETS ---
-io.on('connection', (socket) => {
-    socket.on('join-owner-room', (ownerId) => socket.join(ownerId));
-    socket.on("resolve-call", (data) => io.emit("call-resolved", data));
-});
-
-// --- SELF PING (Keep Alive) ---
+// --- SELF PING (Render Keep-Alive) ---
 const pingUrl = "https://smart-menu-backend-5ge7.onrender.com/"; 
 setInterval(() => {
     https.get(pingUrl, (res) => {
-        // Keep alive ping
-    }).on("error", (e) => {});
-}, 840000); 
+        console.log("Ping sent to keep server awake");
+    }).on("error", (e) => {
+        console.error("Ping error");
+    });
+}, 840000); // 14 minutes
 
 const PORT = process.env.PORT || 5000;
 httpServer.listen(PORT, () => {

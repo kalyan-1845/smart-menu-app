@@ -16,43 +16,39 @@ const generateToken = (id) => {
 
 /**
  * 1. REGISTER NEW OWNER
- * Logic: Checks if user exists by username OR email. Sets up 6-month trial.
+ * Logic: Sets up a 60-day trial.
  */
 router.post('/register', async (req, res) => {
     const { restaurantName, username, email, password } = req.body;
 
     try {
-        // Validation: Check if either identifier is already in use
         const userExists = await Owner.findOne({ $or: [{ username }, { email }] });
         if (userExists) {
             return res.status(400).json({ 
-                message: 'Username or Email already registered. Use different details.' 
+                message: 'Username or Email already registered.' 
             });
         }
 
-        // TRIAL SETUP: Today + 6 months
-        const trialEndDate = new Date();
-        trialEndDate.setMonth(trialEndDate.getMonth() + 6);
+        // TRIAL SETUP: Today + 60 days
+        const today = new Date();
+        const trialEndDate = new Date(today);
+        trialEndDate.setDate(trialEndDate.getDate() + 60);
 
         const user = await Owner.create({ 
             restaurantName,
             username, 
             email,
             password,
-            subscription: {
-                plan: 'free_trial',
-                trialEndsAt: trialEndDate, 
-                isPaid: false 
-            }
+            trialEndsAt: trialEndDate,
+            isPro: false
         });
         
-        // Return JSON with token so Frontend can log in immediately
         res.status(201).json({
             _id: user._id,
             username: user.username,
             restaurantName: user.restaurantName,
-            token: generateToken(user._id),
-            trialEndsAt: user.subscription.trialEndsAt
+            trialEndsAt: user.trialEndsAt,
+            token: generateToken(user._id)
         });
     } catch (error) {
         res.status(400).json({ message: error.message });
@@ -61,25 +57,28 @@ router.post('/register', async (req, res) => {
 
 /**
  * 2. OWNER LOGIN
- * Logic: Matches the "Restaurant ID" (Username) and Password from Frontend.
+ * Logic: Matches Restaurant ID (Username) and Password.
  */
 router.post('/login', async (req, res) => {
     const { username, password } = req.body;
 
     try {
-        // Search specifically by username to match your login input label
-        const user = await Owner.findOne({ username });
-        
-        // CRITICAL: .matchPassword() must be defined in your Owner model file
+        // Accept either email or username as the identifier
+        const user = await Owner.findOne({ 
+            $or: [{ email: username }, { username: username }] 
+        });
+
         if (user && (await user.matchPassword(password))) {
             res.json({
                 _id: user._id,
                 username: user.username,
-                email: user.email,
+                restaurantName: user.restaurantName,
+                trialEndsAt: user.trialEndsAt,
+                isPro: user.isPro,
                 token: generateToken(user._id) 
             });
         } else {
-            res.status(401).json({ message: 'Invalid username or password' });
+            res.status(401).json({ message: 'Invalid ID or password' });
         }
     } catch (error) {
         res.status(500).json({ message: error.message });
@@ -87,23 +86,21 @@ router.post('/login', async (req, res) => {
 });
 
 /**
- * 3. GET SINGLE RESTAURANT
- * Used for Menu headers and Dashboard greetings.
+ * 3. GET RESTAURANT PROFILE
+ * Used for headers and trial countdowns.
  */
 router.get('/restaurant/:id', async (req, res) => {
     try {
         const { id } = req.params;
         let owner;
 
-        // Smart detect: Check if param is MongoDB ID or a Username slug
         if (mongoose.Types.ObjectId.isValid(id)) {
-            owner = await Owner.findById(id).select('username restaurantName email');
+            owner = await Owner.findById(id).select('-password');
         } else {
-            owner = await Owner.findOne({ username: id }).select('username restaurantName email');
+            owner = await Owner.findOne({ username: id }).select('-password');
         }
 
         if (!owner) return res.status(404).json({ message: 'Restaurant not found' });
-        
         res.json(owner);
     } catch (error) {
         res.status(500).json({ message: error.message });
@@ -115,29 +112,18 @@ router.get('/restaurant/:id', async (req, res) => {
  */
 router.get('/restaurants', async (req, res) => {
     try {
-        const owners = await Owner.find().select('_id username restaurantName');
+        const owners = await Owner.find().select('_id username restaurantName trialEndsAt isPro');
         res.json(owners);
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
 });
 
-// --- SUPER ADMIN ROUTES (FOR SRINIVAS) ---
+// --- SUPER ADMIN MANAGEMENT ROUTES ---
 
 /**
- * 5. ADMIN: VIEW ALL SaaS CLIENTS
- */
-router.get('/admin/all-owners', async (req, res) => {
-    try {
-        const owners = await Owner.find().select('-password').sort({ createdAt: -1 }); 
-        res.json(owners);
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
-});
-
-/**
- * 6. ADMIN: DELETE CLIENT & PURGE DATA
+ * 5. ADMIN: DELETE CLIENT & PURGE DATA
+ * Used by Srinivas to remove restaurants and their content.
  */
 router.delete('/admin/delete-owner/:id', async (req, res) => {
     try {
@@ -147,9 +133,9 @@ router.delete('/admin/delete-owner/:id', async (req, res) => {
 
         await Owner.findByIdAndDelete(ownerId);
 
-        // CLEANUP: Wipe out associated menu items and order history
-        await Dish.deleteMany({ restaurantId: ownerId }); 
-        await Order.deleteMany({ restaurantId: ownerId });
+        // PURGE: Remove dishes and orders linked to this restaurant
+        await Dish.deleteMany({ owner: ownerId }); 
+        await Order.deleteMany({ owner: ownerId });
 
         res.json({ message: `Access revoked for ${owner.username}. Data purged.` });
     } catch (error) {

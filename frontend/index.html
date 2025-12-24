@@ -28,19 +28,29 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@600;700;800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&family=Poppins:wght@600;700;800&display=swap"
       rel="stylesheet"
     />
 
     <style>
+      /* --- GLOBAL VARIABLES & RESET --- */
       :root {
-        --bg-color: #0d0d0d;
-        --card-bg: #1a1a1a;
-        --text-main: #ffffff;
-        --text-dim: #a1a1aa;
+        --bg-color: #050505; /* Matches your React components */
         --primary-orange: #f97316;
-        --app-max-width: 450px;
         --safe-area-inset-bottom: env(safe-area-inset-bottom);
+
+        /* Typography Defaults */
+        font-family: "Inter", system-ui, Avenir, Helvetica, Arial, sans-serif;
+        line-height: 1.5;
+        font-weight: 400;
+        
+        color-scheme: light dark;
+        color: rgba(255, 255, 255, 0.87);
+        
+        font-synthesis: none;
+        text-rendering: optimizeLegibility;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
       }
 
       * {
@@ -54,36 +64,85 @@
       html,
       body {
         height: 100%;
-        background-color: #000;
-        overscroll-behavior-y: contain;
+        background-color: var(--bg-color);
+        /* Prevents "pull-to-refresh" on mobile to feel like a native app */
+        overscroll-behavior-y: none;
+        min-width: 320px; 
       }
 
       body {
-        color: var(--text-main);
+        color: #ffffff;
         font-family: "Inter", sans-serif;
-        -webkit-font-smoothing: antialiased;
-        display: flex;
-        justify-content: center;
       }
 
+      /* --- APP CONTAINER --- */
       #root {
         width: 100%;
-        max-width: var(--app-max-width);
-        background-color: var(--bg-color);
         min-height: 100vh;
         position: relative;
-        box-shadow: 0 0 100px rgba(0, 0, 0, 0.9),
-          0 0 20px rgba(249, 115, 22, 0.05);
         display: flex;
         flex-direction: column;
+        
+        /* CRITICAL: Removed 'max-width: 450px'. 
+           This allows the Super Admin & Chef panels to use full screen width.
+           Mobile Menu pages control their own width internally.
+        */
       }
 
+      /* --- LINKS & BUTTON DEFAULTS --- */
+      a { font-weight: 500; color: #646cff; text-decoration: inherit; }
+      button {
+        border-radius: 12px;
+        border: 1px solid transparent;
+        padding: 0.6em 1.2em;
+        font-size: 1em;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+
+      /* --- 🖨️ KITCHEN PRINTER (KOT) LOGIC --- */
+      @media print {
+        /* Hide everything on the screen by default */
+        body * {
+          visibility: hidden;
+        }
+
+        /* Only show the KOT receipt content */
+        #kot-receipt, #kot-receipt * {
+          visibility: visible;
+        }
+
+        #kot-receipt {
+          position: absolute;
+          left: 0;
+          top: 0;
+          width: 80mm; /* Standard Thermal Paper Width */
+          background: white !important;
+          color: black !important;
+          padding: 10px;
+          font-family: 'Courier New', Courier, monospace;
+          border: none !important;
+        }
+
+        /* Force background colors to show if needed */
+        * {
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+        }
+
+        /* Remove browser headers/footers (Date, URL, Page No) */
+        @page {
+          margin: 0;
+        }
+      }
+
+      /* --- LOADING SPINNER (Visible while React loads) --- */
       #root:empty {
         display: flex;
-        flex-direction: column;
         justify-content: center;
         align-items: center;
-        background: var(--bg-color);
+        height: 100vh;
       }
 
       #root:empty::before {
@@ -98,13 +157,14 @@
       }
 
       #root:empty::after {
-        content: "SMART MENU CLOUD";
+        content: "LOADING SYSTEM...";
         font-family: "Poppins", sans-serif;
         font-weight: 800;
         font-size: 12px;
-        letter-spacing: 4px;
+        letter-spacing: 3px;
         color: var(--primary-orange);
         animation: fade 1.5s ease-in-out infinite;
+        display: block;
       }
 
       @keyframes spin {
@@ -114,13 +174,6 @@
       @keyframes fade {
         0%, 100% { opacity: 0.3; }
         50% { opacity: 1; }
-      }
-
-      @media (max-width: 480px) {
-        #root {
-          max-width: 100%;
-          box-shadow: none;
-        }
       }
     </style>
   </head>
@@ -135,9 +188,8 @@
         window.addEventListener("load", () => {
           navigator.serviceWorker
             .register("/sw.js")
-            .catch((err) => {
-              console.log("SW registration failed: ", err);
-            });
+            .then((reg) => console.log("SW Registered"))
+            .catch((err) => console.log("SW Failed: ", err));
         });
       }
     </script>
