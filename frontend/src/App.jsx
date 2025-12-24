@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 
 // --- COMPONENT IMPORTS ---
@@ -14,30 +14,37 @@ import SuperAdmin from './SuperAdmin.jsx';
 import OrderSuccess from './OrderSuccess.jsx';
 import ManagerLogin from "./ManagerLogin.jsx"; 
 
+// --- PROTECTED ROUTE MIDDLEWARE ---
+// Standard protection for staff areas (Chef, Waiter)
 const ProtectedRoute = ({ children }) => {
   const token = localStorage.getItem("ownerToken");
   return token ? children : <Navigate to="/login" replace />;
 };
 
+// 🔒 MANAGER PROTECTION MIDDLEWARE
+// Specifically for the Admin/Manage Menu area
 const ManagerProtectedRoute = ({ children }) => {
   const token = localStorage.getItem("ownerToken");
   const isManagerAuth = localStorage.getItem("managerAuthenticated") === "true";
+  
   if (!token) return <Navigate to="/login" replace />;
   if (!isManagerAuth) return <Navigate to="/manager-login" replace />;
+  
   return children;
 };
 
+// --- HOME REDIRECT ---
+const Home = () => (
+    <Navigate to="/login" replace />
+);
+
 function App() {
+  // --- GLOBAL STATE ---
   const [cart, setCart] = useState([]);
-  const [restaurantId, setRestaurantId] = useState(localStorage.getItem("activeResId") || null);
-  const [tableNum, setTableNum] = useState(localStorage.getItem("activeTable") || ""); 
+  const [restaurantId, setRestaurantId] = useState(null);
+  const [tableNum, setTableNum] = useState(""); 
 
-  // Persistence: Save IDs so Cart doesn't break on refresh
-  useEffect(() => {
-    if (restaurantId) localStorage.setItem("activeResId", restaurantId);
-    if (tableNum) localStorage.setItem("activeTable", tableNum);
-  }, [restaurantId, tableNum]);
-
+  // --- CART FUNCTIONS ---
   const addToCart = (dish) => {
     setCart((prev) => {
       const exists = prev.find((item) => item._id === dish._id);
@@ -48,15 +55,15 @@ function App() {
     });
   };
 
-  const updateQuantity = (id, change) => {
+  const updateQuantity = (id, newQuantity) => {
+    if (newQuantity <= 0) {
+      removeFromCart(id);
+      return;
+    }
     setCart((prev) => 
-      prev.map((item) => {
-        if (item._id === id) {
-          const newQty = item.quantity + change;
-          return newQty > 0 ? { ...item, quantity: newQty } : item;
-        }
-        return item;
-      }).filter(item => item.quantity > 0)
+      prev.map((item) => 
+        item._id === id ? { ...item, quantity: newQuantity } : item
+      )
     );
   };
 
@@ -66,18 +73,39 @@ function App() {
   return (
     <Router>
       <Routes>
-        <Route path="/" element={<Navigate to="/login" replace />} /> 
+        
+        {/* --- PUBLIC ROUTES --- */}
+        <Route path="/" element={<Home />} /> 
         <Route path="/login" element={<OwnerLogin />} />
         <Route path="/register" element={<Register />} />
         
-        <Route path="/menu/:id/:table" element={
-            <Menu cart={cart} addToCart={addToCart} setRestaurantId={setRestaurantId} setTableNum={setTableNum} />
-        } />
-        <Route path="/menu/:id" element={
-            <Menu cart={cart} addToCart={addToCart} setRestaurantId={setRestaurantId} setTableNum={setTableNum} />
-        } />
+        {/* Customer Experience Routes */}
+        <Route 
+          path="/menu/:id/:table" 
+          element={
+            <Menu 
+                cart={cart} 
+                addToCart={addToCart} 
+                setRestaurantId={setRestaurantId} 
+                setTableNum={setTableNum} 
+            />
+          } 
+        />
+        <Route 
+          path="/menu/:id" 
+          element={
+            <Menu 
+                cart={cart} 
+                addToCart={addToCart} 
+                setRestaurantId={setRestaurantId} 
+                setTableNum={setTableNum} 
+            />
+          } 
+        />
         
-        <Route path="/cart" element={
+        <Route 
+          path="/cart" 
+          element={
             <Cart 
                 cart={cart} 
                 removeFromCart={removeFromCart} 
@@ -87,17 +115,51 @@ function App() {
                 tableNum={tableNum} 
                 setTableNum={setTableNum} 
             />
+          } 
+        />
+
+        <Route path="/order-success" element={<OrderSuccess />} />
+        <Route path="/track/:id" element={<OrderTracker />} />
+
+        {/* --- STAFF PROTECTED ROUTES --- */}
+        
+        {/* The Chef/Kitchen Dashboard */}
+        <Route path="/chef" element={
+            <ProtectedRoute>
+                <ChefDashboard />
+            </ProtectedRoute>
         } />
 
-        <Route path="/track/:id" element={<OrderTracker />} />
-        <Route path="/order-success" element={<OrderSuccess />} />
+        {/* Added this so "/kitchen" also works */}
+        <Route path="/kitchen" element={<Navigate to="/chef" replace />} />
 
-        {/* Staff Routes */}
-        <Route path="/chef" element={<ProtectedRoute><ChefDashboard /></ProtectedRoute>} />
-        <Route path="/waiter" element={<ProtectedRoute><WaiterDashboard /></ProtectedRoute>} />
+        <Route path="/waiter" element={
+            <ProtectedRoute>
+                <WaiterDashboard />
+            </ProtectedRoute>
+        } />
+
+        {/* 🛡️ MANAGER LOGIN ROUTE */}
         <Route path="/manager-login" element={<ProtectedRoute><ManagerLogin /></ProtectedRoute>} />
-        <Route path="/admin" element={<ManagerProtectedRoute><AdminPanel /></ManagerProtectedRoute>} />
+
+        {/* ⚙️ ADMIN PANEL ROUTES */}
+        {/* Route for just "/admin" */}
+        <Route path="/admin" element={
+            <ManagerProtectedRoute>
+                <AdminPanel />
+            </ManagerProtectedRoute>
+        } />
+        
+        {/* ✅ FIXED: Added specific route for "/admin/dashboard" */}
+        <Route path="/admin/dashboard" element={
+            <ManagerProtectedRoute>
+                <AdminPanel />
+            </ManagerProtectedRoute>
+        } />
+
+        {/* --- SUPER ADMIN --- */}
         <Route path="/superadmin" element={<SuperAdmin />} />
+
       </Routes>
     </Router>
   );
