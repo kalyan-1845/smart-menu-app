@@ -13,49 +13,46 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
     const [showTableModal, setShowTableModal] = useState(!tableNum);
     const [isSubmitting, setIsSubmitting] = useState(false);
     
-    // 🟢 Store Restaurant Data (Needed for UPI Links)
+    // Store Restaurant Data
     const [restaurant, setRestaurant] = useState(null);
 
     const tableOptions = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, "Takeaway"];
     const totalPrice = cart.reduce((total, item) => total + (item.price * item.quantity), 0);
 
-    // --- 1. FETCH RESTAURANT DETAILS (For UPI ID) ---
+    // --- 1. GET RESTAURANT UPI ID ---
     useEffect(() => {
         const fetchRestaurant = async () => {
             if(restaurantId) {
                 try {
                     const res = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/auth/restaurant/${restaurantId}`);
                     setRestaurant(res.data);
-                } catch (e) { console.error("Error fetching restaurant UPI", e); }
+                } catch (e) { console.error("Error fetching restaurant data", e); }
             }
         };
         fetchRestaurant();
     }, [restaurantId]);
 
-    // --- 2. PAYMENT APP HANDLER ---
+    // --- 2. PAYMENT APP LINK HANDLER ---
     const handleAppPayment = () => {
-        if (!restaurant || !restaurant.upiId) return alert("Restaurant UPI ID not available. Please pay Cash.");
+        if (!restaurant || !restaurant.upiId) return alert("Restaurant UPI ID not available.");
         
         const payeeName = restaurant.username || "Restaurant";
         const note = `Table ${tableNum || 'NA'} Bill`;
         
-        // Universal UPI Link format
+        // This opens GPay/PhonePe directly
         let upiLink = `upi://pay?pa=${restaurant.upiId}&pn=${payeeName}&am=${totalPrice}&cu=INR&tn=${note}`;
-        
-        // Open the App
         window.location.href = upiLink;
     };
 
-    // --- 3. SUBMIT ORDER ---
+    // --- 3. SUBMIT & REDIRECT LOGIC ---
     const handlePlaceOrder = async () => {
-        // Validation
+        // --- VALIDATION ---
         if (!customerName.trim()) return alert("Please enter your name!");
         if (!tableNum) return setShowTableModal(true);
         if (cart.length === 0) return alert("Your cart is empty!");
         
-        // UPI Validation
         if (paymentMethod === "UPI" && utrNumber.length < 4) {
-            return alert("Please enter the last 4 digits of your UPI Transaction ID (UTR) to confirm.");
+            return alert("Please enter the last 4 digits of your UPI Transaction ID (UTR).");
         }
 
         setIsSubmitting(true);
@@ -77,18 +74,22 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
         };
 
         try {
+            // 1. Send Order to Backend
             const response = await axios.post("https://smart-menu-backend-5ge7.onrender.com/api/orders", orderData);
             
-            // Save order history locally
+            // 2. Save to History (Optional, for re-opening later)
             const history = JSON.parse(localStorage.getItem("smartMenu_History") || "[]");
             localStorage.setItem("smartMenu_History", JSON.stringify([response.data._id, ...history]));
 
+            // 3. Clear the Cart
             clearCart();
-            // Redirect to Order Tracker
+
+            // 🚀 THIS IS THE LINE THAT OPENS THE TRACKER 🚀
             navigate(`/track/${response.data._id}`);
+
         } catch (error) {
             console.error("Submission error:", error);
-            alert(error.response?.data?.message || "Connection Error.");
+            alert(error.response?.data?.message || "Connection Error. Please try again.");
             setIsSubmitting(false);
         }
     };
@@ -100,7 +101,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
             {showTableModal && (
                 <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.9)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', backdropFilter: 'blur(10px)' }}>
                     <div style={{ background: '#111', width: '100%', maxWidth: '400px', borderRadius: '32px', padding: '30px', border: '1px solid #222', textAlign: 'center' }}>
-                        <h2 style={{ marginBottom: '20px', fontWeight: '900' }}>Where are you sitting?</h2>
+                        <h2 style={{ marginBottom: '20px', fontWeight: '900' }}>Select Table</h2>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
                             {tableOptions.map((opt) => (
                                 <button key={opt} onClick={() => { setTableNum(opt); setShowTableModal(false); }} 
@@ -151,14 +152,14 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                 ))}
             </div>
 
-            {/* PAYMENT METHOD SECTION */}
+            {/* PAYMENT METHOD */}
             <div style={{ background: '#111', padding: '20px', borderRadius: '24px', border: '1px solid #1a1a1a' }}>
                 <p style={{ color: '#555', fontSize: '10px', fontWeight: '900', letterSpacing: '1px', marginBottom: '15px' }}>PAYMENT METHOD</p>
                 
-                {/* Toggle Buttons */}
+                {/* BUTTONS */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '15px' }}>
                     <button onClick={() => setPaymentMethod("UPI")} 
-                        style={{ padding: '15px', borderRadius: '18px', border: '2px solid', borderColor: paymentMethod === 'UPI' ? '#f97316' : '#1a1a1a', background: paymentMethod === 'UPI' ? 'rgba(249, 115, 22, 0.05)' : '#161616', color: paymentMethod === 'UPI' ? '#f97316' : '#555', transition: '0.3s' }}>
+                        style={{ padding: '15px', borderRadius: '18px', border: '2px solid', borderColor: paymentMethod === 'UPI' ? '#f97316' : '#222', background: paymentMethod === 'UPI' ? 'rgba(249, 115, 22, 0.05)' : '#161616', color: paymentMethod === 'UPI' ? '#f97316' : '#555', transition: '0.3s' }}>
                         <FaQrcode size={18} style={{ marginBottom: '6px' }} /><br/>
                         <span style={{ fontSize: '10px', fontWeight: '900' }}>ONLINE PAY</span>
                     </button>
@@ -169,11 +170,9 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                     </button>
                 </div>
 
-                {/* 🟢 UPI SPECIFIC: Show App Buttons + UTR Input */}
+                {/* APP SELECTION (UPI) */}
                 {paymentMethod === "UPI" && (
                     <div style={{animation: 'fadeIn 0.5s'}}>
-                        
-                        {/* 1. Payment App Buttons */}
                         <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
                             <button onClick={handleAppPayment} style={{ flex: 1, padding: '12px', borderRadius: '12px', background: '#1f1f1f', border: '1px solid #333', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                                 <FaGoogle /> GPay
@@ -186,7 +185,6 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                             </button>
                         </div>
 
-                        {/* 2. UTR Input */}
                         <div style={{ background: '#161616', padding: '15px', borderRadius: '18px', border: '1px dashed #f97316' }}>
                             <p style={{ color: '#f97316', fontSize: '11px', marginBottom: '10px', fontWeight:'900' }}>AFTER PAYMENT, ENTER UTR 👇</p>
                             <input 
