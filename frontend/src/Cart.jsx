@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-import { FaArrowLeft, FaTrash, FaGoogle, FaMobileAlt, FaWallet, FaMoneyBillWave, FaTimes } from "react-icons/fa";
+import { FaArrowLeft, FaTrash, FaGoogle, FaMobileAlt, FaWallet, FaMoneyBillWave, FaCopy, FaCheck } from "react-icons/fa";
 
 const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, tableNum, setTableNum }) => {
     const navigate = useNavigate();
@@ -11,6 +11,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
     const [restaurant, setRestaurant] = useState(null);
     const [showTableModal, setShowTableModal] = useState(!tableNum);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [copied, setCopied] = useState(false); // For Copy Feedback
     
     // 'selection' = Showing icons | 'verifying' = User came back, needs to enter UTR
     const [paymentStage, setPaymentStage] = useState("selection"); 
@@ -36,37 +37,40 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
         fetchRestaurant();
     }, [restaurantId]);
 
-    // --- 2. HANDLE PAYMENT CLICK ---
+    // --- 2. COPY UPI FUNCTION ---
+    const copyToClipboard = () => {
+        if (restaurant?.upiId) {
+            navigator.clipboard.writeText(restaurant.upiId);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        }
+    };
+
+    // --- 3. HANDLE PAYMENT CLICK ---
     const handlePaymentClick = (appName) => {
-        // Validation
         if (!customerName.trim()) { alert("Please enter your name!"); return; }
         if (!tableNum) { setShowTableModal(true); return; }
         if (cart.length === 0) { alert("Your cart is empty!"); return; }
 
         // --- CASH LOGIC ---
         if (appName === "Cash") {
-            // FIX: Sending "CASH" (uppercase) to satisfy backend enum
-            submitOrder("CASH", "PAY_AT_TABLE");
+            submitOrder("CASH", "PAY_AT_TABLE"); // Sends uppercase CASH
             return;
         }
 
         // --- UPI LOGIC ---
         if (!restaurant?.upiId) { alert("Restaurant UPI not set up."); return; }
 
-        // 1. Construct Deep Link
         const cleanName = restaurant.username.replace(/\s/g, '');
-        // Generates: upi://pay?pa=UPI_ID&pn=NAME&am=AMOUNT&cu=INR
         const upiLink = `upi://pay?pa=${restaurant.upiId}&pn=${cleanName}&am=${totalPrice}&cu=INR`;
 
-        // 2. INSTANT REDIRECT (Go to Next Tab/App)
+        // Redirect & Switch to Verify Mode
         window.location.href = upiLink;
-
-        // 3. Update UI to "Verify" mode (Wait for user to return)
         setSelectedApp(appName);
         setPaymentStage("verifying");
     };
 
-    // --- 3. SUBMIT ORDER ---
+    // --- 4. SUBMIT ORDER ---
     const submitOrder = async (paymentMethod, txnId) => {
         setIsSubmitting(true);
 
@@ -80,7 +84,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                 customizations: selectedSpecs[item._id] || [] 
             })),
             totalAmount: totalPrice,
-            paymentMethod: paymentMethod, // Sending "CASH" or "Google Pay"
+            paymentMethod: paymentMethod, 
             transactionId: txnId, 
             owner: restaurantId,
             status: "PLACED"
@@ -89,7 +93,6 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
         try {
             const response = await axios.post("https://smart-menu-backend-5ge7.onrender.com/api/orders", orderData);
             
-            // Save to History
             const history = JSON.parse(localStorage.getItem("smartMenu_History") || "[]");
             localStorage.setItem("smartMenu_History", JSON.stringify([response.data._id, ...history]));
             
@@ -98,7 +101,6 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
 
         } catch (error) {
             console.error("Submission error:", error);
-            // Show detailed error if backend rejects validation again
             alert(`Order Failed: ${error.response?.data?.message || error.message}`);
             setIsSubmitting(false);
         }
@@ -106,7 +108,13 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
 
     // --- RENDER ---
     return (
-        <div style={{ minHeight: '100vh', background: '#050505', color: 'white', padding: '15px', paddingBottom: '160px', maxWidth: '600px', margin: '0 auto', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
+        <div style={{ 
+            minHeight: '100vh', background: '#050505', color: 'white', 
+            padding: '15px', paddingBottom: '120px', 
+            width: '100%', maxWidth: '600px', margin: '0 auto', 
+            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+            overflowX: 'hidden', boxSizing: 'border-box'
+        }}>
             
             {/* 1. TABLE MODAL */}
             {showTableModal && (
@@ -183,50 +191,64 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                 </div>
             )}
 
-            {/* 5. PAYMENT SECTION (ICONS) */}
-            <div style={{ marginBottom: '100px' }}>
+            {/* 5. PAYMENT SECTION */}
+            <div style={{ marginBottom: '20px' }}>
                 <p style={{ color: '#555', fontSize: '10px', fontWeight: '900', letterSpacing: '1px', marginBottom: '15px', textTransform: 'uppercase' }}>Select Payment</p>
                 
                 {paymentStage === 'selection' ? (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
-                        
-                        {/* GPay */}
-                        <button onClick={() => handlePaymentClick("Google Pay")}
-                            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '15px 5px', borderRadius: '18px', background: '#1a1a1a', border: '1px solid #333', color: 'white', cursor: 'pointer' }}>
-                            <div style={{ width: '45px', height: '45px', borderRadius: '50%', background: '#1f1f1f', border: '1px solid #444', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
-                                <FaGoogle size={20} color="#fff"/>
-                            </div>
-                            <span style={{ fontSize: '11px', fontWeight: 'bold' }}>GPay</span>
-                        </button>
+                    <>
+                        {/* ICONS GRID */}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
+                            {/* GPay */}
+                            <button onClick={() => handlePaymentClick("Google Pay")}
+                                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '15px 5px', borderRadius: '18px', background: '#1a1a1a', border: '1px solid #333', color: 'white', cursor: 'pointer' }}>
+                                <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#1f1f1f', border: '1px solid #444', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
+                                    <FaGoogle size={18} color="#fff"/>
+                                </div>
+                                <span style={{ fontSize: '10px', fontWeight: 'bold' }}>GPay</span>
+                            </button>
 
-                        {/* PhonePe */}
-                        <button onClick={() => handlePaymentClick("PhonePe")}
-                            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '15px 5px', borderRadius: '18px', background: '#1a1a1a', border: '1px solid #333', color: 'white', cursor: 'pointer' }}>
-                            <div style={{ width: '45px', height: '45px', borderRadius: '50%', background: '#5f259f', border: '1px solid #7848b0', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
-                                <FaMobileAlt size={20} color="#fff"/>
-                            </div>
-                            <span style={{ fontSize: '11px', fontWeight: 'bold' }}>PhonePe</span>
-                        </button>
+                            {/* PhonePe */}
+                            <button onClick={() => handlePaymentClick("PhonePe")}
+                                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '15px 5px', borderRadius: '18px', background: '#1a1a1a', border: '1px solid #333', color: 'white', cursor: 'pointer' }}>
+                                <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#5f259f', border: '1px solid #7848b0', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
+                                    <FaMobileAlt size={18} color="#fff"/>
+                                </div>
+                                <span style={{ fontSize: '10px', fontWeight: 'bold' }}>PhonePe</span>
+                            </button>
 
-                        {/* FamPay */}
-                        <button onClick={() => handlePaymentClick("FamPay")}
-                            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '15px 5px', borderRadius: '18px', background: '#1a1a1a', border: '1px solid #333', color: 'white', cursor: 'pointer' }}>
-                            <div style={{ width: '45px', height: '45px', borderRadius: '50%', background: '#FFAD00', border: '1px solid #ffbf40', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
-                                <FaWallet size={20} color="#000"/>
-                            </div>
-                            <span style={{ fontSize: '11px', fontWeight: 'bold' }}>FamPay</span>
-                        </button>
+                            {/* FamPay */}
+                            <button onClick={() => handlePaymentClick("FamPay")}
+                                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '15px 5px', borderRadius: '18px', background: '#1a1a1a', border: '1px solid #333', color: 'white', cursor: 'pointer' }}>
+                                <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#FFAD00', border: '1px solid #ffbf40', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
+                                    <FaWallet size={18} color="#000"/>
+                                </div>
+                                <span style={{ fontSize: '10px', fontWeight: 'bold' }}>FamPay</span>
+                            </button>
 
-                        {/* Cash */}
-                        <button onClick={() => handlePaymentClick("Cash")}
-                            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '15px 5px', borderRadius: '18px', background: '#1a1a1a', border: '1px solid #333', color: 'white', cursor: 'pointer' }}>
-                            <div style={{ width: '45px', height: '45px', borderRadius: '50%', background: '#22c55e', border: '1px solid #4ade80', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
-                                <FaMoneyBillWave size={20} color="#fff"/>
-                            </div>
-                            <span style={{ fontSize: '11px', fontWeight: 'bold' }}>Cash</span>
-                        </button>
+                            {/* Cash */}
+                            <button onClick={() => handlePaymentClick("Cash")}
+                                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '15px 5px', borderRadius: '18px', background: '#1a1a1a', border: '1px solid #333', color: 'white', cursor: 'pointer' }}>
+                                <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#22c55e', border: '1px solid #4ade80', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
+                                    <FaMoneyBillWave size={18} color="#fff"/>
+                                </div>
+                                <span style={{ fontSize: '10px', fontWeight: 'bold' }}>Cash</span>
+                            </button>
+                        </div>
 
-                    </div>
+                        {/* MANUAL UPI COPY SECTION (NEW) */}
+                        <div style={{ marginTop: '20px', background: '#111', borderRadius: '16px', padding: '15px', border: '1px dashed #333', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <div style={{ overflow: 'hidden' }}>
+                                <p style={{ margin: 0, fontSize: '10px', color: '#666', fontWeight: 'bold', textTransform: 'uppercase' }}>PAYING FROM ANOTHER PHONE?</p>
+                                <p style={{ margin: '4px 0 0 0', fontSize: '14px', color: '#fff', fontWeight: 'bold', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                    {restaurant?.upiId || "UPI Not Available"}
+                                </p>
+                            </div>
+                            <button onClick={copyToClipboard} style={{ background: copied ? '#22c55e' : '#222', border: 'none', borderRadius: '8px', padding: '10px', color: 'white', cursor: 'pointer', transition: '0.2s', minWidth: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                {copied ? <FaCheck size={14}/> : <FaCopy size={14}/>}
+                            </button>
+                        </div>
+                    </>
                 ) : (
                     // --- VERIFY UTR SCREEN ---
                     <div style={{ background: '#111', padding: '25px', borderRadius: '24px', border: '1px solid #333', textAlign: 'center', animation: 'fadeIn 0.3s ease' }}>
@@ -242,11 +264,11 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                         <input 
                             type="tel" 
                             maxLength={4}
-                            placeholder="Last 4 Digits (e.g. 8832)"
+                            placeholder="Last 4 Digits"
                             value={transactionId}
                             onChange={(e) => setTransactionId(e.target.value.replace(/\D/g,''))}
                             style={{ 
-                                width: '100%', padding: '18px', borderRadius: '16px', background: '#080808', 
+                                width: '100%', padding: '15px', borderRadius: '16px', background: '#080808', 
                                 border: '1px solid #333', color: 'white', fontSize: '22px', textAlign: 'center', 
                                 letterSpacing: '6px', fontWeight: '900', marginBottom: '20px', outline: 'none'
                             }}
