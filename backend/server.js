@@ -25,38 +25,45 @@ const allowedOrigins = [
 ];
 
 // ============================================================
-// ☢️ NUCLEAR CORS FIX (MANUAL HEADER OVERRIDE)
+// ☢️ NUCLEAR CORS FIX (LAYER 1: MANUAL HEADERS)
 // ============================================================
-// This middleware runs before ANYTHING else.
-// It manually sets the headers to ensure Netlify is accepted.
 app.use((req, res, next) => {
     const origin = req.headers.origin;
     
-    // Check if the origin is allowed
+    // Allow requests from our allowed origins
     if (allowedOrigins.includes(origin)) {
         res.setHeader("Access-Control-Allow-Origin", origin);
     }
 
-    // Allow specific headers and methods
+    // Set standard headers
     res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, Origin, X-Requested-With, Accept");
     res.header("Access-Control-Allow-Credentials", "true");
 
-    // Handle Preflight (OPTIONS) requests immediately
+    // Handle Preflight (OPTIONS) immediately
     if (req.method === "OPTIONS") {
         return res.status(200).end();
     }
 
     next();
 });
-// ============================================================
 
+// ============================================================
+// 🛡️ STANDARD CORS (LAYER 2: LIBRARY BACKUP)
+// ============================================================
+app.use(cors({
+    origin: allowedOrigins,
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+}));
+
+// --- MIDDLEWARE ---
 app.use(express.json({ limit: '10mb' })); 
 
 // Rate Limiter
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, 
-    max: 200, 
+    max: 300, 
     standardHeaders: true,
     legacyHeaders: false,
 });
