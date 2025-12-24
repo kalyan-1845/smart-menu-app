@@ -1,33 +1,19 @@
 import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import axios from "axios";
-import { FaMobileAlt, FaMoneyBillWave, FaArrowLeft, FaTrash } from "react-icons/fa";
+import { FaArrowLeft, FaTrash } from "react-icons/fa";
 
 const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, tableNum, setTableNum }) => {
     const navigate = useNavigate();
 
     // --- STATE ---
     const [customerName, setCustomerName] = useState("");
-    const [paymentMethod, setPaymentMethod] = useState("UPI"); // Default to digital
     const [showTableModal, setShowTableModal] = useState(!tableNum);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Track selected specifications: { "itemId": ["No Onion"] }
     const [selectedSpecs, setSelectedSpecs] = useState({});
     const tableOptions = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, "Takeaway"];
-
-    // --- HELPERS ---
-    // (Optional) If you want to allow users to toggle specs per item in the cart later
-    const toggleSpec = (itemId, spec) => {
-        setSelectedSpecs(prev => {
-            const currentSpecs = prev[itemId] || [];
-            if (currentSpecs.includes(spec)) {
-                return { ...prev, [itemId]: currentSpecs.filter(s => s !== spec) };
-            } else {
-                return { ...prev, [itemId]: [...currentSpecs, spec] };
-            }
-        });
-    };
 
     const totalPrice = cart.reduce((total, item) => total + (item.price * item.quantity), 0);
 
@@ -52,7 +38,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                 customizations: selectedSpecs[item._id] || [] 
             })),
             totalAmount: totalPrice,
-            paymentMethod: paymentMethod, 
+            paymentMethod: "Pay at Table", // Defaulted since UI selector is removed
             owner: restaurantId,
             status: "PLACED"
         };
@@ -154,7 +140,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                                     <button onClick={() => updateQuantity(item._id, item.quantity + 1)} style={{ background: 'none', border: 'none', color: '#f97316', fontSize: '20px', cursor: 'pointer' }}>+</button>
                                 </div>
                                 
-                                {/* Trash Icon (Optional) */}
+                                {/* Trash Icon */}
                                 <button onClick={() => removeFromCart(item._id)} style={{background: 'none', border: 'none', color: '#333', cursor: 'pointer', padding: '5px'}}>
                                     <FaTrash size={12}/>
                                 </button>
@@ -163,23 +149,6 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                     ))}
                 </div>
             )}
-
-            {/* 5. PAYMENT METHOD SELECTOR */}
-            <div style={{ background: '#111', padding: '25px', borderRadius: '28px', marginBottom: '20px', border: '1px solid #1a1a1a' }}>
-                <p style={{ color: '#555', fontSize: '10px', fontWeight: '900', letterSpacing: '1px', marginBottom: '15px' }}>PAYMENT METHOD</p>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-                    <button onClick={() => setPaymentMethod("UPI")} 
-                        style={{ padding: '15px', borderRadius: '18px', border: '2px solid', borderColor: paymentMethod === 'UPI' ? '#f97316' : '#222', background: paymentMethod === 'UPI' ? 'rgba(249, 115, 22, 0.1)' : 'transparent', color: paymentMethod === 'UPI' ? '#f97316' : '#555', transition: '0.3s', cursor: 'pointer' }}>
-                        <FaMobileAlt size={20} style={{ marginBottom: '5px' }} /><br/>
-                        <span style={{ fontSize: '10px', fontWeight: '900' }}>UPI ONLINE</span>
-                    </button>
-                    <button onClick={() => setPaymentMethod("CASH")} 
-                        style={{ padding: '15px', borderRadius: '18px', border: '2px solid', borderColor: paymentMethod === 'CASH' ? '#22c55e' : '#222', background: paymentMethod === 'CASH' ? 'rgba(34, 197, 94, 0.1)' : 'transparent', color: paymentMethod === 'CASH' ? '#22c55e' : '#555', transition: '0.3s', cursor: 'pointer' }}>
-                        <FaMoneyBillWave size={20} style={{ marginBottom: '5px' }} /><br/>
-                        <span style={{ fontSize: '10px', fontWeight: '900' }}>PAY AT TABLE</span>
-                    </button>
-                </div>
-            </div>
 
             {/* 6. FIXED BOTTOM CHECKOUT BAR */}
             <div style={{ position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: '480px', padding: '25px', background: 'rgba(8, 8, 8, 0.95)', backdropFilter: 'blur(10px)', borderTop: '1px solid #222' }}>
