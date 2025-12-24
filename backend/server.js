@@ -18,20 +18,51 @@ import broadcastRoutes from './routes/broadcastRoutes.js';
 const app = express();
 const httpServer = createServer(app);
 
-// --- 🔒 SECURITY: RATE LIMITER ---
-const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // limit each IP to 100 requests
-    message: "Too many requests from this IP, please try again later."
-});
-
-// --- 🔒 SECURITY: CORS CONFIG ---
+// --- 🔒 SECURITY: ALLOWED ORIGINS ---
 const allowedOrigins = [
     "http://localhost:5173",           
     "https://smartmenuss.netlify.app",
     "https://694915c413d9f40008f38924--smartmenuss.netlify.app" // Your specific Netlify preview
 ];
 
+// --- 🔒 SECURITY: CORS CONFIGURATION ---
+// We define this BEFORE routes to ensure it catches everything
+const corsOptions = {
+    origin: function (origin, callback) {
+        // Allow requests with no origin (like mobile apps, curl, or postman)
+        if (!origin) return callback(null, true);
+        
+        if (allowedOrigins.indexOf(origin) !== -1) {
+            callback(null, true);
+        } else {
+            console.log("Blocked by CORS:", origin); // Debugging log
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"], // Explicitly allow OPTIONS
+    credentials: true,
+    allowedHeaders: ["Content-Type", "Authorization"]
+};
+
+// --- 1. MIDDLEWARE ---
+
+// Apply CORS Middleware
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions)); // <--- CRITICAL FIX: Handle Preflight Requests
+
+// Rate Limiter
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 200, // Increased to 200 to prevent blocking valid heavy traffic
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: "Too many requests from this IP, please try again later."
+});
+app.use(limiter); 
+
+app.use(express.json({ limit: '10mb' })); 
+
+// Socket.io Setup
 const io = new Server(httpServer, {
     cors: {
         origin: allowedOrigins,
@@ -39,23 +70,6 @@ const io = new Server(httpServer, {
         credentials: true
     }
 });
-
-// --- 1. MIDDLEWARE ---
-app.use(limiter); 
-app.use(cors({ 
-    origin: function (origin, callback) {
-        // Allow requests with no origin (like mobile apps/curl) or if in allowedOrigins
-        if (!origin || allowedOrigins.indexOf(origin) !== -1) {
-            callback(null, true);
-        } else {
-            console.log("Blocked Origin:", origin); // Optional: Log blocked origins for debugging
-            callback(new Error('CORS Policy: Origin not allowed'));
-        }
-    }, 
-    credentials: true 
-}));
-
-app.use(express.json({ limit: '10mb' })); 
 
 // Attach Socket.io to req
 app.use((req, res, next) => {
@@ -80,6 +94,7 @@ app.get('/', (req, res) => res.send('Smart Menu Cloud API v2.8 Active...'));
 
 // --- 4. GLOBAL ERROR HANDLER ---
 app.use((err, req, res, next) => {
+    console.error("Server Error:", err.message); // Log error to console
     const statusCode = res.statusCode === 200 ? 500 : res.statusCode;
     res.status(statusCode).json({
         message: err.message,
@@ -109,7 +124,7 @@ const pingUrl = "https://smart-menu-backend-5ge7.onrender.com/"; // Pings the ro
 
 setInterval(() => {
     https.get(pingUrl, (res) => {
-        console.log(`Self-ping sent to ${pingUrl} - Status: ${res.statusCode}`);
+        // console.log(`Self-ping sent to ${pingUrl} - Status: ${res.statusCode}`);
     }).on("error", (e) => {
         console.error(`Self-ping error: ${e.message}`);
     });
