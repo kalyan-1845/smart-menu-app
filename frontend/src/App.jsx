@@ -4,7 +4,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-d
 // --- PAGES ---
 // 🛠️ FIX: Added .jsx extensions for strict resolution on Netlify/Vite
 import LandingPage from "./pages/LandingPage.jsx"; 
-import Menu from "./pages/menu.jsx"; // Ensure this is lowercase 'm' if the file is 'menu.jsx'
+import Menu from "./pages/Menu.jsx"; // Ensure this is lowercase 'm' if the file is 'menu.jsx'
 import Cart from "./pages/Cart.jsx";
 import OrderSuccess from "./pages/OrderSuccess.jsx";
 import OrderTracker from "./pages/OrderTracker.jsx";
