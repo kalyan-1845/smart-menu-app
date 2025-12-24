@@ -14,12 +14,15 @@ import SuperAdmin from './SuperAdmin.jsx';
 import OrderSuccess from './OrderSuccess.jsx';
 import ManagerLogin from "./ManagerLogin.jsx"; 
 
-// --- PROTECTED ROUTE MIDDLEWARE ---
+// --- 🛡️ PROTECTED ROUTE MIDDLEWARE ---
+// Standard protection for staff areas (Chef, Waiter)
 const ProtectedRoute = ({ children }) => {
   const token = localStorage.getItem("ownerToken");
   return token ? children : <Navigate to="/login" replace />;
 };
 
+// 🔒 MANAGER PROTECTION GATE
+// Specifically for the Admin/Manage Menu area - Requires PIN (bb1972)
 const ManagerProtectedRoute = ({ children }) => {
   const token = localStorage.getItem("ownerToken");
   const isManagerAuth = localStorage.getItem("managerAuthenticated") === "true";
@@ -30,19 +33,21 @@ const ManagerProtectedRoute = ({ children }) => {
   return children;
 };
 
+// --- REDIRECT LOGIC ---
 const Home = () => <Navigate to="/login" replace />;
 
 function App() {
-  // ✅ FIX: Initialize state directly from localStorage so it never starts as null
+  // --- GLOBAL STATE ---
   const [cart, setCart] = useState([]);
-  const [restaurantId, setRestaurantId] = useState(localStorage.getItem("activeResId") || null);
-  const [tableNum, setTableNum] = useState(localStorage.getItem("activeTable") || ""); 
+  const [restaurantId, setRestaurantId] = useState(localStorage.getItem("activeRestId"));
+  const [tableNum, setTableNum] = useState(""); 
 
-  // --- PERSISTENCE: Save ID whenever it changes ---
+  // Sync restaurantId with localStorage to prevent loss on refresh
   useEffect(() => {
-    if (restaurantId) localStorage.setItem("activeResId", restaurantId);
-    if (tableNum) localStorage.setItem("activeTable", tableNum);
-  }, [restaurantId, tableNum]);
+    if (restaurantId) {
+      localStorage.setItem("activeRestId", restaurantId);
+    }
+  }, [restaurantId]);
 
   // --- CART FUNCTIONS ---
   const addToCart = (dish) => {
@@ -61,9 +66,7 @@ function App() {
       return;
     }
     setCart((prev) => 
-      prev.map((item) => 
-        item._id === id ? { ...item, quantity: newQuantity } : item
-      )
+      prev.map((item) => item._id === id ? { ...item, quantity: newQuantity } : item)
     );
   };
 
@@ -73,41 +76,81 @@ function App() {
   return (
     <Router>
       <Routes>
+        
+        {/* --- PUBLIC / AUTH ROUTES --- */}
         <Route path="/" element={<Home />} /> 
         <Route path="/login" element={<OwnerLogin />} />
         <Route path="/register" element={<Register />} />
         
-        <Route path="/menu/:id/:table" element={
-            <Menu cart={cart} addToCart={addToCart} setRestaurantId={setRestaurantId} setTableNum={setTableNum} />
-        } />
-        <Route path="/menu/:id" element={
-            <Menu cart={cart} addToCart={addToCart} setRestaurantId={setRestaurantId} setTableNum={setTableNum} />
-        } />
+        {/* --- CUSTOMER EXPERIENCE --- */}
+        {/* Supports both direct menu access and table-specific QR scans */}
+        <Route 
+          path="/menu/:id/:table" 
+          element={<Menu cart={cart} addToCart={addToCart} setRestaurantId={setRestaurantId} setTableNum={setTableNum} />} 
+        />
+        <Route 
+          path="/menu/:id" 
+          element={<Menu cart={cart} addToCart={addToCart} setRestaurantId={setRestaurantId} setTableNum={setTableNum} />} 
+        />
         
-        <Route path="/cart" element={
+        <Route 
+          path="/cart" 
+          element={
             <Cart 
-                cart={cart} 
-                removeFromCart={removeFromCart} 
-                clearCart={clearCart} 
-                updateQuantity={updateQuantity} 
-                restaurantId={restaurantId} // Passing the persistent ID
-                tableNum={tableNum} 
-                setTableNum={setTableNum} 
+              cart={cart} 
+              removeFromCart={removeFromCart} 
+              clearCart={clearCart} 
+              updateQuantity={updateQuantity} 
+              restaurantId={restaurantId} 
+              tableNum={tableNum} 
+              setTableNum={setTableNum} 
             />
-        } />
+          } 
+        />
 
         <Route path="/order-success" element={<OrderSuccess />} />
         <Route path="/track/:id" element={<OrderTracker />} />
 
-        {/* Staff Routes */}
-        <Route path="/chef" element={<ProtectedRoute><ChefDashboard /></ProtectedRoute>} />
+        {/* --- STAFF PROTECTED DASHBOARDS --- */}
+        <Route path="/chef" element={
+          <ProtectedRoute>
+            <ChefDashboard />
+          </ProtectedRoute>
+        } />
         <Route path="/kitchen" element={<Navigate to="/chef" replace />} />
-        <Route path="/waiter" element={<ProtectedRoute><WaiterDashboard /></ProtectedRoute>} />
-        <Route path="/manager-login" element={<ProtectedRoute><ManagerLogin /></ProtectedRoute>} />
-        <Route path="/admin" element={<ManagerProtectedRoute><AdminPanel /></ManagerProtectedRoute>}>
-             <Route path="dashboard" element={<AdminPanel />} />
-        </Route>
+
+        <Route path="/waiter" element={
+          <ProtectedRoute>
+            <WaiterDashboard />
+          </ProtectedRoute>
+        } />
+
+        {/* --- 🔒 MANAGER SECURITY GATE --- */}
+        <Route path="/manager-login" element={
+          <ProtectedRoute>
+            <ManagerLogin />
+          </ProtectedRoute>
+        } />
+
+        {/* --- ⚙️ ADMIN / MANAGEMENT AREA --- */}
+        <Route path="/admin" element={
+          <ManagerProtectedRoute>
+            <AdminPanel />
+          </ManagerProtectedRoute>
+        } />
+        
+        <Route path="/admin/dashboard" element={
+          <ManagerProtectedRoute>
+            <AdminPanel />
+          </ManagerProtectedRoute>
+        } />
+
+        {/* --- SUPER ADMIN (GLOBAL CONTROL) --- */}
         <Route path="/superadmin" element={<SuperAdmin />} />
+
+        {/* Fallback Catch-all */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+
       </Routes>
     </Router>
   );

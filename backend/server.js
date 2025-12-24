@@ -17,65 +17,70 @@ import broadcastRoutes from './routes/broadcastRoutes.js';
 const app = express();
 const httpServer = createServer(app);
 
-// ✅ Add this for Rate Limiting to work correctly on Render/Heroku
+// ✅ MANDATORY for Render: Allows Express to see the real IP behind the proxy
 app.set('trust proxy', 1);
 
-// --- 🔒 SECURITY: RATE LIMITER ---
-const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, 
-    max: 100, 
-    standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
-    legacyHeaders: false, // Disable the `X-RateLimit-*` headers
-    message: "Too many requests from this IP, please try again later."
-});
-
-// --- 🔒 SECURITY: CORS CONFIG ---
+// --- 🔒 1. CORS CONFIGURATION (Must be at the top) ---
 const allowedOrigins = [
     "http://localhost:5173",           
     "https://smartmenuss.netlify.app",
 ];
 
-const io = new Server(httpServer, {
-    cors: {
-        origin: allowedOrigins,
-        methods: ["GET", "POST", "PUT", "DELETE"],
-        credentials: true
-    }
-});
-
-// --- 1. MIDDLEWARE ---
-app.use(limiter); 
-
 app.use(cors({ 
     origin: function (origin, callback) {
+        // Allow requests with no origin (like mobile apps/Postman)
         if (!origin) return callback(null, true);
         
-        // Allow main domains or Netlify subdomains
+        // Allow main domains or Netlify preview links
         const isNetlifyPreview = /\.netlify\.app$/.test(origin);
         
         if (allowedOrigins.indexOf(origin) !== -1 || isNetlifyPreview) {
             callback(null, true);
         } else {
-            console.log("Blocked by CORS:", origin);
+            console.log("❌ Blocked by CORS:", origin);
             callback(new Error('CORS Policy: Origin not allowed'));
         }
     }, 
-    credentials: true 
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    credentials: true,
+    optionsSuccessStatus: 200 // Essential for legacy browser support
 }));
 
+// --- 🔒 2. RATE LIMITER (After CORS) ---
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // Limit each IP to 100 requests per window
+    standardHeaders: true, 
+    legacyHeaders: false, 
+    message: { message: "Too many requests, please try again in 15 minutes." }
+});
+
+app.use(limiter); 
+
+// --- 3. STANDARD MIDDLEWARE ---
 app.use(express.json({ limit: '10mb' })); 
 
+// --- 4. SOCKET.IO SETUP ---
+const io = new Server(httpServer, {
+    cors: {
+        origin: allowedOrigins,
+        methods: ["GET", "POST"],
+        credentials: true
+    }
+});
+
+// Pass Socket.io to every request
 app.use((req, res, next) => {
     req.io = io;
     next();
 });
 
-// --- 2. DATABASE CONNECTION ---
+// --- 5. DATABASE CONNECTION ---
 mongoose.connect(process.env.MONGO_URI)
     .then(() => console.log("✅ Database Engine: Connected"))
     .catch((err) => console.error("❌ Database Engine Error:", err));
 
-// --- 3. ROUTES ---
+// --- 6. ROUTES ---
 app.use('/api/auth', authRoutes);
 app.use('/api/dishes', dishRoutes);
 app.use('/api/orders', orderRoutes);
@@ -84,9 +89,13 @@ app.use('/api/broadcast', broadcastRoutes);
 
 app.get('/', (req, res) => res.send('Smart Menu Cloud API v2.8 Active...'));
 
-// --- 4. GLOBAL ERROR HANDLER ---
+// --- 7. GLOBAL ERROR HANDLER ---
 app.use((err, req, res, next) => {
-    console.error("Global Error:", err); 
+    if (err.message === 'CORS Policy: Origin not allowed') {
+        return res.status(403).json({ error: err.message });
+    }
+    
+    console.error("Global Error Log:", err.stack); 
     const statusCode = res.statusCode === 200 ? 500 : res.statusCode;
     res.status(statusCode).json({
         message: err.message,
@@ -94,35 +103,34 @@ app.use((err, req, res, next) => {
     });
 });
 
-// --- 5. SOCKET CONNECTION LOGIC ---
+// --- 8. SOCKET CONNECTION LOGIC ---
 io.on('connection', (socket) => {
-    console.log(`⚡ Connection Established: ${socket.id}`);
+    console.log(`⚡ Socket Connected: ${socket.id}`);
 
     socket.on('join-owner-room', (ownerId) => {
         socket.join(ownerId);
-        console.log(`🏠 Owner joined private room: ${ownerId}`);
+        console.log(`🏠 Joined private room: ${ownerId}`);
     });
 
     socket.on("resolve-call", (data) => {
         io.emit("call-resolved", data);
     });
 
-    socket.on('disconnect', () => console.log('⚡ Connection Terminated'));
+    socket.on('disconnect', () => console.log('⚡ Socket Disconnected'));
 });
 
-// --- 6. START SERVER ---
+// --- 9. START SERVER ---
 const PORT = process.env.PORT || 5000;
 httpServer.listen(PORT, () => {
-    console.log(`🚀 Production Server running on port ${PORT}`);
+    console.log(`🚀 Smart Menu Server active on port ${PORT}`);
 });
 
-// --- 7. SELF-PING (KEEP ALIVE) ---
+// --- 10. SELF-PING (Keep-Alive for Render Free Tier) ---
 const renderUrl = "https://smart-menu-backend-5ge7.onrender.com/"; 
-
 setInterval(() => {
     https.get(renderUrl, (res) => {
-        console.log(`Self-ping sent - Status: ${res.statusCode}`);
+        console.log(`Ping status: ${res.statusCode}`);
     }).on("error", (e) => {
-        console.error(`Self-ping error: ${e.message}`);
+        console.error(`Ping error: ${e.message}`);
     });
-}, 840000);
+}, 840000); // 14 Minutes
