@@ -1,11 +1,11 @@
-import 'dotenv/config'; // Must stay at the very top for VAPID/DB keys
+import 'dotenv/config'; // Must stay at the very top
 import express from 'express';
 import cors from 'cors';
 import mongoose from 'mongoose';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import rateLimit from 'express-rate-limit';
-import https from "https"; // ✅ Correctly imported here
+import https from "https"; 
 
 // --- IMPORT ROUTES ---
 import authRoutes from './routes/authRoutes.js';
@@ -26,10 +26,11 @@ const limiter = rateLimit({
 });
 
 // --- 🔒 SECURITY: CORS CONFIG ---
+// Add ALL your frontend URLs here
 const allowedOrigins = [
-    "http://localhost:5173",           
-    "https://smartmenuss.netlify.app",
-    "https://694915c413d9f40008f38924--smartmenuss.netlify.app" 
+    "http://localhost:5173",           // Local development
+    "https://smartmenuss.netlify.app", // Your Main Netlify Site
+    // Add any other deployment URLs if you have them (e.g., https://your-custom-domain.com)
 ];
 
 const io = new Server(httpServer, {
@@ -42,20 +43,26 @@ const io = new Server(httpServer, {
 
 // --- 1. MIDDLEWARE ---
 app.use(limiter); 
+
 app.use(cors({ 
     origin: function (origin, callback) {
-        if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) return callback(null, true);
+        
+        if (allowedOrigins.indexOf(origin) !== -1) {
             callback(null, true);
         } else {
+            console.log("Blocked by CORS:", origin); // Helpful for debugging
             callback(new Error('CORS Policy: Origin not allowed'));
         }
     }, 
     credentials: true 
 }));
 
+// Increase payload limit for image uploads
 app.use(express.json({ limit: '10mb' })); 
 
-// Attach Socket.io to req
+// Attach Socket.io to req so routes can use it
 app.use((req, res, next) => {
     req.io = io;
     next();
@@ -78,6 +85,7 @@ app.get('/', (req, res) => res.send('Smart Menu Cloud API v2.8 Active...'));
 
 // --- 4. GLOBAL ERROR HANDLER ---
 app.use((err, req, res, next) => {
+    console.error("Global Error:", err); // Log the error to server console
     const statusCode = res.statusCode === 200 ? 500 : res.statusCode;
     res.status(statusCode).json({
         message: err.message,
@@ -89,11 +97,13 @@ app.use((err, req, res, next) => {
 io.on('connection', (socket) => {
     console.log(`⚡ Connection Established: ${socket.id}`);
 
+    // Allow owners to join their private room
     socket.on('join-owner-room', (ownerId) => {
         socket.join(ownerId);
         console.log(`🏠 Owner joined private room: ${ownerId}`);
     });
 
+    // Handle call resolutions
     socket.on("resolve-call", (data) => {
         io.emit("call-resolved", data);
     });
@@ -108,17 +118,13 @@ httpServer.listen(PORT, () => {
 });
 
 // --- 7. SELF-PING (KEEP ALIVE) ---
-/* NOTE: I changed the URL to ping your home route ('/') instead of '/api/products'.
-   This is lighter on your server/database.
-*/
+// This prevents Render free tier from sleeping
 const renderUrl = "https://smart-menu-backend-5ge7.onrender.com/"; 
 
-// Ping the server every 14 minutes (840,000 ms)
 setInterval(() => {
-    // We reuse the 'https' variable we imported at the top!
     https.get(renderUrl, (res) => {
         console.log(`Self-ping sent to ${renderUrl} - Status: ${res.statusCode}`);
     }).on("error", (e) => {
         console.error(`Self-ping error: ${e.message}`);
     });
-}, 840000);
+}, 840000); // Ping every 14 minutes
