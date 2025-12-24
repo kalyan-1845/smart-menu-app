@@ -2,8 +2,8 @@ import jsPDF from "jspdf";
 import "jspdf-autotable";
 
 export const generateCustomerReceipt = (order, restaurant) => {
-    const doc = new jsPDF({ unit: "mm", format: [80, 180] }); // Taller for tax breakdown
-    const taxRate = restaurant?.taxRate || 5; // Default to 5% if not set
+    const doc = new jsPDF({ unit: "mm", format: [80, 180] }); 
+    const taxRate = restaurant?.taxRate || 5; 
     
     let startY = 15;
     if (restaurant?.logo) {
@@ -16,66 +16,43 @@ export const generateCustomerReceipt = (order, restaurant) => {
     // --- HEADER ---
     doc.setFontSize(12);
     doc.setFont("helvetica", "bold");
-    doc.text(restaurant?.username?.toUpperCase() || "TAX INVOICE", 40, startY, { align: "center" });
+    doc.text(restaurant?.restaurantName?.toUpperCase() || "TAX INVOICE", 40, startY, { align: "center" });
     
     doc.setFontSize(7);
     doc.setFont("helvetica", "normal");
     doc.text(restaurant?.address || "Official Tax Invoice", 40, startY + 4, { align: "center" });
-    if(restaurant?.gstin) doc.text(`GSTIN: ${restaurant.gstin}`, 40, startY + 8, { align: "center" });
     doc.line(5, startY + 10, 75, startY + 10);
 
     // --- INFO ---
     doc.setFontSize(8);
-    doc.text(`INV NO: #${order._id.slice(-6).toUpperCase()}`, 5, startY + 16);
+    doc.text(`INV: #${order._id.slice(-6).toUpperCase()}`, 5, startY + 16);
     doc.text(`TABLE: ${order.tableNumber}`, 5, startY + 20);
-    doc.text(`DATE: ${new Date(order.createdAt).toLocaleString()}`, 5, startY + 24);
+    doc.text(`DATE: ${new Date().toLocaleString()}`, 5, startY + 24);
 
-    // --- ITEMS TABLE ---
-    const tableRows = order.items.map(item => [
-        item.name,
-        item.quantity,
-        `Rs.${(item.price * item.quantity).toFixed(2)}`
-    ]);
-
+    // --- ITEMS ---
+    const tableRows = order.items.map(item => [item.name, item.quantity, `Rs.${(item.price * item.quantity).toFixed(2)}`]);
     doc.autoTable({
         startY: startY + 28,
         head: [['Item', 'Qty', 'Total']],
         body: tableRows,
         theme: 'plain',
-        styles: { fontSize: 7, cellPadding: 1 },
-        headStyles: { fontStyle: 'bold', borderBottom: 0.1 },
+        styles: { fontSize: 7 },
+        headStyles: { fontStyle: 'bold' },
         margin: { left: 5, right: 5 }
     });
 
-    // --- TAX CALCULATION SECTION ---
-    const subtotal = order.totalAmount; // Assuming totalAmount from cart is base price
-    const taxAmount = (subtotal * taxRate) / 100;
-    const grandTotal = subtotal + taxAmount;
+    const subtotal = order.totalAmount;
+    const tax = (subtotal * taxRate) / 100;
+    const total = subtotal + tax;
 
-    let finalY = doc.lastAutoTable.finalY + 6;
-    doc.line(5, finalY, 75, finalY);
-    
+    let finalY = doc.lastAutoTable.finalY + 5;
     doc.setFontSize(8);
-    doc.setFont("helvetica", "normal");
+    doc.text(`Subtotal: Rs.${subtotal.toFixed(2)}`, 75, finalY, { align: "right" });
+    doc.text(`GST (${taxRate}%): Rs.${tax.toFixed(2)}`, 75, finalY + 4, { align: "right" });
     
-    // Subtotal Row
-    doc.text("Subtotal:", 5, finalY + 5);
-    doc.text(`Rs.${subtotal.toFixed(2)}`, 75, finalY + 5, { align: "right" });
-
-    // Tax Row (Split into CGST/SGST if 5% total)
-    doc.text(`GST (${taxRate}%):`, 5, finalY + 9);
-    doc.text(`Rs.${taxAmount.toFixed(2)}`, 75, finalY + 9, { align: "right" });
-
-    // Grand Total Row
-    doc.setFontSize(11);
+    doc.setFontSize(10);
     doc.setFont("helvetica", "bold");
-    doc.text("TOTAL AMOUNT:", 5, finalY + 16);
-    doc.text(`Rs.${grandTotal.toFixed(2)}`, 75, finalY + 16, { align: "right" });
+    doc.text(`GRAND TOTAL: Rs.${total.toFixed(2)}`, 75, finalY + 10, { align: "right" });
 
-    // Footer
-    doc.setFontSize(7);
-    doc.setFont("helvetica", "italic");
-    doc.text(`Payment: ${order.paymentMethod.toUpperCase()}`, 40, finalY + 24, { align: "center" });
-    
-    doc.save(`Invoice_${order._id.slice(-6)}.pdf`);
+    doc.save(`Receipt_Table_${order.tableNumber}.pdf`);
 };
