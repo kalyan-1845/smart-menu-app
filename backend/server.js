@@ -1,4 +1,4 @@
-import 'dotenv/config'; // Must stay at the very top
+import 'dotenv/config'; 
 import express from 'express';
 import cors from 'cors';
 import mongoose from 'mongoose';
@@ -14,23 +14,25 @@ import orderRoutes from './routes/orderRoutes.js';
 import superAdminRoutes from './routes/superAdminRoutes.js';
 import broadcastRoutes from './routes/broadcastRoutes.js';
 
-// --- INITIALIZATION ---
 const app = express();
 const httpServer = createServer(app);
 
+// ✅ Add this for Rate Limiting to work correctly on Render/Heroku
+app.set('trust proxy', 1);
+
 // --- 🔒 SECURITY: RATE LIMITER ---
 const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // limit each IP to 100 requests
+    windowMs: 15 * 60 * 1000, 
+    max: 100, 
+    standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+    legacyHeaders: false, // Disable the `X-RateLimit-*` headers
     message: "Too many requests from this IP, please try again later."
 });
 
 // --- 🔒 SECURITY: CORS CONFIG ---
-// Add ALL your frontend URLs here
 const allowedOrigins = [
-    "http://localhost:5173",           // Local development
-    "https://smartmenuss.netlify.app", // Your Main Netlify Site
-    // Add any other deployment URLs if you have them (e.g., https://your-custom-domain.com)
+    "http://localhost:5173",           
+    "https://smartmenuss.netlify.app",
 ];
 
 const io = new Server(httpServer, {
@@ -46,23 +48,23 @@ app.use(limiter);
 
 app.use(cors({ 
     origin: function (origin, callback) {
-        // Allow requests with no origin (like mobile apps or curl requests)
         if (!origin) return callback(null, true);
         
-        if (allowedOrigins.indexOf(origin) !== -1) {
+        // Allow main domains or Netlify subdomains
+        const isNetlifyPreview = /\.netlify\.app$/.test(origin);
+        
+        if (allowedOrigins.indexOf(origin) !== -1 || isNetlifyPreview) {
             callback(null, true);
         } else {
-            console.log("Blocked by CORS:", origin); // Helpful for debugging
+            console.log("Blocked by CORS:", origin);
             callback(new Error('CORS Policy: Origin not allowed'));
         }
     }, 
     credentials: true 
 }));
 
-// Increase payload limit for image uploads
 app.use(express.json({ limit: '10mb' })); 
 
-// Attach Socket.io to req so routes can use it
 app.use((req, res, next) => {
     req.io = io;
     next();
@@ -80,12 +82,11 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/superadmin', superAdminRoutes);
 app.use('/api/broadcast', broadcastRoutes);
 
-// Test Route
 app.get('/', (req, res) => res.send('Smart Menu Cloud API v2.8 Active...'));
 
 // --- 4. GLOBAL ERROR HANDLER ---
 app.use((err, req, res, next) => {
-    console.error("Global Error:", err); // Log the error to server console
+    console.error("Global Error:", err); 
     const statusCode = res.statusCode === 200 ? 500 : res.statusCode;
     res.status(statusCode).json({
         message: err.message,
@@ -97,13 +98,11 @@ app.use((err, req, res, next) => {
 io.on('connection', (socket) => {
     console.log(`⚡ Connection Established: ${socket.id}`);
 
-    // Allow owners to join their private room
     socket.on('join-owner-room', (ownerId) => {
         socket.join(ownerId);
         console.log(`🏠 Owner joined private room: ${ownerId}`);
     });
 
-    // Handle call resolutions
     socket.on("resolve-call", (data) => {
         io.emit("call-resolved", data);
     });
@@ -118,13 +117,12 @@ httpServer.listen(PORT, () => {
 });
 
 // --- 7. SELF-PING (KEEP ALIVE) ---
-// This prevents Render free tier from sleeping
 const renderUrl = "https://smart-menu-backend-5ge7.onrender.com/"; 
 
 setInterval(() => {
     https.get(renderUrl, (res) => {
-        console.log(`Self-ping sent to ${renderUrl} - Status: ${res.statusCode}`);
+        console.log(`Self-ping sent - Status: ${res.statusCode}`);
     }).on("error", (e) => {
         console.error(`Self-ping error: ${e.message}`);
     });
-}, 840000); // Ping every 14 minutes
+}, 840000);
