@@ -1,16 +1,21 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-import { FaArrowLeft, FaTrash, FaGoogle, FaMobileAlt, FaWallet, FaMoneyBillWave } from "react-icons/fa";
+import { FaArrowLeft, FaTrash, FaGoogle, FaMobileAlt, FaWallet, FaMoneyBillWave, FaCheckCircle } from "react-icons/fa";
 
 const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, tableNum, setTableNum }) => {
     const navigate = useNavigate();
 
     // --- STATE ---
     const [customerName, setCustomerName] = useState("");
-    const [restaurant, setRestaurant] = useState(null); // To store UPI ID
+    const [restaurant, setRestaurant] = useState(null);
     const [showTableModal, setShowTableModal] = useState(!tableNum);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    
+    // Payment Verification State
+    const [paymentStage, setPaymentStage] = useState("selection"); // 'selection' | 'verifying'
+    const [selectedApp, setSelectedApp] = useState(null);
+    const [transactionId, setTransactionId] = useState(""); // Last 5 digits
 
     // Track selected specifications
     const [selectedSpecs, setSelectedSpecs] = useState({});
@@ -18,7 +23,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
 
     const totalPrice = cart.reduce((total, item) => total + (item.price * item.quantity), 0);
 
-    // --- 1. FETCH RESTAURANT DETAILS (For UPI ID) ---
+    // --- 1. FETCH RESTAURANT DETAILS ---
     useEffect(() => {
         const fetchRestaurant = async () => {
             if (restaurantId) {
@@ -33,13 +38,35 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
         fetchRestaurant();
     }, [restaurantId]);
 
-    // --- 2. ORDER SUBMISSION & REDIRECT ---
-    const submitOrder = async (paymentMethod, shouldRedirect = false) => {
+    // --- 2. HANDLE APP CLICK (REDIRECT) ---
+    const handlePaymentClick = (appName) => {
         // Validation
         if (!customerName.trim()) { alert("Please enter your name!"); return; }
         if (!tableNum) { setShowTableModal(true); return; }
         if (cart.length === 0) { alert("Your cart is empty!"); return; }
+        if (!restaurant?.upiId) { alert("Restaurant UPI not set up."); return; }
 
+        if (appName === "Cash") {
+            // Cash goes straight to submission
+            submitOrder("Cash", "CASH-PAY");
+            return;
+        }
+
+        // 1. Construct Deep Link
+        const cleanName = restaurant.username.replace(/\s/g, '');
+        // We use a temporary transaction ref. The real verification happens manually.
+        const upiLink = `upi://pay?pa=${restaurant.upiId}&pn=${cleanName}&am=${totalPrice}&cu=INR`;
+
+        // 2. Redirect User
+        window.location.href = upiLink;
+
+        // 3. Update UI to "Verify" mode
+        setSelectedApp(appName);
+        setPaymentStage("verifying");
+    };
+
+    // --- 3. SUBMIT ORDER (FINAL STEP) ---
+    const submitOrder = async (paymentMethod, txnId) => {
         setIsSubmitting(true);
 
         const orderData = {
@@ -52,7 +79,8 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                 customizations: selectedSpecs[item._id] || [] 
             })),
             totalAmount: totalPrice,
-            paymentMethod: paymentMethod, 
+            paymentMethod: paymentMethod,
+            transactionId: txnId, // Save the 5 digits or 'CASH'
             owner: restaurantId,
             status: "PLACED"
         };
@@ -60,32 +88,12 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
         try {
             const response = await axios.post("https://smart-menu-backend-5ge7.onrender.com/api/orders", orderData);
             
-            // Success! Save to history
+            // Save to History
             const history = JSON.parse(localStorage.getItem("smartMenu_History") || "[]");
             localStorage.setItem("smartMenu_History", JSON.stringify([response.data._id, ...history]));
             
             clearCart(); 
-
-            // --- REDIRECT LOGIC ---
-            if (shouldRedirect && restaurant?.upiId) {
-                // Remove spaces from name to avoid bad UPI links
-                const cleanName = restaurant.username.replace(/\s/g, '');
-                const orderRef = response.data._id.slice(-4);
-                
-                // Construct UPI Deep Link
-                const upiLink = `upi://pay?pa=${restaurant.upiId}&pn=${cleanName}&am=${totalPrice}&cu=INR&tn=Order-${orderRef}`;
-                
-                // Redirect user to their UPI app
-                window.location.href = upiLink;
-
-                // Move app to tracker (will show when they switch back)
-                setTimeout(() => {
-                    navigate(`/track/${response.data._id}`);
-                }, 1000);
-            } else {
-                // Cash or Manual -> Go straight to tracker
-                navigate(`/track/${response.data._id}`);
-            }
+            navigate(`/track/${response.data._id}`);
 
         } catch (error) {
             console.error("Submission error:", error);
@@ -173,82 +181,103 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                 </div>
             )}
 
-            {/* 5. INSTANT PAY GRID (The Requested Feature) */}
+            {/* 5. PAYMENT SECTION */}
             <div style={{ marginBottom: '100px' }}>
-                <p style={{ color: '#555', fontSize: '10px', fontWeight: '900', letterSpacing: '1px', marginBottom: '15px', textTransform: 'uppercase' }}>Instant Pay & Order</p>
+                <p style={{ color: '#555', fontSize: '10px', fontWeight: '900', letterSpacing: '1px', marginBottom: '15px', textTransform: 'uppercase' }}>Select Payment</p>
                 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                    {/* GPay - Dark Grey */}
-                    <button 
-                        onClick={() => submitOrder("Google Pay", true)}
-                        disabled={isSubmitting}
-                        style={{
-                            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px',
-                            padding: '20px', borderRadius: '20px', cursor: 'pointer', border: '1px solid #333',
-                            background: '#1f1f1f', color: 'white', height: '110px', transition: 'transform 0.1s'
-                        }}
-                    >
-                        <FaGoogle size={28} color="#fff"/>
-                        <span style={{ fontSize: '13px', fontWeight: 'bold' }}>GPay</span>
-                    </button>
+                {paymentStage === 'selection' ? (
+                    // --- SELECTION GRID (Medium Size, Side by Side) ---
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px' }}>
+                        
+                        {/* GPay */}
+                        <button onClick={() => handlePaymentClick("Google Pay")}
+                            style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '15px 5px', borderRadius: '18px', background: '#1a1a1a', border: '1px solid #333', color: 'white', cursor: 'pointer' }}>
+                            <div style={{ width: '45px', height: '45px', borderRadius: '50%', background: '#1f1f1f', border: '1px solid #444', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
+                                <FaGoogle size={20} color="#fff"/>
+                            </div>
+                            <span style={{ fontSize: '11px', fontWeight: 'bold' }}>GPay</span>
+                        </button>
 
-                    {/* PhonePe - Purple */}
-                    <button 
-                        onClick={() => submitOrder("PhonePe", true)}
-                        disabled={isSubmitting}
-                        style={{
-                            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px',
-                            padding: '20px', borderRadius: '20px', cursor: 'pointer', border: 'none',
-                            background: '#5f259f', color: 'white', height: '110px'
-                        }}
-                    >
-                        <FaMobileAlt size={28} />
-                        <span style={{ fontSize: '13px', fontWeight: 'bold' }}>PhonePe</span>
-                    </button>
+                        {/* PhonePe */}
+                        <button onClick={() => handlePaymentClick("PhonePe")}
+                            style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '15px 5px', borderRadius: '18px', background: '#1a1a1a', border: '1px solid #333', color: 'white', cursor: 'pointer' }}>
+                            <div style={{ width: '45px', height: '45px', borderRadius: '50%', background: '#5f259f', border: '1px solid #7848b0', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
+                                <FaMobileAlt size={20} color="#fff"/>
+                            </div>
+                            <span style={{ fontSize: '11px', fontWeight: 'bold' }}>PhonePe</span>
+                        </button>
 
-                    {/* FamPay / Generic UPI - Orange/Yellow */}
-                    <button 
-                        onClick={() => submitOrder("FamPay", true)}
-                        disabled={isSubmitting}
-                        style={{
-                            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px',
-                            padding: '20px', borderRadius: '20px', cursor: 'pointer', border: 'none',
-                            background: '#FFAD00', color: 'black', height: '110px'
-                        }}
-                    >
-                        <FaWallet size={28} />
-                        <span style={{ fontSize: '13px', fontWeight: 'bold' }}>FamPay</span>
-                    </button>
+                        {/* FamPay */}
+                        <button onClick={() => handlePaymentClick("FamPay")}
+                            style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '15px 5px', borderRadius: '18px', background: '#1a1a1a', border: '1px solid #333', color: 'white', cursor: 'pointer' }}>
+                            <div style={{ width: '45px', height: '45px', borderRadius: '50%', background: '#FFAD00', border: '1px solid #ffbf40', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
+                                <FaWallet size={20} color="#000"/>
+                            </div>
+                            <span style={{ fontSize: '11px', fontWeight: 'bold' }}>FamPay</span>
+                        </button>
 
-                    {/* Cash - Dark Grey (Matches your image) */}
-                    <button 
-                        onClick={() => submitOrder("Cash", false)}
-                        disabled={isSubmitting}
-                        style={{
-                            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px',
-                            padding: '20px', borderRadius: '20px', cursor: 'pointer', border: '1px solid #333',
-                            background: '#333', color: 'white', height: '110px'
-                        }}
-                    >
-                        <FaMoneyBillWave size={28} />
-                        <span style={{ fontSize: '13px', fontWeight: 'bold' }}>Cash</span>
-                    </button>
-                </div>
+                        {/* Cash */}
+                        <button onClick={() => handlePaymentClick("Cash")}
+                            style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '15px 5px', borderRadius: '18px', background: '#1a1a1a', border: '1px solid #333', color: 'white', cursor: 'pointer' }}>
+                            <div style={{ width: '45px', height: '45px', borderRadius: '50%', background: '#22c55e', border: '1px solid #4ade80', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
+                                <FaMoneyBillWave size={20} color="#fff"/>
+                            </div>
+                            <span style={{ fontSize: '11px', fontWeight: 'bold' }}>Cash</span>
+                        </button>
+
+                    </div>
+                ) : (
+                    // --- VERIFICATION UI (Shows after returning from app) ---
+                    <div style={{ background: '#111', padding: '20px', borderRadius: '24px', border: '1px solid #333', textAlign: 'center' }}>
+                        <FaCheckCircle size={40} color="#f97316" style={{ marginBottom: '15px' }} />
+                        <h3 style={{ margin: '0 0 10px 0', fontSize: '18px' }}>Confirm {selectedApp}</h3>
+                        <p style={{ color: '#888', fontSize: '12px', marginBottom: '20px' }}>
+                            Please enter the last 5 digits of your UPI Transaction ID (UTR) to track your order.
+                        </p>
+                        
+                        <input 
+                            type="tel" 
+                            maxLength={5}
+                            placeholder="Last 5 Digits (e.g. 89432)"
+                            value={transactionId}
+                            onChange={(e) => setTransactionId(e.target.value.replace(/\D/g,''))}
+                            style={{ 
+                                width: '100%', padding: '15px', borderRadius: '12px', background: '#080808', 
+                                border: '1px solid #333', color: 'white', fontSize: '20px', textAlign: 'center', 
+                                letterSpacing: '4px', fontWeight: 'bold', marginBottom: '20px'
+                            }}
+                        />
+
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                            <button onClick={() => setPaymentStage("selection")} style={{ flex: 1, padding: '15px', borderRadius: '14px', background: 'transparent', border: '1px solid #333', color: '#888', fontWeight: 'bold', cursor: 'pointer' }}>Back</button>
+                            <button 
+                                onClick={() => submitOrder(selectedApp, transactionId)}
+                                disabled={transactionId.length < 5 || isSubmitting}
+                                style={{ 
+                                    flex: 2, padding: '15px', borderRadius: '14px', border: 'none', 
+                                    background: transactionId.length < 5 ? '#333' : '#f97316', 
+                                    color: transactionId.length < 5 ? '#666' : 'white', 
+                                    fontWeight: 'bold', cursor: transactionId.length < 5 ? 'not-allowed' : 'pointer'
+                                }}>
+                                {isSubmitting ? "Verifying..." : "Confirm & Track"}
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
 
-            {/* 6. BOTTOM TOTAL BAR */}
-            <div style={{ position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: '600px', padding: '20px', background: 'rgba(5, 5, 5, 0.95)', backdropFilter: 'blur(10px)', borderTop: '1px solid #222', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div>
-                    <span style={{ color: '#888', fontWeight: 'bold', fontSize: '12px', display: 'block' }}>Total to Pay</span>
-                    <span style={{ fontSize: '26px', fontWeight: '900', color: '#f97316' }}>₹{totalPrice}</span>
+            {/* 6. FIXED BOTTOM TOTAL */}
+            {paymentStage === 'selection' && (
+                <div style={{ position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: '600px', padding: '20px', background: 'rgba(5, 5, 5, 0.95)', backdropFilter: 'blur(10px)', borderTop: '1px solid #222', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div>
+                        <span style={{ color: '#888', fontWeight: 'bold', fontSize: '12px', display: 'block' }}>Total to Pay</span>
+                        <span style={{ fontSize: '26px', fontWeight: '900', color: '#f97316' }}>₹{totalPrice}</span>
+                    </div>
+                    <div style={{ color: '#666', fontSize: '12px', fontWeight: 'bold' }}>
+                        Select App Above ⬆
+                    </div>
                 </div>
-                
-                {/* Fallback Button */}
-                <button onClick={() => submitOrder("Cash", false)} disabled={isSubmitting}
-                    style={{ padding: '16px 32px', borderRadius: '16px', border: 'none', background: '#f97316', color: 'white', fontSize: '14px', fontWeight: '900', cursor: isSubmitting ? 'not-allowed' : 'pointer', boxShadow: '0 8px 20px rgba(249,115,22,0.3)' }}>
-                    {isSubmitting ? "SYNCING..." : "PLACE ORDER"}
-                </button>
-            </div>
+            )}
         </div>
     );
 };
