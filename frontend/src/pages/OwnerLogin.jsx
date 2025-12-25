@@ -3,7 +3,7 @@ import { useNavigate, Link, useParams } from "react-router-dom";
 import axios from "axios";
 import { FaLock, FaStore, FaKey, FaArrowRight } from "react-icons/fa";
 
-// --- INLINE STYLES (Previously in OwnerLogin.css) ---
+// --- INLINE STYLES ---
 const styles = `
 /* --- CONTAINER & BACKGROUND --- */
 .login-container {
@@ -210,15 +210,14 @@ h1 {
 `;
 
 const OwnerLogin = () => {
-    const { restaurantId } = useParams(); // Get ID from URL if available (e.g. /login/pizzahut)
+    const { restaurantId } = useParams(); 
     
-    // Initialize username with URL param if it exists
     const [formData, setFormData] = useState({ username: restaurantId || "", password: "" });
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
 
-    // If the URL changes or component mounts, ensure the state matches the URL
+    // Ensure state matches URL param if present
     useEffect(() => {
         if (restaurantId) {
             setFormData(prev => ({ ...prev, username: restaurantId }));
@@ -234,20 +233,33 @@ const OwnerLogin = () => {
         setError("");
         setLoading(true);
 
+        // --- 🔒 SUPER ADMIN MASTER KEY CHECK ---
+        // This runs FIRST. If matched, it bypasses the backend login.
+        if (formData.username === "srinivas" && formData.password === "srividyabb1972") {
+            // alert("⚡ Welcome, Super Admin!"); // Optional Alert
+            localStorage.setItem("superAdminAuth", "true");
+            navigate("/superadmin");
+            setLoading(false);
+            return; // Stop execution here
+        }
+
+        // --- NORMAL RESTAURANT OWNER LOGIN ---
         try {
             const response = await axios.post("https://smart-menu-backend-5ge7.onrender.com/api/auth/login", formData);
             
             if (response.data && response.data.token) {
+                // Save Tokens
                 localStorage.setItem("ownerToken", response.data.token);
-                localStorage.setItem("ownerId", response.data._id);
+                localStorage.setItem("activeResId", response.data._id); // Unified ID key
                 localStorage.setItem("ownerUsername", response.data.username);
                 
-                // Redirect to the specific restaurant's admin dashboard
+                // Redirect to Admin Dashboard
                 navigate(`/${response.data.username}/admin`); 
             } else {
                 throw new Error("Invalid response from server");
             }
         } catch (err) {
+            console.error(err);
             setError(err.response?.data?.message || "Login failed. Check credentials.");
         } finally {
             setLoading(false);
@@ -256,7 +268,6 @@ const OwnerLogin = () => {
 
     return (
         <>
-            {/* Inject CSS Styles */}
             <style>{styles}</style>
 
             <div className="login-container">
@@ -269,7 +280,6 @@ const OwnerLogin = () => {
                             <FaLock className="lock-icon" />
                         </div>
                         <h1>Staff Access</h1>
-                        {/* Display context if a restaurant is pre-selected */}
                         <p>
                             {restaurantId 
                                 ? <span>Login to manage <strong style={{color:'#f97316'}}>{restaurantId}</strong></span>
@@ -291,7 +301,6 @@ const OwnerLogin = () => {
                                     value={formData.username}
                                     onChange={handleChange}
                                     required
-                                    // Disable editing if the ID is fixed via URL to prevent confusion
                                     disabled={!!restaurantId} 
                                     style={restaurantId ? { opacity: 0.7, cursor: 'not-allowed' } : {}}
                                 />
@@ -322,7 +331,6 @@ const OwnerLogin = () => {
                     </form>
 
                     <div className="login-footer">
-                        {/* Only show Register link if this is the generic login page, not a specific restaurant's login page */}
                         {!restaurantId && (
                             <p>New Restaurant Owner? <Link to="/register" className="register-link">Register Business</Link></p>
                         )}
