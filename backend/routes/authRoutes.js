@@ -1,235 +1,159 @@
 import express from 'express';
+import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import mongoose from 'mongoose';
-import Owner from '../models/Owner.js'; 
-import Dish from '../models/Dish.js'; 
-import Order from '../models/Order.js'; 
+import Owner from '../models/Owner.js';
 
 const router = express.Router();
 
-/**
- * UTILITY: Generate JWT Token
- */
-const generateToken = (id) => {
-    return jwt.sign({ id }, process.env.JWT_SECRET || 'fallback_secret', { expiresIn: '30d' });
-};
-
-/**
- * 1. REGISTER NEW OWNER
- * Logic: Sets up a 60-day trial.
- */
+// --- 1. REGISTER (Owner) ---
 router.post('/register', async (req, res) => {
-    const { restaurantName, username, email, password } = req.body;
+  try {
+    const { username, password, restaurantName, email } = req.body;
+    
+    // Check if username exists
+    const existing = await Owner.findOne({ username });
+    if (existing) return res.status(400).json({ message: "Username already taken" });
 
-    try {
-        // Check for duplicates
-        const userExists = await Owner.findOne({ $or: [{ username }, { email }] });
-        if (userExists) {
-            return res.status(400).json({ 
-                message: 'Username or Email already registered.' 
-            });
-        }
+    // Create Owner
+    const newOwner = new Owner({
+      username,
+      email: email || "no-email@example.com",
+      password, // Hashed in Model pre-save
+      restaurantName,
+      trialEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 Days Trial
+    });
 
-        // TRIAL SETUP: Today + 60 days
-        const today = new Date();
-        const trialEndDate = new Date(today);
-        trialEndDate.setDate(trialEndDate.getDate() + 60);
-
-        const user = await Owner.create({ 
-            restaurantName,
-            username, 
-            email,
-            password,
-            trialEndsAt: trialEndDate,
-            isPro: false,
-            // Default passwords for roles
-            waiterPassword: "bitebox18",
-            chefPassword: "bitebox18"
-        });
-        
-        res.status(201).json({
-            _id: user._id,
-            username: user.username,
-            restaurantName: user.restaurantName,
-            trialEndsAt: user.trialEndsAt,
-            token: generateToken(user._id)
-        });
-    } catch (error) {
-        res.status(400).json({ message: error.message });
-    }
+    await newOwner.save();
+    res.status(201).json({ message: "Restaurant Registered Successfully" });
+  } catch (err) {
+    res.status(500).json({ message: "Server Error", error: err.message });
+  }
 });
 
-/**
- * 2. OWNER LOGIN
- * Logic: Matches Restaurant ID (Username) and Password.
- */
+// --- 2. LOGIN (Owner) ---
 router.post('/login', async (req, res) => {
+  try {
     const { username, password } = req.body;
+    const owner = await Owner.findOne({ username });
 
-    try {
-        // Accept either email or username as the identifier
-        const user = await Owner.findOne({ 
-            $or: [{ email: username }, { username: username }] 
-        });
+    if (!owner) return res.status(404).json({ message: "User not found" });
 
-        if (user && (await user.matchPassword(password))) {
-            res.json({
-                _id: user._id,
-                username: user.username,
-                restaurantName: user.restaurantName,
-                trialEndsAt: user.trialEndsAt,
-                isPro: user.isPro,
-                token: generateToken(user._id) 
-            });
-        } else {
-            res.status(401).json({ message: 'Invalid ID or password' });
-        }
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
+    const isMatch = await owner.matchPassword(password);
+    if (!isMatch) return res.status(400).json({ message: "Invalid Credentials" });
+
+    const token = jwt.sign({ id: owner._id }, process.env.JWT_SECRET || 'secret', { expiresIn: '7d' });
+
+    res.json({
+      token,
+      _id: owner._id,
+      username: owner.username,
+      restaurantName: owner.restaurantName,
+      trialEndsAt: owner.trialEndsAt,
+      isPro: owner.isPro
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Server Error" });
+  }
 });
 
-/**
- * 3. VERIFY ROLE (WAITER / CHEF)
- * Logic: Checks specific role passwords (default: bitebox18)
- * FIX: This route handles the 404 error you were seeing.
- */
-router.post('/verify-role', async (req, res) => {
-    try {
-        const { username, password, role } = req.body;
-
-        // Find owner by username (which is used in the URL)
-        const owner = await Owner.findOne({ username });
-        
-        if (!owner) {
-            return res.status(404).json({ success: false, message: "Restaurant not found" });
-        }
-
-        let isValid = false;
-        
-        // Check password based on role
-        if (role === 'waiter') {
-            const validPass = owner.waiterPassword || "bitebox18";
-            isValid = (password === validPass);
-        } 
-        else if (role === 'chef') {
-            const validPass = owner.chefPassword || "bitebox18";
-            isValid = (password === validPass);
-        }
-
-        if (isValid) {
-            res.status(200).json({ 
-                success: true, 
-                restaurantId: owner._id,
-                restaurantName: owner.restaurantName 
-            });
-        } else {
-            res.status(401).json({ success: false, message: "Invalid Password" });
-        }
-
-    } catch (err) {
-        console.error("Verify Role Error:", err);
-        res.status(500).json({ success: false, error: err.message });
-    }
-});
-
-/**
- * 4. GET RESTAURANT PROFILE
- */
+// --- 3. PUBLIC RESTAURANT INFO (For QR Menu) ---
 router.get('/restaurant/:id', async (req, res) => {
-    try {
-        const { id } = req.params;
-        let owner;
+  try {
+    // Search by 'username' (the part in the URL) OR '_id'
+    const owner = await Owner.findOne({ 
+      $or: [{ username: req.params.id }, { _id: req.params.id.match(/^[0-9a-fA-F]{24}$/) ? req.params.id : null }]
+    });
 
-        if (mongoose.Types.ObjectId.isValid(id)) {
-            owner = await Owner.findById(id).select('-password');
-        } else {
-            owner = await Owner.findOne({ username: id }).select('-password');
-        }
+    if (!owner) return res.status(404).json({ message: "Restaurant Not Found" });
 
-        if (!owner) return res.status(404).json({ message: 'Restaurant not found' });
-        res.json(owner);
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
+    // Return public info only
+    res.json({
+      _id: owner._id,
+      username: owner.username,
+      restaurantName: owner.restaurantName,
+      upiId: "your-upi@okaxis" // Add this field to your Model if needed later
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Server Error" });
+  }
 });
 
-/**
- * 5. GET ALL RESTAURANTS (Public / Admin List)
- */
+// --- 4. STAFF LOGIN (Verify Chef/Waiter) ✅ FIX IS HERE ---
+router.post('/verify-role', async (req, res) => {
+  try {
+    const { username, password, role } = req.body;
+    const owner = await Owner.findOne({ username });
+
+    if (!owner) return res.status(404).json({ success: false, message: "Restaurant not found" });
+
+    let isValid = false;
+    
+    // Check against the passwords stored in Owner model
+    // Note: These are simple strings in your model (default: "bitebox18")
+    if (role === 'chef') {
+        isValid = (password === owner.chefPassword); 
+    } else if (role === 'waiter') {
+        isValid = (password === owner.waiterPassword);
+    }
+
+    if (!isValid) return res.status(401).json({ success: false, message: "Wrong Password" });
+
+    // Success: Return the MongoDB ID for socket rooms
+    res.json({ success: true, restaurantId: owner._id });
+
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// --- 5. SUPER ADMIN ROUTES ---
 router.get('/restaurants', async (req, res) => {
-    try {
-        const owners = await Owner.find().select('_id username restaurantName trialEndsAt isPro');
-        res.json(owners);
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
+  try {
+    const owners = await Owner.find({}, '-password'); // Return all except password
+    res.json(owners);
+  } catch (err) {
+    res.status(500).json({ message: "Server Error" });
+  }
 });
 
-// --- SUPER ADMIN MANAGEMENT ROUTES ---
-
-/**
- * 6. ADMIN: DELETE CLIENT & PURGE DATA
- */
 router.delete('/admin/delete-owner/:id', async (req, res) => {
-    try {
-        const ownerId = req.params.id;
-        const owner = await Owner.findById(ownerId);
-        if (!owner) return res.status(404).json({ message: "Owner not found" });
-
-        await Owner.findByIdAndDelete(ownerId);
-
-        // PURGE Data
-        await Dish.deleteMany({ owner: ownerId }); 
-        await Order.deleteMany({ owner: ownerId });
-
-        res.json({ message: `Access revoked for ${owner.username}. Data purged.` });
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
+  try {
+    await Owner.findByIdAndDelete(req.params.id);
+    res.json({ message: "Deleted" });
+  } catch (err) {
+    res.status(500).json({ message: "Error" });
+  }
 });
 
-/**
- * 7. ADMIN: EXTEND TRIAL PLAN
- */
 router.put('/admin/extend-trial/:id', async (req, res) => {
-    try {
-        const owner = await Owner.findById(req.params.id);
-        if (!owner) return res.status(404).json({ message: "Restaurant not found" });
+  try {
+    const owner = await Owner.findById(req.params.id);
+    if (!owner) return res.status(404).json({ message: "Not found" });
 
-        let currentEnd = new Date(owner.trialEndsAt);
-        if (currentEnd < new Date()) {
-            currentEnd = new Date();
-        }
-
-        const newEnd = new Date(currentEnd);
-        newEnd.setDate(newEnd.getDate() + 30);
-        
-        owner.trialEndsAt = newEnd;
-        await owner.save();
-
-        res.json({ message: "Plan extended by 30 days", newDate: newEnd });
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
+    // Add 30 days to current expiry or today
+    const currentExpiry = new Date(owner.trialEndsAt) > new Date() ? new Date(owner.trialEndsAt) : new Date();
+    owner.trialEndsAt = new Date(currentExpiry.getTime() + 30 * 24 * 60 * 60 * 1000);
+    
+    await owner.save();
+    res.json({ message: "Extended" });
+  } catch (err) {
+    res.status(500).json({ message: "Error" });
+  }
 });
 
-/**
- * 8. ADMIN: RESET PASSWORD (Corrects 401 Login Issues)
- */
 router.put('/admin/reset-password/:id', async (req, res) => {
-    try {
-        const { newPassword } = req.body;
-        const owner = await Owner.findById(req.params.id);
-        if (!owner) return res.status(404).json({ message: "Owner not found" });
+  try {
+    const { newPassword } = req.body;
+    const owner = await Owner.findById(req.params.id);
+    if (!owner) return res.status(404).json({ message: "Not found" });
 
-        owner.password = newPassword; // The model's pre-save hook will hash this
-        await owner.save();
-
-        res.json({ message: "Password updated successfully" });
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
+    owner.password = newPassword; // Will be hashed by pre-save hook
+    await owner.save();
+    
+    res.json({ message: "Password Updated" });
+  } catch (err) {
+    res.status(500).json({ message: "Error" });
+  }
 });
 
 export default router;
