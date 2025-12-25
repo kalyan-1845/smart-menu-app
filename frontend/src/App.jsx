@@ -1,21 +1,21 @@
 import React, { useState, useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 
-// --- ✅ FIX: Pointing to the "pages" folder ---
+// --- ✅ FIXED: Pointing to the "pages" folder ---
 import LandingPage from "./pages/LandingPage.jsx"; 
 import Menu from "./pages/Menu.jsx"; 
 import Cart from "./pages/Cart.jsx";
 import OrderSuccess from "./pages/OrderSuccess.jsx";
 import OrderTracker from "./pages/OrderTracker.jsx";
 
-// --- STAFF PANELS ---
+// --- STAFF PANELS (Inside pages folder) ---
 import SuperAdmin from "./pages/SuperAdmin.jsx";
 import RestaurantAdmin from "./pages/RestaurantAdmin.jsx"; 
 import ChefDashboard from "./pages/ChefDashboard.jsx"; 
 import WaiterDashboard from "./pages/WaiterDashboard.jsx";
 
-// --- AUTH PAGES (Check if these are in "pages" or root) ---
-// If these are also in the pages folder, change to "./pages/..."
+// --- AUTH PAGES (Usually in root, but check if they are in pages) ---
+// If these are also in the 'pages' folder, add '/pages/' before the name
 import OwnerLogin from "./OwnerLogin.jsx"; 
 import Register from "./Register.jsx";
 
