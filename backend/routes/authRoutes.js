@@ -42,7 +42,7 @@ router.post('/register', async (req, res) => {
             password,
             trialEndsAt: trialEndDate,
             isPro: false,
-            // Default passwords for roles (can be changed in settings later)
+            // Default passwords for roles
             waiterPassword: "bitebox18",
             chefPassword: "bitebox18"
         });
@@ -97,22 +97,18 @@ router.post('/verify-role', async (req, res) => {
     try {
         const { username, password, role } = req.body;
 
-        // 1. Find the restaurant by username
         const owner = await Owner.findOne({ username });
         if (!owner) {
             return res.status(404).json({ success: false, message: "Restaurant not found" });
         }
 
-        // 2. Check Password based on Role
         let isValid = false;
         
         if (role === 'waiter') {
-            // Check against stored password OR default "bitebox18"
             const validPass = owner.waiterPassword || "bitebox18";
             isValid = (password === validPass);
         } 
         else if (role === 'chef') {
-            // Check against stored password OR default "bitebox18"
             const validPass = owner.chefPassword || "bitebox18";
             isValid = (password === validPass);
         }
@@ -135,7 +131,6 @@ router.post('/verify-role', async (req, res) => {
 
 /**
  * 4. GET RESTAURANT PROFILE
- * Used for headers and trial countdowns.
  */
 router.get('/restaurant/:id', async (req, res) => {
     try {
@@ -171,7 +166,6 @@ router.get('/restaurants', async (req, res) => {
 
 /**
  * 6. ADMIN: DELETE CLIENT & PURGE DATA
- * Used by Srinivas to remove restaurants and their content.
  */
 router.delete('/admin/delete-owner/:id', async (req, res) => {
     try {
@@ -181,7 +175,7 @@ router.delete('/admin/delete-owner/:id', async (req, res) => {
 
         await Owner.findByIdAndDelete(ownerId);
 
-        // PURGE: Remove dishes and orders linked to this restaurant
+        // PURGE Data
         await Dish.deleteMany({ owner: ownerId }); 
         await Order.deleteMany({ owner: ownerId });
 
@@ -193,20 +187,17 @@ router.delete('/admin/delete-owner/:id', async (req, res) => {
 
 /**
  * 7. ADMIN: EXTEND TRIAL PLAN
- * Adds 30 days to the current expiry date every time it is clicked.
  */
 router.put('/admin/extend-trial/:id', async (req, res) => {
     try {
         const owner = await Owner.findById(req.params.id);
         if (!owner) return res.status(404).json({ message: "Restaurant not found" });
 
-        // Get current expiry date (or use today if it's already expired)
         let currentEnd = new Date(owner.trialEndsAt);
         if (currentEnd < new Date()) {
-            currentEnd = new Date(); // Reset to today if expired
+            currentEnd = new Date();
         }
 
-        // Add 30 Days
         const newEnd = new Date(currentEnd);
         newEnd.setDate(newEnd.getDate() + 30);
         
@@ -214,6 +205,24 @@ router.put('/admin/extend-trial/:id', async (req, res) => {
         await owner.save();
 
         res.json({ message: "Plan extended by 30 days", newDate: newEnd });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+/**
+ * 8. ADMIN: RESET PASSWORD (Corrects 401 Login Issues)
+ */
+router.put('/admin/reset-password/:id', async (req, res) => {
+    try {
+        const { newPassword } = req.body;
+        const owner = await Owner.findById(req.params.id);
+        if (!owner) return res.status(404).json({ message: "Owner not found" });
+
+        owner.password = newPassword; // The model's pre-save hook will hash this
+        await owner.save();
+
+        res.json({ message: "Password updated successfully" });
     } catch (error) {
         res.status(500).json({ message: error.message });
     }

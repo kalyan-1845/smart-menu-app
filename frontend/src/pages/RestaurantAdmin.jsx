@@ -5,11 +5,10 @@ import io from "socket.io-client";
 import confetti from "canvas-confetti";
 import { 
     FaPlus, FaTrash, FaUtensils, 
-    FaBell, FaCheckCircle, FaCircle, FaCrown, FaSignOutAlt, FaRocket, FaUnlock, FaStore
+    FaBell, FaCheckCircle, FaCircle, FaCrown, FaSignOutAlt, FaRocket, FaUnlock, FaStore, FaExternalLinkAlt, FaCopy
 } from "react-icons/fa";
 
 // ... (KEEP YOUR EXISTING STYLES CONSTANT HERE) ...
-// (I am omitting the long 'styles' string to save space, paste your existing styles here)
 const styles = `
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;900&display=swap');
 .admin-container { min-height: 100vh; padding: 20px; background: radial-gradient(circle at top center, #1a0f0a 0%, #050505 60%); color: white; font-family: 'Inter', sans-serif; }
@@ -35,6 +34,10 @@ const styles = `
 @keyframes slideDown { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 .lock-container { min-height: 100vh; background: #050505; display: flex; align-items: center; justify-content: center; padding: 20px; }
 .lock-card { width: 100%; max-width: 350px; background: #111; padding: 40px; border-radius: 30px; border: 1px solid #222; text-align: center; }
+.menu-link-box { background: rgba(0,0,0,0.3); border: 1px dashed #333; padding: 15px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.link-text { color: #3b82f6; font-size: 12px; font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; display: block; text-decoration: none; }
+.action-btn { background: none; border: none; color: #888; cursor: pointer; padding: 5px; transition: 0.2s; }
+.action-btn:hover { color: white; }
 `;
 
 const SetupWizard = ({ dishesCount, pushEnabled }) => {
@@ -76,6 +79,9 @@ const SetupWizard = ({ dishesCount, pushEnabled }) => {
 const RestaurantAdmin = () => {
     const { id } = useParams();
     const API_BASE = "https://smart-menu-backend-5ge7.onrender.com/api";
+    
+    // Construct the public menu URL
+    const publicMenuUrl = `${window.location.origin}/menu/${id}`;
 
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [password, setPassword] = useState("");
@@ -168,6 +174,11 @@ const RestaurantAdmin = () => {
         return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
     };
 
+    const copyToClipboard = () => {
+        navigator.clipboard.writeText(publicMenuUrl);
+        alert("Menu Link Copied! Share this with customers.");
+    };
+
     if (!isAuthenticated) return (
         <div className="admin-container">
             <style>{styles}</style>
@@ -225,6 +236,24 @@ const RestaurantAdmin = () => {
                         </div>
                         <button onClick={handleLogout} className="btn-glass" style={{ color: '#ef4444' }}><FaSignOutAlt /></button>
                     </div>
+
+                    {/* ✅ PUBLIC MENU LINK BOX */}
+                    <div className="menu-link-box">
+                        <div style={{display:'flex', alignItems:'center', gap:'10px', overflow:'hidden'}}>
+                            <div style={{background:'rgba(59,130,246,0.2)', padding:'8px', borderRadius:'8px', color:'#3b82f6'}}>
+                                <FaUtensils size={14} />
+                            </div>
+                            <div style={{overflow:'hidden'}}>
+                                <p style={{fontSize:'10px', color:'#888', margin:0, fontWeight:'bold'}}>YOUR MENU LINK</p>
+                                <a href={publicMenuUrl} target="_blank" rel="noreferrer" className="link-text">{publicMenuUrl}</a>
+                            </div>
+                        </div>
+                        <div style={{display:'flex', gap:'5px'}}>
+                            <button onClick={copyToClipboard} className="action-btn" title="Copy Link"><FaCopy /></button>
+                            <a href={publicMenuUrl} target="_blank" rel="noreferrer" className="action-btn" title="Open Menu"><FaExternalLinkAlt /></a>
+                        </div>
+                    </div>
+
                     <div style={{ display: 'flex', gap: '10px' }}>
                         <Link to={`/${id}/chef`} target="_blank" style={{ flex: 1, textDecoration: 'none' }}><button className="btn-glass" style={{ width: '100%' }}><FaUtensils /> Chef View</button></Link>
                         <Link to={`/${id}/waiter`} target="_blank" style={{ flex: 1, textDecoration: 'none' }}><button className="btn-glass" style={{ width: '100%' }}><FaBell /> Waiter View</button></Link>
