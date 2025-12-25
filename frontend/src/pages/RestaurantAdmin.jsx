@@ -8,49 +8,35 @@ import {
     FaBell, FaCheckCircle, FaCircle, FaCrown, FaSignOutAlt, FaRocket, FaUnlock, FaStore
 } from "react-icons/fa";
 
-// --- INLINE CSS STYLES ---
+// ... (KEEP YOUR EXISTING STYLES CONSTANT HERE) ...
+// (I am omitting the long 'styles' string to save space, paste your existing styles here)
 const styles = `
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;900&display=swap');
-
-.admin-container {
-  min-height: 100vh;
-  padding: 20px;
-  background: radial-gradient(circle at top center, #1a0f0a 0%, #050505 60%);
-  color: white;
-  font-family: 'Inter', sans-serif;
-}
-
+.admin-container { min-height: 100vh; padding: 20px; background: radial-gradient(circle at top center, #1a0f0a 0%, #050505 60%); color: white; font-family: 'Inter', sans-serif; }
 .max-w-wrapper { max-width: 480px; margin: 0 auto; }
 .admin-header { margin-bottom: 30px; }
 .header-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
 .shop-title { font-size: 28px; font-weight: 900; margin: 0; letter-spacing: -1px; text-transform: uppercase; }
 .badge-pro { background: rgba(255, 153, 51, 0.15); color: #FF9933; border: 1px solid rgba(255, 153, 51, 0.3); padding: 4px 10px; border-radius: 20px; font-size: 10px; font-weight: 900; display: inline-flex; align-items: center; gap: 5px; }
-
 .btn-glass { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); color: white; padding: 10px 16px; border-radius: 12px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: 0.2s; }
 .btn-glass:hover { background: rgba(255, 255, 255, 0.1); }
 .btn-primary { background: linear-gradient(135deg, #FF8800 0%, #FF5500 100%); border: none; color: white; width: 100%; padding: 16px; border-radius: 16px; font-size: 14px; font-weight: 700; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; box-shadow: 0 4px 15px rgba(255, 85, 0, 0.4); transition: 0.2s; }
 .btn-primary:active { transform: scale(0.98); }
-
 .glass-card { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); backdrop-filter: blur(12px); border-radius: 24px; padding: 24px; margin-bottom: 24px; }
 .nav-tabs { display: flex; background: rgba(0,0,0,0.3); padding: 4px; border-radius: 16px; margin-bottom: 24px; }
 .tab-btn { flex: 1; padding: 12px; background: transparent; border: none; color: #888; font-size: 11px; font-weight: 900; cursor: pointer; border-radius: 12px; text-transform: uppercase; transition: 0.3s; }
 .tab-btn.active { background: rgba(255,255,255,0.1); color: #FF9933; }
-
 .input-dark { width: 100%; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); padding: 14px; border-radius: 12px; color: white; margin-bottom: 15px; outline: none; transition: 0.3s; }
 .input-dark:focus { border-color: #FF9933; background: rgba(0,0,0,0.6); }
-
 .dish-item { display: flex; justify-content: space-between; align-items: center; padding: 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
 .dish-item:last-child { border-bottom: none; }
-
 .toast-container { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); width: 90%; max-width: 400px; z-index: 1000; display: flex; flex-direction: column; gap: 10px; }
 .toast-alert { background: #FF9933; color: black; padding: 15px; border-radius: 15px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5); animation: slideDown 0.3s ease-out; }
 @keyframes slideDown { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-
 .lock-container { min-height: 100vh; background: #050505; display: flex; align-items: center; justify-content: center; padding: 20px; }
 .lock-card { width: 100%; max-width: 350px; background: #111; padding: 40px; border-radius: 30px; border: 1px solid #222; text-align: center; }
 `;
 
-// --- SETUP WIZARD COMPONENT ---
 const SetupWizard = ({ dishesCount, pushEnabled }) => {
     const steps = [
         { id: 1, label: "Add 3 dishes", done: dishesCount >= 3, hint: "Go to Menu tab" },
@@ -87,7 +73,6 @@ const SetupWizard = ({ dishesCount, pushEnabled }) => {
     );
 };
 
-// --- MAIN DASHBOARD ---
 const RestaurantAdmin = () => {
     const { id } = useParams();
     const API_BASE = "https://smart-menu-backend-5ge7.onrender.com/api";
@@ -106,7 +91,6 @@ const RestaurantAdmin = () => {
     const [dishes, setDishes] = useState([]);
     const [formData, setFormData] = useState({ name: "", price: "", category: "Starters" });
 
-    // Login Logic
     const handleLogin = async (e) => {
         e.preventDefault();
         setAuthLoading(true);
@@ -122,7 +106,6 @@ const RestaurantAdmin = () => {
         } catch (err) { alert("❌ Invalid Password"); } finally { setAuthLoading(false); }
     };
 
-    // Initial Data Fetch
     const fetchData = async (token, mongoId) => {
         setLoading(true);
         try {
@@ -132,7 +115,6 @@ const RestaurantAdmin = () => {
         } catch (error) { console.error(error); } finally { setLoading(false); }
     };
 
-    // Socket Connection
     useEffect(() => {
         if (isAuthenticated) {
             const mongoId = localStorage.getItem(`owner_id_${id}`);
@@ -153,15 +135,12 @@ const RestaurantAdmin = () => {
         }
     }, [isAuthenticated, id]);
 
-    // Handle Permissions
     const requestNotificationPermission = async () => {
         const permission = await Notification.requestPermission();
         if (permission === 'granted') setPushEnabled(true);
     };
 
     const handleLogout = () => { setIsAuthenticated(false); setPassword(""); };
-
-    // --- CRUD OPERATIONS ---
 
     const handleAddDish = async (e) => {
         e.preventDefault();
@@ -176,18 +155,11 @@ const RestaurantAdmin = () => {
 
     const handleDeleteDish = async (dishId) => {
         if(!window.confirm("Are you sure you want to delete this dish?")) return;
-        
         const token = localStorage.getItem(`owner_token_${id}`);
         try {
-            await axios.delete(`${API_BASE}/dishes/${dishId}`, { 
-                headers: { Authorization: `Bearer ${token}` } 
-            });
-            // Optimistic update
+            await axios.delete(`${API_BASE}/dishes/${dishId}`, { headers: { Authorization: `Bearer ${token}` } });
             setDishes(prev => prev.filter(dish => dish._id !== dishId));
-        } catch (error) {
-            console.error("Delete failed", error);
-            alert("Failed to delete dish. Check connection.");
-        }
+        } catch (error) { console.error("Delete failed", error); alert("Failed to delete dish."); }
     };
 
     const calculateDaysLeft = (date) => {
@@ -196,7 +168,6 @@ const RestaurantAdmin = () => {
         return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
     };
 
-    // --- RENDER LOGIN SCREEN ---
     if (!isAuthenticated) return (
         <div className="admin-container">
             <style>{styles}</style>
@@ -205,7 +176,15 @@ const RestaurantAdmin = () => {
                     <FaStore size={40} color="#f97316" style={{ marginBottom: '15px' }} />
                     <h1 style={{ fontSize: '20px', fontWeight: '900' }}>{id} Admin</h1>
                     <form onSubmit={handleLogin} style={{ marginTop: '20px' }}>
-                        <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} className="input-dark" style={{ textAlign: 'center' }} />
+                        <input 
+                            type="password" 
+                            placeholder="Password" 
+                            value={password} 
+                            onChange={e => setPassword(e.target.value)} 
+                            className="input-dark" 
+                            style={{ textAlign: 'center' }} 
+                            autoComplete="current-password" 
+                        />
                         <button type="submit" className="btn-primary" disabled={authLoading}>{authLoading ? "Checking..." : <><FaUnlock /> Access Panel</>}</button>
                     </form>
                 </div>
@@ -213,20 +192,15 @@ const RestaurantAdmin = () => {
         </div>
     );
 
-    // --- RENDER DASHBOARD ---
     return (
         <div className="admin-container">
             <style>{styles}</style>
-            
-            {/* Global Broadcast Message */}
             {broadcast && (
                 <div style={{ background: '#3b82f6', color: 'white', padding: '10px', textAlign: 'center', fontSize: '12px', borderRadius: '10px', marginBottom: '15px' }}>
                     📢 {broadcast.title}: {broadcast.message}
                     <button onClick={() => setBroadcast(null)} style={{ marginLeft: '10px', background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>✕</button>
                 </div>
             )}
-
-            {/* Live Alerts Toast */}
             <div className="toast-container">
                 {activeAlerts.map((alert, i) => (
                     <div key={i} className="toast-alert">
