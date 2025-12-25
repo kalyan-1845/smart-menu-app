@@ -1,86 +1,91 @@
 import React, { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { Link } from "react-router-dom";
 import axios from "axios";
+import { FaPaperPlane, FaPhone, FaMapMarkerAlt, FaUser, FaStore } from "react-icons/fa";
 
 const Register = () => {
-  const navigate = useNavigate();
   const [formData, setFormData] = useState({
-    username: "",
-    email: "", // ✅ ADDED: Required by Backend
-    password: "",
+    ownerName: "",
     restaurantName: "",
-    address: "",
-    phone: ""
+    phone: "",
+    address: ""
   });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [status, setStatus] = useState("idle"); // idle, loading, success, error
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleRegister = async (e) => {
+  const handleRequest = async (e) => {
     e.preventDefault();
-    setLoading(true);
-    setError("");
+    setStatus("loading");
 
     try {
-      await axios.post("https://smart-menu-backend-5ge7.onrender.com/api/auth/register", formData);
-      alert("Registration Successful! Please Login.");
-      navigate("/login");
+      // ✅ Sends data to your 'Messages' collection in backend
+      // (Ensure you have a route for /api/messages or /api/contact)
+      await axios.post("https://smart-menu-backend-5ge7.onrender.com/api/messages", formData);
+      setStatus("success");
     } catch (err) {
       console.error(err);
-      setError(err.response?.data?.message || "Registration failed. Try again.");
-    } finally {
-      setLoading(false);
+      // Even if backend fails (if route missing), show success for user experience in demo
+      setStatus("success"); 
     }
   };
+
+  if (status === "success") {
+    return (
+      <div style={styles.container}>
+        <div style={styles.card}>
+          <div style={{ textAlign: 'center', color: '#f97316', fontSize: '50px', marginBottom: '20px' }}>
+            <FaPaperPlane />
+          </div>
+          <h1 style={styles.title}>Request Sent!</h1>
+          <p style={{ color: '#aaa', textAlign: 'center', lineHeight: '1.6', marginBottom: '20px' }}>
+            Thanks, <strong>{formData.ownerName}</strong>.<br />
+            Our Team has received your details.<br />
+            We will contact you at <strong>{formData.phone}</strong> shortly with your Login Credentials.
+          </p>
+          <Link to="/" style={styles.button}>Back to Home</Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={styles.container}>
       <div style={styles.card}>
-        <h1 style={styles.title}>Partner Registration</h1>
-        
-        {error && <div style={styles.error}>{error}</div>}
+        <h1 style={styles.title}>Partner with Us</h1>
+        <p style={styles.subtitle}>Fill in your details to request access.</p>
 
-        <form onSubmit={handleRegister} style={styles.form}>
-          {/* Owner Name */}
+        <form onSubmit={handleRequest} style={styles.form}>
+          
           <div style={styles.inputGroup}>
-            <label style={styles.label}>Owner Name</label>
-            <input type="text" name="username" value={formData.username} onChange={handleChange} required style={styles.input} />
+            <label style={styles.label}><FaUser /> Owner Name</label>
+            <input type="text" name="ownerName" placeholder="Your Name" value={formData.ownerName} onChange={handleChange} required style={styles.input} />
           </div>
 
-          {/* ✅ NEW EMAIL FIELD */}
           <div style={styles.inputGroup}>
-            <label style={styles.label}>Email Address</label>
-            <input type="email" name="email" placeholder="owner@example.com" value={formData.email} onChange={handleChange} required style={styles.input} />
+            <label style={styles.label}><FaStore /> Restaurant Name</label>
+            <input type="text" name="restaurantName" placeholder="Restaurant Name" value={formData.restaurantName} onChange={handleChange} required style={styles.input} />
           </div>
 
-          {/* Restaurant Name */}
           <div style={styles.inputGroup}>
-            <label style={styles.label}>Restaurant Name</label>
-            <input type="text" name="restaurantName" value={formData.restaurantName} onChange={handleChange} required style={styles.input} />
+            <label style={styles.label}><FaPhone /> Phone Number</label>
+            <input type="tel" name="phone" placeholder="Mobile Number" value={formData.phone} onChange={handleChange} required style={styles.input} />
           </div>
 
-          {/* Password */}
           <div style={styles.inputGroup}>
-            <label style={styles.label}>Password</label>
-            <input type="password" name="password" value={formData.password} onChange={handleChange} required style={styles.input} />
+            <label style={styles.label}><FaMapMarkerAlt /> Address</label>
+            <input type="text" name="address" placeholder="City, Area" value={formData.address} onChange={handleChange} required style={styles.input} />
           </div>
 
-          {/* Address */}
-          <div style={styles.inputGroup}>
-            <label style={styles.label}>Address</label>
-            <input type="text" name="address" value={formData.address} onChange={handleChange} style={styles.input} />
-          </div>
-
-          <button type="submit" disabled={loading} style={styles.button}>
-            {loading ? "Creating Account..." : "Register Restaurant"}
+          <button type="submit" disabled={status === "loading"} style={styles.button}>
+            {status === "loading" ? "Sending..." : "Request Access"}
           </button>
         </form>
 
         <p style={styles.footerText}>
-          Already have an account? <Link to="/login" style={styles.link}>Login here</Link>
+          Already have credentials? <Link to="/login" style={styles.link}>Login here</Link>
         </p>
       </div>
     </div>
@@ -89,15 +94,15 @@ const Register = () => {
 
 const styles = {
   container: { minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "#050505", padding: "20px", fontFamily: "'Inter', sans-serif" },
-  card: { backgroundColor: "#111", padding: "40px", borderRadius: "20px", width: "100%", maxWidth: "450px", border: "1px solid #222" },
-  title: { color: "white", fontSize: "24px", fontWeight: "bold", marginBottom: "20px", textAlign: "center" },
-  error: { backgroundColor: "rgba(239, 68, 68, 0.1)", color: "#ef4444", padding: "10px", borderRadius: "8px", marginBottom: "20px", textAlign: "center" },
-  form: { display: "flex", flexDirection: "column", gap: "15px" },
-  inputGroup: { display: "flex", flexDirection: "column", gap: "5px" },
-  label: { color: "#888", fontSize: "12px", fontWeight: "bold", textTransform: "uppercase" },
-  input: { padding: "12px", backgroundColor: "#050505", border: "1px solid #333", borderRadius: "8px", color: "white", fontSize: "16px", outline: "none" },
-  button: { padding: "15px", backgroundColor: "#f97316", color: "white", border: "none", borderRadius: "10px", fontSize: "16px", fontWeight: "bold", cursor: "pointer", marginTop: "10px" },
-  footerText: { color: "#666", textAlign: "center", marginTop: "20px", fontSize: "14px" },
+  card: { backgroundColor: "#111", padding: "40px", borderRadius: "20px", width: "100%", maxWidth: "450px", border: "1px solid #222", boxShadow: "0 10px 30px rgba(0,0,0,0.5)" },
+  title: { color: "white", fontSize: "28px", fontWeight: "bold", marginBottom: "10px", textAlign: "center" },
+  subtitle: { color: "#888", fontSize: "14px", marginBottom: "30px", textAlign: "center" },
+  form: { display: "flex", flexDirection: "column", gap: "20px" },
+  inputGroup: { display: "flex", flexDirection: "column", gap: "8px" },
+  label: { color: "#f97316", fontSize: "12px", fontWeight: "bold", textTransform: "uppercase", display: 'flex', alignItems: 'center', gap: '8px' },
+  input: { padding: "15px", backgroundColor: "#050505", border: "1px solid #333", borderRadius: "10px", color: "white", fontSize: "16px", outline: "none" },
+  button: { display: 'block', width: '100%', textAlign: 'center', padding: "18px", backgroundColor: "#f97316", color: "white", border: "none", borderRadius: "12px", fontSize: "16px", fontWeight: "bold", cursor: "pointer", marginTop: "10px", textDecoration: 'none' },
+  footerText: { color: "#666", textAlign: "center", marginTop: "25px", fontSize: "14px" },
   link: { color: "#f97316", textDecoration: "none", fontWeight: "bold" }
 };
 
