@@ -5,10 +5,10 @@ import io from "socket.io-client";
 import confetti from "canvas-confetti";
 import { 
     FaPlus, FaTrash, FaUtensils, 
-    FaBell, FaCheckCircle, FaCircle, FaCrown, FaSignOutAlt, FaRocket, FaUnlock, FaStore, FaExternalLinkAlt, FaCopy, FaLock
+    FaBell, FaCheckCircle, FaCircle, FaCrown, FaSignOutAlt, FaRocket, FaUnlock, FaStore, FaExternalLinkAlt, FaCopy
 } from "react-icons/fa";
 
-// --- STYLES (Your Beautiful Theme) ---
+// --- STYLES (Mobile Optimized & Beautiful) ---
 const styles = `
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;900&display=swap');
 .admin-container { min-height: 100vh; padding: 20px; background: radial-gradient(circle at top center, #1a0f0a 0%, #050505 60%); color: white; font-family: 'Inter', sans-serif; }
@@ -38,9 +38,6 @@ const styles = `
 .link-text { color: #3b82f6; font-size: 12px; font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; display: block; text-decoration: none; }
 .action-btn { background: none; border: none; color: #888; cursor: pointer; padding: 5px; transition: 0.2s; }
 .action-btn:hover { color: white; }
-/* MODAL STYLES */
-.modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 2000; }
-.modal-content { background: #111; padding: 30px; border-radius: 20px; width: 90%; max-width: 320px; text-align: center; border: 1px solid #333; box-shadow: 0 10px 40px rgba(0,0,0,0.8); }
 `;
 
 const SetupWizard = ({ dishesCount, pushEnabled }) => {
@@ -98,13 +95,6 @@ const RestaurantAdmin = () => {
     const [dishes, setDishes] = useState([]);
     const [formData, setFormData] = useState({ name: "", price: "", category: "Starters" });
 
-    // --- STAFF MODAL STATE (Merged Logic) ---
-    const [showStaffModal, setShowStaffModal] = useState(false);
-    const [selectedRole, setSelectedRole] = useState("");
-    const [rolePassword, setRolePassword] = useState("");
-    const [roleError, setRoleError] = useState("");
-    const [roleLoading, setRoleLoading] = useState(false);
-
     const handleLogin = async (e) => {
         e.preventDefault();
         setAuthLoading(true);
@@ -127,38 +117,6 @@ const RestaurantAdmin = () => {
             const dishRes = await axios.get(`${API_BASE}/dishes?restaurantId=${mongoId}`, config);
             setDishes(dishRes.data || []);
         } catch (error) { console.error(error); } finally { setLoading(false); }
-    };
-
-    // --- NEW STAFF LOGIN LOGIC ---
-    const openStaffLogin = (role) => {
-        setSelectedRole(role);
-        setRolePassword("");
-        setRoleError("");
-        setShowStaffModal(true);
-    };
-
-    const handleStaffLogin = async () => {
-        if(!rolePassword) return;
-        setRoleLoading(true);
-        setRoleError("");
-        
-        try {
-            const res = await axios.post(`${API_BASE}/auth/verify-role`, {
-                username: id,
-                role: selectedRole,
-                password: rolePassword
-            });
-
-            if (res.data.success) {
-                // Open correct page in new tab
-                window.open(`/${id}/${selectedRole}`, "_blank");
-                setShowStaffModal(false);
-            }
-        } catch (err) {
-            setRoleError("Wrong Password! (Try 'bitebox18')");
-        } finally {
-            setRoleLoading(false);
-        }
     };
 
     useEffect(() => {
@@ -293,14 +251,18 @@ const RestaurantAdmin = () => {
                         </div>
                     </div>
 
-                    {/* ✅ UPDATED BUTTONS TO TRIGGER MODAL */}
+                    {/* ✅ RESTORED DIRECT LINKS (NO MODAL) */}
                     <div style={{ display: 'flex', gap: '10px' }}>
-                        <button onClick={() => openStaffLogin('chef')} className="btn-glass" style={{ flex: 1, justifyContent: 'center' }}>
-                            <FaUtensils /> Chef View
-                        </button>
-                        <button onClick={() => openStaffLogin('waiter')} className="btn-glass" style={{ flex: 1, justifyContent: 'center' }}>
-                            <FaBell /> Waiter View
-                        </button>
+                        <Link to={`/${id}/chef`} target="_blank" style={{ flex: 1, textDecoration: 'none' }}>
+                            <button className="btn-glass" style={{ width: '100%', justifyContent: 'center' }}>
+                                <FaUtensils /> Chef View
+                            </button>
+                        </Link>
+                        <Link to={`/${id}/waiter`} target="_blank" style={{ flex: 1, textDecoration: 'none' }}>
+                            <button className="btn-glass" style={{ width: '100%', justifyContent: 'center' }}>
+                                <FaBell /> Waiter View
+                            </button>
+                        </Link>
                     </div>
                 </header>
 
@@ -346,42 +308,6 @@ const RestaurantAdmin = () => {
                     </div>
                 )}
             </div>
-
-            {/* ✅ STAFF LOGIN MODAL (Added at the bottom) */}
-            {showStaffModal && (
-                <div className="modal-overlay">
-                    <div className="modal-content">
-                        <FaLock size={24} color="#f97316" style={{ marginBottom: "15px" }} />
-                        <h3 style={{ margin: "0 0 15px 0", color: 'white' }}>
-                            {selectedRole === 'chef' ? 'Kitchen Access' : 'Waiter Access'}
-                        </h3>
-                        <input 
-                            type="password" 
-                            autoFocus
-                            placeholder="Enter Staff Password"
-                            value={rolePassword}
-                            onChange={e => setRolePassword(e.target.value)}
-                            className="input-dark"
-                            style={{ textAlign: "center", marginBottom: "10px" }}
-                        />
-                        {roleError && <div style={{ color: "#ff4d4d", fontSize: "13px", marginBottom: "10px" }}>{roleError}</div>}
-                        
-                        <button 
-                            onClick={handleStaffLogin}
-                            className="btn-primary"
-                            disabled={roleLoading}
-                        >
-                            {roleLoading ? "Verifying..." : "Unlock"}
-                        </button>
-                        <button 
-                            onClick={() => setShowStaffModal(false)}
-                            style={{ marginTop: "15px", background: "transparent", color: "#888", border: "none", textDecoration: "underline", cursor: 'pointer' }}
-                        >
-                            Cancel
-                        </button>
-                    </div>
-                </div>
-            )}
         </div>
     );
 };
