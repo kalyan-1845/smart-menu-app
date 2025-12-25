@@ -92,18 +92,22 @@ router.post('/login', async (req, res) => {
 /**
  * 3. VERIFY ROLE (WAITER / CHEF)
  * Logic: Checks specific role passwords (default: bitebox18)
+ * FIX: This route handles the 404 error you were seeing.
  */
 router.post('/verify-role', async (req, res) => {
     try {
         const { username, password, role } = req.body;
 
+        // Find owner by username (which is used in the URL)
         const owner = await Owner.findOne({ username });
+        
         if (!owner) {
             return res.status(404).json({ success: false, message: "Restaurant not found" });
         }
 
         let isValid = false;
         
+        // Check password based on role
         if (role === 'waiter') {
             const validPass = owner.waiterPassword || "bitebox18";
             isValid = (password === validPass);
