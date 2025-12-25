@@ -1,70 +1,59 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 
-/**
- * Owner Model (v2.8)
- * Represents a Restaurant entity. 
- * Includes fields for the 60-day trial and manual extensions.
- */
-const ownerSchema = mongoose.Schema({
-    restaurantName: { 
-        type: String, 
-        required: [true, "Restaurant name is required"],
-        trim: true
+const ownerSchema = new mongoose.Schema({
+    restaurantName: {
+        type: String,
+        required: true
     },
     username: {
         type: String,
-        required: [true, "Restaurant ID (username) is required"],
-        unique: true,
-        trim: true
+        required: true,
+        unique: true
     },
     email: {
         type: String,
-        required: [true, "Email is required"],
-        unique: true,
-        lowercase: true,
-        trim: true
+        required: true,
+        unique: true
     },
     password: {
         type: String,
-        required: [true, "Password is required"],
+        required: true
     },
-
-    // 💰 SIMPLIFIED SUBSCRIPTION TRACKING
-    // Flattened for easier access in SuperAdmin and Chef dashboards
-    isPro: { 
-        type: Boolean, 
-        default: false 
+    // --- Role-Based Passwords (Added for Waiter/Chef) ---
+    waiterPassword: { 
+        type: String, 
+        default: "bitebox18" 
     },
-    trialEndsAt: { 
-        type: Date,
-        required: true // Set automatically during registration (Day 0 + 60)
+    chefPassword: { 
+        type: String, 
+        default: "bitebox18" 
     },
-    status: {
-        type: String,
-        enum: ['Active', 'Suspended', 'Blocked'],
-        default: 'Active'
+    // ----------------------------------------------------
+    trialEndsAt: {
+        type: Date
+    },
+    isPro: {
+        type: Boolean,
+        default: false
+    },
+    subscriptionId: { // Optional: For future Razorpay/Stripe integration
+        type: String
     }
 }, {
-    timestamps: true, // Tracks when the account was created
+    timestamps: true // Automatically adds createdAt and updatedAt
 });
 
-/**
- * 🔒 PASSWORD ENCRYPTION
- * Hashes password before saving to the database.
- */
+// 🔒 Middleware: Hash password before saving
 ownerSchema.pre('save', async function (next) {
     if (!this.isModified('password')) {
-        return next();
+        next();
     }
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
 });
 
-/**
- * 🔓 PASSWORD VERIFICATION
- * Compares plain text login password with the hashed password in DB.
- */
+// 🔑 Method: Check if entered password matches hashed password
 ownerSchema.methods.matchPassword = async function (enteredPassword) {
     return await bcrypt.compare(enteredPassword, this.password);
 };
