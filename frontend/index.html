@@ -7,10 +7,10 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
     />
-    <meta name="theme-color" content="#0d0d0d" />
+    <meta name="theme-color" content="#050505" />
     <meta
       name="description"
-      content="Smart Restaurant Menu & Real-time Ordering System"
+      content="Smart Restaurant Menu - Real-time Digital Ordering & Kitchen Management"
     />
 
     <link rel="manifest" href="/manifest.json" />
@@ -20,31 +20,22 @@
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <link rel="apple-touch-icon" href="/logo192.png" />
 
-    <title>Smart Menu | Cloud Kitchen</title>
+    <title>Smart Menu | v2.8 Cloud System</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&family=Poppins:wght@600;700;800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&family=Poppins:wght@700;800&display=swap"
       rel="stylesheet"
     />
 
     <style>
-      /* --- GLOBAL VARIABLES & RESET --- */
+      /* --- GLOBAL BASE STYLES --- */
       :root {
-        --bg-color: #050505; 
+        --bg-color: #050505;
         --primary-orange: #f97316;
         --safe-area-inset-bottom: env(safe-area-inset-bottom);
-
-        font-family: "Inter", system-ui, Avenir, Helvetica, Arial, sans-serif;
-        line-height: 1.5;
-        font-weight: 400;
-        color-scheme: light dark;
-        color: rgba(255, 255, 255, 0.87);
-        font-synthesis: none;
-        text-rendering: optimizeLegibility;
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
+        color-scheme: dark;
       }
 
       * {
@@ -57,26 +48,54 @@
       html, body {
         height: 100%;
         background-color: var(--bg-color);
-        overscroll-behavior-y: none; /* Prevents pull-to-refresh */
-        min-width: 320px; 
-      }
-
-      body {
         color: #ffffff;
         font-family: "Inter", sans-serif;
+        /* Prevents pull-to-refresh on mobile for a native app feel */
+        overscroll-behavior-y: none;
+        overflow-x: hidden;
       }
 
       /* --- APP CONTAINER --- */
       #root {
         width: 100%;
         min-height: 100vh;
-        position: relative;
         display: flex;
         flex-direction: column;
       }
 
-      /* --- 🖨️ THERMAL PRINTER (KOT/Invoice) LOGIC --- */
-      /* This ensures that when you press Print, only the receipt shows up */
+      /* --- 🌀 LOADING SPINNER (Visible before React Boots) --- */
+      #root:empty {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+      }
+
+      #root:empty::before {
+        content: "";
+        width: 40px;
+        height: 40px;
+        border: 3px solid rgba(249, 115, 22, 0.1);
+        border-top: 3px solid var(--primary-orange);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        margin-bottom: 15px;
+      }
+
+      #root:empty::after {
+        content: "SMART MENU CLOUD";
+        font-size: 10px;
+        letter-spacing: 4px;
+        font-weight: 900;
+        color: var(--primary-orange);
+        opacity: 0.8;
+      }
+
+      @keyframes spin { 100% { transform: rotate(360deg); } }
+
+      /* --- 🖨️ KITCHEN PRINTER (KOT) LOGIC --- */
+      /* This allows for 80mm thermal printing while hiding UI elements */
       @media print {
         body * {
           visibility: hidden;
@@ -88,49 +107,14 @@
           position: absolute;
           left: 0;
           top: 0;
-          width: 80mm; /* Standard 80mm Thermal Width */
+          width: 80mm;
           background: white !important;
           color: black !important;
+          font-family: 'Courier New', monospace;
           padding: 5px;
-          font-family: 'Courier New', Courier, monospace;
         }
-        @page {
-          margin: 0; /* Removes browser header/footer text */
-        }
+        @page { margin: 0; }
       }
-
-      /* --- 🌀 LOADING SPINNER (Shows before React starts) --- */
-      #root:empty {
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        height: 100vh;
-      }
-
-      #root:empty::before {
-        content: "";
-        width: 50px;
-        height: 50px;
-        border: 4px solid rgba(249, 115, 22, 0.1);
-        border-top: 4px solid var(--primary-orange);
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
-        margin-bottom: 20px;
-      }
-
-      #root:empty::after {
-        content: "LOADING SYSTEM...";
-        font-family: "Poppins", sans-serif;
-        font-weight: 800;
-        font-size: 12px;
-        letter-spacing: 3px;
-        color: var(--primary-orange);
-        animation: fade 1.5s ease-in-out infinite;
-      }
-
-      @keyframes spin { 100% { transform: rotate(360deg); } }
-      @keyframes fade { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
     </style>
   </head>
 
@@ -145,7 +129,7 @@
           navigator.serviceWorker
             .register("/sw.js")
             .then((reg) => console.log("✅ SW Active"))
-            .catch((err) => console.log("❌ SW Error: ", err));
+            .catch((err) => console.log("❌ SW Failed:", err));
         });
       }
     </script>
