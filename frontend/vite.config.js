@@ -3,9 +3,8 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
-  // Ensure the base is set to root unless you are hosting on a subpath
-  base: '/', 
-  build: {
-    outDir: 'dist',
+  server: {
+    host: true, // 👈 THIS ALLOWS MOBILE ACCESS
+    port: 5173
   }
 })
