@@ -1,21 +1,23 @@
 import React, { useState, useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 
-// --- PAGES ---
-import LandingPage from "./pages/LandingPage.jsx"; 
-import Menu from "./pages/Menu.jsx"; 
-import Cart from "./pages/Cart.jsx";
-import OrderSuccess from "./pages/OrderSuccess.jsx";
-import OrderTracker from "./pages/OrderTracker.jsx";
+// --- PAGES IMPORT ---
+// Ensure these files exist in your "src/pages" or "src" folder
+import LandingPage from "./LandingPage.jsx"; 
+import Menu from "./Menu.jsx"; 
+import Cart from "./Cart.jsx";
+import OrderSuccess from "./OrderSuccess.jsx";
+import OrderTracker from "./OrderTracker.jsx";
 
-// (Pricing import removed)
+// --- STAFF PANELS IMPORT ---
+import SuperAdmin from "./SuperAdmin.jsx";
+import RestaurantAdmin from "./RestaurantAdmin.jsx"; // Or AdminPanel.jsx if that's your name
+import ChefDashboard from "./ChefDashboard.jsx"; 
+import WaiterDashboard from "./WaiterDashboard.jsx";
+import OwnerLogin from "./OwnerLogin.jsx";
+import Register from "./Register.jsx";
 
-// --- STAFF PANELS ---
-import SuperAdmin from "./pages/SuperAdmin.jsx";
-import RestaurantAdmin from "./pages/RestaurantAdmin.jsx";
-import ChefDashboard from "./pages/ChefDashboard.jsx"; 
-import WaiterDashboard from "./pages/WaiterDashboard.jsx";
-
+// --- GLOBAL STYLES ---
 const GlobalStyles = () => (
   <style>{`
     :root { background-color: #050505; color: white; font-family: 'Inter', sans-serif; }
@@ -29,29 +31,45 @@ const GlobalStyles = () => (
 );
 
 function App() {
+  // --- STATE ---
+  // Initialize Cart from LocalStorage
   const [cart, setCart] = useState(() => {
-    const saved = localStorage.getItem("smartMenu_Cart");
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const saved = localStorage.getItem("smartMenu_Cart");
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) { return []; }
   });
   
-  const [restaurantId, setRestaurantId] = useState(null);
-  const [tableNum, setTableNum] = useState(""); 
+  // Initialize Restaurant Info from LocalStorage (Prevents "Null" errors on refresh)
+  const [restaurantId, setRestaurantId] = useState(localStorage.getItem("activeResId") || null);
+  const [tableNum, setTableNum] = useState(localStorage.getItem("activeTable") || ""); 
 
+  // --- PERSISTENCE EFFECT ---
   useEffect(() => {
     localStorage.setItem("smartMenu_Cart", JSON.stringify(cart));
-  }, [cart]);
+    if (restaurantId) localStorage.setItem("activeResId", restaurantId);
+    if (tableNum) localStorage.setItem("activeTable", tableNum);
+  }, [cart, restaurantId, tableNum]);
 
+  // --- CART HANDLERS ---
   const addToCart = (dish) => {
     setCart((prev) => {
       const exists = prev.find((item) => item._id === dish._id);
-      if (exists) return prev.map((i) => i._id === dish._id ? { ...i, quantity: i.quantity + 1 } : i);
+      if (exists) {
+        return prev.map((i) => i._id === dish._id ? { ...i, quantity: i.quantity + 1 } : i);
+      }
       return [...prev, { ...dish, quantity: 1 }];
     });
   };
 
   const updateQuantity = (id, newQuantity) => {
-    if (newQuantity <= 0) return removeFromCart(id);
-    setCart((prev) => prev.map((item) => item._id === id ? { ...item, quantity: newQuantity } : item));
+    if (newQuantity <= 0) {
+      removeFromCart(id);
+      return;
+    }
+    setCart((prev) => 
+      prev.map((item) => item._id === id ? { ...item, quantity: newQuantity } : item)
+    );
   };
 
   const removeFromCart = (id) => setCart((prev) => prev.filter((item) => item._id !== id));
@@ -61,22 +79,52 @@ function App() {
     <Router>
       <GlobalStyles /> 
       <Routes>
+        {/* --- PUBLIC ROUTES --- */}
         <Route path="/" element={<LandingPage />} /> 
-        
-        {/* (Pricing Route removed) */}
+        <Route path="/login" element={<OwnerLogin />} />
+        <Route path="/register" element={<Register />} />
 
-        <Route path="/menu/:id/:table" element={<Menu cart={cart} addToCart={addToCart} setRestaurantId={setRestaurantId} setTableNum={setTableNum} />} />
-        <Route path="/menu/:id" element={<Menu cart={cart} addToCart={addToCart} setRestaurantId={setRestaurantId} setTableNum={setTableNum} />} />
-        <Route path="/cart" element={<Cart cart={cart} removeFromCart={removeFromCart} clearCart={clearCart} updateQuantity={updateQuantity} restaurantId={restaurantId} tableNum={tableNum} setTableNum={setTableNum} />} />
+        {/* --- CUSTOMER EXPERIENCE --- */}
+        <Route 
+          path="/menu/:id/:table" 
+          element={<Menu cart={cart} addToCart={addToCart} setRestaurantId={setRestaurantId} setTableNum={setTableNum} />} 
+        />
+        <Route 
+          path="/menu/:id" 
+          element={<Menu cart={cart} addToCart={addToCart} setRestaurantId={setRestaurantId} setTableNum={setTableNum} />} 
+        />
+        <Route 
+          path="/cart" 
+          element={
+            <Cart 
+              cart={cart} 
+              removeFromCart={removeFromCart} 
+              clearCart={clearCart} 
+              updateQuantity={updateQuantity} 
+              restaurantId={restaurantId} 
+              tableNum={tableNum} 
+              setTableNum={setTableNum} 
+            />
+          } 
+        />
         <Route path="/order-success" element={<OrderSuccess />} />
         <Route path="/track/:id" element={<OrderTracker />} />
 
+        {/* --- STAFF DASHBOARDS --- */}
         <Route path="/superadmin" element={<SuperAdmin />} />
+        
+        {/* Note: I added /admin route specifically for your Staff Access flow */}
+        <Route path="/admin" element={<RestaurantAdmin />} /> 
         <Route path="/:id/admin" element={<RestaurantAdmin />} />
+        
+        <Route path="/chef" element={<ChefDashboard />} /> 
         <Route path="/:id/chef" element={<ChefDashboard />} />
-        <Route path="/:id/kitchen" element={<ChefDashboard />} />
+        <Route path="/kitchen" element={<Navigate to="/chef" replace />} />
+
+        <Route path="/waiter" element={<WaiterDashboard />} />
         <Route path="/:id/waiter" element={<WaiterDashboard />} />
 
+        {/* --- FALLBACK --- */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>
