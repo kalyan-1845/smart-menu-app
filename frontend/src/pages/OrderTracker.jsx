@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import io from "socket.io-client";
 // Corrected import path to match your folder structure
-import { generateCustomerReceipt } from "../utils/receiptGenerator";
+import { generateCustomerReceipt } from "../utils/ReceiptGenerator";
 import { 
     FaCheck, FaUtensils, FaClock, FaConciergeBell, 
     FaArrowLeft, FaPhoneAlt, FaMoneyBillWave, FaCheckCircle, 
