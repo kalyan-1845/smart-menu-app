@@ -7,7 +7,7 @@ import Menu from "./pages/Menu.jsx";
 import Cart from "./pages/Cart.jsx";
 import OrderSuccess from "./pages/OrderSuccess.jsx";
 import OrderTracker from "./pages/OrderTracker.jsx";
-import Pricing from "./pages/Pricing.jsx"; 
+import Pricing from "./pages/Pricing.jsx";
 
 // --- STAFF ---
 import SuperAdmin from "./pages/SuperAdmin.jsx";
