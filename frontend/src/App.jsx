@@ -1,23 +1,22 @@
 import React, { useState, useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 
-// --- ✅ FIXED: Pointing to the "pages" folder ---
+// --- PAGES IMPORT (All from ./pages/) ---
 import LandingPage from "./pages/LandingPage.jsx"; 
 import Menu from "./pages/Menu.jsx"; 
 import Cart from "./pages/Cart.jsx";
 import OrderSuccess from "./pages/OrderSuccess.jsx";
 import OrderTracker from "./pages/OrderTracker.jsx";
 
-// --- STAFF PANELS (Inside pages folder) ---
+// --- STAFF PANELS ---
 import SuperAdmin from "./pages/SuperAdmin.jsx";
 import RestaurantAdmin from "./pages/RestaurantAdmin.jsx"; 
 import ChefDashboard from "./pages/ChefDashboard.jsx"; 
 import WaiterDashboard from "./pages/WaiterDashboard.jsx";
 
-// --- AUTH PAGES (Usually in root, but check if they are in pages) ---
-// If these are also in the 'pages' folder, add '/pages/' before the name
-import OwnerLogin from "./OwnerLogin.jsx"; 
-import Register from "./Register.jsx";
+// --- ✅ FIXED: These are also in the "pages" folder ---
+import OwnerLogin from "./pages/OwnerLogin.jsx"; 
+import Register from "./pages/Register.jsx";
 
 // --- GLOBAL STYLES ---
 const GlobalStyles = () => (
