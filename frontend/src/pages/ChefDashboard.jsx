@@ -42,7 +42,7 @@ const ChefDashboard = () => {
         setError("");
 
         try {
-            // Updated to use verify-role for specific 'bitebox18' password
+            // Verify Role API Call
             const res = await axios.post(`${API_BASE}/auth/verify-role`, { 
                 username: id, 
                 password: password,
@@ -202,6 +202,7 @@ const ChefDashboard = () => {
                             value={password} 
                             onChange={e=>setPassword(e.target.value)} 
                             style={styles.input}
+                            autoComplete="current-password" // ✅ FIX: Removes the DOM warning
                         />
                         {error && <p style={{color: '#ef4444', fontSize: '12px', marginBottom: '15px'}}>{error}</p>}
                         

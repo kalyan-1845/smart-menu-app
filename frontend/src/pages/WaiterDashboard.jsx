@@ -47,8 +47,6 @@ const WaiterDashboard = () => {
                 
                 setIsAuthenticated(true);
                 fetchData(rId);
-            } else {
-                setError("Invalid Password");
             }
         } catch (err) {
             console.error(err);
@@ -96,6 +94,8 @@ const WaiterDashboard = () => {
 
             // 📦 ORDER UPDATES
             socket.on("order-updated", () => fetchData(mongoId));
+            
+            // 🍔 NEW ORDER PLACED
             socket.on("new-order", () => {
                 notifSound.current.play().catch(()=>{});
                 fetchData(mongoId);
@@ -155,6 +155,7 @@ const WaiterDashboard = () => {
                             style={styles.input}
                             value={password}
                             onChange={e => setPassword(e.target.value)}
+                            autoComplete="current-password" // ✅ Fixes DOM Warning
                         />
                         {error && <p style={{color: '#ef4444', fontSize: '12px', marginBottom: '15px'}}>{error}</p>}
                         
