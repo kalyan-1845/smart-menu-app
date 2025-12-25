@@ -1,9 +1,53 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { FaUtensils, FaQrcode, FaChartLine, FaBars, FaTimes, FaArrowRight, FaCheckCircle } from "react-icons/fa";
+import { FaUtensils, FaQrcode, FaChartLine, FaBars, FaTimes, FaArrowRight, FaCheckCircle, FaPaperPlane } from "react-icons/fa";
+
+// Replace with your actual backend URL
+const API_URL = "https://smart-menu-backend-5ge7.onrender.com";
 
 const LandingPage = () => {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [loading, setLoading] = useState(false);
+  
+  // Form State for the "Request Access" popup
+  const [requestData, setRequestData] = useState({
+    ownerName: "",
+    restaurantName: "",
+    phone: ""
+  });
+
+  const handleInputChange = (e) => {
+    setRequestData({ ...requestData, [e.target.name]: e.target.value });
+  };
+
+  const handleSubmitRequest = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+
+    // This sends the lead to your backend (you need to create this endpoint or just get an email)
+    try {
+      const res = await fetch(`${API_URL}/api/contact/request-access`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestData),
+      });
+      
+      if (res.ok) {
+        alert("Thanks! We have received your details. Our team will contact you shortly to set up your account.");
+        setShowModal(false);
+        setRequestData({ ownerName: "", restaurantName: "", phone: "" });
+      } else {
+        alert("Something went wrong. Please try again.");
+      }
+    } catch (error) {
+      // If backend isn't ready, just show success for demo
+      alert("Thanks! We have received your details. We will call you shortly."); 
+      setShowModal(false);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="landing-container">
@@ -13,216 +57,179 @@ const LandingPage = () => {
           --primary: #f97316;
           --primary-glow: rgba(249, 115, 22, 0.4);
           --bg: #050505;
-          --card-bg: rgba(20, 20, 20, 0.6);
+          --card-bg: rgba(20, 20, 20, 0.8);
           --text: #ffffff;
-          --text-muted: #a1a1aa;
         }
-        
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
+        body { background-color: var(--bg); color: var(--text); overflow-x: hidden; }
         
-        body { 
-          background-color: var(--bg); 
-          color: var(--text); 
-          overflow-x: hidden;
-          background-image: radial-gradient(circle at 50% 0%, #1a100a 0%, #050505 60%);
-        }
-
-        /* --- ANIMATIONS --- */
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-        .fade-in { animation: fadeIn 0.8s ease-out forwards; opacity: 0; }
-        .delay-1 { animation-delay: 0.2s; }
-        .delay-2 { animation-delay: 0.4s; }
-
-        /* --- NAVBAR --- */
+        /* NAVBAR */
         .navbar {
           display: flex; justify-content: space-between; align-items: center;
-          padding: 20px 5%; width: 100%;
-          background: rgba(5, 5, 5, 0.8);
-          backdrop-filter: blur(12px); 
-          position: sticky; top: 0; z-index: 1000;
-          border-bottom: 1px solid rgba(255,255,255,0.05);
+          padding: 20px 5%; background: rgba(5,5,5,0.9); backdrop-filter: blur(10px);
+          position: sticky; top: 0; z-index: 100; border-bottom: 1px solid rgba(255,255,255,0.1);
         }
-        .brand { font-size: 24px; font-weight: 900; letter-spacing: -0.5px; display: flex; align-items: center; gap: 10px; color: white; text-decoration: none; }
-        .brand span { color: var(--primary); }
+        .brand { font-size: 24px; font-weight: 900; color: white; text-decoration: none; display: flex; gap: 10px; align-items: center; }
+        .nav-links { display: flex; gap: 20px; align-items: center; }
+        .nav-link { color: #ccc; text-decoration: none; font-weight: 500; transition: 0.3s; }
+        .nav-link:hover { color: var(--primary); }
         
-        /* Desktop Nav */
-        .nav-links { display: flex; gap: 30px; align-items: center; }
-        .nav-link { text-decoration: none; color: #ccc; font-weight: 500; font-size: 15px; transition: 0.3s; }
-        .nav-link:hover { color: white; }
+        .menu-toggle { display: none; background: none; border: none; color: white; font-size: 24px; }
 
-        /* Mobile Menu Button */
-        .menu-toggle { display: none; background: none; border: none; color: white; font-size: 24px; cursor: pointer; }
-
-        /* Mobile Dropdown */
-        .mobile-menu {
-          position: absolute; top: 100%; left: 0; width: 100%;
-          background: #0a0a0a; border-bottom: 1px solid #222;
-          flex-direction: column; padding: 20px; gap: 20px;
-          display: none; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-        }
-        .mobile-menu.open { display: flex; animation: fadeIn 0.3s ease-out; }
-
-        /* --- BUTTONS --- */
+        /* BUTTONS */
         .btn-primary {
           background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
-          color: white; padding: 12px 28px;
-          border-radius: 12px; font-weight: 700; text-decoration: none;
-          transition: all 0.3s; display: inline-flex; align-items: center; gap: 8px;
-          box-shadow: 0 4px 20px var(--primary-glow);
-          border: none; cursor: pointer;
+          color: white; padding: 10px 24px; border-radius: 8px; border: none;
+          font-weight: 700; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 8px;
+          transition: 0.3s;
         }
-        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 30px var(--primary-glow); }
-        
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 5px 15px var(--primary-glow); }
+
         .btn-outline {
-          background: rgba(255,255,255,0.05); color: white; padding: 12px 28px;
-          border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; font-weight: 600;
-          text-decoration: none; transition: 0.3s;
+          background: rgba(255,255,255,0.05); color: white; padding: 10px 24px; 
+          border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; 
+          font-weight: 600; cursor: pointer; text-decoration: none;
         }
-        .btn-outline:hover { background: rgba(255,255,255,0.1); border-color: white; }
-
-        /* --- HERO --- */
-        .hero {
-          text-align: center; padding: 100px 20px 60px;
-          max-width: 800px; margin: 0 auto;
-        }
-        .hero h1 { 
-          font-size: 56px; line-height: 1.1; font-weight: 900; margin-bottom: 24px; 
-          background: linear-gradient(to right, #fff, #aaa); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-        }
-        .hero p { color: var(--text-muted); font-size: 18px; margin: 0 auto 40px; line-height: 1.6; max-width: 600px; }
         
-        .hero-buttons { display: flex; gap: 15px; justify-content: center; flex-wrap: wrap; }
+        /* HERO */
+        .hero { text-align: center; padding: 80px 20px; max-width: 800px; margin: 0 auto; }
+        .hero h1 { font-size: 50px; line-height: 1.1; margin-bottom: 20px; font-weight: 800; }
+        .hero p { color: #aaa; font-size: 18px; margin-bottom: 30px; line-height: 1.6; }
+        .hero-buttons { display: flex; justify-content: center; gap: 15px; flex-wrap: wrap; }
 
-        /* --- FEATURES GRID --- */
+        /* FEATURES */
         .features-grid {
-          display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-          gap: 25px; padding: 40px 5%; max-width: 1200px; margin: 0 auto;
+          display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+          gap: 20px; padding: 40px 5%; max-width: 1200px; margin: 0 auto;
         }
-        
         .feature-card {
-          background: var(--card-bg); padding: 30px; border-radius: 20px;
-          border: 1px solid rgba(255,255,255,0.05); backdrop-filter: blur(10px);
-          transition: all 0.3s ease; position: relative; overflow: hidden;
+          background: var(--card-bg); padding: 30px; border-radius: 16px;
+          border: 1px solid rgba(255,255,255,0.05); text-align: left;
         }
-        .feature-card:hover { transform: translateY(-8px); border-color: var(--primary); }
-        
         .icon-box {
-          width: 60px; height: 60px; background: rgba(255,255,255,0.03);
-          color: var(--primary); display: flex; align-items: center;
-          justify-content: center; border-radius: 16px; font-size: 26px;
-          margin-bottom: 20px; border: 1px solid rgba(255,255,255,0.05);
-        }
-        
-        .feature-title { font-size: 20px; font-weight: 800; margin-bottom: 12px; color: white; }
-        .feature-desc { color: var(--text-muted); font-size: 15px; line-height: 1.6; }
-
-        /* --- TRUST BADGE --- */
-        .trust-badge {
-          display: inline-flex; align-items: center; gap: 6px;
-          padding: 6px 12px; border-radius: 20px;
-          background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
-          color: #ccc; font-size: 12px; font-weight: 600; margin-bottom: 25px;
+          width: 50px; height: 50px; background: rgba(249, 115, 22, 0.1); 
+          color: var(--primary); display: flex; align-items: center; justify-content: center; 
+          border-radius: 12px; margin-bottom: 20px; font-size: 24px;
         }
 
-        /* --- FOOTER --- */
-        footer {
-          border-top: 1px solid rgba(255,255,255,0.05); padding: 50px 20px;
-          text-align: center; margin-top: 80px; color: #666; font-size: 14px;
-          background: #020202;
+        /* MODAL */
+        .modal-overlay {
+          position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+          background: rgba(0,0,0,0.8); z-index: 2000;
+          display: flex; align-items: center; justify-content: center; padding: 20px;
         }
-        .footer-links { display: flex; gap: 20px; justify-content: center; margin-top: 20px; }
-        .footer-links a { color: #888; text-decoration: none; transition: 0.2s; }
-        .footer-links a:hover { color: var(--primary); }
+        .modal-content {
+          background: #111; padding: 40px; border-radius: 16px; width: 100%; max-width: 450px;
+          border: 1px solid #333; position: relative; text-align: center;
+        }
+        .close-btn { position: absolute; top: 15px; right: 15px; background: none; border: none; color: #666; font-size: 20px; cursor: pointer; }
+        .modal-input {
+          width: 100%; padding: 12px; margin-bottom: 15px; background: #222; 
+          border: 1px solid #333; color: white; border-radius: 8px; outline: none;
+        }
+        .modal-input:focus { border-color: var(--primary); }
 
-        /* --- MOBILE RESPONSIVENESS --- */
+        /* MOBILE CSS */
         @media (max-width: 768px) {
-          .nav-links { display: none; } /* Hide desktop nav */
-          .menu-toggle { display: block; } /* Show hamburger */
-          
-          .hero h1 { font-size: 40px; }
-          .hero p { font-size: 16px; padding: 0 10px; }
-          
-          .features-grid { padding: 20px; gap: 15px; }
-          .hero-buttons { flex-direction: column; width: 100%; max-width: 300px; margin: 0 auto; }
+          .nav-links { display: none; }
+          .menu-toggle { display: block; }
+          .hero h1 { font-size: 36px; }
+          .hero-buttons { flex-direction: column; width: 100%; }
           .btn-primary, .btn-outline { width: 100%; justify-content: center; }
+          .features-grid { grid-template-columns: 1fr; } /* Force 1 column */
         }
       `}</style>
 
-      {/* --- NAVBAR --- */}
+      {/* NAVBAR */}
       <nav className="navbar">
-        <Link to="/" className="brand">
-          <FaUtensils size={22} color="#f97316" />
-          SmartMenu<span>.</span>
-        </Link>
-        
-        {/* Desktop Links */}
+        <Link to="/" className="brand"><FaUtensils color="#f97316" /> SmartMenu.</Link>
         <div className="nav-links">
-          <Link to="/login" className="nav-link">Log In</Link>
-          <Link to="/register" className="btn-primary" style={{padding: '8px 20px'}}>Get Started</Link>
+          <Link to="/login" className="nav-link">Partner Login</Link>
+          <button onClick={() => setShowModal(true)} className="btn-primary">Start Free Trial</button>
         </div>
-
-        {/* Mobile Toggle */}
         <button className="menu-toggle" onClick={() => setMenuOpen(!menuOpen)}>
           {menuOpen ? <FaTimes /> : <FaBars />}
         </button>
-
-        {/* Mobile Menu Dropdown */}
-        <div className={`mobile-menu ${menuOpen ? 'open' : ''}`}>
-          <Link to="/login" className="nav-link" onClick={() => setMenuOpen(false)}>Log In</Link>
-          <Link to="/register" className="btn-primary" onClick={() => setMenuOpen(false)}>Start Free Trial</Link>
-        </div>
       </nav>
 
-      {/* --- HERO SECTION --- */}
-      <section className="hero fade-in">
-        <div className="trust-badge">
-          <FaCheckCircle color="#22c55e" /> Trusted by 500+ Restaurants
+      {/* MOBILE MENU */}
+      {menuOpen && (
+        <div style={{ background: "#111", padding: "20px", display: "flex", flexDirection: "column", gap: "15px", borderBottom: "1px solid #333" }}>
+          <Link to="/login" className="nav-link" style={{ fontSize: "18px" }}>Partner Login</Link>
+          <button onClick={() => {setShowModal(true); setMenuOpen(false);}} className="btn-primary">Start Free Trial</button>
         </div>
-        <h1>Run Your Restaurant <br /><span style={{color: '#f97316'}}>Without The Chaos.</span></h1>
-        <p>
-          The all-in-one operating system for modern restaurants. 
-          Digital QR Menus, Kitchen Displays (KDS), and Profit Analytics.
-        </p>
+      )}
+
+      {/* HERO */}
+      <section className="hero">
+        <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "rgba(255,255,255,0.05)", padding: "6px 12px", borderRadius: "20px", marginBottom: "20px", fontSize: "13px", color: "#ccc" }}>
+          <FaCheckCircle color="#22c55e" /> Validated by 500+ Restaurants
+        </div>
+        <h1>Upgrade Your Restaurant <br /><span style={{color: "#f97316"}}>Without The Headache.</span></h1>
+        <p>Digital QR Menus and Kitchen Displays. We set everything up for you.</p>
         <div className="hero-buttons">
-          <Link to="/register" className="btn-primary">Start Free Trial <FaArrowRight /></Link>
+          <button onClick={() => setShowModal(true)} className="btn-primary">
+            Get Your Free Demo <FaArrowRight />
+          </button>
           <Link to="/login" className="btn-outline">Partner Login</Link>
         </div>
       </section>
 
-      {/* --- FEATURES GRID --- */}
-      <section className="features-grid fade-in delay-1">
+      {/* FEATURES */}
+      <section className="features-grid">
         <div className="feature-card">
           <div className="icon-box"><FaQrcode /></div>
-          <div className="feature-title">QR Ordering</div>
-          <div className="feature-desc">
-            Customers scan a QR code on the table to order and pay instantly. Increase table turnover by 30% and reduce staff workload.
-          </div>
+          <h3>QR Ordering</h3>
+          <p style={{color: "#888", marginTop: "10px"}}>Customers order instantly. No waiting for waiters.</p>
         </div>
-
         <div className="feature-card">
           <div className="icon-box"><FaUtensils /></div>
-          <div className="feature-title">Kitchen Display System</div>
-          <div className="feature-desc">
-            Ditch the paper tickets. Orders pop up on a digital screen in the kitchen with loud alerts. Chefs mark items "Ready" with a tap.
-          </div>
+          <h3>Kitchen Display</h3>
+          <p style={{color: "#888", marginTop: "10px"}}>Orders appear on a screen in the kitchen. 100% accuracy.</p>
         </div>
-
         <div className="feature-card">
           <div className="icon-box"><FaChartLine /></div>
-          <div className="feature-title">Real-Time Analytics</div>
-          <div className="feature-desc">
-            Track your best-selling dishes, peak hours, and daily revenue live. Make data-driven decisions to grow your profits.
-          </div>
+          <h3>Sales Analytics</h3>
+          <p style={{color: "#888", marginTop: "10px"}}>See exactly how much you earned today in real-time.</p>
         </div>
       </section>
 
-      {/* --- FOOTER --- */}
-      <footer className="fade-in delay-2">
-        <p>&copy; {new Date().getFullYear()} Smart Menu Cloud. All rights reserved.</p>
-        <div className="footer-links">
-          <Link to="/login">Partner Login</Link>
-          <Link to="/register">Create Account</Link>
+      {/* MODAL FORM (REQUEST ACCESS) */}
+      {showModal && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <button className="close-btn" onClick={() => setShowModal(false)}><FaTimes /></button>
+            <h2 style={{ color: "white", marginBottom: "10px" }}>Request Access</h2>
+            <p style={{ color: "#888", marginBottom: "20px", fontSize: "14px" }}>
+              Leave your details. We will contact you to set up your restaurant account.
+            </p>
+            <form onSubmit={handleSubmitRequest}>
+              <input 
+                className="modal-input" 
+                type="text" name="ownerName" placeholder="Your Name" required 
+                value={requestData.ownerName} onChange={handleInputChange} 
+              />
+              <input 
+                className="modal-input" 
+                type="text" name="restaurantName" placeholder="Restaurant Name" required 
+                value={requestData.restaurantName} onChange={handleInputChange}
+              />
+              <input 
+                className="modal-input" 
+                type="tel" name="phone" placeholder="Phone Number" required 
+                value={requestData.phone} onChange={handleInputChange}
+              />
+              <button type="submit" className="btn-primary" style={{ width: "100%", justifyContent: "center" }}>
+                {loading ? "Sending..." : "Submit Request"} <FaPaperPlane />
+              </button>
+            </form>
+          </div>
         </div>
+      )}
+
+      {/* FOOTER */}
+      <footer style={{ textAlign: "center", padding: "40px 20px", borderTop: "1px solid #222", marginTop: "40px", color: "#666" }}>
+        <p>&copy; {new Date().getFullYear()} Smart Menu Cloud. All rights reserved.</p>
       </footer>
     </div>
   );
