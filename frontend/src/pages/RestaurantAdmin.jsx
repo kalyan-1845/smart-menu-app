@@ -81,7 +81,7 @@ const SetupWizard = ({ dishesCount, pushEnabled }) => {
 };
 
 // --- MAIN DASHBOARD ---
-const AdminPanel = () => {
+const RestaurantAdmin = () => {
     const { id } = useParams();
     const API_BASE = "https://smart-menu-backend-5ge7.onrender.com/api";
 
@@ -262,4 +262,4 @@ const AdminPanel = () => {
     );
 };
 
-export default AdminPanel;
+export default RestaurantAdmin;
