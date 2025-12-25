@@ -8,7 +8,7 @@ import rateLimit from 'express-rate-limit';
 import https from "https"; 
 
 // --- IMPORT ROUTES ---
-import authRoutes from './routes/authRoutes.js';
+import authRoutes from './routes/auth.js'; // ✅ CHANGED: Now imports 'auth.js' (where the fix is)
 import dishRoutes from './routes/dishRoutes.js';
 import orderRoutes from './routes/orderRoutes.js';
 import superAdminRoutes from './routes/superAdminRoutes.js';
@@ -94,8 +94,6 @@ app.use('/api/support', supportRoutes);
 app.get('/', (req, res) => res.send('Smart Menu API v2.8 Active'));
 
 // --- SOCKET LOGIC ---
-
-
 io.on('connection', (socket) => {
     console.log(`🔌 Client Connected: ${socket.id}`);
 
