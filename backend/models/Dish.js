@@ -33,4 +33,5 @@ const dishSchema = new mongoose.Schema({
   timestamps: true 
 });
 
-export default mongoose.model('Dish', dishSchema);
+// ✅ Correct way
+export default mongoose.models.Dish || mongoose.model('Dish', dishSchema);

@@ -2,62 +2,31 @@ import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 
 const ownerSchema = new mongoose.Schema({
-    restaurantName: {
-        type: String,
-        required: true
-    },
-    username: {
-        type: String,
-        required: true,
-        unique: true
-    },
-    email: {
-        type: String,
-        required: true,
-        unique: true
-    },
-    password: {
-        type: String,
-        required: true
-    },
-    // --- Role-Based Passwords (Added for Waiter/Chef) ---
-    waiterPassword: { 
-        type: String, 
-        default: "bitebox18" 
-    },
-    chefPassword: { 
-        type: String, 
-        default: "bitebox18" 
-    },
-    // ----------------------------------------------------
-    trialEndsAt: {
-        type: Date
-    },
-    isPro: {
-        type: Boolean,
-        default: false
-    },
-    subscriptionId: { // Optional: For future Razorpay/Stripe integration
-        type: String
-    }
-}, {
-    timestamps: true // Automatically adds createdAt and updatedAt
-});
+  username: { type: String, required: true, unique: true, index: true },
+  email: { type: String, required: true, unique: true, index: true },
+  password: { type: String, required: true },
+  restaurantName: { type: String, required: true },
+  trialEndsAt: { type: Date, required: true },
+  isPro: { type: Boolean, default: false },
+  
+  // Staff Passwords
+  waiterPassword: { type: String, default: "bitebox18" },
+  chefPassword: { type: String, default: "bitebox18" }
+}, { timestamps: true });
 
-// 🔒 Middleware: Hash password before saving
+// Encrypt password before saving
 ownerSchema.pre('save', async function (next) {
-    if (!this.isModified('password')) {
-        next();
-    }
-    const salt = await bcrypt.genSalt(10);
-    this.password = await bcrypt.hash(this.password, salt);
+  if (!this.isModified('password')) return next();
+  const salt = await bcrypt.genSalt(10);
+  this.password = await bcrypt.hash(this.password, salt);
+  next();
 });
 
-// 🔑 Method: Check if entered password matches hashed password
+// Match password method
 ownerSchema.methods.matchPassword = async function (enteredPassword) {
-    return await bcrypt.compare(enteredPassword, this.password);
+  return await bcrypt.compare(enteredPassword, this.password);
 };
 
-const Owner = mongoose.model('Owner', ownerSchema);
-
+// ✅ FIX: Check if model exists before creating
+const Owner = mongoose.models.Owner || mongoose.model('Owner', ownerSchema);
 export default Owner;

@@ -56,4 +56,5 @@ const dishSchema = new mongoose.Schema({
   timestamps: true // Manages createdAt (for "New Item" badges) and updatedAt
 });
 
-export default mongoose.model('Dish', dishSchema);
+// ✅ Correct way
+export default mongoose.models.Order || mongoose.model('Order', orderSchema);
