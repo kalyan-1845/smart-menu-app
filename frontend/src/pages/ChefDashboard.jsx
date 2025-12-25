@@ -196,13 +196,23 @@ const ChefDashboard = () => {
                     <p style={{ color: '#666', fontSize: '11px', marginBottom: '25px', fontWeight: 'bold', letterSpacing: '1px' }}>CHEF ACCESS POINT</p>
                     
                     <form onSubmit={handleLogin}>
+                        {/* ✅ FIX: Hidden username input to satisfy accessibility warnings */}
+                        <input 
+                            type="text" 
+                            name="username" 
+                            value={id} 
+                            readOnly 
+                            style={{ display: 'none' }} 
+                            autoComplete="username"
+                        />
+
                         <input 
                             type="password" 
                             placeholder="Kitchen Password" 
                             value={password} 
                             onChange={e=>setPassword(e.target.value)} 
                             style={styles.input}
-                            autoComplete="current-password" // ✅ FIX: Removes the DOM warning
+                            autoComplete="current-password" 
                         />
                         {error && <p style={{color: '#ef4444', fontSize: '12px', marginBottom: '15px'}}>{error}</p>}
                         

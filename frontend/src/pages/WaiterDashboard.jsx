@@ -149,13 +149,23 @@ const WaiterDashboard = () => {
                     <p style={{ color: '#666', fontSize: '11px', marginBottom: '25px', fontWeight: 'bold', letterSpacing: '1px' }}>WAITER ACCESS POINT</p>
                     
                     <form onSubmit={handleLogin}>
+                         {/* ✅ FIX: Hidden username input to satisfy accessibility warnings */}
+                        <input 
+                            type="text" 
+                            name="username" 
+                            value={id} 
+                            readOnly 
+                            style={{ display: 'none' }} 
+                            autoComplete="username"
+                        />
+
                         <input 
                             type="password" 
                             placeholder="Enter Waiter Password" 
                             style={styles.input}
                             value={password}
                             onChange={e => setPassword(e.target.value)}
-                            autoComplete="current-password" // ✅ Fixes DOM Warning
+                            autoComplete="current-password"
                         />
                         {error && <p style={{color: '#ef4444', fontSize: '12px', marginBottom: '15px'}}>{error}</p>}
                         
