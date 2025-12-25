@@ -8,7 +8,8 @@ import rateLimit from 'express-rate-limit';
 import https from "https"; 
 
 // --- IMPORT ROUTES ---
-import authRoutes from './routes/auth.js'; // ✅ CHANGED: Now imports 'auth.js' (where the fix is)
+// ✅ FIX: Matches the filename 'authRoutes.js' you have in your folder
+import authRoutes from './routes/authRoutes.js'; 
 import dishRoutes from './routes/dishRoutes.js';
 import orderRoutes from './routes/orderRoutes.js';
 import superAdminRoutes from './routes/superAdminRoutes.js';
@@ -84,6 +85,7 @@ mongoose.connect(process.env.MONGO_URI)
     .catch((err) => console.error("❌ MongoDB Error:", err));
 
 // --- ROUTES ---
+// This connects the /api/auth URL to your authRoutes.js file
 app.use('/api/auth', authRoutes);
 app.use('/api/dishes', dishRoutes);
 app.use('/api/orders', orderRoutes);
