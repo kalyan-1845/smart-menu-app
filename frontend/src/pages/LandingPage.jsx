@@ -100,11 +100,6 @@ const LandingPage = () => {
                 </div>
             </section>
 
-            {/* --- 4. PRICING SECTION --- */}
-            <div id="pricing">
-                <Pricing /> 
-            </div>
-
             {/* --- 5. TRUST BANNER --- */}
             <section className="bg-[#FF9933] py-20 px-6 text-black text-center">
                 <h2 className="text-4xl font-black mb-4 tracking-tighter uppercase">Ready to upgrade your shop?</h2>
