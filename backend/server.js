@@ -8,7 +8,7 @@ import rateLimit from 'express-rate-limit';
 import https from "https"; 
 
 // --- IMPORT ROUTES ---
-import authRoutes from './routes/auth.js';
+import authRoutes from './routes/authRoutes.js';
 import dishRoutes from './routes/dishRoutes.js';
 import orderRoutes from './routes/orderRoutes.js';
 import superAdminRoutes from './routes/superAdminRoutes.js';
