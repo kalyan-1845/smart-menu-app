@@ -1,18 +1,12 @@
 [build]
-  # Tell Netlify to enter the frontend folder first
-  base = "frontend"
-  # Run the Vite production build
   command = "npm run build"
-  # Vite outputs production files to the 'dist' folder
   publish = "dist"
 
 [build.environment]
-  # Prevents warnings from being treated as errors during build
-  CI = "false"
   NODE_VERSION = "20"
+  CI = "false"
 
-# ✅ FIX: Redirects all traffic to index.html for React Router
-# This prevents the "text/html" MIME type error on page refresh.
+# React Router / SPA redirect
 [[redirects]]
   from = "/*"
   to = "/index.html"

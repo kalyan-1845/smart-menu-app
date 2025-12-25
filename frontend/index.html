@@ -7,7 +7,6 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
     />
-
     <meta name="theme-color" content="#0d0d0d" />
     <meta
       name="description"
@@ -15,11 +14,9 @@
     />
 
     <link rel="manifest" href="/manifest.json" />
-
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="SmartMenu" />
-
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <link rel="apple-touch-icon" href="/logo192.png" />
 
@@ -35,18 +32,15 @@
     <style>
       /* --- GLOBAL VARIABLES & RESET --- */
       :root {
-        --bg-color: #050505; /* Matches your React components */
+        --bg-color: #050505; 
         --primary-orange: #f97316;
         --safe-area-inset-bottom: env(safe-area-inset-bottom);
 
-        /* Typography Defaults */
         font-family: "Inter", system-ui, Avenir, Helvetica, Arial, sans-serif;
         line-height: 1.5;
         font-weight: 400;
-        
         color-scheme: light dark;
         color: rgba(255, 255, 255, 0.87);
-        
         font-synthesis: none;
         text-rendering: optimizeLegibility;
         -webkit-font-smoothing: antialiased;
@@ -58,15 +52,12 @@
         margin: 0;
         padding: 0;
         -webkit-tap-highlight-color: transparent;
-        outline: none;
       }
 
-      html,
-      body {
+      html, body {
         height: 100%;
         background-color: var(--bg-color);
-        /* Prevents "pull-to-refresh" on mobile to feel like a native app */
-        overscroll-behavior-y: none;
+        overscroll-behavior-y: none; /* Prevents pull-to-refresh */
         min-width: 320px; 
       }
 
@@ -82,64 +73,36 @@
         position: relative;
         display: flex;
         flex-direction: column;
-        
-        /* CRITICAL: Removed 'max-width: 450px'. 
-           This allows the Super Admin & Chef panels to use full screen width.
-           Mobile Menu pages control their own width internally.
-        */
       }
 
-      /* --- LINKS & BUTTON DEFAULTS --- */
-      a { font-weight: 500; color: #646cff; text-decoration: inherit; }
-      button {
-        border-radius: 12px;
-        border: 1px solid transparent;
-        padding: 0.6em 1.2em;
-        font-size: 1em;
-        font-weight: 700;
-        cursor: pointer;
-        transition: all 0.2s;
-      }
-
-      /* --- 🖨️ KITCHEN PRINTER (KOT) LOGIC --- */
+      /* --- 🖨️ THERMAL PRINTER (KOT/Invoice) LOGIC --- */
+      /* This ensures that when you press Print, only the receipt shows up */
       @media print {
-        /* Hide everything on the screen by default */
         body * {
           visibility: hidden;
         }
-
-        /* Only show the KOT receipt content */
         #kot-receipt, #kot-receipt * {
           visibility: visible;
         }
-
         #kot-receipt {
           position: absolute;
           left: 0;
           top: 0;
-          width: 80mm; /* Standard Thermal Paper Width */
+          width: 80mm; /* Standard 80mm Thermal Width */
           background: white !important;
           color: black !important;
-          padding: 10px;
+          padding: 5px;
           font-family: 'Courier New', Courier, monospace;
-          border: none !important;
         }
-
-        /* Force background colors to show if needed */
-        * {
-          -webkit-print-color-adjust: exact;
-          print-color-adjust: exact;
-        }
-
-        /* Remove browser headers/footers (Date, URL, Page No) */
         @page {
-          margin: 0;
+          margin: 0; /* Removes browser header/footer text */
         }
       }
 
-      /* --- LOADING SPINNER (Visible while React loads) --- */
+      /* --- 🌀 LOADING SPINNER (Shows before React starts) --- */
       #root:empty {
         display: flex;
+        flex-direction: column;
         justify-content: center;
         align-items: center;
         height: 100vh;
@@ -164,17 +127,10 @@
         letter-spacing: 3px;
         color: var(--primary-orange);
         animation: fade 1.5s ease-in-out infinite;
-        display: block;
       }
 
-      @keyframes spin {
-        100% { transform: rotate(360deg); }
-      }
-
-      @keyframes fade {
-        0%, 100% { opacity: 0.3; }
-        50% { opacity: 1; }
-      }
+      @keyframes spin { 100% { transform: rotate(360deg); } }
+      @keyframes fade { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
     </style>
   </head>
 
@@ -188,8 +144,8 @@
         window.addEventListener("load", () => {
           navigator.serviceWorker
             .register("/sw.js")
-            .then((reg) => console.log("SW Registered"))
-            .catch((err) => console.log("SW Failed: ", err));
+            .then((reg) => console.log("✅ SW Active"))
+            .catch((err) => console.log("❌ SW Error: ", err));
         });
       }
     </script>
