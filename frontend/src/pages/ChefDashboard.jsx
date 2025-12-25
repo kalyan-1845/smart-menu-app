@@ -6,77 +6,91 @@ import {
     FaUtensils, FaVolumeUp, FaVolumeMute, FaRegClock, 
     FaUser, FaFire, FaCheck, FaRocket, FaBell, 
     FaExternalLinkAlt, FaUserTie, FaBoxOpen, 
-    FaUnlock, FaSignOutAlt, FaChartLine, FaClipboardList
+    FaUnlock, FaSignOutAlt, FaChartLine, FaClipboardList, FaSpinner
 } from "react-icons/fa";
 
 // 🖼️ ASSETS
 const DEFAULT_DISH_IMG = "https://cdn-icons-png.flaticon.com/512/706/706164.png"; 
-const DASHBOARD_LOGO = "https://cdn-icons-png.flaticon.com/512/1830/1830839.png"; 
 
 const ChefDashboard = () => {
     const { id } = useParams(); // Get Restaurant ID from URL
-    const navigate = useNavigate();
     const API_BASE = "https://smart-menu-backend-5ge7.onrender.com/api";
     
     // --- STATE ---
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [password, setPassword] = useState("");
     const [authLoading, setAuthLoading] = useState(false);
+    const [error, setError] = useState("");
 
     const [orders, setOrders] = useState([]); // Active Orders
-    const [dailyStats, setDailyStats] = useState({ count: 0, revenue: 0 }); // New Stats State
+    const [dailyStats, setDailyStats] = useState({ count: 0, revenue: 0 }); 
     const [dishes, setDishes] = useState([]); // For Stock Tab
-    const [restaurantName, setRestaurantName] = useState(id);
     const [loading, setLoading] = useState(false);
     const [serviceCalls, setServiceCalls] = useState([]); 
     const [isMuted, setIsMuted] = useState(false);
     const [activeChefTab, setActiveChefTab] = useState("orders"); // "orders" or "stock"
+    const [mongoId, setMongoId] = useState(null);
 
     // 🔊 REFS
     const audioRef = useRef(new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"));
     const callSound = useRef(new Audio("https://assets.mixkit.co/active_storage/sfx/2190/2190-preview.mp3"));
-    const socketRef = useRef();
 
     // --- 1. LOGIN LOGIC ---
     const handleLogin = async (e) => {
         e.preventDefault();
         setAuthLoading(true);
+        setError("");
+
         try {
-            const res = await axios.post(`${API_BASE}/auth/login`, { email: id, password });
+            // Updated to use verify-role for specific 'bitebox18' password
+            const res = await axios.post(`${API_BASE}/auth/verify-role`, { 
+                username: id, 
+                password: password,
+                role: 'chef'
+            });
             
-            // Store Session
-            localStorage.setItem(`chef_token_${id}`, res.data.token);
-            localStorage.setItem(`chef_owner_id_${id}`, res.data.id);
-            
-            setRestaurantName(res.data.restaurantName || id);
-            setIsAuthenticated(true);
-            
-            // Initial Fetch
-            fetchData(res.data.token, res.data.id);
+            if (res.data.success) {
+                const rId = res.data.restaurantId;
+                setMongoId(rId);
+                
+                // Store Session
+                localStorage.setItem(`chef_session_${id}`, rId);
+                
+                setIsAuthenticated(true);
+                fetchData(rId);
+            }
         } catch (err) {
-            alert("❌ Invalid Kitchen Password");
+            setError("❌ Invalid Kitchen Password");
         } finally {
             setAuthLoading(false);
         }
     };
 
+    // Check session on load
+    useEffect(() => {
+        const savedId = localStorage.getItem(`chef_session_${id}`);
+        if (savedId) {
+            setMongoId(savedId);
+            setIsAuthenticated(true);
+            fetchData(savedId);
+        }
+    }, [id]);
+
     // --- 2. DATA FETCHING ---
-    const fetchData = async (token, mongoId) => {
+    const fetchData = async (rId) => {
         setLoading(true);
         try {
-            const config = { headers: { Authorization: `Bearer ${token}` } };
-
-            // Fetch All Orders (Active + History for stats)
-            // Note: In a real app, you might have a separate endpoint for daily stats to save bandwidth
-            const orderRes = await axios.get(`${API_BASE}/orders?restaurantId=${mongoId}`, config);
+            // Fetch All Orders
+            const orderRes = await axios.get(`${API_BASE}/orders?restaurantId=${rId}`);
             
+            // Filter Active vs Completed
             const active = orderRes.data.filter(o => o.status !== "SERVED");
             const completedToday = orderRes.data.filter(o => {
                 const isToday = new Date(o.createdAt).toDateString() === new Date().toDateString();
                 return o.status === "SERVED" && isToday;
             });
 
-            setOrders(active);
+            setOrders(active.sort((a,b) => new Date(a.createdAt) - new Date(b.createdAt))); // Oldest first for kitchen
             
             // Calculate Daily Stats
             const revenue = completedToday.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
@@ -86,32 +100,31 @@ const ChefDashboard = () => {
             });
 
             // Fetch Dishes (for Stock)
-            const dishRes = await axios.get(`${API_BASE}/dishes?restaurantId=${mongoId}`, config);
+            const dishRes = await axios.get(`${API_BASE}/dishes?restaurantId=${rId}`);
             setDishes(dishRes.data);
+
+            // Fetch Active Calls
+            const callRes = await axios.get(`${API_BASE}/orders/calls?restaurantId=${rId}`);
+            setServiceCalls(callRes.data);
 
         } catch (e) { console.error("Sync Failed", e); }
         finally { setLoading(false); }
     };
 
-    // --- 3. SOCKETS & EFFECTS ---
+    // --- 3. SOCKETS ---
     useEffect(() => {
-        if(isAuthenticated) {
-            const token = localStorage.getItem(`chef_token_${id}`);
-            const mongoId = localStorage.getItem(`chef_owner_id_${id}`);
-
-            socketRef.current = io("https://smart-menu-backend-5ge7.onrender.com");
-            const socket = socketRef.current;
-            
-            socket.emit("join-owner-room", mongoId);
+        if(isAuthenticated && mongoId) {
+            const socket = io("https://smart-menu-backend-5ge7.onrender.com");
+            socket.emit("join-restaurant", mongoId);
 
             // New Orders
             socket.on("new-order", () => {
                 if (!isMuted) audioRef.current.play().catch(()=>{});
-                fetchData(token, mongoId);
+                fetchData(mongoId);
             });
 
             // Order Updates
-            socket.on("order-updated", () => fetchData(token, mongoId));
+            socket.on("order-updated", () => fetchData(mongoId));
 
             // Waiter Calls
             socket.on("new-waiter-call", (callData) => {
@@ -119,41 +132,35 @@ const ChefDashboard = () => {
                 setServiceCalls(prev => [callData, ...prev]);
             });
 
-            socket.on("call-resolved", (data) => {
-                setServiceCalls(prev => prev.filter(c => c.tableNumber !== data.tableNumber));
-            });
-
             return () => socket.disconnect();
         }
-    }, [isAuthenticated, id, isMuted]);
+    }, [isAuthenticated, mongoId, isMuted]);
 
     // --- 4. ACTIONS ---
 
     const toggleDishAvailability = async (dishId, currentStatus) => {
-        const token = localStorage.getItem(`chef_token_${id}`);
         try {
             const newStatus = !currentStatus;
+            // Optimistic Update
             setDishes(prev => prev.map(d => d._id === dishId ? { ...d, isAvailable: newStatus } : d));
-            await axios.put(`${API_BASE}/dishes/${dishId}`, { isAvailable: newStatus }, { headers: { Authorization: `Bearer ${token}` } });
+            await axios.put(`${API_BASE}/dishes/${dishId}`, { isAvailable: newStatus });
         } catch (e) { alert("Update failed"); }
     };
 
     const updateOrderStatus = async (orderId, newStatus) => {
-        const token = localStorage.getItem(`chef_token_${id}`);
         try {
             setOrders(prev => prev.map(o => o._id === orderId ? { ...o, status: newStatus } : o));
-            await axios.put(`${API_BASE}/orders/${orderId}`, { status: newStatus }, { headers: { Authorization: `Bearer ${token}` } });
+            await axios.put(`${API_BASE}/orders/${orderId}`, { status: newStatus });
         } catch (error) { alert("Status update failed"); }
     };
 
     const handleDeleteOrder = async (orderId) => {
-        if(!window.confirm("Complete & Archive Order?")) return;
-        const token = localStorage.getItem(`chef_token_${id}`);
+        if(!window.confirm("Complete Order?")) return;
         try { 
-            // Mark as Served instead of deleting to keep history stats
-            await axios.put(`${API_BASE}/orders/${orderId}`, { status: "SERVED" }, { headers: { Authorization: `Bearer ${token}` } });
+            // Mark as Served
+            await axios.put(`${API_BASE}/orders/${orderId}`, { status: "SERVED" });
             
-            // Optimistic update: Remove from active list and update stats
+            // Optimistic update
             const order = orders.find(o => o._id === orderId);
             setOrders(prev => prev.filter(o => o._id !== orderId)); 
             setDailyStats(prev => ({
@@ -165,27 +172,48 @@ const ChefDashboard = () => {
     };
 
     const handleAttendTable = async (callId) => {
-        const token = localStorage.getItem(`chef_token_${id}`);
         try {
-            await axios.delete(`${API_BASE}/orders/calls/${callId}`, { headers: { Authorization: `Bearer ${token}` } });
+            await axios.delete(`${API_BASE}/orders/calls/${callId}`);
             setServiceCalls(prev => prev.filter(c => c._id !== callId));
         } catch (e) {}
+    };
+
+    const handleLogout = () => {
+        localStorage.removeItem(`chef_session_${id}`);
+        setIsAuthenticated(false);
+        setPassword("");
     };
 
     // --- 5. RENDER: LOCK SCREEN ---
     if (!isAuthenticated) {
         return (
-            <div style={{minHeight:'100vh', background:'#080a0f', display:'flex', alignItems:'center', justifyContent:'center'}}>
+            <div style={styles.lockContainer}>
                 <div style={styles.lockCard}>
-                    <FaUtensils style={{fontSize:'40px', color:'#f97316', marginBottom:'15px'}}/>
+                    <div style={styles.iconCircle}>
+                        <FaUtensils style={{fontSize:'24px', color:'#f97316'}}/>
+                    </div>
                     <h1 style={styles.lockTitle}>{id} Kitchen</h1>
-                    <form onSubmit={handleLogin} style={{marginTop:'20px'}}>
-                        <input type="password" placeholder="Kitchen Password" value={password} onChange={e=>setPassword(e.target.value)} style={styles.input}/>
+                    <p style={{ color: '#666', fontSize: '11px', marginBottom: '25px', fontWeight: 'bold', letterSpacing: '1px' }}>CHEF ACCESS POINT</p>
+                    
+                    <form onSubmit={handleLogin}>
+                        <input 
+                            type="password" 
+                            placeholder="Kitchen Password" 
+                            value={password} 
+                            onChange={e=>setPassword(e.target.value)} 
+                            style={styles.input}
+                        />
+                        {error && <p style={{color: '#ef4444', fontSize: '12px', marginBottom: '15px'}}>{error}</p>}
+                        
                         <button type="submit" style={styles.loginBtn} disabled={authLoading}>
-                            {authLoading ? "Unlocking..." : <><FaUnlock/> OPEN KITCHEN</>}
+                            {authLoading ? <FaSpinner className="spin"/> : <><FaUnlock/> OPEN KITCHEN</>}
                         </button>
                     </form>
                 </div>
+                <style>{`
+                    .spin { animation: spin 1s linear infinite; }
+                    @keyframes spin { 100% { transform: rotate(360deg); } }
+                `}</style>
             </div>
         );
     }
@@ -209,17 +237,16 @@ const ChefDashboard = () => {
             {/* HEADER */}
             <header style={styles.header}>
                 <div style={{display: 'flex', alignItems: 'center', gap: '15px'}}>
-                    <img src={DASHBOARD_LOGO} alt="Logo" style={{width: '50px', height: '50px'}} />
                     <div>
                         <h1 style={styles.headerTitle}>Kitchen Console</h1>
-                        <p style={styles.headerSubtitle}>{restaurantName} • <span style={{ color: '#22c55e' }}>Online</span></p>
+                        <p style={styles.headerSubtitle}>{id.toUpperCase()} • <span style={{ color: '#22c55e' }}>Online</span></p>
                     </div>
                 </div>
 
                 {/* STATS WIDGETS */}
-                <div style={{display: 'flex', gap: '15px', marginLeft: 'auto', marginRight: '30px'}}>
+                <div style={styles.statsRow}>
                     <div style={styles.statWidget}>
-                        <span style={styles.statLabel}><FaChartLine/> DAILY ORDERS</span>
+                        <span style={styles.statLabel}><FaChartLine/> ORDERS</span>
                         <span style={styles.statValue}>{dailyStats.count}</span>
                     </div>
                     <div style={styles.statWidget}>
@@ -233,15 +260,15 @@ const ChefDashboard = () => {
                         {isMuted ? <FaVolumeMute /> : <FaVolumeUp />}
                     </button>
                     
-                    <a href={`/menu/${id}`} target="_blank" rel="noreferrer" style={{textDecoration:'none'}}>
-                        <button style={styles.iconButtonText}><FaExternalLinkAlt style={{ marginRight: '8px' }}/> Public Menu</button>
-                    </a>
+                    <Link to={`/menu/${id}`} target="_blank" style={{textDecoration:'none'}}>
+                        <button style={styles.iconButtonText}><FaExternalLinkAlt style={{ marginRight: '8px' }}/> Menu</button>
+                    </Link>
 
-                    <Link to={`/${id}/waiter`}>
-                        <button style={styles.iconButtonText}><FaUserTie style={{ marginRight: '8px' }}/> Waiter View</button>
+                    <Link to={`/${id}/waiter`} target="_blank" style={{textDecoration:'none'}}>
+                        <button style={styles.iconButtonText}><FaUserTie style={{ marginRight: '8px' }}/> Waiter</button>
                     </Link>
                     
-                    <button onClick={() => setIsAuthenticated(false)} style={styles.iconButtonRed}><FaSignOutAlt/></button>
+                    <button onClick={handleLogout} style={styles.iconButtonRed}><FaSignOutAlt/></button>
                 </div>
             </header>
 
@@ -260,14 +287,14 @@ const ChefDashboard = () => {
                 <div style={styles.grid}>
                     {orders.length === 0 ? (
                         <div style={styles.emptyState}>
-                            <FaUtensils style={{ fontSize: '50px', opacity: 0.2 }} />
-                            <p style={{marginTop:'15px', fontWeight:'bold'}}>KITCHEN IS CLEAR</p>
+                            <FaUtensils style={{ fontSize: '50px', opacity: 0.2, color: 'white' }} />
+                            <p style={{marginTop:'15px', fontWeight:'bold', color: '#666'}}>KITCHEN IS CLEAR</p>
                         </div>
                     ) : (
                         orders.map((order) => (
                             <div key={order._id} style={{
                                 ...styles.card, 
-                                borderColor: order.status === 'Ready' ? '#22c55e' : (order.status === 'Cooking' ? '#eab308' : '#1f2937')
+                                borderColor: order.status === 'Ready' ? '#22c55e' : (order.status === 'Cooking' ? '#eab308' : '#374151')
                             }}>
                                 <div style={styles.cardHeader}>
                                     <div>
@@ -343,33 +370,36 @@ const ChefDashboard = () => {
 // --- STYLES ---
 const styles = {
     // Layout
-    dashboardContainer: { minHeight: '100vh', background: '#080a0f', color: 'white', padding: '30px', fontFamily: "sans-serif" },
-    lockCard: { background: '#111', padding: '40px', borderRadius: '30px', border: '1px solid #222', textAlign: 'center', width: '300px' },
-    lockTitle: { fontSize: '20px', fontWeight: '900', color: 'white', margin: 0 },
-    
+    dashboardContainer: { minHeight: '100vh', background: '#080a0f', color: 'white', padding: '30px', fontFamily: '"Inter", sans-serif' },
+    lockContainer: { minHeight: '100vh', background: '#050505', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: '"Inter", sans-serif' },
+    lockCard: { background: '#111', padding: '40px', borderRadius: '30px', border: '1px solid #222', textAlign: 'center', width: '320px' },
+    lockTitle: { fontSize: '24px', fontWeight: '900', color: 'white', margin: 0 },
+    iconCircle: { width: '60px', height: '60px', borderRadius: '50%', background: 'rgba(249, 115, 22, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 15px auto' },
+
     // Header
-    header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', background: '#111827', padding: '20px', borderRadius: '20px', border: '1px solid #1f2937' },
+    header: { display: 'flex', flexWrap: 'wrap', gap: '20px', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', background: '#111827', padding: '20px', borderRadius: '20px', border: '1px solid #1f2937' },
     headerTitle: { fontSize: '24px', fontWeight: '900', margin: 0 },
     headerSubtitle: { color: '#9ca3af', fontSize: '12px', fontWeight: 'bold' },
     headerButtons: { display: 'flex', gap: '10px' },
+    statsRow: { display: 'flex', gap: '15px' },
     
     // Stats Widgets
-    statWidget: { background: '#1f2937', padding: '10px 20px', borderRadius: '12px', display:'flex', flexDirection:'column', alignItems:'center', border: '1px solid #374151' },
+    statWidget: { background: '#1f2937', padding: '10px 20px', borderRadius: '12px', display:'flex', flexDirection:'column', alignItems:'center', border: '1px solid #374151', minWidth: '100px' },
     statLabel: { fontSize: '10px', fontWeight: '900', color: '#9ca3af', display:'flex', alignItems:'center', gap:'5px', marginBottom:'4px' },
     statValue: { fontSize: '18px', fontWeight: '900', color: 'white' },
 
     // Buttons
-    input: { width: '100%', background: '#000', border: '1px solid #333', padding: '12px', borderRadius: '10px', color: 'white', fontSize: '16px', outline: 'none', textAlign: 'center', marginBottom: '15px' },
-    loginBtn: { width: '100%', background: '#f97316', color: 'white', border: 'none', padding: '12px', borderRadius: '10px', fontWeight: '900', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' },
+    input: { width: '100%', background: '#000', border: '1px solid #333', padding: '14px', borderRadius: '10px', color: 'white', fontSize: '16px', outline: 'none', textAlign: 'center', marginBottom: '15px' },
+    loginBtn: { width: '100%', background: '#f97316', color: 'white', border: 'none', padding: '14px', borderRadius: '10px', fontWeight: '900', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' },
     iconButton: { background: '#1f2937', border: '1px solid #374151', color: '#fff', padding: '10px', borderRadius: '10px', cursor: 'pointer' },
     iconButtonText: { background: '#1f2937', border: '1px solid #374151', color: '#fff', padding: '10px 15px', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', fontSize: '12px' },
-    iconButtonRed: { background: '#450a0a', border: '1px solid #7f1d1d', color: '#f87171', padding: '10px', borderRadius: '10px', cursor: 'pointer' },
+    iconButtonRed: { background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.2)', color: '#ef4444', padding: '10px', borderRadius: '10px', cursor: 'pointer' },
     tabButton: { border: '1px solid #374151', color: 'white', padding: '12px 20px', borderRadius: '12px', cursor: 'pointer', fontWeight: '900', display: 'flex', alignItems: 'center', fontSize: '12px' },
 
     // Grid & Cards
     grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' },
     emptyState: { gridColumn: '1/-1', textAlign: 'center', padding: '100px 0', color: '#333' },
-    card: { background: '#111827', borderRadius: '20px', border: '2px solid #1f2937', overflow: 'hidden' },
+    card: { background: '#111827', borderRadius: '20px', border: '2px solid #374151', overflow: 'hidden', transition: '0.3s' },
     cardHeader: { padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'start', borderBottom: '1px solid #1f2937' },
     tableNumber: { fontSize: '20px', fontWeight: '900', margin: 0 },
     orderId: { color: '#6b7280', fontSize: '10px', fontWeight: 'bold' },
@@ -396,7 +426,7 @@ const styles = {
 
     // Alerts
     alertContainer: { position: 'fixed', top: '20px', left: '50%', transform: 'translateX(-50%)', zIndex: 1000, width: '90%', maxWidth: '500px' },
-    alertBanner: { background: '#f97316', padding: '15px 20px', borderRadius: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 10px 30px rgba(0,0,0,0.5)', marginBottom: '10px' },
+    alertBanner: { background: '#f97316', padding: '15px 20px', borderRadius: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 10px 30px rgba(0,0,0,0.5)', marginBottom: '10px', animation: 'slideDown 0.3s ease' },
     alertText: { fontWeight: '900', fontSize: '14px', color: 'white', display: 'flex', alignItems: 'center', gap: '10px' },
     attendBtn: { background: 'white', color: '#f97316', border: 'none', padding: '8px 15px', borderRadius: '8px', fontWeight: '900', cursor: 'pointer', fontSize: '11px' }
 };
