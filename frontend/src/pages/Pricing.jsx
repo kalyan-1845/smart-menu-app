@@ -8,7 +8,7 @@ const Pricing = () => {
       price: "FREE",
       duration: "60 Days",
       icon: <FaRocket color="#60a5fa" size={30} />,
-      features: ["Digital Menu", "Table QR Codes", "Basic Kitchen View"],
+      features: ["Digital Menu", "Table QR Codes", "Self-Service Setup"],
       button: "Start Free",
       link: "/", 
       pro: false
@@ -28,8 +28,8 @@ const Pricing = () => {
   return (
     <section style={{ padding: "80px 20px", background: "#050505", color: "white", minHeight: '100vh' }}>
       <div style={{ maxWidth: "900px", margin: "0 auto", textAlign: "center" }}>
-        <h2 style={{ fontSize: "32px", fontWeight: "900" }}>SMART PLANS</h2>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "30px", marginTop: "40px" }}>
+        <h2 style={{ fontSize: "32px", fontWeight: "900", marginBottom: "40px" }}>SMART PLANS</h2>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "30px" }}>
           {plans.map((plan, i) => (
             <div key={i} style={{
               background: "rgba(255,255,255,0.03)",
@@ -40,16 +40,18 @@ const Pricing = () => {
               flexDirection: "column"
             }}>
               <div style={{ marginBottom: "20px" }}>{plan.icon}</div>
-              <h3>{plan.title}</h3>
-              <div style={{ margin: "15px 0" }}><span style={{ fontSize: "40px", fontWeight: "900" }}>{plan.price}</span></div>
+              <h3 style={{ fontSize: "24px", fontWeight: "900" }}>{plan.title}</h3>
+              <div style={{ margin: "15px 0" }}>
+                <span style={{ fontSize: "40px", fontWeight: "900" }}>{plan.price}</span>
+              </div>
               <ul style={{ listStyle: "none", padding: 0, margin: "25px 0", flexGrow: 1 }}>
-                {plan.features.map((f, idx) => (
-                  <li key={idx} style={{ marginBottom: "10px", fontSize: "14px", color: "#aaa" }}>
-                    <FaCheckCircle color={plan.pro ? "#f97316" : "#22c55e"} /> {f}
+                {plan.features.map((feat, idx) => (
+                  <li key={idx} style={{ marginBottom: "10px", fontSize: "14px", color: "#aaa", display: 'flex', gap: '10px' }}>
+                    <FaCheckCircle color={plan.pro ? "#f97316" : "#22c55e"} /> {feat}
                   </li>
                 ))}
               </ul>
-              <a href={plan.link} target="_blank" rel="noreferrer">
+              <a href={plan.link} style={{ textDecoration: 'none' }}>
                 <button style={{
                   width: "100%", padding: "16px", borderRadius: "14px", border: "none",
                   background: plan.pro ? "#f97316" : "white", color: plan.pro ? "white" : "black",
