@@ -12,16 +12,20 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
     const [showTableModal, setShowTableModal] = useState(!tableNum);
     const [isSubmitting, setIsSubmitting] = useState(false);
     
+    // Customizations (Future proofing)
     const [selectedSpecs, setSelectedSpecs] = useState({});
+    
     const tableOptions = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, "Takeaway"];
     const totalPrice = cart.reduce((total, item) => total + (item.price * item.quantity), 0);
 
-    // --- 1. FETCH RESTAURANT DETAILS ---
+    // --- 1. FETCH RESTAURANT DETAILS (For UPI ID) ---
     useEffect(() => {
         const fetchRestaurant = async () => {
-            if (restaurantId) {
+            // Fallback to localStorage if prop is missing
+            const activeId = restaurantId || localStorage.getItem("activeResId");
+            if (activeId) {
                 try {
-                    const res = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/auth/restaurant/${restaurantId}`);
+                    const res = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/auth/restaurant/${activeId}`);
                     setRestaurant(res.data);
                 } catch (err) {
                     console.error("Error fetching restaurant details:", err);
@@ -40,21 +44,24 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
 
         setIsSubmitting(true);
 
+        const activeId = restaurantId || localStorage.getItem("activeResId");
+
         // Prepare Order Data
         const orderData = {
             customerName: customerName,
             tableNumber: tableNum.toString(),
             items: cart.map(item => ({
+                dishId: item._id, // ✅ Critical for Chef Dashboard
                 name: item.name,
                 quantity: item.quantity,
                 price: item.price,
                 customizations: selectedSpecs[item._id] || [] 
             })),
             totalAmount: totalPrice,
-            // Map frontend selection to backend enum
-            paymentMethod: paymentMethod === "ONLINE" ? "UPI_ONLINE" : "CASH", 
-            transactionId: paymentMethod === "ONLINE" ? "AUTO_REDIRECT" : "PAY_AT_COUNTER", 
-            owner: restaurantId,
+            // ✅ MATCHING BACKEND ENUM EXACTLY:
+            paymentMethod: paymentMethod === "ONLINE" ? "Online" : "Cash", 
+            paymentStatus: "Pending", // Default status
+            owner: activeId,
             status: "PLACED"
         };
 
@@ -68,16 +75,16 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
             
             clearCart(); 
 
-            // 3. Handle Redirections based on Method
+            // 3. Handle Redirections
             if (paymentMethod === "ONLINE" && restaurant?.upiId) {
                 // Construct UPI Link
                 const cleanName = restaurant.username.replace(/\s/g, '');
                 const upiLink = `upi://pay?pa=${restaurant.upiId}&pn=${cleanName}&am=${totalPrice}&cu=INR`;
                 
-                // Open Payment App (Waiter will bring QR if this fails or user prefers)
+                // Redirect to Payment App
                 window.location.href = upiLink;
 
-                // Move to Tracker after a short delay
+                // Move to Tracker after delay
                 setTimeout(() => {
                     navigate(`/track/${response.data._id}`);
                 }, 1000);
@@ -97,7 +104,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
     return (
         <div style={{ 
             minHeight: '100vh', background: '#050505', color: 'white', 
-            padding: '15px', paddingBottom: '140px', // Extra padding for the fixed footer
+            padding: '15px', paddingBottom: '140px', 
             width: '100%', maxWidth: '600px', margin: '0 auto', 
             fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
             overflowX: 'hidden', boxSizing: 'border-box'
@@ -128,6 +135,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
 
             {/* 3. INFO CARD */}
             <div style={{ background: '#111', padding: '20px', borderRadius: '24px', marginBottom: '15px', border: '1px solid #1a1a1a' }}>
+                {/* ✅ EDIT BUTTON: Opens Modal now */}
                 <div onClick={() => setShowTableModal(true)} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px', cursor: 'pointer', alignItems: 'center' }}>
                     <div>
                         <p style={{ color: '#555', fontSize: '10px', fontWeight: '900', letterSpacing: '1px', marginBottom: '4px' }}>DELIVERING TO</p>
@@ -178,11 +186,11 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                 </div>
             )}
 
-            {/* 5. SIMPLIFIED FOOTER (Pay Online & Cash) */}
+            {/* 5. FOOTER (Pay Online & Cash) */}
             <div style={{ 
                 position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', 
                 width: '100%', maxWidth: '600px', 
-                padding: '20px 30px', // Increased side padding to make buttons "not width of mobile"
+                padding: '20px 30px', 
                 background: 'rgba(5, 5, 5, 0.98)', backdropFilter: 'blur(15px)', 
                 borderTop: '1px solid #222', 
                 display: 'flex', flexDirection: 'column', gap: '12px'
@@ -193,7 +201,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                 </div>
 
                 <div style={{ display: 'flex', gap: '12px' }}>
-                    {/* PAY ONLINE BUTTON */}
+                    {/* PAY ONLINE */}
                     <button 
                         onClick={() => processOrder("ONLINE")} 
                         disabled={isSubmitting}
@@ -207,7 +215,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                         <FaMobileAlt size={16} /> Pay Online
                     </button>
 
-                    {/* CASH ON COUNTER BUTTON */}
+                    {/* CASH ON COUNTER */}
                     <button 
                         onClick={() => processOrder("CASH")} 
                         disabled={isSubmitting}
