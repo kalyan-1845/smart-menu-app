@@ -115,7 +115,6 @@ const SuperAdmin = () => {
 
   return (
     <div style={{ minHeight: "100vh", background: "#050505", color: "white", padding: "20px", fontFamily: "'Inter', sans-serif" }}>
-      
       {/* HEADER */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "30px", borderBottom: "1px solid #222", paddingBottom: "20px" }}>
         <h1 style={{ margin: 0, color: "#f97316", display: "flex", alignItems: "center", gap: "10px" }}>
