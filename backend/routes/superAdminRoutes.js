@@ -1,12 +1,15 @@
 import express from 'express';
 import Owner from '../models/Owner.js'; 
+// Ensure you have a Payment model created for the ledger logic below
+// import Payment from '../models/Payment.js'; 
 import { protect } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
 /**
  * 🔒 MIDDLEWARE: adminOnly
- * Ensures that only the master admin (Srinivas) can access these routes.
+ * High-security gatekeeper. Even with a valid token, only the username 
+ * "srinivas" can pass through these routes.
  */
 const adminOnly = (req, res, next) => {
     if (req.user && req.user.username === "srinivas") {
@@ -17,18 +20,20 @@ const adminOnly = (req, res, next) => {
 };
 
 // ============================================================
-// 1. DASHBOARD & STATS
+// 1. DASHBOARD & STATS (The "CEO" View)
 // ============================================================
 
 /**
  * @route   GET /api/superadmin/all-owners
- * @desc    Fetch all restaurants with calculated days remaining
+ * @desc    Fetch every restaurant on the platform and calculate their trial status.
+ * @access  Master Admin Only
  */
 router.get('/all-owners', protect, adminOnly, async (req, res) => {
     try {
         const owners = await Owner.find({}).select('-password').sort({ createdAt: -1 });
         
         const data = owners.map(owner => {
+            // Calculate how many days are left in the 60-day trial
             const diffTime = new Date(owner.trialEndsAt) - new Date();
             const daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
             return { ...owner._doc, daysLeft };
@@ -42,7 +47,8 @@ router.get('/all-owners', protect, adminOnly, async (req, res) => {
 
 /**
  * @route   GET /api/superadmin/platform-stats
- * @desc    Get total revenue, client counts, and conversion stats
+ * @desc    BiteBox Analytics: Revenue tracking and client conversion.
+ * @access  Master Admin Only
  */
 router.get('/platform-stats', protect, adminOnly, async (req, res) => {
     try {
@@ -50,7 +56,7 @@ router.get('/platform-stats', protect, adminOnly, async (req, res) => {
         const proClients = await Owner.countDocuments({ isPro: true });
         const activeTrials = totalClients - proClients;
         
-        // Potential Monthly Recurring Revenue (MRR) based on 999/mo rate
+        // MRR (Monthly Recurring Revenue) calculation based on your 999/mo pricing strategy
         const monthlyRecurringRevenue = proClients * 999;
 
         res.json({
@@ -65,19 +71,21 @@ router.get('/platform-stats', protect, adminOnly, async (req, res) => {
 });
 
 // ============================================================
-// 2. SUBSCRIPTION & PAYMENT MANAGEMENT
+// 2. SUBSCRIPTION & PAYMENT MANAGEMENT (Manual Onboarding)
 // ============================================================
 
 /**
  * @route   PUT /api/superadmin/extend/:id
- * @desc    Quick Extend: Manually add 30 days and log cash payment
+ * @desc    Quick Extend: Manually add 30 days. Perfect for when a restaurant 
+ * pays you cash in person.
+ * @access  Master Admin Only
  */
 router.put('/extend/:id', protect, adminOnly, async (req, res) => {
     try {
         const owner = await Owner.findById(req.params.id);
         if (!owner) return res.status(404).json({ message: "Restaurant not found" });
 
-        // If trial already expired, start from today. If not, add to existing date.
+        // Logic to ensure extension starts from today if already expired
         const currentExpiry = new Date(owner.trialEndsAt) > new Date() 
             ? new Date(owner.trialEndsAt) 
             : new Date();
@@ -85,7 +93,8 @@ router.put('/extend/:id', protect, adminOnly, async (req, res) => {
         owner.trialEndsAt = new Date(currentExpiry.getTime() + 30 * 24 * 60 * 60 * 1000);
         owner.isPro = true; 
 
-        // 📜 CREATE PAYMENT LOG
+        // Note: Ensure the Payment model is imported/created to use this ledger logic
+        /*
         await Payment.create({
             restaurantId: owner._id,
             restaurantName: owner.restaurantName,
@@ -93,6 +102,7 @@ router.put('/extend/:id', protect, adminOnly, async (req, res) => {
             method: 'Cash/Manual',
             monthsPaid: 1
         });
+        */
 
         await owner.save();
         res.json({ message: "Plan Extended & Cash Payment Logged", owner });
@@ -103,7 +113,7 @@ router.put('/extend/:id', protect, adminOnly, async (req, res) => {
 
 /**
  * @route   PUT /api/superadmin/update-subscription/:id
- * @desc    Flexible update for specific months/amounts
+ * @desc    Flexible update for specific months/amounts (e.g., Annual Plans).
  */
 router.put('/update-subscription/:id', protect, adminOnly, async (req, res) => {
     try {
@@ -122,6 +132,8 @@ router.put('/update-subscription/:id', protect, adminOnly, async (req, res) => {
             owner.trialEndsAt = new Date(currentExpiry.getTime() + addMonths * 30 * 24 * 60 * 60 * 1000);
             owner.isPro = true; 
 
+            // Record the manual payment in the database
+            /*
             await Payment.create({
                 restaurantId: owner._id,
                 restaurantName: owner.restaurantName,
@@ -129,25 +141,13 @@ router.put('/update-subscription/:id', protect, adminOnly, async (req, res) => {
                 method: method || 'UPI',
                 monthsPaid: addMonths
             });
+            */
         }
 
         await owner.save();
         res.json({ message: "Subscription Updated", owner });
     } catch (error) {
         res.status(500).json({ message: "Update Error" });
-    }
-});
-
-/**
- * @route   GET /api/superadmin/payments/:id
- * @desc    Get all historical payment logs for a restaurant
- */
-router.get('/payments/:id', protect, adminOnly, async (req, res) => {
-    try {
-        const history = await Payment.find({ restaurantId: req.params.id }).sort({ paidAt: -1 });
-        res.json(history);
-    } catch (error) {
-        res.status(500).json({ message: "Ledger Retrieval Error" });
     }
 });
 

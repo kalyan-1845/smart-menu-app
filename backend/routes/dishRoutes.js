@@ -7,8 +7,10 @@ import { protect, checkSubscription } from '../middleware/authMiddleware.js';
 const router = express.Router();
 
 /**
- * 1. ADD NEW DISH (Protected)
- * POST /api/dishes
+ * 1. ADD NEW DISH (Admin Only)
+ * @route   POST /api/dishes
+ * @desc    Add a dish to the restaurant menu
+ * @access  Protected (Owner only)
  */
 router.post('/', protect, checkSubscription, async (req, res) => {
     try {
@@ -24,7 +26,7 @@ router.post('/', protect, checkSubscription, async (req, res) => {
             category, 
             description, 
             image,
-            owner: req.user.id // Taken from the protect middleware
+            owner: req.user.id // Link dish to the logged-in restaurant
         });
 
         const savedDish = await newDish.save();
@@ -35,9 +37,10 @@ router.post('/', protect, checkSubscription, async (req, res) => {
 });
 
 /**
- * 2. GET DISHES (Public)
- * GET /api/dishes?restaurantId=...
- * Detects if 'restaurantId' is a Username OR a Database ID.
+ * 2. GET DISHES (Public / Customer Facing)
+ * @route   GET /api/dishes?restaurantId=...
+ * @desc    Fetch menu items. Supports both Database ID and Username URLs.
+ * @access  Public
  */
 router.get('/', async (req, res) => {
     const { restaurantId } = req.query; 
@@ -49,6 +52,7 @@ router.get('/', async (req, res) => {
     try {
         let ownerObjectId;
 
+        // Detect if the request is using a DB ID or a clean Username (e.g. /kalyanresto1)
         if (mongoose.Types.ObjectId.isValid(restaurantId)) {
             ownerObjectId = restaurantId;
         } else {
@@ -59,6 +63,7 @@ router.get('/', async (req, res) => {
             ownerObjectId = owner._id;
         }
 
+        // Only fetch dishes that belong to this specific owner
         const dishes = await Dish.find({ owner: ownerObjectId }); 
         res.json(dishes);
     } catch (error) {
@@ -67,9 +72,10 @@ router.get('/', async (req, res) => {
 });
 
 /**
- * 3. UPDATE DISH / TOGGLE AVAILABILITY (Protected)
- * PUT /api/dishes/:id
- * 🎯 Used by Chef to mark items as "Sold Out" or by Admin to edit price.
+ * 3. UPDATE DISH / STOCK MANAGEMENT (Chef & Admin)
+ * @route   PUT /api/dishes/:id
+ * @desc    Edit dish details or toggle availability (Sold Out/In Stock)
+ * @access  Protected
  */
 router.put('/:id', protect, async (req, res) => {
     try {
@@ -77,14 +83,14 @@ router.put('/:id', protect, async (req, res) => {
 
         if (!dish) return res.status(404).json({ message: "Dish not found" });
 
-        // Security: Ensure the user owns this dish
+        // Security: Ensure the user owns this dish before allowing changes
         if (dish.owner.toString() !== req.user.id) {
             return res.status(401).json({ message: "Not authorized" });
         }
 
         const updatedDish = await Dish.findByIdAndUpdate(
             req.params.id,
-            { $set: req.body }, // Updates only fields sent (e.g. { isAvailable: false })
+            { $set: req.body }, // Dynamically updates fields like { isAvailable: false }
             { new: true }
         );
 
@@ -95,8 +101,10 @@ router.put('/:id', protect, async (req, res) => {
 });
 
 /**
- * 4. DELETE DISH (Protected)
- * DELETE /api/dishes/:id
+ * 4. DELETE DISH (Admin Only)
+ * @route   DELETE /api/dishes/:id
+ * @desc    Permanently remove a dish from the menu
+ * @access  Protected
  */
 router.delete('/:id', protect, async (req, res) => {
     try {

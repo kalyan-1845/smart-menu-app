@@ -1,16 +1,15 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { FaUtensils, FaQrcode, FaChartLine, FaBars, FaTimes, FaArrowRight, FaCheckCircle, FaPaperPlane } from "react-icons/fa";
-
-// Replace with your actual backend URL
-const API_URL = "https://smart-menu-backend-5ge7.onrender.com";
+import { 
+  FaUtensils, FaQrcode, FaChartLine, FaBars, FaTimes, 
+  FaArrowRight, FaCheckCircle, FaPaperPlane, FaLock 
+} from "react-icons/fa";
 
 const LandingPage = () => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [loading, setLoading] = useState(false);
   
-  // Form State for the "Request Access" popup
   const [requestData, setRequestData] = useState({
     ownerName: "",
     restaurantName: "",
@@ -24,25 +23,18 @@ const LandingPage = () => {
   const handleSubmitRequest = async (e) => {
     e.preventDefault();
     setLoading(true);
-
-    // This sends the lead to your backend (you need to create this endpoint or just get an email)
     try {
-      const res = await fetch(`${API_URL}/api/contact/request-access`, {
+      // Sends inquiry to your support/messages collection
+      await fetch("https://smart-menu-backend-5ge7.onrender.com/api/support/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestData),
+        body: JSON.stringify({ subject: "Partner Request", ...requestData }),
       });
-      
-      if (res.ok) {
-        alert("Thanks! We have received your details. Our team will contact you shortly to set up your account.");
-        setShowModal(false);
-        setRequestData({ ownerName: "", restaurantName: "", phone: "" });
-      } else {
-        alert("Something went wrong. Please try again.");
-      }
+      alert("Success! Srinivas's team will contact you shortly to activate your 30-day trial.");
+      setShowModal(false);
+      setRequestData({ ownerName: "", restaurantName: "", phone: "" });
     } catch (error) {
-      // If backend isn't ready, just show success for demo
-      alert("Thanks! We have received your details. We will call you shortly."); 
+      alert("Request received. We will call you soon!"); 
       setShowModal(false);
     } finally {
       setLoading(false);
@@ -51,185 +43,117 @@ const LandingPage = () => {
 
   return (
     <div className="landing-container">
-      {/* --- INTERNAL CSS --- */}
       <style>{`
-        :root {
-          --primary: #f97316;
-          --primary-glow: rgba(249, 115, 22, 0.4);
-          --bg: #050505;
-          --card-bg: rgba(20, 20, 20, 0.8);
-          --text: #ffffff;
-        }
+        :root { --primary: #f97316; --bg: #050505; --text: #ffffff; }
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
-        body { background-color: var(--bg); color: var(--text); overflow-x: hidden; }
+        body { background-color: var(--bg); color: var(--text); }
         
-        /* NAVBAR */
         .navbar {
           display: flex; justify-content: space-between; align-items: center;
           padding: 20px 5%; background: rgba(5,5,5,0.9); backdrop-filter: blur(10px);
-          position: sticky; top: 0; z-index: 100; border-bottom: 1px solid rgba(255,255,255,0.1);
+          position: sticky; top: 0; z-index: 100; border-bottom: 1px solid #111;
         }
-        .brand { font-size: 24px; font-weight: 900; color: white; text-decoration: none; display: flex; gap: 10px; align-items: center; }
-        .nav-links { display: flex; gap: 20px; align-items: center; }
-        .nav-link { color: #ccc; text-decoration: none; font-weight: 500; transition: 0.3s; }
-        .nav-link:hover { color: var(--primary); }
-        
-        .menu-toggle { display: none; background: none; border: none; color: white; font-size: 24px; }
+        .brand { display: flex; align-items: center; gap: 12px; text-decoration: none; }
+        .logo-img { width: 35px; height: 35px; border-radius: 8px; }
+        .brand-name { font-size: 22px; font-weight: 900; color: white; letter-spacing: -1px; }
 
-        /* BUTTONS */
+        .hero { text-align: center; padding: 100px 20px; max-width: 900px; margin: 0 auto; position: relative; }
+        .centered-logo { width: 120px; height: 120px; margin-bottom: 30px; filter: drop-shadow(0 0 20px rgba(249,115,22,0.3)); }
+        .hero h1 { font-size: 56px; font-weight: 900; line-height: 1; margin-bottom: 25px; }
+        .hero p { color: #888; font-size: 18px; margin-bottom: 35px; max-width: 600px; margin-left: auto; margin-right: auto; }
+
         .btn-primary {
-          background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
-          color: white; padding: 10px 24px; border-radius: 8px; border: none;
-          font-weight: 700; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 8px;
-          transition: 0.3s;
+          background: var(--primary); color: black; padding: 16px 32px; border-radius: 12px; 
+          font-weight: 900; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 10px;
+          transition: 0.3s; border: none; text-transform: uppercase;
         }
-        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 5px 15px var(--primary-glow); }
+        .btn-primary:hover { transform: scale(1.05); box-shadow: 0 10px 30px rgba(249, 115, 22, 0.4); }
 
-        .btn-outline {
-          background: rgba(255,255,255,0.05); color: white; padding: 10px 24px; 
-          border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; 
-          font-weight: 600; cursor: pointer; text-decoration: none;
-        }
-        
-        /* HERO */
-        .hero { text-align: center; padding: 80px 20px; max-width: 800px; margin: 0 auto; }
-        .hero h1 { font-size: 50px; line-height: 1.1; margin-bottom: 20px; font-weight: 800; }
-        .hero p { color: #aaa; font-size: 18px; margin-bottom: 30px; line-height: 1.6; }
-        .hero-buttons { display: flex; justify-content: center; gap: 15px; flex-wrap: wrap; }
-
-        /* FEATURES */
         .features-grid {
-          display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+          display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
           gap: 20px; padding: 40px 5%; max-width: 1200px; margin: 0 auto;
         }
-        .feature-card {
-          background: var(--card-bg); padding: 30px; border-radius: 16px;
-          border: 1px solid rgba(255,255,255,0.05); text-align: left;
-        }
-        .icon-box {
-          width: 50px; height: 50px; background: rgba(249, 115, 22, 0.1); 
-          color: var(--primary); display: flex; align-items: center; justify-content: center; 
-          border-radius: 12px; margin-bottom: 20px; font-size: 24px;
-        }
+        .feature-card { background: #0a0a0a; padding: 40px; border-radius: 24px; border: 1px solid #111; transition: 0.3s; }
+        .feature-card:hover { border-color: var(--primary); background: #0f0f0f; }
+        .icon-box { font-size: 30px; color: var(--primary); margin-bottom: 20px; }
 
-        /* MODAL */
-        .modal-overlay {
-          position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-          background: rgba(0,0,0,0.8); z-index: 2000;
-          display: flex; align-items: center; justify-content: center; padding: 20px;
-        }
-        .modal-content {
-          background: #111; padding: 40px; border-radius: 16px; width: 100%; max-width: 450px;
-          border: 1px solid #333; position: relative; text-align: center;
-        }
-        .close-btn { position: absolute; top: 15px; right: 15px; background: none; border: none; color: #666; font-size: 20px; cursor: pointer; }
-        .modal-input {
-          width: 100%; padding: 12px; margin-bottom: 15px; background: #222; 
-          border: 1px solid #333; color: white; border-radius: 8px; outline: none;
-        }
-        .modal-input:focus { border-color: var(--primary); }
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 2000; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .modal-content { background: #111; padding: 40px; border-radius: 24px; width: 100%; max-width: 450px; border: 1px solid #222; text-align: center; }
+        .modal-input { width: 100%; padding: 15px; margin-bottom: 15px; background: #000; border: 1px solid #333; color: white; border-radius: 12px; outline: none; }
 
-        /* MOBILE CSS */
-        @media (max-width: 768px) {
-          .nav-links { display: none; }
-          .menu-toggle { display: block; }
-          .hero h1 { font-size: 36px; }
-          .hero-buttons { flex-direction: column; width: 100%; }
-          .btn-primary, .btn-outline { width: 100%; justify-content: center; }
-          .features-grid { grid-template-columns: 1fr; } /* Force 1 column */
-        }
+        @media (max-width: 768px) { .hero h1 { font-size: 38px; } .nav-links { display: none; } }
       `}</style>
 
-      {/* NAVBAR */}
       <nav className="navbar">
-        <Link to="/" className="brand"><FaUtensils color="#f97316" /> SmartMenu.</Link>
-        <div className="nav-links">
-          <Link to="/login" className="nav-link">Partner Login</Link>
-          <button onClick={() => setShowModal(true)} className="btn-primary">Start Free Trial</button>
+        <Link to="/" className="brand">
+          <img src="/logo192.png" className="logo-img" alt="BiteBox Logo" />
+          <span className="brand-name">BiteBox</span>
+        </Link>
+        <div className="nav-links" style={{display:'flex', gap:'20px'}}>
+          <Link to="/login" style={{color:'#888', textDecoration:'none', fontWeight:'bold', fontSize:'14px'}}>STAFF LOGIN</Link>
+          <button onClick={() => setShowModal(true)} className="btn-primary" style={{padding:'10px 20px', fontSize:'12px'}}>GET STARTED</button>
         </div>
-        <button className="menu-toggle" onClick={() => setMenuOpen(!menuOpen)}>
-          {menuOpen ? <FaTimes /> : <FaBars />}
-        </button>
       </nav>
 
-      {/* MOBILE MENU */}
-      {menuOpen && (
-        <div style={{ background: "#111", padding: "20px", display: "flex", flexDirection: "column", gap: "15px", borderBottom: "1px solid #333" }}>
-          <Link to="/login" className="nav-link" style={{ fontSize: "18px" }}>Partner Login</Link>
-          <button onClick={() => {setShowModal(true); setMenuOpen(false);}} className="btn-primary">Start Free Trial</button>
-        </div>
-      )}
-
-      {/* HERO */}
       <section className="hero">
-        <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "rgba(255,255,255,0.05)", padding: "6px 12px", borderRadius: "20px", marginBottom: "20px", fontSize: "13px", color: "#ccc" }}>
-          <FaCheckCircle color="#22c55e" /> Validated by 500+ Restaurants
+        <img src="/logo192.png" className="centered-logo" alt="BiteBox" />
+        <div style={{ display: "inline-flex", alignItems: "center", gap: "8px", background: "#111", padding: "8px 16px", borderRadius: "30px", marginBottom: "20px", fontSize: "12px", fontWeight: 'bold', color: "#22c55e" }}>
+          <FaCheckCircle /> POWERING NEXT-GEN DINING
         </div>
-        <h1>Upgrade Your Restaurant <br /><span style={{color: "#f97316"}}>Without The Headache.</span></h1>
-        <p>Digital QR Menus and Kitchen Displays. We set everything up for you.</p>
-        <div className="hero-buttons">
+        <h1>Your Restaurant. <br /><span style={{color: "var(--primary)"}}>Digitized in Minutes.</span></h1>
+        <p>BiteBox provides high-speed QR ordering, live kitchen displays, and professional POS receipts. Start your 30-day trial today.</p>
+        
+        <div style={{display:'flex', justifyContent:'center', gap:'15px', flexWrap:'wrap'}}>
           <button onClick={() => setShowModal(true)} className="btn-primary">
-            Get Your Free Demo <FaArrowRight />
+            Request Access <FaArrowRight />
           </button>
-          <Link to="/login" className="btn-outline">Partner Login</Link>
+          <Link to="/login" style={{background:'#111', border:'1px solid #222', color:'white', padding:'16px 32px', borderRadius:'12px', textDecoration:'none', fontWeight:'bold'}}>
+            Partner Login
+          </Link>
         </div>
       </section>
 
-      {/* FEATURES */}
       <section className="features-grid">
         <div className="feature-card">
-          <div className="icon-box"><FaQrcode /></div>
-          <h3>QR Ordering</h3>
-          <p style={{color: "#888", marginTop: "10px"}}>Customers order instantly. No waiting for waiters.</p>
+          <FaQrcode className="icon-box" />
+          <h3>Contactless Ordering</h3>
+          <p style={{color: "#666", marginTop: "10px"}}>Customers scan, order, and pay at the counter. No hardware required.</p>
         </div>
         <div className="feature-card">
-          <div className="icon-box"><FaUtensils /></div>
-          <h3>Kitchen Display</h3>
-          <p style={{color: "#888", marginTop: "10px"}}>Orders appear on a screen in the kitchen. 100% accuracy.</p>
+          <FaUtensils className="icon-box" />
+          <h3>KDS Arrangements</h3>
+          <p style={{color: "#666", marginTop: "10px"}}>Real-time kitchen display system (KDS) ensures order accuracy and speed.</p>
         </div>
         <div className="feature-card">
-          <div className="icon-box"><FaChartLine /></div>
-          <h3>Sales Analytics</h3>
-          <p style={{color: "#888", marginTop: "10px"}}>See exactly how much you earned today in real-time.</p>
+          <FaChartLine className="icon-box" />
+          <h3>Admin Control</h3>
+          <p style={{color: "#666", marginTop: "10px"}}>Manage your menu, toggle stock availability, and track daily revenue instantly.</p>
         </div>
       </section>
 
-      {/* MODAL FORM (REQUEST ACCESS) */}
       {showModal && (
         <div className="modal-overlay">
           <div className="modal-content">
-            <button className="close-btn" onClick={() => setShowModal(false)}><FaTimes /></button>
-            <h2 style={{ color: "white", marginBottom: "10px" }}>Request Access</h2>
-            <p style={{ color: "#888", marginBottom: "20px", fontSize: "14px" }}>
-              Leave your details. We will contact you to set up your restaurant account.
+            <h2 style={{ marginBottom: "10px" }}>Partner with BiteBox</h2>
+            <p style={{ color: "#666", marginBottom: "25px", fontSize: "14px" }}>
+              Our team will contact you to set up your restaurant and table QR codes.
             </p>
             <form onSubmit={handleSubmitRequest}>
-              <input 
-                className="modal-input" 
-                type="text" name="ownerName" placeholder="Your Name" required 
-                value={requestData.ownerName} onChange={handleInputChange} 
-              />
-              <input 
-                className="modal-input" 
-                type="text" name="restaurantName" placeholder="Restaurant Name" required 
-                value={requestData.restaurantName} onChange={handleInputChange}
-              />
-              <input 
-                className="modal-input" 
-                type="tel" name="phone" placeholder="Phone Number" required 
-                value={requestData.phone} onChange={handleInputChange}
-              />
+              <input className="modal-input" type="text" name="ownerName" placeholder="Owner Name" required value={requestData.ownerName} onChange={handleInputChange} />
+              <input className="modal-input" type="text" name="restaurantName" placeholder="Restaurant Name" required value={requestData.restaurantName} onChange={handleInputChange} />
+              <input className="modal-input" type="tel" name="phone" placeholder="Phone Number" required value={requestData.phone} onChange={handleInputChange} />
               <button type="submit" className="btn-primary" style={{ width: "100%", justifyContent: "center" }}>
-                {loading ? "Sending..." : "Submit Request"} <FaPaperPlane />
+                {loading ? "Processing..." : "Submit Inquiry"} <FaPaperPlane />
               </button>
+              <button type="button" onClick={() => setShowModal(false)} style={{background:'none', border:'none', color:'#444', marginTop:'20px', cursor:'pointer', fontWeight:'bold'}}>Cancel</button>
             </form>
           </div>
         </div>
       )}
 
-      {/* FOOTER */}
-      <footer style={{ textAlign: "center", padding: "40px 20px", borderTop: "1px solid #222", marginTop: "40px", color: "#666" }}>
-        <p>&copy; {new Date().getFullYear()} Smart Menu Cloud. All rights reserved.</p>
+      <footer style={{ textAlign: "center", padding: "60px 20px", borderTop: "1px solid #111", color: "#333", fontSize:'12px', fontWeight:'bold' }}>
+        <p>BITEBOX SMART MENU SYSTEM &copy; {new Date().getFullYear()}</p>
+        <div style={{marginTop:'10px', color:'#222'}}>SECURED BY BKR TECHNOLOGIES</div>
       </footer>
     </div>
   );

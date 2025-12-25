@@ -1,179 +1,64 @@
-import React, { useState } from "react";
-import { FaSearch, FaShoppingCart, FaStar, FaPlus, FaMinus, FaUtensils } from "react-icons/fa";
-
-// --- 1. SAMPLE DATA (15 ITEMS) ---
-const MENU_ITEMS = [
-  // STARTERS
-  {
-    id: 1,
-    name: "Crispy Corn",
-    price: 249,
-    category: "Starters",
-    rating: 4.5,
-    image: "https://images.unsplash.com/photo-1621510456600-4db05c95660b?w=800&auto=format&fit=crop&q=60"
-  },
-  {
-    id: 2,
-    name: "Chicken 65",
-    price: 329,
-    category: "Starters",
-    rating: 4.8,
-    image: "https://images.unsplash.com/photo-1610057099443-fde8c4d50f91?w=800&auto=format&fit=crop&q=60"
-  },
-  {
-    id: 3,
-    name: "Paneer Tikka",
-    price: 299,
-    category: "Starters",
-    rating: 4.6,
-    image: "https://images.unsplash.com/photo-1599487488170-d11ec9c172f0?w=800&auto=format&fit=crop&q=60"
-  },
-  // MAIN COURSE
-  {
-    id: 4,
-    name: "Hyderabadi Chicken Biryani",
-    price: 499,
-    category: "Main Course",
-    rating: 4.9,
-    image: "https://images.unsplash.com/photo-1589302168068-964664d93dc0?w=800&auto=format&fit=crop&q=60"
-  },
-  {
-    id: 5,
-    name: "Butter Naan",
-    price: 60,
-    category: "Main Course",
-    rating: 4.5,
-    image: "https://images.unsplash.com/photo-1645177628172-a94c1f96e6db?w=800&auto=format&fit=crop&q=60"
-  },
-  {
-    id: 6,
-    name: "Paneer Butter Masala",
-    price: 349,
-    category: "Main Course",
-    rating: 4.7,
-    image: "https://images.unsplash.com/photo-1631452180519-c014fe946bc7?w=800&auto=format&fit=crop&q=60"
-  },
-  {
-    id: 7,
-    name: "Mutton Rogan Josh",
-    price: 549,
-    category: "Main Course",
-    rating: 4.8,
-    image: "https://plus.unsplash.com/premium_photo-1661609678486-1361c47be5d8?w=800&auto=format&fit=crop&q=60"
-  },
-  // BURGERS & PIZZA
-  {
-    id: 8,
-    name: "Classic Cheese Burger",
-    price: 199,
-    category: "Fast Food",
-    rating: 4.4,
-    image: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=800&auto=format&fit=crop&q=60"
-  },
-  {
-    id: 9,
-    name: "Spicy Chicken Burger",
-    price: 249,
-    category: "Fast Food",
-    rating: 4.6,
-    image: "https://images.unsplash.com/photo-1610440042657-612c34d95e9f?w=800&auto=format&fit=crop&q=60"
-  },
-  {
-    id: 10,
-    name: "Margherita Pizza",
-    price: 399,
-    category: "Fast Food",
-    rating: 4.5,
-    image: "https://images.unsplash.com/photo-1574071318508-1cdbab80d002?w=800&auto=format&fit=crop&q=60"
-  },
-  {
-    id: 11,
-    name: "Pepperoni Pizza",
-    price: 499,
-    category: "Fast Food",
-    rating: 4.7,
-    image: "https://images.unsplash.com/photo-1628840042765-356cda07504e?w=800&auto=format&fit=crop&q=60"
-  },
-  // DESSERTS & DRINKS
-  {
-    id: 12,
-    name: "Chocolate Brownie",
-    price: 149,
-    category: "Dessert",
-    rating: 4.8,
-    image: "https://images.unsplash.com/photo-1606313564200-e75d5e30476c?w=800&auto=format&fit=crop&q=60"
-  },
-  {
-    id: 13,
-    name: "Gulab Jamun",
-    price: 99,
-    category: "Dessert",
-    rating: 4.9,
-    image: "https://images.unsplash.com/photo-1601303516000-388647ba9510?w=800&auto=format&fit=crop&q=60"
-  },
-  {
-    id: 14,
-    name: "Mango Lassi",
-    price: 129,
-    category: "Beverages",
-    rating: 4.7,
-    image: "https://images.unsplash.com/photo-1634547986064-074474320b99?w=800&auto=format&fit=crop&q=60"
-  },
-  {
-    id: 15,
-    name: "Iced Cola",
-    price: 79,
-    category: "Beverages",
-    rating: 4.2,
-    image: "https://images.unsplash.com/photo-1622483767028-3f66f32aef97?w=800&auto=format&fit=crop&q=60"
-  }
-];
+import React, { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { FaSearch, FaShoppingCart, FaStar, FaPlus, FaMinus, FaUtensils, FaInfoCircle } from "react-icons/fa";
+import axios from "axios";
 
 const CATEGORIES = ["All", "Starters", "Main Course", "Fast Food", "Dessert", "Beverages"];
 
-const Menu = () => {
+const Menu = ({ cart, addToCart, removeFromCart, setRestaurantId, setTableNum }) => {
+  const { id, table } = useParams(); // Get restaurant name and table from URL
+  const navigate = useNavigate();
+  
+  const [restaurantName, setRestaurantName] = useState("Loading...");
   const [activeCategory, setActiveCategory] = useState("All");
-  const [cart, setCart] = useState({});
   const [searchTerm, setSearchTerm] = useState("");
+  const [dishes, setDishes] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  // Filter Logic
-  const filteredItems = MENU_ITEMS.filter(item => {
+  // --- 1. DATA FETCHING ---
+  useEffect(() => {
+    // Sync URL params to global state
+    if (id) setRestaurantId(id);
+    if (table) setTableNum(table);
+
+    const fetchMenu = async () => {
+      try {
+        const res = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/dishes?restaurantId=${id}`);
+        setDishes(res.data);
+        // Set dynamic restaurant name from ID
+        setRestaurantName(id.toUpperCase());
+        setLoading(false);
+      } catch (e) {
+        console.error("Menu Load Failed");
+        setLoading(false);
+      }
+    };
+    fetchMenu();
+  }, [id, table, setRestaurantId, setTableNum]);
+
+  // --- 2. LOGIC ---
+  const filteredItems = dishes.filter(item => {
     const matchesCategory = activeCategory === "All" || item.category === activeCategory;
     const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase());
     return matchesCategory && matchesSearch;
   });
 
-  // Cart Logic
-  const addToCart = (id) => {
-    setCart(prev => ({ ...prev, [id]: (prev[id] || 0) + 1 }));
-  };
+  const totalItems = cart.reduce((acc, item) => acc + item.quantity, 0);
+  const totalPrice = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
 
-  const removeFromCart = (id) => {
-    setCart(prev => {
-      const newCart = { ...prev };
-      if (newCart[id] > 1) newCart[id] -= 1;
-      else delete newCart[id];
-      return newCart;
-    });
-  };
-
-  const totalItems = Object.values(cart).reduce((a, b) => a + b, 0);
-  const totalPrice = Object.entries(cart).reduce((sum, [id, qty]) => {
-    const item = MENU_ITEMS.find(i => i.id === parseInt(id));
-    return sum + (item.price * qty);
-  }, 0);
+  if (loading) return <div style={styles.loader}>Loading {id} Menu...</div>;
 
   return (
-    <div style={{ minHeight: "100vh", background: "#050505", color: "white", paddingBottom: "80px", fontFamily: "'Inter', sans-serif" }}>
+    <div style={{ minHeight: "100vh", background: "#050505", color: "white", paddingBottom: "120px", fontFamily: "'Inter', sans-serif" }}>
       
       {/* --- HEADER --- */}
       <div style={{ padding: "20px", background: "#111", position: "sticky", top: 0, zIndex: 100, borderBottom: "1px solid #222" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
           <h1 style={{ fontSize: "22px", margin: 0, display: "flex", alignItems: "center", gap: "10px" }}>
-            <FaUtensils color="#f97316" /> Deccan Fresh
+            <FaUtensils color="#f97316" /> {restaurantName}
           </h1>
-          <div style={{ background: "#222", padding: "8px 15px", borderRadius: "20px", fontSize: "14px", fontWeight: "bold", color: "#f97316" }}>
-            Table #4
+          <div style={{ background: "#222", padding: "8px 15px", borderRadius: "20px", fontSize: "12px", fontWeight: "bold", color: "#f97316" }}>
+            {table ? `Table #${table}` : "BiteBox Menu"}
           </div>
         </div>
 
@@ -211,64 +96,77 @@ const Menu = () => {
       {/* --- MENU GRID --- */}
       <div style={{ padding: "20px", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: "20px" }}>
         {filteredItems.map(item => (
-          <div key={item.id} style={{ background: "#111", borderRadius: "16px", overflow: "hidden", border: "1px solid #222", display: "flex", flexDirection: "column" }}>
-            {/* Image */}
+          <div key={item._id} style={{ background: "#111", borderRadius: "16px", overflow: "hidden", border: "1px solid #222", display: "flex", flexDirection: "column" }}>
             <div style={{ height: "140px", overflow: "hidden", position: "relative" }}>
-              <img src={item.image} alt={item.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-              <div style={{ position: "absolute", bottom: "10px", left: "10px", background: "rgba(0,0,0,0.7)", padding: "4px 8px", borderRadius: "8px", fontSize: "12px", color: "#fbbf24", display: "flex", alignItems: "center", gap: "4px" }}>
-                <FaStar /> {item.rating}
-              </div>
+              <img src={item.image || "https://via.placeholder.com/150"} alt={item.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              {!item.isAvailable && (
+                <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", color: "red", fontWeight: "bold" }}>
+                  SOLD OUT
+                </div>
+              )}
             </div>
 
-            {/* Content */}
             <div style={{ padding: "12px", flex: 1, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
               <div>
                 <h3 style={{ fontSize: "16px", margin: "0 0 5px 0", lineHeight: "1.3" }}>{item.name}</h3>
-                <p style={{ fontSize: "12px", color: "#888", margin: 0 }}>{item.category}</p>
+                <p style={{ fontSize: "11px", color: "#666", margin: "0 0 10px 0" }}>{item.description}</p>
               </div>
               
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "15px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div style={{ fontWeight: "bold", fontSize: "16px" }}>₹{item.price}</div>
-                
-                {cart[item.id] ? (
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px", background: "#f97316", padding: "5px 10px", borderRadius: "8px" }}>
-                    <FaMinus size={10} onClick={() => removeFromCart(item.id)} style={{ cursor: "pointer" }} />
-                    <span style={{ fontSize: "14px", fontWeight: "bold" }}>{cart[item.id]}</span>
-                    <FaPlus size={10} onClick={() => addToCart(item.id)} style={{ cursor: "pointer" }} />
-                  </div>
-                ) : (
-                  <button onClick={() => addToCart(item.id)} style={{ background: "#222", border: "1px solid #333", color: "#f97316", padding: "6px 12px", borderRadius: "8px", cursor: "pointer", fontSize: "12px", fontWeight: "bold" }}>
-                    ADD
-                  </button>
-                )}
+                <button 
+                  disabled={!item.isAvailable}
+                  onClick={() => addToCart(item)} 
+                  style={{ background: "#f97316", border: "none", color: "#000", padding: "6px 12px", borderRadius: "8px", cursor: "pointer", fontSize: "12px", fontWeight: "900", opacity: item.isAvailable ? 1 : 0.5 }}
+                >
+                  ADD
+                </button>
               </div>
             </div>
           </div>
         ))}
       </div>
 
-      {filteredItems.length === 0 && (
-        <div style={{ textAlign: "center", padding: "50px", color: "#666" }}>
-          <FaSearch size={40} style={{ marginBottom: "15px", opacity: 0.5 }} />
-          <p>No dishes found. Try a different category.</p>
+      {/* --- FLOATING CART: BiteBox Dine-In Style --- */}
+      {totalItems > 0 && (
+        <div style={styles.cartSticky}>
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <div style={{ display: "flex", gap: "10px", alignItems: "baseline" }}>
+              <span style={{ fontSize: "16px", fontWeight: "900", color: "#000" }}>₹{totalPrice}</span>
+              <span style={{ fontSize: "10px", fontWeight: "bold", color: "#333" }}>{totalItems} ITEMS</span>
+            </div>
+            {/* MVP Rule: Payment Info */}
+            <div style={{ fontSize: "9px", color: "#222", display: "flex", alignItems: "center", gap: "4px", fontWeight: "bold", marginTop: "2px" }}>
+              <FaInfoCircle /> Pay at counter after eating
+            </div>
+          </div>
+          <button onClick={() => navigate("/cart")} style={styles.viewCartBtn}>
+            View Cart <FaShoppingCart />
+          </button>
         </div>
       )}
 
-      {/* --- FLOATING CART BUTTON --- */}
-      {totalItems > 0 && (
-        <div style={{ position: "fixed", bottom: "20px", left: "5%", width: "90%", background: "#f97316", padding: "15px", borderRadius: "12px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 10px 30px rgba(249, 115, 22, 0.4)", zIndex: 200, cursor: "pointer" }}>
-          <div style={{ display: "flex", flexDirection: "column" }}>
-            <span style={{ fontSize: "12px", opacity: 0.9 }}>{totalItems} ITEMS</span>
-            <span style={{ fontSize: "16px", fontWeight: "bold" }}>₹{totalPrice}</span>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px", fontWeight: "bold" }}>
-            View Cart <FaShoppingCart />
-          </div>
-        </div>
-      )}
+      <div style={{ textAlign: "center", padding: "20px", opacity: 0.3, fontSize: "10px", letterSpacing: "1px" }}>
+        POWERED BY BITEBOX SMART MENU
+      </div>
 
     </div>
   );
+};
+
+const styles = {
+  loader: { height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: "#f97316", fontWeight: "bold" },
+  cartSticky: { 
+    position: "fixed", bottom: "20px", left: "5%", width: "90%", 
+    background: "#f97316", padding: "15px", borderRadius: "16px", 
+    display: "flex", justifyContent: "space-between", alignItems: "center", 
+    boxShadow: "0 10px 40px rgba(0,0,0,0.5)", zIndex: 200 
+  },
+  viewCartBtn: { 
+    background: "#000", color: "#fff", border: "none", 
+    padding: "10px 18px", borderRadius: "10px", fontWeight: "900", 
+    fontSize: "12px", display: "flex", alignItems: "center", gap: "8px" 
+  }
 };
 
 export default Menu;

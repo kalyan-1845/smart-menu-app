@@ -1,20 +1,20 @@
 import React, { useState, useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 
-// --- PAGES IMPORT (All from ./pages/) ---
+// --- PAGES IMPORT ---
 import LandingPage from "./pages/LandingPage.jsx"; 
 import Menu from "./pages/Menu.jsx"; 
 import Cart from "./pages/Cart.jsx";
 import OrderSuccess from "./pages/OrderSuccess.jsx";
-import OrderTracker from "./pages/OrderTracker.jsx";
+import OrderTracker from "./pages/OrderTracker.jsx"; // Live Tracking
 
 // --- STAFF PANELS ---
-import SuperAdmin from "./pages/SuperAdmin.jsx";
+import SuperAdmin from "./pages/SuperAdmin.jsx"; // CEO Access
 import RestaurantAdmin from "./pages/RestaurantAdmin.jsx"; 
-import ChefDashboard from "./pages/ChefDashboard.jsx"; 
-import WaiterDashboard from "./pages/WaiterDashboard.jsx";
+import ChefDashboard from "./pages/ChefDashboard.jsx"; // KDS
+import WaiterDashboard from "./pages/WaiterDashboard.jsx"; // Service
 
-// --- ✅ FIXED: These are also in the "pages" folder ---
+// --- AUTH PAGES ---
 import OwnerLogin from "./pages/OwnerLogin.jsx"; 
 import Register from "./pages/Register.jsx";
 
@@ -32,7 +32,7 @@ const GlobalStyles = () => (
 );
 
 function App() {
-  // --- STATE ---
+  // --- STATE PERSISTENCE ---
   const [cart, setCart] = useState(() => {
     try {
       const saved = localStorage.getItem("smartMenu_Cart");
@@ -43,7 +43,6 @@ function App() {
   const [restaurantId, setRestaurantId] = useState(localStorage.getItem("activeResId") || null);
   const [tableNum, setTableNum] = useState(localStorage.getItem("activeTable") || ""); 
 
-  // --- PERSISTENCE ---
   useEffect(() => {
     localStorage.setItem("smartMenu_Cart", JSON.stringify(cart));
     if (restaurantId) localStorage.setItem("activeResId", restaurantId);
@@ -83,7 +82,7 @@ function App() {
         <Route path="/login" element={<OwnerLogin />} />
         <Route path="/register" element={<Register />} />
 
-        {/* --- CUSTOMER EXPERIENCE --- */}
+        {/* --- 🧍 CUSTOMER EXPERIENCE --- */}
         <Route 
           path="/menu/:id/:table" 
           element={<Menu cart={cart} addToCart={addToCart} setRestaurantId={setRestaurantId} setTableNum={setTableNum} />} 
@@ -107,11 +106,15 @@ function App() {
           } 
         />
         <Route path="/order-success" element={<OrderSuccess />} />
+        
+        {/* 🛰️ TRACKING: Linked to Order ID from backend */}
         <Route path="/track/:id" element={<OrderTracker />} />
 
-        {/* --- STAFF DASHBOARDS --- */}
+        {/* --- 👑 SUPER ADMIN (CEO PANEL) --- */}
         <Route path="/superadmin" element={<SuperAdmin />} />
         
+        {/* --- 👨‍🍳 STAFF DASHBOARDS --- */}
+        {/* Logic: Uses :id parameter for dynamic restaurant access */}
         <Route path="/admin" element={<RestaurantAdmin />} /> 
         <Route path="/:id/admin" element={<RestaurantAdmin />} />
         

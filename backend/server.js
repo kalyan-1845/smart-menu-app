@@ -8,7 +8,7 @@ import rateLimit from 'express-rate-limit';
 import https from "https"; 
 
 // --- IMPORT ROUTES ---
-// ✅ FIX: Matches the filename 'authRoutes.js' you have in your folder
+// ✅ All routes linked to your BiteBox MVP structure
 import authRoutes from './routes/authRoutes.js'; 
 import dishRoutes from './routes/dishRoutes.js';
 import orderRoutes from './routes/orderRoutes.js';
@@ -20,6 +20,7 @@ const app = express();
 const httpServer = createServer(app);
 
 // --- 🔒 SECURITY: ALLOWED ORIGINS ---
+// Updated to include your production Netlify URL
 const allowedOrigins = [
     "http://localhost:5173",           
     "https://smartmenuss.netlify.app",
@@ -28,6 +29,7 @@ const allowedOrigins = [
 
 // ============================================================
 // ☢️ NUCLEAR CORS FIX (LAYER 1: MANUAL HEADERS)
+// Ensures cross-origin requests work across all mobile browsers
 // ============================================================
 app.use((req, res, next) => {
     const origin = req.headers.origin;
@@ -56,15 +58,17 @@ app.use(cors({
 // --- MIDDLEWARE ---
 app.use(express.json({ limit: '10mb' })); 
 
+// Rate limiter set for busy restaurant hours
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, 
-    max: 500, // Increased for busy restaurant hours
+    max: 500, 
     standardHeaders: true,
     legacyHeaders: false,
 });
 app.use(limiter); 
 
 // --- SOCKET.IO SETUP ---
+// Critical for live Chef/Waiter notifications
 const io = new Server(httpServer, {
     cors: {
         origin: allowedOrigins,
@@ -73,7 +77,7 @@ const io = new Server(httpServer, {
     }
 });
 
-// Attach Socket to Request for use in Controllers
+// Attach Socket to Request for use in Controllers (e.g., when a new order is placed)
 app.use((req, res, next) => {
     req.io = io;
     next();
@@ -85,7 +89,6 @@ mongoose.connect(process.env.MONGO_URI)
     .catch((err) => console.error("❌ MongoDB Error:", err));
 
 // --- ROUTES ---
-// This connects the /api/auth URL to your authRoutes.js file
 app.use('/api/auth', authRoutes);
 app.use('/api/dishes', dishRoutes);
 app.use('/api/orders', orderRoutes);
@@ -93,13 +96,13 @@ app.use('/api/superadmin', superAdminRoutes);
 app.use('/api/broadcast', broadcastRoutes);
 app.use('/api/support', supportRoutes); 
 
-app.get('/', (req, res) => res.send('Smart Menu API v2.8 Active'));
+app.get('/', (req, res) => res.send('BiteBox Smart Menu API Active'));
 
 // --- SOCKET LOGIC ---
 io.on('connection', (socket) => {
     console.log(`🔌 Client Connected: ${socket.id}`);
 
-    // Multi-tenant room logic
+    // Multi-tenant room logic: Ensures orders only go to the correct restaurant
     socket.on('join-restaurant', (restaurantId) => {
         socket.join(restaurantId);
         console.log(`User joined restaurant room: ${restaurantId}`);
@@ -120,6 +123,7 @@ app.use((err, req, res, next) => {
 });
 
 // --- SELF PING (Render Keep-Alive) ---
+// Prevents the server from sleeping on free hosting like Render
 const pingUrl = "https://smart-menu-backend-5ge7.onrender.com/"; 
 setInterval(() => {
     https.get(pingUrl, (res) => {
@@ -131,5 +135,5 @@ setInterval(() => {
 
 const PORT = process.env.PORT || 5000;
 httpServer.listen(PORT, () => {
-    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`🚀 BiteBox Server running on port ${PORT}`);
 });

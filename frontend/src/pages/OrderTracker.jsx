@@ -1,192 +1,38 @@
 import React, { useEffect, useState } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import io from "socket.io-client";
+import { generateCustomerReceipt } from "../utils/receiptGenerator"; //
 import { 
-    FaCheck, FaUtensils, FaClock, FaConciergeBell, 
-    FaArrowLeft, FaPhoneAlt, FaMoneyBillWave, FaCheckCircle, 
-    FaSpinner, FaExclamationCircle, FaReceipt
+    FaUtensils, FaClock, FaArrowLeft, FaPhoneAlt, 
+    FaDownload, FaCheckCircle, FaSpinner, FaReceipt
 } from "react-icons/fa";
-
-// --- MOBILE-FIRST STYLES ---
-const styles = `
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;900&display=swap');
-
-/* Base */
-.tracker-container {
-    background-color: #050505;
-    min-height: 100vh;
-    font-family: 'Inter', sans-serif;
-    color: white;
-    padding: 20px;
-    padding-bottom: 120px; /* Space for sticky footer */
-    max-width: 600px;
-    margin: 0 auto;
-    position: relative;
-    background-image: radial-gradient(circle at top right, #1a100a 0%, #050505 40%);
-}
-
-.loading-screen {
-    background: #050505;
-    height: 100vh;
-    color: #f97316;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 15px;
-}
-
-/* Animations */
-@keyframes pulse-orange {
-    0% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.4); }
-    70% { box-shadow: 0 0 0 10px rgba(249, 115, 22, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0); }
-}
-.pulse-active { animation: pulse-orange 2s infinite; }
-
-@keyframes spin { 100% { transform: rotate(360deg); } }
-.spin { animation: spin 1s linear infinite; }
-
-/* 1. Header */
-.nav-header { display: flex; align-items: center; gap: 15px; margin-bottom: 25px; padding-top: 10px; }
-.back-btn { background: rgba(255,255,255,0.1); border: none; color: white; width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; cursor: pointer; backdrop-filter: blur(10px); }
-.order-title { font-size: 20px; font-weight: 900; margin: 0; }
-.order-id { font-size: 11px; color: #888; font-weight: 700; margin-top: 2px; }
-
-/* 2. Status Card */
-.status-card {
-    background: #111;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 24px;
-    padding: 30px 20px;
-    margin-bottom: 25px;
-    text-align: center;
-    position: relative;
-    overflow: hidden;
-}
-.status-label { font-size: 11px; text-transform: uppercase; letter-spacing: 2px; color: #888; font-weight: 800; margin-bottom: 5px; }
-.status-value { font-size: 28px; font-weight: 900; color: white; margin-bottom: 5px; }
-.status-sub { color: #f97316; font-size: 13px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 6px; }
-
-/* 3. Stepper */
-.stepper-wrapper {
-    position: relative;
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin: 0 10px 30px 10px;
-}
-.progress-bg { position: absolute; top: 15px; left: 0; width: 100%; height: 4px; background: #222; z-index: 0; border-radius: 10px; }
-.progress-fill { position: absolute; top: 15px; left: 0; height: 4px; background: #f97316; z-index: 0; transition: width 0.5s ease; border-radius: 10px; }
-
-.step-item { z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; width: 50px; }
-.step-icon {
-    width: 34px; height: 34px;
-    border-radius: 50%;
-    background: #111;
-    border: 2px solid #333;
-    color: #555;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 12px;
-    transition: all 0.3s;
-}
-.step-icon.active {
-    border-color: #f97316;
-    color: white;
-    background: #f97316;
-}
-.step-label { font-size: 10px; font-weight: 700; color: #555; text-align: center; transition: color 0.3s; }
-.step-label.active { color: white; }
-
-/* 4. Receipt Card */
-.receipt-card {
-    background: #111;
-    border-radius: 20px;
-    padding: 20px;
-    border: 1px solid #222;
-}
-.receipt-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px dashed #333; padding-bottom: 15px; }
-.item-row { display: flex; justify-content: space-between; margin-bottom: 12px; font-size: 14px; }
-.item-qty { color: #f97316; font-weight: 800; margin-right: 8px; }
-.item-name { color: #ddd; font-weight: 500; }
-.item-price { color: white; font-weight: 700; }
-
-.note-box {
-    background: rgba(249, 115, 22, 0.1);
-    border: 1px solid rgba(249, 115, 22, 0.2);
-    padding: 10px;
-    border-radius: 10px;
-    margin-top: 15px;
-    font-size: 12px;
-    color: #f97316;
-    display: flex; gap: 8px;
-}
-
-.total-row { display: flex; justify-content: space-between; margin-top: 20px; padding-top: 15px; border-top: 1px solid #222; align-items: center; }
-.total-label { font-size: 12px; font-weight: 800; color: #888; text-transform: uppercase; }
-.total-amount { font-size: 20px; font-weight: 900; color: white; }
-
-/* 5. Sticky Footer */
-.sticky-footer {
-    position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
-    width: 100%; max-width: 600px;
-    background: rgba(5,5,5,0.95);
-    backdrop-filter: blur(10px);
-    padding: 20px;
-    border-top: 1px solid #222;
-    display: flex; gap: 12px;
-    z-index: 100;
-}
-
-.btn-call {
-    flex: 1;
-    background: #1a1a1a;
-    color: white;
-    border: 1px solid #333;
-    height: 50px;
-    border-radius: 14px;
-    font-weight: 700;
-    font-size: 13px;
-    display: flex; align-items: center; justify-content: center; gap: 8px;
-    cursor: pointer;
-}
-.btn-status {
-    flex: 1;
-    background: #f97316;
-    color: white;
-    border: none;
-    height: 50px;
-    border-radius: 14px;
-    font-weight: 800;
-    font-size: 13px;
-    display: flex; align-items: center; justify-content: center; gap: 8px;
-    box-shadow: 0 4px 15px rgba(249, 115, 22, 0.3);
-}
-`;
 
 const OrderTracker = () => {
     const { id } = useParams();
     const navigate = useNavigate();
     const API_BASE = "https://smart-menu-backend-5ge7.onrender.com/api";
     
-    // --- STATE ---
     const [order, setOrder] = useState(null);
-    const [callStatus, setCallStatus] = useState("Call Waiter"); 
+    const [restaurant, setRestaurant] = useState(null); 
     const [isCalling, setIsCalling] = useState(false);
 
-    // --- DATA FETCHING ---
     useEffect(() => {
-        const fetchOrder = async () => {
+        const fetchOrderAndBranding = async () => {
             try {
+                // Get order details via ID from URL
                 const res = await axios.get(`${API_BASE}/orders/track/${id}`);
                 setOrder(res.data);
-            } catch (e) { console.error("Fetch Error:", e); }
+                
+                // Fetch restaurant branding specifically for the PDF receipt
+                const resInfo = await axios.get(`${API_BASE}/auth/restaurant/${res.data.owner}`);
+                setRestaurant(resInfo.data);
+            } catch (e) { console.error("Sync Error", e); }
         };
 
-        fetchOrder();
+        fetchOrderAndBranding();
         
-        // Socket for Live Updates
+        // Socket for live kitchen-to-customer updates
         const socket = io("https://smart-menu-backend-5ge7.onrender.com");
         socket.on("order-updated", (updatedOrder) => {
             if (updatedOrder._id === id) setOrder(updatedOrder);
@@ -195,172 +41,81 @@ const OrderTracker = () => {
         return () => socket.disconnect();
     }, [id]);
 
-    // --- HANDLER: CALL WAITER ---
-    const handleCallWaiter = async () => {
-        if (!order || isCalling) return;
-        
-        setIsCalling(true);
-        setCallStatus("Requesting...");
-        
-        try {
-            await axios.post(`${API_BASE}/orders/calls`, {
-                restaurantId: order.owner,
-                tableNumber: order.tableNumber,
-                type: "help" // Generic help request
-            });
-            setCallStatus("Waiter Notified ✓");
-            // Reset button after 5s
-            setTimeout(() => {
-                setCallStatus("Call Waiter");
-                setIsCalling(false);
-            }, 5000);
-        } catch (e) {
-            alert("Failed to notify staff.");
-            setCallStatus("Call Waiter");
-            setIsCalling(false);
+    // --- HANDLER: DOWNLOAD BITEBOX RECEIPT ---
+    const handleDownload = () => {
+        if (order && restaurant) {
+            // Generates the centered logo + centered URL receipt
+            generateCustomerReceipt(order, restaurant); 
+        } else {
+            alert("Preparing your receipt...");
         }
     };
 
-    // --- STAGES CONFIG ---
-    const stages = [
-        { id: "PLACED", label: "Sent", icon: <FaCheck /> },
-        { id: "COOKING", label: "Cooking", icon: <FaUtensils /> },
-        { id: "READY", label: "Ready", icon: <FaConciergeBell /> },
-        { id: "SERVED", label: "Served", icon: <FaCheckCircle /> }
-    ];
-
-    if (!order) return (
-        <>
-            <style>{styles}</style>
-            <div className="loading-screen">
-                <FaSpinner className="spin" size={30} />
-                <span>Loading Order...</span>
-            </div>
-        </>
-    );
-
-    // Logic for Stepper & Status
-    const currentStatus = order.status === "PLACED" ? "PLACED" : (order.status === "Cooking" ? "COOKING" : (order.status === "Ready" ? "READY" : "SERVED"));
-    const activeIndex = stages.findIndex(s => s.id === currentStatus);
-    const progressWidth = (activeIndex / (stages.length - 1)) * 100;
-
-    const isPaid = order.paymentStatus === "Paid";
-    const isCash = order.paymentMethod === "Cash";
+    if (!order) return <div style={styles.loader}><FaSpinner className="spin"/> Loading Tracker...</div>;
 
     return (
-        <>
-            <style>{styles}</style>
-            <div className="tracker-container">
-                
-                {/* 1. NAV HEADER */}
-                <div className="nav-header">
-                    <button onClick={() => navigate(-1)} className="back-btn"><FaArrowLeft /></button>
-                    <div>
-                        <h1 className="order-title">Track Order</h1>
-                        <div className="order-id">ID: #{order._id.slice(-6).toUpperCase()} • Table {order.tableNumber}</div>
-                    </div>
-                </div>
-
-                {/* 2. STATUS CARD (Pulsing) */}
-                <div className={`status-card ${currentStatus !== 'SERVED' ? 'pulse-active' : ''}`}>
-                    <div className="status-label">CURRENT STATUS</div>
-                    <div className="status-value" style={{ color: currentStatus === 'SERVED' ? '#22c55e' : 'white'}}>
-                        {currentStatus === "PLACED" ? "ORDER SENT" : 
-                         currentStatus === "COOKING" ? "PREPARING" : 
-                         currentStatus === "READY" ? "COMING SOON" : "ENJOY MEAL"}
-                    </div>
-                    <div className="status-sub">
-                        {currentStatus === "SERVED" ? 
-                            <><FaCheckCircle/> Order Complete</> : 
-                            <><FaClock/> Updated Live</>
-                        }
-                    </div>
-                </div>
-
-                {/* 3. STEPPER */}
-                <div className="stepper-wrapper">
-                    <div className="progress-bg"></div>
-                    <div className="progress-fill" style={{ width: `${progressWidth}%` }}></div>
-                    
-                    {stages.map((stage, i) => (
-                        <div key={stage.id} className="step-item">
-                            <div className={`step-icon ${i <= activeIndex ? 'active' : ''}`}>
-                                {stage.icon}
-                            </div>
-                            <div className={`step-label ${i <= activeIndex ? 'active' : ''}`}>
-                                {stage.label}
-                            </div>
-                        </div>
-                    ))}
-                </div>
-
-                {/* 4. RECEIPT CARD */}
-                <div className="receipt-card">
-                    <div className="receipt-header">
-                        <span style={{fontWeight:'800', color:'#888', fontSize:'11px', textTransform:'uppercase'}}>ORDER SUMMARY</span>
-                        <FaReceipt color="#444"/>
-                    </div>
-                    
-                    {order.items.map((item, i) => (
-                        <div key={i} className="item-row">
-                            <div>
-                                <span className="item-qty">{item.quantity}x</span>
-                                <span className="item-name">{item.name}</span>
-                            </div>
-                            <span className="item-price">₹{item.price * item.quantity}</span>
-                        </div>
-                    ))}
-
-                    {/* Note to Chef Display */}
-                    {order.note && (
-                        <div className="note-box">
-                            <FaExclamationCircle style={{minWidth: '12px', marginTop:'2px'}}/> 
-                            <span>Note to Chef: "{order.note}"</span>
-                        </div>
-                    )}
-
-                    <div className="total-row">
-                        <div className="total-label">
-                            {isPaid ? "TOTAL PAID" : "TOTAL TO PAY"}
-                        </div>
-                        <div className="total-amount" style={{ color: isPaid ? '#22c55e' : 'white' }}>
-                            ₹{order.totalAmount}
-                        </div>
-                    </div>
-
-                    {/* Unpaid Warning */}
-                    {isCash && !isPaid && (
-                        <div style={{ marginTop: '15px', background: '#222', padding: '12px', borderRadius: '12px', display:'flex', alignItems:'center', gap:'10px' }}>
-                            <div style={{background:'#f97316', padding:'8px', borderRadius:'50%', display:'flex'}}><FaMoneyBillWave size={12} color="white"/></div>
-                            <div>
-                                <div style={{fontSize:'12px', fontWeight:'bold', color:'white'}}>Pay Cash at Counter</div>
-                                <div style={{fontSize:'10px', color:'#888'}}>Payment Pending</div>
-                            </div>
-                        </div>
-                    )}
-                </div>
-
-                {/* 5. STICKY FOOTER ACTIONS */}
-                <div className="sticky-footer">
-                    <button 
-                        onClick={handleCallWaiter} 
-                        className="btn-call"
-                        disabled={isCalling}
-                        style={{opacity: isCalling ? 0.7 : 1}}
-                    >
-                        {isCalling ? <FaSpinner className="spin"/> : <FaPhoneAlt />} 
-                        {callStatus}
-                    </button>
-                    
-                    <button className="btn-status">
-                        {currentStatus === "SERVED" ? "All Done" : "Kitchen Live"} 
-                        {currentStatus !== "SERVED" && <span style={{width:'8px', height:'8px', background:'white', borderRadius:'50%', marginLeft:'5px'}} className="pulse-active"></span>}
-                    </button>
-                </div>
-
+        <div style={styles.container}>
+            <style>{`.spin { animation: spin 1s linear infinite; } @keyframes spin { 100% { transform: rotate(360deg); } }`}</style>
+            
+            <div style={styles.header}>
+                <button onClick={() => navigate(-1)} style={styles.backBtn}><FaArrowLeft /></button>
+                <h1 style={styles.title}>Order Tracker</h1>
             </div>
-        </>
+
+            {/* QUICK RECEIPT ACCESS: Customer shows this at counter */}
+            <div style={styles.downloadCard}>
+                <div style={styles.receiptInfo}>
+                    <FaReceipt color="#f97316" />
+                    <div>
+                        <p style={{ margin: 0, fontSize: '13px', fontWeight: 'bold' }}>View Billing Receipt</p>
+                        <p style={{ margin: 0, fontSize: '10px', color: '#666' }}>ID: #{order._id.slice(-6).toUpperCase()}</p>
+                    </div>
+                </div>
+                <button onClick={handleDownload} style={styles.miniDownloadBtn}>
+                    <FaDownload />
+                </button>
+            </div>
+
+            {/* LIVE KITCHEN STATUS VISUAL */}
+            <div style={styles.statusBox}>
+                <div style={styles.pulseDot}></div>
+                <h2 style={styles.statusText}>
+                    {order.status === "PLACED" ? "ORDER RECEIVED" : 
+                     order.status === "Cooking" ? "PREPARING FOOD" : 
+                     order.status === "Ready" ? "READY AT COUNTER" : "ENJOY YOUR MEAL"}
+                </h2>
+                <p style={styles.subStatus}>Live updates from BiteBox Kitchen</p>
+            </div>
+
+            {/* LEAN FOOTER: No "Wait for Waiter" - encourage self-service */}
+            <div style={styles.footer}>
+                <button onClick={handleDownload} style={styles.secondaryBtn}>
+                    <FaDownload /> RECEIPT PDF
+                </button>
+                <button style={styles.primaryBtn} onClick={() => navigate(`/menu/${order.owner}`)}>
+                    <FaUtensils /> ORDER MORE
+                </button>
+            </div>
+        </div>
     );
+};
+
+const styles = {
+    container: { minHeight: '100vh', background: '#050505', color: 'white', padding: '20px', paddingBottom: '120px', fontFamily: 'Inter, sans-serif' },
+    loader: { height: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', color: '#f97316', background: '#000' },
+    header: { display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '30px' },
+    backBtn: { background: '#111', border: 'none', color: 'white', padding: '10px', borderRadius: '10px', cursor: 'pointer' },
+    title: { fontSize: '20px', fontWeight: '900', margin: 0 },
+    downloadCard: { background: '#111', padding: '15px', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px', border: '1px solid #222' },
+    receiptInfo: { display: 'flex', alignItems: 'center', gap: '12px' },
+    miniDownloadBtn: { background: '#f97316', border: 'none', color: 'black', width: '35px', height: '35px', borderRadius: '8px', cursor: 'pointer' },
+    statusBox: { textAlign: 'center', padding: '50px 20px', background: 'radial-gradient(circle, #1a100a 0%, #050505 100%)', borderRadius: '24px', border: '1px solid #1a1a1a' },
+    statusText: { fontSize: '22px', fontWeight: '900', margin: '15px 0 5px 0' },
+    subStatus: { color: '#f97316', fontSize: '11px', fontWeight: 'bold', letterSpacing: '1px', textTransform: 'uppercase' },
+    pulseDot: { width: '12px', height: '12px', background: '#f97316', borderRadius: '50%', margin: '0 auto', boxShadow: '0 0 15px #f97316' },
+    footer: { position: 'fixed', bottom: 0, left: 0, width: '100%', padding: '20px', background: 'rgba(5,5,5,0.98)', borderTop: '1px solid #222', display: 'flex', gap: '10px', zIndex: 100 },
+    secondaryBtn: { flex: 1, background: '#111', color: 'white', border: '1px solid #333', padding: '16px', borderRadius: '14px', fontWeight: 'bold', display: 'flex', justifyContent: 'center', gap: '8px', fontSize: '13px' },
+    primaryBtn: { flex: 1, background: '#f97316', color: 'black', border: 'none', padding: '16px', borderRadius: '14px', fontWeight: '900', fontSize: '13px', display: 'flex', justifyContent: 'center', gap: '8px' }
 };
 
 export default OrderTracker;

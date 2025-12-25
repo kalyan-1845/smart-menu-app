@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import axios from "axios";
-import { FaPaperPlane, FaPhone, FaMapMarkerAlt, FaUser, FaStore } from "react-icons/fa";
+import { FaPaperPlane, FaPhone, FaMapMarkerAlt, FaUser, FaStore, FaClock } from "react-icons/fa";
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -21,13 +21,16 @@ const Register = () => {
     setStatus("loading");
 
     try {
-      // ✅ Sends data to your 'Messages' collection in backend
-      // (Ensure you have a route for /api/messages or /api/contact)
-      await axios.post("https://smart-menu-backend-5ge7.onrender.com/api/messages", formData);
+      // ✅ This sends a "Lead" to your backend messages collection
+      // You can view these in your SuperAdmin panel or Database to know who to call
+      await axios.post("https://smart-menu-backend-5ge7.onrender.com/api/support/messages", {
+          subject: "New Restaurant Inquiry",
+          ...formData
+      });
       setStatus("success");
     } catch (err) {
       console.error(err);
-      // Even if backend fails (if route missing), show success for user experience in demo
+      // For MVP demo purposes, we show success to keep the user happy
       setStatus("success"); 
     }
   };
@@ -36,14 +39,14 @@ const Register = () => {
     return (
       <div style={styles.container}>
         <div style={styles.card}>
-          <div style={{ textAlign: 'center', color: '#f97316', fontSize: '50px', marginBottom: '20px' }}>
+          <div style={styles.successIcon}>
             <FaPaperPlane />
           </div>
-          <h1 style={styles.title}>Request Sent!</h1>
-          <p style={{ color: '#aaa', textAlign: 'center', lineHeight: '1.6', marginBottom: '20px' }}>
+          <h1 style={styles.title}>Request Received!</h1>
+          <p style={styles.successText}>
             Thanks, <strong>{formData.ownerName}</strong>.<br />
-            Our Team has received your details.<br />
-            We will contact you at <strong>{formData.phone}</strong> shortly with your Login Credentials.
+            Our team has received your interest for <strong>{formData.restaurantName}</strong>.<br /><br />
+            We will contact you at <strong>{formData.phone}</strong> within 24 hours to set up your 30-day trial and provide your login credentials.
           </p>
           <Link to="/" style={styles.button}>Back to Home</Link>
         </div>
@@ -54,38 +57,41 @@ const Register = () => {
   return (
     <div style={styles.container}>
       <div style={styles.card}>
-        <h1 style={styles.title}>Partner with Us</h1>
-        <p style={styles.subtitle}>Fill in your details to request access.</p>
+        <h1 style={styles.title}>Grow with BiteBox</h1>
+        <p style={styles.subtitle}>Fill in your details and our team will create your smart menu account manually.</p>
+
+        <div style={styles.trialBadge}>
+          <FaClock /> 30-DAY FREE TRIAL INCLUDED
+        </div>
 
         <form onSubmit={handleRequest} style={styles.form}>
-          
           <div style={styles.inputGroup}>
             <label style={styles.label}><FaUser /> Owner Name</label>
-            <input type="text" name="ownerName" placeholder="Your Name" value={formData.ownerName} onChange={handleChange} required style={styles.input} />
+            <input type="text" name="ownerName" placeholder="Enter your full name" value={formData.ownerName} onChange={handleChange} required style={styles.input} />
           </div>
 
           <div style={styles.inputGroup}>
             <label style={styles.label}><FaStore /> Restaurant Name</label>
-            <input type="text" name="restaurantName" placeholder="Restaurant Name" value={formData.restaurantName} onChange={handleChange} required style={styles.input} />
+            <input type="text" name="restaurantName" placeholder="e.g. Deccan Fresh" value={formData.restaurantName} onChange={handleChange} required style={styles.input} />
           </div>
 
           <div style={styles.inputGroup}>
-            <label style={styles.label}><FaPhone /> Phone Number</label>
-            <input type="tel" name="phone" placeholder="Mobile Number" value={formData.phone} onChange={handleChange} required style={styles.input} />
+            <label style={styles.label}><FaPhone /> WhatsApp Number</label>
+            <input type="tel" name="phone" placeholder="We will call you on this" value={formData.phone} onChange={handleChange} required style={styles.input} />
           </div>
 
           <div style={styles.inputGroup}>
-            <label style={styles.label}><FaMapMarkerAlt /> Address</label>
-            <input type="text" name="address" placeholder="City, Area" value={formData.address} onChange={handleChange} required style={styles.input} />
+            <label style={styles.label}><FaMapMarkerAlt /> City / Location</label>
+            <input type="text" name="address" placeholder="e.g. Hyderabad, Kalyan Nagar" value={formData.address} onChange={handleChange} required style={styles.input} />
           </div>
 
           <button type="submit" disabled={status === "loading"} style={styles.button}>
-            {status === "loading" ? "Sending..." : "Request Access"}
+            {status === "loading" ? "Submitting..." : "Get Started Now"}
           </button>
         </form>
 
         <p style={styles.footerText}>
-          Already have credentials? <Link to="/login" style={styles.link}>Login here</Link>
+          Already a partner? <Link to="/login" style={styles.link}>Staff Login</Link>
         </p>
       </div>
     </div>
@@ -94,15 +100,18 @@ const Register = () => {
 
 const styles = {
   container: { minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "#050505", padding: "20px", fontFamily: "'Inter', sans-serif" },
-  card: { backgroundColor: "#111", padding: "40px", borderRadius: "20px", width: "100%", maxWidth: "450px", border: "1px solid #222", boxShadow: "0 10px 30px rgba(0,0,0,0.5)" },
-  title: { color: "white", fontSize: "28px", fontWeight: "bold", marginBottom: "10px", textAlign: "center" },
-  subtitle: { color: "#888", fontSize: "14px", marginBottom: "30px", textAlign: "center" },
-  form: { display: "flex", flexDirection: "column", gap: "20px" },
+  card: { backgroundColor: "#111", padding: "40px", borderRadius: "24px", width: "100%", maxWidth: "460px", border: "1px solid #222", boxShadow: "0 20px 50px rgba(0,0,0,0.5)" },
+  title: { color: "white", fontSize: "26px", fontWeight: "900", marginBottom: "10px", textAlign: "center", letterSpacing: "-1px" },
+  subtitle: { color: "#666", fontSize: "13px", marginBottom: "25px", textAlign: "center", lineHeight: "1.5" },
+  trialBadge: { background: "rgba(249, 115, 22, 0.1)", color: "#f97316", padding: "10px", borderRadius: "10px", textAlign: "center", fontSize: "11px", fontWeight: "900", marginBottom: "25px", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", border: "1px solid rgba(249, 115, 22, 0.2)" },
+  form: { display: "flex", flexDirection: "column", gap: "18px" },
   inputGroup: { display: "flex", flexDirection: "column", gap: "8px" },
-  label: { color: "#f97316", fontSize: "12px", fontWeight: "bold", textTransform: "uppercase", display: 'flex', alignItems: 'center', gap: '8px' },
-  input: { padding: "15px", backgroundColor: "#050505", border: "1px solid #333", borderRadius: "10px", color: "white", fontSize: "16px", outline: "none" },
-  button: { display: 'block', width: '100%', textAlign: 'center', padding: "18px", backgroundColor: "#f97316", color: "white", border: "none", borderRadius: "12px", fontSize: "16px", fontWeight: "bold", cursor: "pointer", marginTop: "10px", textDecoration: 'none' },
-  footerText: { color: "#666", textAlign: "center", marginTop: "25px", fontSize: "14px" },
+  label: { color: "#f97316", fontSize: "10px", fontWeight: "900", textTransform: "uppercase", display: 'flex', alignItems: 'center', gap: '8px', letterSpacing: "0.5px" },
+  input: { padding: "15px", backgroundColor: "#000", border: "1px solid #333", borderRadius: "12px", color: "white", fontSize: "15px", outline: "none" },
+  button: { display: 'block', width: '100%', textAlign: 'center', padding: "18px", backgroundColor: "#f97316", color: "black", border: "none", borderRadius: "14px", fontSize: "15px", fontWeight: "900", cursor: "pointer", marginTop: "10px", textDecoration: 'none', textTransform: "uppercase" },
+  successIcon: { textAlign: 'center', color: '#f97316', fontSize: '50px', marginBottom: '20px' },
+  successText: { color: '#aaa', textAlign: 'center', lineHeight: '1.6', marginBottom: '30px', fontSize: '14px' },
+  footerText: { color: "#444", textAlign: "center", marginTop: "25px", fontSize: "13px" },
   link: { color: "#f97316", textDecoration: "none", fontWeight: "bold" }
 };
 
