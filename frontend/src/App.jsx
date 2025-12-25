@@ -1,20 +1,22 @@
 import React, { useState, useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 
-// --- PAGES IMPORT ---
-// Ensure these files exist in your "src/pages" or "src" folder
-import LandingPage from "./LandingPage.jsx"; 
-import Menu from "./Menu.jsx"; 
-import Cart from "./Cart.jsx";
-import OrderSuccess from "./OrderSuccess.jsx";
-import OrderTracker from "./OrderTracker.jsx";
+// --- ✅ FIX: Pointing to the "pages" folder ---
+import LandingPage from "./pages/LandingPage.jsx"; 
+import Menu from "./pages/Menu.jsx"; 
+import Cart from "./pages/Cart.jsx";
+import OrderSuccess from "./pages/OrderSuccess.jsx";
+import OrderTracker from "./pages/OrderTracker.jsx";
 
-// --- STAFF PANELS IMPORT ---
-import SuperAdmin from "./SuperAdmin.jsx";
-import RestaurantAdmin from "./RestaurantAdmin.jsx"; // Or AdminPanel.jsx if that's your name
-import ChefDashboard from "./ChefDashboard.jsx"; 
-import WaiterDashboard from "./WaiterDashboard.jsx";
-import OwnerLogin from "./OwnerLogin.jsx";
+// --- STAFF PANELS ---
+import SuperAdmin from "./pages/SuperAdmin.jsx";
+import RestaurantAdmin from "./pages/RestaurantAdmin.jsx"; 
+import ChefDashboard from "./pages/ChefDashboard.jsx"; 
+import WaiterDashboard from "./pages/WaiterDashboard.jsx";
+
+// --- AUTH PAGES (Check if these are in "pages" or root) ---
+// If these are also in the pages folder, change to "./pages/..."
+import OwnerLogin from "./OwnerLogin.jsx"; 
 import Register from "./Register.jsx";
 
 // --- GLOBAL STYLES ---
@@ -32,7 +34,6 @@ const GlobalStyles = () => (
 
 function App() {
   // --- STATE ---
-  // Initialize Cart from LocalStorage
   const [cart, setCart] = useState(() => {
     try {
       const saved = localStorage.getItem("smartMenu_Cart");
@@ -40,11 +41,10 @@ function App() {
     } catch (e) { return []; }
   });
   
-  // Initialize Restaurant Info from LocalStorage (Prevents "Null" errors on refresh)
   const [restaurantId, setRestaurantId] = useState(localStorage.getItem("activeResId") || null);
   const [tableNum, setTableNum] = useState(localStorage.getItem("activeTable") || ""); 
 
-  // --- PERSISTENCE EFFECT ---
+  // --- PERSISTENCE ---
   useEffect(() => {
     localStorage.setItem("smartMenu_Cart", JSON.stringify(cart));
     if (restaurantId) localStorage.setItem("activeResId", restaurantId);
@@ -113,7 +113,6 @@ function App() {
         {/* --- STAFF DASHBOARDS --- */}
         <Route path="/superadmin" element={<SuperAdmin />} />
         
-        {/* Note: I added /admin route specifically for your Staff Access flow */}
         <Route path="/admin" element={<RestaurantAdmin />} /> 
         <Route path="/:id/admin" element={<RestaurantAdmin />} />
         
