@@ -8,8 +8,7 @@ import Cart from "./pages/Cart.jsx";
 import OrderSuccess from "./pages/OrderSuccess.jsx";
 import OrderTracker from "./pages/OrderTracker.jsx";
 
-// 👇 THIS WAS MISSING! YOU MUST INCLUDE THIS LINE 👇
-import Pricing from "./pages/Pricing.jsx"; 
+// (Pricing import removed)
 
 // --- STAFF PANELS ---
 import SuperAdmin from "./pages/SuperAdmin.jsx";
@@ -17,9 +16,6 @@ import RestaurantAdmin from "./pages/RestaurantAdmin.jsx";
 import ChefDashboard from "./pages/ChefDashboard.jsx"; 
 import WaiterDashboard from "./pages/WaiterDashboard.jsx";
 
-/**
- * GLOBAL STYLES
- */
 const GlobalStyles = () => (
   <style>{`
     :root { background-color: #050505; color: white; font-family: 'Inter', sans-serif; }
@@ -67,8 +63,7 @@ function App() {
       <Routes>
         <Route path="/" element={<LandingPage />} /> 
         
-        {/* ✅ THIS ROUTE WORKS NOW BECAUSE WE IMPORTED 'Pricing' AT THE TOP */}
-        <Route path="/pricing" element={<Pricing />} />
+        {/* (Pricing Route removed) */}
 
         <Route path="/menu/:id/:table" element={<Menu cart={cart} addToCart={addToCart} setRestaurantId={setRestaurantId} setTableNum={setTableNum} />} />
         <Route path="/menu/:id" element={<Menu cart={cart} addToCart={addToCart} setRestaurantId={setRestaurantId} setTableNum={setTableNum} />} />
