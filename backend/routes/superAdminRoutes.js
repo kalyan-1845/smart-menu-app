@@ -11,6 +11,7 @@ const router = express.Router();
  * High-security gatekeeper. Even with a valid token, only the username 
  * "srinivas" can pass through these routes.
  */
+
 const adminOnly = (req, res, next) => {
     if (req.user && req.user.username === "srinivas") {
         next();
@@ -150,5 +151,84 @@ router.put('/update-subscription/:id', protect, adminOnly, async (req, res) => {
         res.status(500).json({ message: "Update Error" });
     }
 });
+// ============================================================
+// 3. SYSTEM MANAGEMENT (Offboarding & Broadcasts)
+// ============================================================
 
+/**
+ * @route   DELETE /api/superadmin/delete-owner/:id
+ * @desc    Offboard a Partner: Permanently delete a restaurant and all its data.
+ * @access  Master Admin Only
+ */
+router.delete('/delete-owner/:id', protect, adminOnly, async (req, res) => {
+    try {
+        const owner = await Owner.findById(req.params.id);
+        if (!owner) return res.status(404).json({ message: "Restaurant not found" });
+
+        // Optional: Delete related Orders and Dishes here if you have those models imported
+        // await Dish.deleteMany({ restaurantId: owner._id });
+        // await Order.deleteMany({ restaurantId: owner._id });
+
+        await owner.deleteOne();
+        res.json({ message: `🚫 ${owner.restaurantName} has been permanently deleted.` });
+    } catch (error) {
+        res.status(500).json({ message: "Delete Failed", error: error.message });
+    }
+});
+
+/**
+ * @route   POST /api/superadmin/broadcast
+ * @desc    System-Wide Alert: Send a push notification to EVERY active screen 
+ * (Chefs, Waiters, Admins). Useful for "Server Maintenance" warnings.
+ * @access  Master Admin Only
+ */
+router.post('/broadcast', protect, adminOnly, async (req, res) => {
+    try {
+        const { title, message, type } = req.body; // type can be 'info', 'warning', 'critical'
+        
+        // Access the Socket.io instance attached to the app
+        const io = req.app.get('socketio'); 
+        
+        if (io) {
+            io.emit('new-broadcast', { 
+                title: title || "System Alert", 
+                message: message || "Maintenance in 10 mins.",
+                type: type || "warning",
+                timestamp: new Date()
+            });
+            res.json({ message: "📢 Broadcast sent to all connected clients." });
+        } else {
+            res.status(500).json({ message: "Socket.io service not found." });
+        }
+    } catch (error) {
+        res.status(500).json({ message: "Broadcast Failed" });
+    }
+});
+
+// ============================================================
+// 4. FINANCIAL LEDGER (If Payment Model Exists)
+// ============================================================
+
+/**
+ * @route   GET /api/superadmin/ledger
+ * @desc    View all recorded payments (Cash & UPI) across the platform.
+ * @access  Master Admin Only
+ */
+router.get('/ledger', protect, adminOnly, async (req, res) => {
+    try {
+        // Ensure you import Payment at the top of the file: import Payment from '../models/Payment.js';
+        // const payments = await Payment.find({}).sort({ createdAt: -1 });
+        
+        // Mock Response until you uncomment the Payment model
+        res.json({ 
+            message: "Uncomment Payment logic once model is created.", 
+            ledger: [] 
+        });
+        
+        // Real implementation:
+        // res.json(payments);
+    } catch (error) {
+        res.status(500).json({ message: "Ledger Error" });
+    }
+});
 export default router;

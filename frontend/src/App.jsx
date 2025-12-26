@@ -7,7 +7,7 @@ import Menu from "./pages/Menu.jsx";
 import Cart from "./pages/Cart.jsx";
 import OrderSuccess from "./pages/OrderSuccess.jsx";
 import OrderTracker from "./pages/OrderTracker.jsx"; // Live Tracking
-
+import SuperLogin from "./pages/SuperLogin.jsx";
 // --- STAFF PANELS ---
 import SuperAdmin from "./pages/SuperAdmin.jsx"; // CEO Access
 import RestaurantAdmin from "./pages/RestaurantAdmin.jsx"; 
@@ -111,6 +111,8 @@ function App() {
         <Route path="/track/:id" element={<OrderTracker />} />
 
         {/* --- 👑 SUPER ADMIN (CEO PANEL) --- */}
+       {/* --- 👑 SUPER ADMIN (CEO PANEL) --- */}
+        <Route path="/ceo" element={<SuperLogin />} />        {/* ✅ Route Added */}
         <Route path="/superadmin" element={<SuperAdmin />} />
         
         {/* --- 👨‍🍳 STAFF DASHBOARDS --- */}

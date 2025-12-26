@@ -8,11 +8,10 @@ import rateLimit from 'express-rate-limit';
 import https from "https"; 
 
 // --- IMPORT ROUTES ---
-// ✅ All routes linked to your BiteBox MVP structure
 import authRoutes from './routes/authRoutes.js'; 
 import dishRoutes from './routes/dishRoutes.js';
 import orderRoutes from './routes/orderRoutes.js';
-import superAdminRoutes from './routes/superAdminRoutes.js';
+import superAdminRoutes from './routes/superAdminRoutes.js'; // ✅ Make sure this file exists with the code I gave you
 import broadcastRoutes from './routes/broadcastRoutes.js';
 import supportRoutes from './routes/supportRoutes.js'; 
 
@@ -20,7 +19,6 @@ const app = express();
 const httpServer = createServer(app);
 
 // --- 🔒 SECURITY: ALLOWED ORIGINS ---
-// Updated to include your production Netlify URL
 const allowedOrigins = [
     "http://localhost:5173",           
     "https://smartmenuss.netlify.app",
@@ -29,7 +27,6 @@ const allowedOrigins = [
 
 // ============================================================
 // ☢️ NUCLEAR CORS FIX (LAYER 1: MANUAL HEADERS)
-// Ensures cross-origin requests work across all mobile browsers
 // ============================================================
 app.use((req, res, next) => {
     const origin = req.headers.origin;
@@ -58,7 +55,7 @@ app.use(cors({
 // --- MIDDLEWARE ---
 app.use(express.json({ limit: '10mb' })); 
 
-// Rate limiter set for busy restaurant hours
+// Rate limiter
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, 
     max: 500, 
@@ -68,7 +65,6 @@ const limiter = rateLimit({
 app.use(limiter); 
 
 // --- SOCKET.IO SETUP ---
-// Critical for live Chef/Waiter notifications
 const io = new Server(httpServer, {
     cors: {
         origin: allowedOrigins,
@@ -77,7 +73,15 @@ const io = new Server(httpServer, {
     }
 });
 
-// Attach Socket to Request for use in Controllers (e.g., when a new order is placed)
+// ============================================================
+// ✅ CRITICAL CONNECTORS FOR SUPER ADMIN & BROADCASTS
+// ============================================================
+
+// 1. Allows routes to access Socket.io via req.app.get('socketio')
+//    (Required for the 'Broadcast' button in SuperAdmin)
+app.set('socketio', io); 
+
+// 2. Allows controllers to access Socket.io via req.io
 app.use((req, res, next) => {
     req.io = io;
     next();
@@ -102,10 +106,15 @@ app.get('/', (req, res) => res.send('BiteBox Smart Menu API Active'));
 io.on('connection', (socket) => {
     console.log(`🔌 Client Connected: ${socket.id}`);
 
-    // Multi-tenant room logic: Ensures orders only go to the correct restaurant
     socket.on('join-restaurant', (restaurantId) => {
         socket.join(restaurantId);
         console.log(`User joined restaurant room: ${restaurantId}`);
+    });
+
+    // ✅ New: Allow Super Admin to join a global room for live monitoring
+    socket.on('join-super-admin', () => {
+        socket.join('super-admin-room');
+        console.log(`👑 Super Admin joined the master room`);
     });
 
     socket.on('disconnect', () => {
@@ -123,7 +132,6 @@ app.use((err, req, res, next) => {
 });
 
 // --- SELF PING (Render Keep-Alive) ---
-// Prevents the server from sleeping on free hosting like Render
 const pingUrl = "https://smart-menu-backend-5ge7.onrender.com/"; 
 setInterval(() => {
     https.get(pingUrl, (res) => {
