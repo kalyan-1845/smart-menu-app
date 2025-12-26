@@ -6,6 +6,7 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import rateLimit from 'express-rate-limit';
 import https from "https"; 
+import compression from 'compression'; // ✅ 1. Speed Boost Import
 
 // --- IMPORT ROUTES ---
 import authRoutes from './routes/authRoutes.js'; 
@@ -18,12 +19,14 @@ import supportRoutes from './routes/supportRoutes.js';
 const app = express();
 const httpServer = createServer(app);
 
+// ✅ 2. ACTIVATE COMPRESSION (Makes data 70% smaller/faster)
+app.use(compression());
+
 // ============================================================
 // ☢️ NUCLEAR CORS FIX (ALLOWS EVERYONE)
 // ============================================================
-// We removed the "allowedOrigins" array. Now we just say "true".
 app.use(cors({
-    origin: true, // ✅ THIS ALLOWS ANY NETLIFY LINK
+    origin: true, // ✅ Allows any Netlify/Localhost link
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
 }));
@@ -42,7 +45,7 @@ app.use(limiter);
 // --- SOCKET.IO SETUP ---
 const io = new Server(httpServer, {
     cors: {
-        origin: "*", // ✅ THIS ALLOWS SOCKETS FROM ANYWHERE
+        origin: "*", // ✅ Allows sockets from anywhere
         methods: ["GET", "POST", "PUT", "DELETE"],
         credentials: true
     }
@@ -72,11 +75,10 @@ app.get('/', (req, res) => res.send('BiteBox Smart Menu API Active'));
 
 // --- SOCKET LOGIC ---
 io.on('connection', (socket) => {
-    console.log(`🔌 Client Connected: ${socket.id}`);
+    // console.log(`🔌 Client Connected: ${socket.id}`); // Commented out for speed
 
     socket.on('join-restaurant', (restaurantId) => {
         socket.join(restaurantId);
-        console.log(`Joined room: ${restaurantId}`);
     });
 
     socket.on('join-super-admin', () => {
@@ -84,7 +86,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('disconnect', () => {
-        console.log('❌ Client Disconnected');
+        // console.log('❌ Client Disconnected');
     });
 });
 
@@ -94,11 +96,19 @@ app.use((err, req, res, next) => {
     res.status(statusCode).json({ message: err.message });
 });
 
-// --- KEEP ALIVE ---
+// ============================================================
+// ⏰ KEEP ALIVE (PREVENTS SERVER SLEEPING)
+// ============================================================
 const pingUrl = "https://smart-menu-backend-5ge7.onrender.com/"; 
+
+// Ping every 10 minutes (600,000 ms) to keep Render awake
 setInterval(() => {
-    https.get(pingUrl, (res) => {}).on("error", (e) => {});
-}, 840000); 
+    https.get(pingUrl, (res) => {
+        console.log("⏰ Keep-Alive Ping sent.");
+    }).on("error", (e) => {
+        console.error("Ping failed:", e.message);
+    });
+}, 600000); 
 
 const PORT = process.env.PORT || 5000;
 httpServer.listen(PORT, () => {
