@@ -44,6 +44,7 @@ const Menu = ({ cart, addToCart, removeFromCart, setRestaurantId, setTableNum })
   useEffect(() => {
     const fetchMenu = async () => {
       try {
+        // Fetch dishes using the restaurant ID (username from URL)
         const res = await axios.get(`${API_BASE}/dishes?restaurantId=${id}`);
         setDishes(res.data);
         setRestaurantName(id.toUpperCase());
@@ -154,8 +155,6 @@ const Menu = ({ cart, addToCart, removeFromCart, setRestaurantId, setTableNum })
                       <h3 style={styles.dishName}>{item.name}</h3>
                       {item.isVeg ? <span style={styles.vegDot}>●</span> : null}
                     </div>
-                    {/* Optional: Add Rating if available */}
-                    {/* <div style={styles.rating}><FaStar color="#FFD700" size={10}/> 4.5</div> */}
                   </div>
                   
                   <div style={styles.cardFooter}>
