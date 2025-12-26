@@ -5,10 +5,10 @@ import io from "socket.io-client";
 import confetti from "canvas-confetti";
 import { 
     FaPlus, FaTrash, FaUtensils, 
-    FaBell, FaCheckCircle, FaCircle, FaCrown, FaSignOutAlt, FaRocket, FaUnlock, FaStore, FaExternalLinkAlt, FaCopy
+    FaBell, FaCheckCircle, FaCircle, FaCrown, FaSignOutAlt, FaRocket, FaUnlock, FaStore, FaExternalLinkAlt, FaCopy, FaImage
 } from "react-icons/fa";
 
-// --- STYLES ---
+// --- STYLES (Mobile Optimized & Beautiful) ---
 const styles = `
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;900&display=swap');
 .admin-container { min-height: 100vh; padding: 20px; background: radial-gradient(circle at top center, #1a0f0a 0%, #050505 60%); color: white; font-family: 'Inter', sans-serif; }
@@ -77,10 +77,11 @@ const SetupWizard = ({ dishesCount, pushEnabled }) => {
 };
 
 const RestaurantAdmin = () => {
-    const { id } = useParams();
+    const { id } = useParams(); // This grabs "kalyanresto1" from URL
     const API_BASE = "https://smart-menu-backend-5ge7.onrender.com/api";
-    const publicMenuUrl = `${window.location.origin}/menu/${id}`;
-
+    
+    // --- STATE ---
+    const [publicMenuUrl, setPublicMenuUrl] = useState(`${window.location.origin}/menu/${id}`);
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [password, setPassword] = useState("");
     const [authLoading, setAuthLoading] = useState(false);
@@ -95,17 +96,28 @@ const RestaurantAdmin = () => {
     const [dishes, setDishes] = useState([]);
     const [formData, setFormData] = useState({ name: "", price: "", category: "Starters", image: "" });
 
+    // --- LOGIN HANDLER (FIXED TO UPDATE LINK) ---
     const handleLogin = async (e) => {
         e.preventDefault();
         setAuthLoading(true);
         try {
             const res = await axios.post(`${API_BASE}/auth/login`, { username: id, password });
+            
+            // SAVE TOKEN
             localStorage.setItem(`owner_token_${id}`, res.data.token);
             localStorage.setItem(`owner_id_${id}`, res.data._id);
+            
+            // UPDATE STATE
             setRestaurantName(res.data.restaurantName);
             setIsPro(res.data.isPro);
             setTrialEndsAt(res.data.trialEndsAt);
             setIsAuthenticated(true);
+            
+            // ✅ IMPORTANT FIX: Update the link to use the REAL ID (e.g. 65a...), not the username
+            const correctLink = `${window.location.origin}/menu/${res.data._id}`;
+            setPublicMenuUrl(correctLink);
+
+            // Fetch dishes
             fetchData(res.data.token, res.data._id);
         } catch (err) { alert("❌ Invalid Password"); } finally { setAuthLoading(false); }
     };
@@ -119,6 +131,7 @@ const RestaurantAdmin = () => {
         } catch (error) { console.error(error); } finally { setLoading(false); }
     };
 
+    // --- LIVE UPDATES ---
     useEffect(() => {
         if (isAuthenticated) {
             const mongoId = localStorage.getItem(`owner_id_${id}`);
@@ -179,7 +192,7 @@ const RestaurantAdmin = () => {
 
     const copyToClipboard = () => {
         navigator.clipboard.writeText(publicMenuUrl);
-        alert("Menu Link Copied!");
+        alert("Link Copied! Use this link.");
     };
 
     if (!isAuthenticated) return (
@@ -190,7 +203,6 @@ const RestaurantAdmin = () => {
                     <FaStore size={40} color="#f97316" style={{ marginBottom: '15px' }} />
                     <h1 style={{ fontSize: '20px', fontWeight: '900' }}>{id.toUpperCase()} ADMIN</h1>
                     <form onSubmit={handleLogin} style={{ marginTop: '20px' }}>
-                        <input type="text" name="username" value={id} readOnly style={{display:'none'}} autoComplete="username" />
                         <input 
                             type="password" placeholder="Password" 
                             value={password} onChange={e => setPassword(e.target.value)} 
@@ -249,6 +261,7 @@ const RestaurantAdmin = () => {
                             </div>
                             <div style={{overflow:'hidden'}}>
                                 <p style={{fontSize:'10px', color:'#888', margin:0, fontWeight:'bold'}}>CUSTOMER MENU LINK</p>
+                                {/* THIS IS THE FIXED LINK */}
                                 <a href={publicMenuUrl} target="_blank" rel="noreferrer" className="link-text">{publicMenuUrl}</a>
                             </div>
                         </div>
@@ -285,6 +298,7 @@ const RestaurantAdmin = () => {
                         <form onSubmit={handleAddDish}>
                             <input className="input-dark" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} placeholder="Dish Name" required />
                             <input className="input-dark" value={formData.image} onChange={e => setFormData({ ...formData, image: e.target.value })} placeholder="Image URL (e.g. https://...)" />
+                            
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
                                 <input className="input-dark" type="number" value={formData.price} onChange={e => setFormData({ ...formData, price: e.target.value })} placeholder="Price ₹" required />
                                 <select className="input-dark" value={formData.category} onChange={e => setFormData({ ...formData, category: e.target.value })}>
@@ -301,7 +315,9 @@ const RestaurantAdmin = () => {
                                             {dish.image ? (
                                                 <img src={dish.image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                             ) : (
-                                                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><FaUtensils color="#333" /></div>
+                                                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                    <FaUtensils color="#333" />
+                                                </div>
                                             )}
                                         </div>
                                         <div>
