@@ -22,10 +22,10 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
     // --- 1. FETCH RESTAURANT DETAILS ---
     useEffect(() => {
         const fetchRestaurant = async () => {
+            // Fallback to localStorage if prop is missing
             const activeId = restaurantId || localStorage.getItem("activeResId");
             if (activeId) {
                 try {
-                    // Fetching restaurant info for UPI details and branding
                     const res = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/auth/restaurant/${activeId}`);
                     setRestaurant(res.data);
                 } catch (err) {
@@ -36,7 +36,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
         fetchRestaurant();
     }, [restaurantId]);
 
-    // --- 2. ORDER PROCESSING ---
+    // --- 2. ORDER PROCESSING (FIXED) ---
     const processOrder = async (paymentMethod) => {
         if (!customerName.trim()) { alert("Please enter your name!"); return; }
         if (!tableNum) { setShowTableModal(true); return; }
@@ -45,10 +45,10 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
         setIsSubmitting(true);
         const activeId = restaurantId || localStorage.getItem("activeResId");
 
-        // Order Object matches your backend Schema exactly
+        // ✅ FIXED: Field names now match your Backend Schema exactly
         const orderData = {
             customerName: customerName,
-            tableNumber: tableNum.toString(),
+            tableNum: tableNum.toString(), // Renamed from tableNumber
             items: cart.map(item => ({
                 dishId: item._id,
                 name: item.name,
@@ -59,21 +59,20 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
             totalAmount: totalPrice,
             paymentMethod: paymentMethod === "ONLINE" ? "Online" : "Cash",
             paymentStatus: "Pending",
-            owner: activeId,
-            status: "PLACED" 
+            restaurantId: activeId, // Renamed from owner
+            status: "New" // Changed from "PLACED" to "New" to fix Enum error
         };
 
         try {
             const response = await axios.post("https://smart-menu-backend-5ge7.onrender.com/api/orders", orderData);
             
-            // Save to history so the customer can track their specific order later
+            // Save to history
             const history = JSON.parse(localStorage.getItem("smartMenu_History") || "[]");
             localStorage.setItem("smartMenu_History", JSON.stringify([response.data._id, ...history]));
             
             clearCart(); 
 
             if (paymentMethod === "ONLINE" && restaurant?.upiId) {
-                // Mobile Deep Linking for UPI
                 const cleanName = restaurant.username.replace(/\s/g, '');
                 const upiLink = `upi://pay?pa=${restaurant.upiId}&pn=${cleanName}&am=${totalPrice}&cu=INR`;
                 window.location.href = upiLink;
@@ -82,12 +81,14 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                     navigate(`/track/${response.data._id}`);
                 }, 1500);
             } else {
-                // For Cash, proceed directly to the tracking screen
+                // Success! Go to Tracker
                 navigate(`/track/${response.data._id}`);
             }
 
         } catch (error) {
-            alert(`Order Failed: ${error.response?.data?.message || "Server Error"}`);
+            console.error(error);
+            // Detailed error message for debugging
+            alert(`Order Failed: ${error.response?.data?.message || error.message}`);
             setIsSubmitting(false);
         }
     };
@@ -145,7 +146,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {cart.map((item) => (
                     <div key={item._id} style={styles.itemCard}>
-                        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                        <div style={styles.displayFlex}>
                             <img src={item.image || "https://via.placeholder.com/50"} alt="" style={styles.itemImage} />
                             <div style={{ flex: 1 }}>
                                 <h4 style={{ margin: 0, fontSize: '14px', color: 'white' }}>{item.name}</h4>
@@ -205,6 +206,7 @@ const styles = {
     input: { width: '100%', padding: '12px', background: '#000', border: '1px solid #222', borderRadius: '10px', color: 'white', fontWeight: 'bold' },
     textArea: { width: '100%', padding: '12px', background: '#111', border: '1px solid #222', borderRadius: '10px', color: 'white', minHeight: '60px' },
     itemCard: { background: '#111', padding: '10px', borderRadius: '12px' },
+    displayFlex: { display: 'flex', gap: '12px', alignItems: 'center' },
     itemImage: { width: '45px', height: '45px', borderRadius: '8px', objectFit: 'cover' },
     qtyControl: { display: 'flex', alignItems: 'center', gap: '10px', background: '#000', padding: '5px 10px', borderRadius: '8px' },
     qtyBtn: { background: 'none', border: 'none', color: '#fff', fontWeight: 'bold' },
