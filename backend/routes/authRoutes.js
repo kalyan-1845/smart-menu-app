@@ -13,6 +13,44 @@ const generateToken = (id) => {
     return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '30d' });
 };
 
+// --- 0. REGISTER NEW RESTAURANT (Required for AddRestaurant.jsx) ---
+/**
+ * @route   POST /api/auth/register
+ * @desc    Register a new restaurant owner
+ * @access  Public
+ */
+router.post('/register', async (req, res) => {
+    const { username, password, restaurantName, email, phone } = req.body;
+    try {
+        const userExists = await Owner.findOne({ username });
+        if (userExists) {
+            return res.status(400).json({ message: 'Username already exists' });
+        }
+
+        const owner = await Owner.create({
+            username,
+            password,
+            restaurantName,
+            email,
+            phone,
+            isPro: true // Default to Pro for now
+        });
+
+        if (owner) {
+            res.status(201).json({
+                _id: owner._id,
+                username: owner.username,
+                restaurantName: owner.restaurantName,
+                token: generateToken(owner._id),
+            });
+        } else {
+            res.status(400).json({ message: 'Invalid user data' });
+        }
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
 // --- 1. OWNER AUTHENTICATION (Restaurant Admin) ---
 
 /**
@@ -29,6 +67,7 @@ router.post('/login', async (req, res) => {
                 _id: owner._id,
                 username: owner.username,
                 restaurantName: owner.restaurantName,
+                isPro: owner.isPro, // Added isPro to response
                 token: generateToken(owner._id),
             });
         } else {
@@ -110,6 +149,36 @@ router.get('/restaurants', async (req, res) => {
         res.json(owners);
     } catch (error) {
         res.status(500).json({ message: error.message });
+    }
+});
+
+// --- 4. PUBLIC RESTAURANT INFO (The Fix for 404) ---
+
+/**
+ * @route   GET /api/auth/restaurant/:id
+ * @desc    Get public info by ID or Username (Fixes Menu Link)
+ * @access  Public
+ */
+router.get('/restaurant/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        let restaurant;
+
+        // Check if "id" is a valid Mongo Object ID (24 hex chars)
+        if (id.match(/^[0-9a-fA-F]{24}$/)) {
+            restaurant = await Owner.findById(id).select('-password');
+        } else {
+            // If not an ID, treat it as a Username (e.g., 'kalyanresto1')
+            restaurant = await Owner.findOne({ username: id }).select('-password');
+        }
+
+        if (!restaurant) {
+            return res.status(404).json({ message: "Restaurant not found" });
+        }
+        res.json(restaurant);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Server Error" });
     }
 });
 
