@@ -2,8 +2,8 @@ import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { 
-  FaSearch, FaShoppingCart, FaPlus, FaMinus, FainfoCircle, FaUtensils 
-} from "react-icons/fa";
+  FaSearch, FaShoppingCart, FaPlus, FaMinus, FaInfoCircle, FaUtensils 
+} from "react-icons/fa"; // ✅ Fixed typo here
 
 const Menu = ({ cart, addToCart, setRestaurantId, setTableNum }) => {
   const { id, table } = useParams();
@@ -18,7 +18,7 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum }) => {
   // --- 1. INITIALIZE & FETCH MENU ---
   useEffect(() => {
     if (id) {
-      setRestaurantId(id); // Tell App.jsx we are here
+      setRestaurantId(id); 
       if (table) setTableNum(table);
       
       const fetchMenu = async () => {
@@ -26,7 +26,6 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum }) => {
           const res = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/menu/${id}`);
           setMenu(res.data);
           
-          // Fetch Restaurant Info (Name, Logo)
           const resInfo = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/auth/restaurant/${id}`);
           setRestaurant(resInfo.data);
           
@@ -71,7 +70,6 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum }) => {
       {/* --- TOP NAVBAR (Fixed) --- */}
       <div style={styles.navbar}>
         <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
-             {/* Restaurant Logo or Default Icon */}
              <div style={styles.logoBox}>
                 <FaUtensils />
              </div>
