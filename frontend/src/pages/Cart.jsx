@@ -22,7 +22,6 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
     // --- 1. FETCH RESTAURANT DETAILS ---
     useEffect(() => {
         const fetchRestaurant = async () => {
-            // Fallback to localStorage if prop is missing
             const activeId = restaurantId || localStorage.getItem("activeResId");
             if (activeId) {
                 try {
@@ -36,19 +35,27 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
         fetchRestaurant();
     }, [restaurantId]);
 
-    // --- 2. ORDER PROCESSING (FIXED) ---
+    // --- 2. ORDER PROCESSING (FINAL FIX) ---
     const processOrder = async (paymentMethod) => {
         if (!customerName.trim()) { alert("Please enter your name!"); return; }
         if (!tableNum) { setShowTableModal(true); return; }
         if (cart.length === 0) { alert("Your cart is empty!"); return; }
 
         setIsSubmitting(true);
+        
+        // 1. Get the Restaurant ID safely
         const activeId = restaurantId || localStorage.getItem("activeResId");
+        if (!activeId) {
+            alert("❌ System Error: Restaurant ID missing. Please scan the QR code again.");
+            setIsSubmitting(false);
+            return;
+        }
 
-        // ✅ FIXED: Field names now match your Backend Schema exactly
+        // 2. Construct the Exact Payload the Database Wants
         const orderData = {
             customerName: customerName,
-            tableNum: tableNum.toString(), // Renamed from tableNumber
+            // ✅ Fix 1: Use 'tableNum' (not tableNumber)
+            tableNum: tableNum.toString(), 
             items: cart.map(item => ({
                 dishId: item._id,
                 name: item.name,
@@ -59,9 +66,13 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
             totalAmount: totalPrice,
             paymentMethod: paymentMethod === "ONLINE" ? "Online" : "Cash",
             paymentStatus: "Pending",
-            restaurantId: activeId, // Renamed from owner
-            status: "New" // Changed from "PLACED" to "New" to fix Enum error
+            // ✅ Fix 2: Use 'restaurantId' (not owner)
+            restaurantId: activeId, 
+            // ✅ Fix 3: Use 'Pending' (Standard Mongoose default)
+            status: "Pending" 
         };
+
+        console.log("🚀 Sending Order:", orderData); // Debug log to see what is being sent
 
         try {
             const response = await axios.post("https://smart-menu-backend-5ge7.onrender.com/api/orders", orderData);
@@ -81,14 +92,13 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                     navigate(`/track/${response.data._id}`);
                 }, 1500);
             } else {
-                // Success! Go to Tracker
                 navigate(`/track/${response.data._id}`);
             }
 
         } catch (error) {
-            console.error(error);
-            // Detailed error message for debugging
-            alert(`Order Failed: ${error.response?.data?.message || error.message}`);
+            console.error("Order Error:", error);
+            const msg = error.response?.data?.message || error.message;
+            alert(`Order Failed: ${msg}`);
             setIsSubmitting(false);
         }
     };
