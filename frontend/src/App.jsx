@@ -6,19 +6,19 @@ import LandingPage from "./pages/LandingPage.jsx";
 import Menu from "./pages/Menu.jsx"; 
 import Cart from "./pages/Cart.jsx";
 import OrderSuccess from "./pages/OrderSuccess.jsx";
-import OrderTracker from "./pages/OrderTracker.jsx"; // Live Tracking
-import SuperLogin from "./pages/SuperLogin.jsx";
+import OrderTracker from "./pages/OrderTracker.jsx"; 
+
 // --- STAFF PANELS ---
-import SuperAdmin from "./pages/SuperAdmin.jsx"; // CEO Access
+import SuperAdmin from "./pages/SuperAdmin.jsx"; 
 import RestaurantAdmin from "./pages/RestaurantAdmin.jsx"; 
-import ChefDashboard from "./pages/ChefDashboard.jsx"; // KDS
-import WaiterDashboard from "./pages/WaiterDashboard.jsx"; // Service
+import ChefDashboard from "./pages/ChefDashboard.jsx"; 
+import WaiterDashboard from "./pages/WaiterDashboard.jsx"; 
+import SuperLogin from "./pages/SuperLogin.jsx";
 
 // --- AUTH PAGES ---
 import OwnerLogin from "./pages/OwnerLogin.jsx"; 
 import Register from "./pages/Register.jsx";
 
-// --- GLOBAL STYLES ---
 const GlobalStyles = () => (
   <style>{`
     :root { background-color: #050505; color: white; font-family: 'Inter', sans-serif; }
@@ -26,13 +26,11 @@ const GlobalStyles = () => (
     * { box-sizing: border-box; }
     ::-webkit-scrollbar { width: 5px; }
     ::-webkit-scrollbar-thumb { background: #f97316; border-radius: 10px; }
-    #kot-receipt { display: none; }
-    @media print { #kot-receipt { display: block !important; } }
   `}</style>
 );
 
 function App() {
-  // --- STATE PERSISTENCE ---
+  // --- STATE ---
   const [cart, setCart] = useState(() => {
     try {
       const saved = localStorage.getItem("smartMenu_Cart");
@@ -43,11 +41,25 @@ function App() {
   const [restaurantId, setRestaurantId] = useState(localStorage.getItem("activeResId") || null);
   const [tableNum, setTableNum] = useState(localStorage.getItem("activeTable") || ""); 
 
+  // --- 🛡️ DATA ISOLATION LOGIC ---
+  // This ensures Restaurant A's cart doesn't show up in Restaurant B
+  const handleRestaurantChange = (newId) => {
+    if (newId && newId !== restaurantId) {
+      console.log(`🔄 Switching from ${restaurantId} to ${newId}. Clearing Cart.`);
+      setCart([]); // WIPE OLD CART
+      setRestaurantId(newId);
+      localStorage.setItem("activeResId", newId);
+    } else if (newId && !restaurantId) {
+      // First time loading
+      setRestaurantId(newId);
+      localStorage.setItem("activeResId", newId);
+    }
+  };
+
   useEffect(() => {
     localStorage.setItem("smartMenu_Cart", JSON.stringify(cart));
-    if (restaurantId) localStorage.setItem("activeResId", restaurantId);
     if (tableNum) localStorage.setItem("activeTable", tableNum);
-  }, [cart, restaurantId, tableNum]);
+  }, [cart, tableNum]);
 
   // --- CART HANDLERS ---
   const addToCart = (dish) => {
@@ -82,15 +94,18 @@ function App() {
         <Route path="/login" element={<OwnerLogin />} />
         <Route path="/register" element={<Register />} />
 
-        {/* --- 🧍 CUSTOMER EXPERIENCE --- */}
+        {/* --- 🧍 CUSTOMER EXPERIENCE (MULTI-TENANT) --- */}
+        {/* We pass 'handleRestaurantChange' instead of 'setRestaurantId' to enforce isolation */}
         <Route 
           path="/menu/:id/:table" 
-          element={<Menu cart={cart} addToCart={addToCart} setRestaurantId={setRestaurantId} setTableNum={setTableNum} />} 
+          element={<Menu cart={cart} addToCart={addToCart} setRestaurantId={handleRestaurantChange} setTableNum={setTableNum} />} 
         />
         <Route 
           path="/menu/:id" 
-          element={<Menu cart={cart} addToCart={addToCart} setRestaurantId={setRestaurantId} setTableNum={setTableNum} />} 
+          element={<Menu cart={cart} addToCart={addToCart} setRestaurantId={handleRestaurantChange} setTableNum={setTableNum} />} 
         />
+        
+        {/* Cart works for whichever 'restaurantId' is currently active */}
         <Route 
           path="/cart" 
           element={
@@ -107,16 +122,14 @@ function App() {
         />
         <Route path="/order-success" element={<OrderSuccess />} />
         
-        {/* 🛰️ TRACKING: Linked to Order ID from backend */}
+        {/* Tracker is unique because Order IDs are unique in Database */}
         <Route path="/track/:id" element={<OrderTracker />} />
 
-        {/* --- 👑 SUPER ADMIN (CEO PANEL) --- */}
-       {/* --- 👑 SUPER ADMIN (CEO PANEL) --- */}
-        <Route path="/ceo" element={<SuperLogin />} />        {/* ✅ Route Added */}
+        {/* --- 👑 SUPER ADMIN --- */}
+        <Route path="/ceo" element={<SuperLogin />} />
         <Route path="/superadmin" element={<SuperAdmin />} />
         
         {/* --- 👨‍🍳 STAFF DASHBOARDS --- */}
-        {/* Logic: Uses :id parameter for dynamic restaurant access */}
         <Route path="/admin" element={<RestaurantAdmin />} /> 
         <Route path="/:id/admin" element={<RestaurantAdmin />} />
         

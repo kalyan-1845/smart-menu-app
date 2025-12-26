@@ -12,52 +12,37 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
     // --- STATE ---
     const [customerName, setCustomerName] = useState("");
     const [chefNote, setChefNote] = useState(""); 
-    const [restaurant, setRestaurant] = useState(null);
     const [showTableModal, setShowTableModal] = useState(!tableNum);
     const [isSubmitting, setIsSubmitting] = useState(false);
     
+    // Valid table options
     const tableOptions = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, "Takeaway"];
     const totalPrice = cart.reduce((total, item) => total + (item.price * item.quantity), 0);
 
-    // --- 1. FETCH RESTAURANT DETAILS ---
-    useEffect(() => {
-        const fetchRestaurant = async () => {
-            const activeId = restaurantId || localStorage.getItem("activeResId");
-            if (activeId) {
-                try {
-                    const res = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/auth/restaurant/${activeId}`);
-                    setRestaurant(res.data);
-                } catch (err) {
-                    console.error("Error fetching restaurant details:", err);
-                }
-            }
-        };
-        fetchRestaurant();
-    }, [restaurantId]);
-
-    // --- 2. ORDER PROCESSING (FIXED) ---
-    const processOrder = async (paymentMethod) => {
+    // --- 1. HANDLE ORDER SUBMISSION ---
+    // This function sends the details to the Waiter/Chef/Admin
+    const sendOrderToStaff = async (paymentType) => {
+        // 1. Basic Validation
         if (!customerName.trim()) { alert("Please enter your name!"); return; }
         if (!tableNum) { setShowTableModal(true); return; }
         if (cart.length === 0) { alert("Your cart is empty!"); return; }
 
         setIsSubmitting(true);
         
-        // 1. Get the Restaurant ID safely
-        // Priority: Prop > LocalStorage > Error
+        // 2. Get the correct Restaurant ID
+        // (This ensures the order goes to the RIGHT admin, not a different restaurant)
         const activeId = restaurantId || localStorage.getItem("activeResId");
         
         if (!activeId) {
-            alert("❌ System Error: Restaurant ID missing. Please scan the QR code again.");
+            alert("❌ System Error: Restaurant ID missing. Please scan QR again.");
             setIsSubmitting(false);
             return;
         }
 
-        // 2. Construct the Exact Payload the Database Wants
+        // 3. PREPARE DATA (Exactly how your database wants it)
         const orderData = {
             customerName: customerName,
-            // ✅ FIX 1: Send 'tableNum' (Backend Requirement)
-            tableNum: tableNum.toString(), 
+            tableNum: tableNum.toString(), // ✅ Fixed Name
             items: cart.map(item => ({
                 dishId: item._id,
                 name: item.name,
@@ -66,56 +51,67 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
             })),
             note: chefNote, 
             totalAmount: totalPrice,
-            paymentMethod: paymentMethod === "ONLINE" ? "Online" : "Cash",
+            // Just tells the waiter how to collect money
+            paymentMethod: paymentType === "ONLINE" ? "Online" : "Cash", 
             paymentStatus: "Pending",
-            // ✅ FIX 2: Send 'restaurantId' (Backend Requirement)
-            restaurantId: activeId, 
-            // ✅ FIX 3: Send 'Pending' (Backend Requirement, 'PLACED' was invalid)
-            status: "Pending" 
+            restaurantId: activeId, // ✅ Fixed Name
+            status: "Pending"       // ✅ Fixed Status
         };
 
-        console.log("🚀 Sending Corrected Order:", orderData);
+        console.log("🚀 Sending Order to Staff:", orderData);
 
         try {
+            // 4. SEND TO SERVER
             const response = await axios.post("https://smart-menu-backend-5ge7.onrender.com/api/orders", orderData);
             
-            // Save to history for tracking
+            // 5. SUCCESS! 
+            // Save Order ID so user can track it
             const history = JSON.parse(localStorage.getItem("smartMenu_History") || "[]");
             localStorage.setItem("smartMenu_History", JSON.stringify([response.data._id, ...history]));
             
             clearCart(); 
 
-            if (paymentMethod === "ONLINE" && restaurant?.upiId) {
-                // UPI Logic
-                const cleanName = restaurant.username.replace(/\s/g, '');
-                const upiLink = `upi://pay?pa=${restaurant.upiId}&pn=${cleanName}&am=${totalPrice}&cu=INR`;
-                window.location.href = upiLink;
-
-                setTimeout(() => {
-                    navigate(`/track/${response.data._id}`);
-                }, 1500);
-            } else {
-                // Cash Logic -> Go to Tracker
-                navigate(`/track/${response.data._id}`);
+            // 6. IF UPI SELECTED (Optional Helper)
+            // This just opens the UPI app on their phone to make it easier. 
+            // The waiter still checks the payment manually.
+            if (paymentType === "ONLINE") {
+                // Try to find restaurant details for UPI link (optional)
+                try {
+                    const resDetails = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/auth/restaurant/${activeId}`);
+                    const upiId = resDetails.data.upiId;
+                    if (upiId) {
+                        const cleanName = resDetails.data.username.replace(/\s/g, '');
+                        const upiLink = `upi://pay?pa=${upiId}&pn=${cleanName}&am=${totalPrice}&cu=INR`;
+                        window.location.href = upiLink; // Opens GPay/PhonePe
+                    }
+                } catch (e) {
+                    console.log("No UPI ID found, manual payment only.");
+                }
             }
 
+            // 7. GO TO TRACKER
+            // Wait 1 second then show the tracking screen
+            setTimeout(() => {
+                navigate(`/track/${response.data._id}`);
+            }, 1000);
+
         } catch (error) {
-            console.error("Order Error:", error);
+            console.error("Order Failed:", error);
             const msg = error.response?.data?.message || error.message;
-            alert(`Order Failed: ${msg}`);
+            alert(`❌ Order Failed: ${msg}`);
             setIsSubmitting(false);
         }
     };
 
     return (
         <div style={styles.container}>
-            {/* 1. TABLE SELECTION MODAL */}
+            {/* TABLE SELECTOR MODAL */}
             {showTableModal && (
                 <div style={styles.modalOverlay}>
                     <div style={styles.modalCard}>
                         <div style={styles.iconCircle}><FaMapMarkerAlt /></div>
                         <h2 style={{ textAlign: 'center', marginBottom: '8px' }}>Select Table</h2>
-                        <p style={{ textAlign: 'center', color: '#888', fontSize: '12px', marginBottom: '20px' }}>Where should we serve your food?</p>
+                        <p style={{ textAlign: 'center', color: '#888', fontSize: '12px', marginBottom: '20px' }}>Where are you sitting?</p>
                         <div style={styles.tableGrid}>
                             {tableOptions.map((opt) => (
                                 <button key={opt} onClick={() => { setTableNum(opt); setShowTableModal(false); }} 
@@ -132,31 +128,30 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                 </div>
             )}
 
-            {/* 2. TOP NAVIGATION */}
+            {/* HEADER */}
             <div style={styles.header}>
                 <button onClick={() => navigate(-1)} style={styles.backBtn}><FaArrowLeft /></button>
                 <h1 style={{ fontSize: '18px', fontWeight: '900' }}>Review Order</h1>
             </div>
 
-            {/* 3. ORDER DETAILS CARD */}
+            {/* CUSTOMER INFO CARD */}
             <div style={styles.card}>
                 <div onClick={() => setShowTableModal(true)} style={styles.tableSelector}>
                     <div>
-                        <p style={styles.label}>DELIVERY LOCATION</p>
+                        <p style={styles.label}>LOCATION</p>
                         <div style={{ color: '#f97316', fontSize: '16px', fontWeight: '900', display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <FaMapMarkerAlt size={14}/> {tableNum ? `Table ${tableNum}` : "Select Table"}
                         </div>
                     </div>
-                    <span style={styles.changeBtn}>Edit</span>
+                    <span style={styles.changeBtn}>Change</span>
                 </div>
-                
                 <div style={{ borderTop: '1px solid #222', paddingTop: '15px' }}>
                     <p style={styles.label}>YOUR NAME</p>
-                    <input type="text" placeholder="Who is this for?" value={customerName} onChange={(e) => setCustomerName(e.target.value)} style={styles.input} />
+                    <input type="text" placeholder="Enter your name" value={customerName} onChange={(e) => setCustomerName(e.target.value)} style={styles.input} />
                 </div>
             </div>
 
-            {/* 4. ITEMS LIST */}
+            {/* CART ITEMS */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {cart.map((item) => (
                     <div key={item._id} style={styles.itemCard}>
@@ -177,27 +172,29 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                 ))}
             </div>
 
-            {/* 5. CHEF INSTRUCTIONS */}
+            {/* INSTRUCTIONS */}
             <div style={{ marginTop: '20px' }}>
-                <p style={styles.label}><FaCommentDots /> SPECIAL INSTRUCTIONS</p>
-                <textarea placeholder="Less spicy, no onions, etc..." value={chefNote} onChange={(e) => setChefNote(e.target.value)} style={styles.textArea} />
+                <p style={styles.label}><FaCommentDots /> NOTE TO CHEF</p>
+                <textarea placeholder="Ex: Less spicy, No onions..." value={chefNote} onChange={(e) => setChefNote(e.target.value)} style={styles.textArea} />
             </div>
 
-            {/* 6. BOTTOM PAYMENT BAR */}
+            {/* ACTION BAR */}
             <div style={styles.footer}>
                 <div style={{display:'flex', justifyContent:'space-between', marginBottom:'10px'}}>
                     <span style={styles.totalLabel}>Grand Total</span>
                     <span style={styles.totalValue}>₹{totalPrice}</span>
                 </div>
                 <div style={{ display: 'flex', gap: '10px' }}>
-                    <button onClick={() => processOrder("CASH")} disabled={isSubmitting} style={{ ...styles.payBtn, background: '#111', border: '1px solid #333', color: '#f97316' }}>
-                        <FaMoneyBillWave /> Pay at Counter
+                    {/* BUTTON 1: CASH */}
+                    <button onClick={() => sendOrderToStaff("CASH")} disabled={isSubmitting} style={{ ...styles.payBtn, background: '#111', border: '1px solid #333', color: '#f97316' }}>
+                        <FaMoneyBillWave /> Pay Cash
                     </button>
-                    <button onClick={() => processOrder("ONLINE")} disabled={isSubmitting} style={{ ...styles.payBtn, background: '#f97316', color: '#000' }}>
-                        <FaMobileAlt /> Pay via UPI
+                    {/* BUTTON 2: ONLINE (Manual Check) */}
+                    <button onClick={() => sendOrderToStaff("ONLINE")} disabled={isSubmitting} style={{ ...styles.payBtn, background: '#f97316', color: '#000' }}>
+                        <FaMobileAlt /> Pay Online
                     </button>
                 </div>
-                <p style={styles.secureText}><FaLock size={8}/> SSL Secured Order Platform</p>
+                <p style={styles.secureText}><FaLock size={8}/> Order sent directly to kitchen</p>
             </div>
         </div>
     );
@@ -228,7 +225,7 @@ const styles = {
     footer: { position: 'fixed', bottom: 0, left: 0, width: '100%', padding: '20px', background: 'rgba(5, 5, 5, 0.98)', borderTop: '1px solid #222', zIndex: 100 },
     totalLabel: { color: '#888', fontWeight: 'bold', fontSize: '12px' },
     totalValue: { fontSize: '20px', fontWeight: '900' },
-    payBtn: { flex: 1, padding: '15px', borderRadius: '12px', fontWeight: '900', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontSize: '13px' },
+    payBtn: { flex: 1, padding: '15px', borderRadius: '12px', fontWeight: '900', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontSize: '13px', cursor: 'pointer' },
     secureText: { textAlign: 'center', fontSize: '8px', color: '#444', marginTop: '10px', textTransform: 'uppercase' }
 };
 
