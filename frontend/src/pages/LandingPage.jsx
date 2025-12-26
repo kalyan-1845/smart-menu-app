@@ -1,50 +1,19 @@
-import React, { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import React, { useState } from "react";
+import { Link } from "react-router-dom";
 import { 
   FaUtensils, FaQrcode, FaChartLine, FaArrowRight, 
   FaCheckCircle, FaPaperPlane, FaSpinner 
 } from "react-icons/fa";
 
 const LandingPage = () => {
-  const navigate = useNavigate();
   const [showModal, setShowModal] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [checking, setChecking] = useState(true);
   
   const [requestData, setRequestData] = useState({
     ownerName: "",
     restaurantName: "",
     phone: ""
   });
-
-  // --- 1. SMART REDIRECT LOGIC ---
-  useEffect(() => {
-    const checkRedirect = () => {
-        const lastResId = localStorage.getItem("activeResId");
-        const lastTable = localStorage.getItem("activeTable");
-
-        // If we have valid data, Auto-Redirect
-        if (lastResId && lastResId.length > 10) { 
-            if (lastTable) {
-                navigate(`/menu/${lastResId}/${lastTable}`);
-            } else {
-                navigate(`/menu/${lastResId}`);
-            }
-        } else {
-            // No data? Show Landing Page
-            setChecking(false);
-        }
-    };
-
-    // Safety Timer: Stop checking after 1.5 seconds
-    const timer = setTimeout(() => {
-        setChecking(false);
-    }, 1500);
-
-    checkRedirect();
-    
-    return () => clearTimeout(timer);
-  }, [navigate]);
 
   const handleInputChange = (e) => {
     setRequestData({ ...requestData, [e.target.name]: e.target.value });
@@ -70,16 +39,7 @@ const LandingPage = () => {
     }
   };
 
-  // --- LOADING SCREEN ---
-  if (checking) return (
-    <div style={{ height: "100vh", background: "#050505", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", color: "#f97316" }}>
-      <FaSpinner className="spin" size={40} />
-      <p style={{ marginTop: "20px", fontWeight: "bold", fontSize: "12px", letterSpacing: "1px" }}>ENTERING RESTAURANT...</p>
-      <style>{`.spin { animation: spin 0.8s linear infinite; } @keyframes spin { 100% { transform: rotate(360deg); } }`}</style>
-    </div>
-  );
-
-  // --- MAIN LANDING PAGE ---
+  // --- MAIN LANDING PAGE (NO AUTO-REDIRECT) ---
   return (
     <div className="landing-container">
       <style>{`

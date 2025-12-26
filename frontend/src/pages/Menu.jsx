@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { 
   FaSearch, FaShoppingCart, FaPlus, FaMinus, FaInfoCircle, FaUtensils 
-} from "react-icons/fa"; // ✅ Fixed typo here
+} from "react-icons/fa"; // ✅ Fixed typo FaInfoCircle
 
 const Menu = ({ cart, addToCart, setRestaurantId, setTableNum }) => {
   const { id, table } = useParams();
@@ -67,7 +67,7 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum }) => {
   return (
     <div style={styles.container}>
       
-      {/* --- TOP NAVBAR (Fixed) --- */}
+      {/* --- TOP NAVBAR --- */}
       <div style={styles.navbar}>
         <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
              <div style={styles.logoBox}>
@@ -147,7 +147,7 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum }) => {
         ))}
       </div>
 
-      {/* --- BOTTOM FLOATING CART BAR (Only shows if items in cart) --- */}
+      {/* --- BOTTOM FLOATING CART BAR --- */}
       {totalItems > 0 && (
         <div onClick={() => navigate('/cart')} style={styles.floatingCart}>
             <div style={{display:'flex', flexDirection:'column'}}>
