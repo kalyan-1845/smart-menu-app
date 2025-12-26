@@ -11,43 +11,19 @@ import https from "https";
 import authRoutes from './routes/authRoutes.js'; 
 import dishRoutes from './routes/dishRoutes.js';
 import orderRoutes from './routes/orderRoutes.js';
-import superAdminRoutes from './routes/superAdminRoutes.js'; // ✅ Make sure this file exists with the code I gave you
+import superAdminRoutes from './routes/superAdminRoutes.js';
 import broadcastRoutes from './routes/broadcastRoutes.js';
 import supportRoutes from './routes/supportRoutes.js'; 
 
 const app = express();
 const httpServer = createServer(app);
 
-// --- 🔒 SECURITY: ALLOWED ORIGINS ---
-const allowedOrigins = [
-    "http://localhost:5173",           
-    "https://smartmenuss.netlify.app",
-    "https://694915c413d9f40008f38924--smartmenuss.netlify.app"
-];
-
 // ============================================================
-// ☢️ NUCLEAR CORS FIX (LAYER 1: MANUAL HEADERS)
+// ☢️ NUCLEAR CORS FIX (ALLOWS EVERYONE)
 // ============================================================
-app.use((req, res, next) => {
-    const origin = req.headers.origin;
-    if (allowedOrigins.includes(origin)) {
-        res.setHeader("Access-Control-Allow-Origin", origin);
-    }
-    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, Origin, X-Requested-With, Accept");
-    res.header("Access-Control-Allow-Credentials", "true");
-
-    if (req.method === "OPTIONS") {
-        return res.status(200).end();
-    }
-    next();
-});
-
-// ============================================================
-// 🛡️ STANDARD CORS (LAYER 2: LIBRARY BACKUP)
-// ============================================================
+// We removed the "allowedOrigins" array. Now we just say "true".
 app.use(cors({
-    origin: allowedOrigins,
+    origin: true, // ✅ THIS ALLOWS ANY NETLIFY LINK
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
 }));
@@ -55,7 +31,6 @@ app.use(cors({
 // --- MIDDLEWARE ---
 app.use(express.json({ limit: '10mb' })); 
 
-// Rate limiter
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, 
     max: 500, 
@@ -67,21 +42,14 @@ app.use(limiter);
 // --- SOCKET.IO SETUP ---
 const io = new Server(httpServer, {
     cors: {
-        origin: allowedOrigins,
+        origin: "*", // ✅ THIS ALLOWS SOCKETS FROM ANYWHERE
         methods: ["GET", "POST", "PUT", "DELETE"],
         credentials: true
     }
 });
 
-// ============================================================
-// ✅ CRITICAL CONNECTORS FOR SUPER ADMIN & BROADCASTS
-// ============================================================
-
-// 1. Allows routes to access Socket.io via req.app.get('socketio')
-//    (Required for the 'Broadcast' button in SuperAdmin)
+// CRITICAL: Attach Socket to App
 app.set('socketio', io); 
-
-// 2. Allows controllers to access Socket.io via req.io
 app.use((req, res, next) => {
     req.io = io;
     next();
@@ -108,13 +76,11 @@ io.on('connection', (socket) => {
 
     socket.on('join-restaurant', (restaurantId) => {
         socket.join(restaurantId);
-        console.log(`User joined restaurant room: ${restaurantId}`);
+        console.log(`Joined room: ${restaurantId}`);
     });
 
-    // ✅ New: Allow Super Admin to join a global room for live monitoring
     socket.on('join-super-admin', () => {
         socket.join('super-admin-room');
-        console.log(`👑 Super Admin joined the master room`);
     });
 
     socket.on('disconnect', () => {
@@ -125,21 +91,14 @@ io.on('connection', (socket) => {
 // --- ERROR HANDLER ---
 app.use((err, req, res, next) => {
     const statusCode = res.statusCode === 200 ? 500 : res.statusCode;
-    res.status(statusCode).json({
-        message: err.message,
-        stack: process.env.NODE_ENV === 'production' ? null : err.stack,
-    });
+    res.status(statusCode).json({ message: err.message });
 });
 
-// --- SELF PING (Render Keep-Alive) ---
+// --- KEEP ALIVE ---
 const pingUrl = "https://smart-menu-backend-5ge7.onrender.com/"; 
 setInterval(() => {
-    https.get(pingUrl, (res) => {
-        console.log("Ping sent to keep server awake");
-    }).on("error", (e) => {
-        console.error("Ping error");
-    });
-}, 840000); // 14 minutes
+    https.get(pingUrl, (res) => {}).on("error", (e) => {});
+}, 840000); 
 
 const PORT = process.env.PORT || 5000;
 httpServer.listen(PORT, () => {
