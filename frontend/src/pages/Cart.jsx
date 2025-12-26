@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { 
     FaArrowLeft, FaTrash, FaMobileAlt, FaMoneyBillWave, 
-    FaMapMarkerAlt, FaCommentDots, FaLock, FaSpinner, FaUtensils 
+    FaMapMarkerAlt, FaCommentDots, FaLock, FaSpinner, FaExclamationTriangle 
 } from "react-icons/fa";
 
 const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, tableNum, setTableNum }) => {
@@ -14,62 +14,74 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
     const [chefNote, setChefNote] = useState(""); 
     const [showTableModal, setShowTableModal] = useState(!tableNum);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [isLoadingDetails, setIsLoadingDetails] = useState(true);
     const [realRestaurantId, setRealRestaurantId] = useState(null);
-    
+    const [errorMsg, setErrorMsg] = useState("");
+
     const tableOptions = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, "Takeaway"];
     const totalPrice = cart.reduce((total, item) => total + (item.price * item.quantity), 0);
 
-    // --- 1. INTELLIGENT ID RESOLVER (Prevents 400 Errors) ---
+    // --- 1. AUTO-FIX RESTAURANT ID ---
     useEffect(() => {
         const resolveId = async () => {
             const storedId = restaurantId || localStorage.getItem("activeResId");
-            if (!storedId) { setIsLoadingDetails(false); return; }
+            if (!storedId) return;
 
-            // If it's already a valid ID (24 chars), use it.
+            // Check if it looks like a valid ID (24 chars, no spaces)
             if (storedId.length === 24 && !storedId.includes(" ")) {
                 setRealRestaurantId(storedId);
-                setIsLoadingDetails(false);
                 return;
             }
 
-            // If it's a username, fetch the Real ID
+            // If it's a username (e.g. "deccanfresh"), convert it to ID
             try {
                 const res = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/auth/restaurant/${storedId}`);
-                if (res.data?._id) setRealRestaurantId(res.data._id);
+                if (res.data?._id) {
+                    setRealRestaurantId(res.data._id);
+                    // Update local storage so we don't ask again
+                    localStorage.setItem("activeResId", res.data._id);
+                }
             } catch (err) {
-                console.error("ID Resolution Failed:", err);
-            } finally {
-                setIsLoadingDetails(false);
+                console.error("ID Fix Failed:", err);
+                setErrorMsg("Restaurant System Offline. Please Scan QR Again.");
             }
         };
         resolveId();
     }, [restaurantId]);
 
-    // --- 2. SEND ORDER (Messenger Mode) ---
+    // --- 2. SUBMIT ORDER (Safe Mode) ---
     const submitOrder = async (paymentType) => {
+        // Validation
         if (!customerName.trim()) { alert("Please enter your name!"); return; }
         if (!tableNum) { setShowTableModal(true); return; }
         if (cart.length === 0) { alert("Cart is empty!"); return; }
-        if (!realRestaurantId) { alert("❌ System Error: Loading Restaurant Data. Please wait or refresh."); return; }
+        if (!realRestaurantId) { alert("❌ System Error: Please re-scan the QR code."); return; }
 
         setIsSubmitting(true);
+        setErrorMsg("");
+
+        // 🛡️ DATA SANITIZATION (The Fix for 400 Errors)
+        const cleanItems = cart.map(item => ({
+            dishId: item._id || item.id, // Handle both ID formats
+            name: item.name,
+            quantity: Number(item.quantity),
+            price: Number(item.price)
+        })).filter(item => item.dishId); // Remove items with no ID
+
+        if (cleanItems.length === 0) {
+            alert("❌ Error: Your cart contains invalid items. Please clear cart and add again.");
+            setIsSubmitting(false);
+            return;
+        }
 
         const orderPayload = {
             customerName: customerName,
             tableNum: tableNum.toString(),
-            items: cart.map(item => ({
-                dishId: item._id,
-                name: item.name,
-                quantity: item.quantity,
-                price: item.price
-            })),
+            items: cleanItems,
             note: chefNote, 
             totalAmount: totalPrice,
-            // ✉️ MESSENGER LOGIC: Just tells the waiter what to expect
             paymentMethod: paymentType === "ONLINE" ? "Online" : "Cash", 
             paymentStatus: "Pending",
-            restaurantId: realRestaurantId, // ✅ The Real ID
+            restaurantId: realRestaurantId, 
             status: "Pending"
         };
 
@@ -81,20 +93,27 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
             localStorage.setItem("smartMenu_History", JSON.stringify([res.data._id, ...history]));
             
             clearCart(); 
-            
-            // 🚀 INSTANT JUMP TO TRACKER
             navigate(`/track/${res.data._id}`);
 
         } catch (error) {
             console.error("Submission Error:", error);
-            alert("❌ Order Failed. Please call the waiter.");
+            // Show the EXACT error from the server so we know what's wrong
+            const serverMessage = error.response?.data?.message || error.message;
+            setErrorMsg(`Order Failed: ${serverMessage}`);
             setIsSubmitting(false);
         }
     };
 
     return (
         <div style={styles.container}>
-            {/* --- LOADING OVERLAY (If submitting) --- */}
+            {/* ERROR BANNER */}
+            {errorMsg && (
+                <div style={styles.errorBanner}>
+                    <FaExclamationTriangle /> {errorMsg}
+                </div>
+            )}
+
+            {/* LOADING OVERLAY */}
             {isSubmitting && (
                 <div style={styles.loadingOverlay}>
                     <FaSpinner className="spin" size={40} color="#f97316" />
@@ -102,7 +121,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                 </div>
             )}
 
-            {/* --- TABLE MODAL --- */}
+            {/* TABLE MODAL */}
             {showTableModal && (
                 <div style={styles.modalOverlay}>
                     <div style={styles.modalCard}>
@@ -120,13 +139,13 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                 </div>
             )}
 
-            {/* --- HEADER --- */}
+            {/* HEADER */}
             <div style={styles.header}>
                 <button onClick={() => navigate(-1)} style={styles.backBtn}><FaArrowLeft /></button>
                 <h1 style={{ fontSize: '20px', fontWeight: '800', letterSpacing: '-0.5px' }}>Your Bag</h1>
             </div>
 
-            {/* --- CUSTOMER INFO --- */}
+            {/* INFO CARD */}
             <div style={styles.card}>
                 <div onClick={() => setShowTableModal(true)} style={styles.rowBetween}>
                     <div>
@@ -144,51 +163,44 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                 </div>
             </div>
 
-            {/* --- ITEMS --- */}
+            {/* CART ITEMS */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', paddingBottom: '20px' }}>
                 {cart.map((item) => (
-                    <div key={item._id} style={styles.itemCard}>
+                    <div key={item._id || item.id} style={styles.itemCard}>
                         <img src={item.image || "https://via.placeholder.com/60"} alt="" style={styles.itemImage} />
                         <div style={{ flex: 1 }}>
                             <h4 style={{ margin: '0 0 4px 0', fontSize: '15px', fontWeight: '600' }}>{item.name}</h4>
                             <p style={{ margin: 0, color: '#888', fontSize: '12px' }}>₹{item.price} x {item.quantity}</p>
                         </div>
                         <div style={styles.qtyWrapper}>
-                            <button onClick={() => updateQuantity(item._id, item.quantity - 1)} style={styles.qtyBtn}>-</button>
+                            <button onClick={() => updateQuantity(item._id || item.id, item.quantity - 1)} style={styles.qtyBtn}>-</button>
                             <span style={{ fontSize: '14px', fontWeight: 'bold' }}>{item.quantity}</span>
-                            <button onClick={() => updateQuantity(item._id, item.quantity + 1)} style={{...styles.qtyBtn, color: '#f97316'}}>+</button>
+                            <button onClick={() => updateQuantity(item._id || item.id, item.quantity + 1)} style={{...styles.qtyBtn, color: '#f97316'}}>+</button>
                         </div>
-                        <button onClick={() => removeFromCart(item._id)} style={styles.deleteBtn}><FaTrash size={14}/></button>
+                        <button onClick={() => removeFromCart(item._id || item.id)} style={styles.deleteBtn}><FaTrash size={14}/></button>
                     </div>
                 ))}
             </div>
 
-            {/* --- NOTE --- */}
+            {/* CHEF NOTE */}
             <p style={styles.label}><FaCommentDots /> KITCHEN NOTE</p>
             <textarea placeholder="Allergies? Spice level?" value={chefNote} onChange={(e) => setChefNote(e.target.value)} style={styles.textArea} />
 
-            {/* --- FOOTER --- */}
+            {/* FOOTER */}
             <div style={styles.footer}>
                 <div style={styles.rowBetween}>
                     <span style={{ color: '#888', fontWeight: '600' }}>Total to Pay</span>
                     <span style={{ fontSize: '22px', fontWeight: '900', color: 'white' }}>₹{totalPrice}</span>
                 </div>
                 
-                {/* BUTTONS: Only show if data is ready */}
-                {!isLoadingDetails ? (
-                    <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
-                        <button onClick={() => submitOrder("CASH")} style={{ ...styles.payBtn, background: '#1a1a1a', border: '1px solid #333', color: '#f97316' }}>
-                            <FaMoneyBillWave size={18} /> Pay Cash
-                        </button>
-                        <button onClick={() => submitOrder("ONLINE")} style={{ ...styles.payBtn, background: '#f97316', color: '#000' }}>
-                            <FaMobileAlt size={18} /> Pay Online
-                        </button>
-                    </div>
-                ) : (
-                    <div style={{ textAlign: 'center', padding: '15px', color: '#666', fontSize: '12px' }}>
-                        Connecting to Restaurant...
-                    </div>
-                )}
+                <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
+                    <button onClick={() => submitOrder("CASH")} style={{ ...styles.payBtn, background: '#1a1a1a', border: '1px solid #333', color: '#f97316' }}>
+                        <FaMoneyBillWave size={18} /> Pay Cash
+                    </button>
+                    <button onClick={() => submitOrder("ONLINE")} style={{ ...styles.payBtn, background: '#f97316', color: '#000' }}>
+                        <FaMobileAlt size={18} /> Pay Online
+                    </button>
+                </div>
                 <p style={styles.secureMsg}><FaLock size={10}/> Order sent directly to Waiter</p>
             </div>
             <style>{`.spin { animation: spin 1s linear infinite; } @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
@@ -198,6 +210,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
 
 const styles = {
     container: { minHeight: '100vh', background: '#000', color: 'white', padding: '20px', paddingBottom: '200px', fontFamily: 'Inter, sans-serif' },
+    errorBanner: { background: '#dc2626', color: 'white', padding: '15px', borderRadius: '10px', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', fontWeight: 'bold' },
     loadingOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.9)', zIndex: 2000, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' },
     modalOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.95)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' },
     modalCard: { background: '#111', width: '100%', maxWidth: '350px', borderRadius: '24px', padding: '30px', border: '1px solid #222' },

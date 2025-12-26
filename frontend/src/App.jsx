@@ -1,7 +1,7 @@
-import React, { useState, useEffect, Suspense, lazy } from "react"; // 1. Import Suspense & lazy
+import React, { useState, useEffect, Suspense, lazy } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 
-// --- LAZY LOAD PAGES (Makes the app 50% Faster) ---
+// --- LAZY LOAD PAGES ---
 const LandingPage = lazy(() => import("./pages/LandingPage.jsx"));
 const Menu = lazy(() => import("./pages/Menu.jsx"));
 const Cart = lazy(() => import("./pages/Cart.jsx"));
@@ -15,11 +15,11 @@ const SuperLogin = lazy(() => import("./pages/SuperLogin.jsx"));
 const OwnerLogin = lazy(() => import("./pages/OwnerLogin.jsx"));
 const Register = lazy(() => import("./pages/Register.jsx"));
 
-// --- LOADING SPINNER COMPONENT ---
+// --- LOADING SPINNER ---
 const LoadingScreen = () => (
   <div style={{ height: '100vh', background: '#050505', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f97316', flexDirection: 'column' }}>
     <div className="spinner"></div>
-    <p style={{ marginTop: '20px', fontSize: '12px', fontWeight: 'bold' }}>LOADING BITEBOX...</p>
+    <p style={{ marginTop: '20px', fontSize: '12px', fontWeight: 'bold' }}>LOADING...</p>
     <style>{`.spinner { width: 40px; height: 40px; border: 4px solid #333; border-top: 4px solid #f97316; border-radius: 50%; animation: spin 1s linear infinite; } @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
   </div>
 );
@@ -29,12 +29,36 @@ const GlobalStyles = () => (
     :root { background-color: #050505; color: white; font-family: 'Inter', sans-serif; }
     body { margin: 0; padding: 0; background: #050505; overflow-x: hidden; }
     * { box-sizing: border-box; }
-    ::-webkit-scrollbar { width: 5px; }
-    ::-webkit-scrollbar-thumb { background: #f97316; border-radius: 10px; }
   `}</style>
 );
 
 function App() {
+  // --- 1. AUTOMATIC GARBAGE COLLECTION (CRITICAL FIX) ---
+  useEffect(() => {
+    const APP_VERSION = "v3.0"; // Increment this to force-reset everyone
+    const currentVersion = localStorage.getItem("app_version");
+    const activeResId = localStorage.getItem("activeResId");
+
+    // CHECK 1: Is this a new update?
+    if (currentVersion !== APP_VERSION) {
+      console.log("🧹 New Version Detected: Wiping old data...");
+      localStorage.clear();
+      localStorage.setItem("app_version", APP_VERSION);
+      // Reload page once to apply clean slate
+      window.location.reload();
+      return;
+    }
+
+    // CHECK 2: Is the Restaurant ID broken? (e.g. "undefined" or username instead of ID)
+    if (activeResId && (activeResId.length < 20 || activeResId.includes(" "))) {
+      console.log("⚠️ Corrupt ID Detected: Auto-Cleaning...");
+      localStorage.removeItem("activeResId");
+      localStorage.removeItem("smartMenu_Cart");
+      // We don't reload here, just let the user re-scan
+    }
+  }, []);
+
+  // --- STATE ---
   const [cart, setCart] = useState(() => {
     try {
       const saved = localStorage.getItem("smartMenu_Cart");
@@ -45,6 +69,7 @@ function App() {
   const [restaurantId, setRestaurantId] = useState(localStorage.getItem("activeResId") || null);
   const [tableNum, setTableNum] = useState(localStorage.getItem("activeTable") || ""); 
 
+  // --- HANDLERS ---
   const handleRestaurantChange = (newId) => {
     if (newId && newId !== restaurantId) {
       setCart([]); 
@@ -63,6 +88,9 @@ function App() {
 
   const addToCart = (dish) => {
     setCart((prev) => {
+      // Safety check for invalid dishes
+      if (!dish._id) return prev;
+      
       const exists = prev.find((item) => item._id === dish._id);
       if (exists) {
         return prev.map((i) => i._id === dish._id ? { ...i, quantity: i.quantity + 1 } : i);
@@ -87,13 +115,13 @@ function App() {
   return (
     <Router>
       <GlobalStyles /> 
-      {/* 2. WRAP ROUTES IN SUSPENSE */}
       <Suspense fallback={<LoadingScreen />}>
         <Routes>
             <Route path="/" element={<LandingPage />} /> 
             <Route path="/login" element={<OwnerLogin />} />
             <Route path="/register" element={<Register />} />
 
+            {/* CUSTOMER ROUTES */}
             <Route path="/menu/:id/:table" element={<Menu cart={cart} addToCart={addToCart} setRestaurantId={handleRestaurantChange} setTableNum={setTableNum} />} />
             <Route path="/menu/:id" element={<Menu cart={cart} addToCart={addToCart} setRestaurantId={handleRestaurantChange} setTableNum={setTableNum} />} />
             
@@ -101,16 +129,15 @@ function App() {
             <Route path="/order-success" element={<OrderSuccess />} />
             <Route path="/track/:id" element={<OrderTracker />} />
 
+            {/* ADMIN ROUTES */}
             <Route path="/ceo" element={<SuperLogin />} />
             <Route path="/superadmin" element={<SuperAdmin />} />
-            
             <Route path="/admin" element={<RestaurantAdmin />} /> 
             <Route path="/:id/admin" element={<RestaurantAdmin />} />
             
+            {/* STAFF ROUTES */}
             <Route path="/chef" element={<ChefDashboard />} /> 
             <Route path="/:id/chef" element={<ChefDashboard />} />
-            <Route path="/kitchen" element={<Navigate to="/chef" replace />} />
-
             <Route path="/waiter" element={<WaiterDashboard />} />
             <Route path="/:id/waiter" element={<WaiterDashboard />} />
 
