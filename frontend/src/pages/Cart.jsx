@@ -25,7 +25,6 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
             const activeId = restaurantId || localStorage.getItem("activeResId");
             if (activeId) {
                 try {
-                    // This fetches the details (including the REAL _id)
                     const res = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/auth/restaurant/${activeId}`);
                     setRestaurant(res.data);
                 } catch (err) {
@@ -44,22 +43,23 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
 
         setIsSubmitting(true);
         
-        // 🛡️ CRITICAL FIX: Ensure we use the REAL MongoID, not the Username
-        // If 'restaurant' state is loaded, use its _id. Otherwise fallback to localStorage.
-        const validRestaurantId = restaurant?._id || restaurantId || localStorage.getItem("activeResId");
-
-        if (!validRestaurantId) {
-            alert("❌ System Error: Restaurant ID missing. Please refresh.");
+        // 1. Get the Restaurant ID safely
+        // Priority: Prop > LocalStorage > Error
+        const activeId = restaurantId || localStorage.getItem("activeResId");
+        
+        if (!activeId) {
+            alert("❌ System Error: Restaurant ID missing. Please scan the QR code again.");
             setIsSubmitting(false);
             return;
         }
 
+        // 2. Construct the Exact Payload the Database Wants
         const orderData = {
             customerName: customerName,
+            // ✅ FIX 1: Send 'tableNum' (Backend Requirement)
             tableNum: tableNum.toString(), 
             items: cart.map(item => ({
-                dishId: item._id,     // Standard
-                dish: item._id,       // Backup for different schemas
+                dishId: item._id,
                 name: item.name,
                 quantity: item.quantity,
                 price: item.price
@@ -68,22 +68,25 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
             totalAmount: totalPrice,
             paymentMethod: paymentMethod === "ONLINE" ? "Online" : "Cash",
             paymentStatus: "Pending",
-            restaurantId: validRestaurantId, // ✅ Now sending the correct ID
-            status: "Pending" // ✅ Standard Status
+            // ✅ FIX 2: Send 'restaurantId' (Backend Requirement)
+            restaurantId: activeId, 
+            // ✅ FIX 3: Send 'Pending' (Backend Requirement, 'PLACED' was invalid)
+            status: "Pending" 
         };
 
-        console.log("🚀 Sending Order:", orderData);
+        console.log("🚀 Sending Corrected Order:", orderData);
 
         try {
             const response = await axios.post("https://smart-menu-backend-5ge7.onrender.com/api/orders", orderData);
             
-            // Save to history
+            // Save to history for tracking
             const history = JSON.parse(localStorage.getItem("smartMenu_History") || "[]");
             localStorage.setItem("smartMenu_History", JSON.stringify([response.data._id, ...history]));
             
             clearCart(); 
 
             if (paymentMethod === "ONLINE" && restaurant?.upiId) {
+                // UPI Logic
                 const cleanName = restaurant.username.replace(/\s/g, '');
                 const upiLink = `upi://pay?pa=${restaurant.upiId}&pn=${cleanName}&am=${totalPrice}&cu=INR`;
                 window.location.href = upiLink;
@@ -92,13 +95,14 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                     navigate(`/track/${response.data._id}`);
                 }, 1500);
             } else {
+                // Cash Logic -> Go to Tracker
                 navigate(`/track/${response.data._id}`);
             }
 
         } catch (error) {
             console.error("Order Error:", error);
             const msg = error.response?.data?.message || error.message;
-            alert(`Order Failed: ${msg}\n\nCheck console for details.`);
+            alert(`Order Failed: ${msg}`);
             setIsSubmitting(false);
         }
     };
