@@ -2,7 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
 import { Toaster } from 'react-hot-toast'; // ✅ Pro Notifications
-import './index.css';
+
 
 // --- 1. MOBILE AUTO-FIX SYSTEM (CRITICAL) ---
 // This runs BEFORE the app starts to fix "broken" phones automatically.
