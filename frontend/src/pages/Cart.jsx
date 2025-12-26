@@ -25,6 +25,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
             const activeId = restaurantId || localStorage.getItem("activeResId");
             if (activeId) {
                 try {
+                    // This fetches the details (including the REAL _id)
                     const res = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/auth/restaurant/${activeId}`);
                     setRestaurant(res.data);
                 } catch (err) {
@@ -35,7 +36,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
         fetchRestaurant();
     }, [restaurantId]);
 
-    // --- 2. ORDER PROCESSING (FINAL FIX) ---
+    // --- 2. ORDER PROCESSING (FIXED) ---
     const processOrder = async (paymentMethod) => {
         if (!customerName.trim()) { alert("Please enter your name!"); return; }
         if (!tableNum) { setShowTableModal(true); return; }
@@ -43,21 +44,22 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
 
         setIsSubmitting(true);
         
-        // 1. Get the Restaurant ID safely
-        const activeId = restaurantId || localStorage.getItem("activeResId");
-        if (!activeId) {
-            alert("❌ System Error: Restaurant ID missing. Please scan the QR code again.");
+        // 🛡️ CRITICAL FIX: Ensure we use the REAL MongoID, not the Username
+        // If 'restaurant' state is loaded, use its _id. Otherwise fallback to localStorage.
+        const validRestaurantId = restaurant?._id || restaurantId || localStorage.getItem("activeResId");
+
+        if (!validRestaurantId) {
+            alert("❌ System Error: Restaurant ID missing. Please refresh.");
             setIsSubmitting(false);
             return;
         }
 
-        // 2. Construct the Exact Payload the Database Wants
         const orderData = {
             customerName: customerName,
-            // ✅ Fix 1: Use 'tableNum' (not tableNumber)
             tableNum: tableNum.toString(), 
             items: cart.map(item => ({
-                dishId: item._id,
+                dishId: item._id,     // Standard
+                dish: item._id,       // Backup for different schemas
                 name: item.name,
                 quantity: item.quantity,
                 price: item.price
@@ -66,13 +68,11 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
             totalAmount: totalPrice,
             paymentMethod: paymentMethod === "ONLINE" ? "Online" : "Cash",
             paymentStatus: "Pending",
-            // ✅ Fix 2: Use 'restaurantId' (not owner)
-            restaurantId: activeId, 
-            // ✅ Fix 3: Use 'Pending' (Standard Mongoose default)
-            status: "Pending" 
+            restaurantId: validRestaurantId, // ✅ Now sending the correct ID
+            status: "Pending" // ✅ Standard Status
         };
 
-        console.log("🚀 Sending Order:", orderData); // Debug log to see what is being sent
+        console.log("🚀 Sending Order:", orderData);
 
         try {
             const response = await axios.post("https://smart-menu-backend-5ge7.onrender.com/api/orders", orderData);
@@ -98,7 +98,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
         } catch (error) {
             console.error("Order Error:", error);
             const msg = error.response?.data?.message || error.message;
-            alert(`Order Failed: ${msg}`);
+            alert(`Order Failed: ${msg}\n\nCheck console for details.`);
             setIsSubmitting(false);
         }
     };
