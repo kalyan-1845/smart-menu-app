@@ -20,3 +20,33 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <App />
   </React.StrictMode>,
 )
+
+// --- SERVICE WORKER REGISTRATION ---
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker
+      .register("/sw.js")
+      .then((registration) => {
+        console.log("✅ SW Registered: ", registration.scope);
+        
+        // CHECK FOR UPDATES
+        registration.onupdatefound = () => {
+          const installingWorker = registration.installing;
+          installingWorker.onstatechange = () => {
+            if (installingWorker.state === "installed") {
+              if (navigator.serviceWorker.controller) {
+                console.log("🔄 New content is available; please refresh.");
+                // Optional: Force refresh
+                // window.location.reload(); 
+              } else {
+                console.log("✅ Content is cached for offline use.");
+              }
+            }
+          };
+        };
+      })
+      .catch((error) => {
+        console.log("❌ SW Registration Failed: ", error);
+      });
+  });
+}

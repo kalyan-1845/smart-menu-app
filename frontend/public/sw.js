@@ -1,62 +1,73 @@
-const CACHE_NAME = 'smart-menu-v1';
-const URLS_TO_CACHE = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/logo192.png',
-  '/logo512.png'
+const CACHE_NAME = "bitebox-v4";
+const DYNAMIC_CACHE = "bitebox-dynamic-v4";
+
+// 1. FILES TO CACHE IMMEDIATELY (Static Assets)
+const ASSETS = [
+  "/",
+  "/index.html",
+  "/manifest.json",
+  "/favicon.ico",
+  "/logo192.png",
+  "/logo512.png"
 ];
 
-// 1. Install Event: Save core files to local storage
-self.addEventListener('install', (event) => {
+// 2. INSTALL EVENT
+self.addEventListener("install", (event) => {
+  self.skipWaiting(); // Force activation immediately
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(URLS_TO_CACHE);
+      console.log("✅ SW: Caching Shell Assets");
+      return cache.addAll(ASSETS);
     })
   );
 });
 
-// 2. Fetch Event: Intercept requests
-self.addEventListener('fetch', (event) => {
-  event.respondWith(
-    caches.match(event.request).then((response) => {
-      // Return cached version if found, otherwise fetch from network
-      return response || fetch(event.request).catch(() => {
-        // Optional: Return an offline page if the network fails completely
-        if (event.request.mode === 'navigate') {
-          return caches.match('/index.html');
-        }
-      });
-    })
-  );
-});
-   self.addEventListener('push', (event) => {
-    const data = event.data.json();
-    
-    const options = {
-        body: data.body,
-        icon: data.icon || '/logo192.png',
-        badge: '/logo192.png',
-        vibrate: [200, 100, 200], // Makes the phone vibrate
-        data: { url: '/admin' } // Where to go when clicked
-    };
-
-    event.waitUntil(
-        self.registration.showNotification(data.title, options)
-    );
-});
-
-// Open the Admin Panel when the notification is clicked
-self.addEventListener('notificationclick', (event) => {
-    event.notification.close();
-    event.waitUntil(clients.openWindow(event.notification.data.url));
-});
-// 3. Activate Event: Clean up old caches
-self.addEventListener('activate', (event) => {
+// 3. ACTIVATE EVENT (Cleanup Old Caches)
+self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
+    caches.keys().then((keys) => {
       return Promise.all(
-        cacheNames.filter(name => name !== CACHE_NAME).map(name => caches.delete(name))
+        keys.map((key) => {
+          if (key !== CACHE_NAME && key !== DYNAMIC_CACHE) {
+            console.log("🧹 SW: Removing Old Cache", key);
+            return caches.delete(key);
+          }
+        })
+      );
+    })
+  );
+  return self.clients.claim();
+});
+
+// 4. FETCH EVENT (The Smart Interceptor)
+self.addEventListener("fetch", (event) => {
+  const url = new URL(event.request.url);
+
+  // A. IGNORE API CALLS (Network Only)
+  // We NEVER cache API calls because they change constantly (e.g., Order Status)
+  if (url.pathname.startsWith("/api") || event.request.method !== "GET") {
+    return; // Let the browser handle it normally
+  }
+
+  // B. HANDLE STATIC FILES (Stale-While-Revalidate)
+  event.respondWith(
+    caches.match(event.request).then((cachedRes) => {
+      return (
+        cachedRes ||
+        fetch(event.request)
+          .then((fetchRes) => {
+            return caches.open(DYNAMIC_CACHE).then((cache) => {
+              // Cache new files for next time
+              cache.put(event.request.url, fetchRes.clone());
+              return fetchRes;
+            });
+          })
+          .catch(() => {
+            // C. OFFLINE FALLBACK (Optional)
+            if (event.request.headers.get("accept").includes("text/html")) {
+              return caches.match("/index.html");
+            }
+          })
       );
     })
   );
