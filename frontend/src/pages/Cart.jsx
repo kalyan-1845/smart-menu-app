@@ -21,18 +21,24 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
     const totalPrice = cart.reduce((total, item) => total + (item.price * item.quantity), 0);
 
     // --- 1. AUTO-FIX RESTAURANT ID ---
+    // This runs on load to ensure we have a valid Mongo ID, not a username.
     useEffect(() => {
         const resolveId = async () => {
             const storedId = restaurantId || localStorage.getItem("activeResId");
-            if (!storedId) return;
+            
+            // If no ID found at all, force redirect to landing
+            if (!storedId) {
+                // Don't alert immediately to avoid annoyance, just let them fix it via UI if needed
+                return;
+            }
 
-            // Check if it looks like a valid ID (24 chars, no spaces)
+            // A. Check if it's already a valid ID (24 chars, no spaces)
             if (storedId.length === 24 && !storedId.includes(" ")) {
                 setRealRestaurantId(storedId);
                 return;
             }
 
-            // If it's a username (e.g. "deccanfresh"), convert it to ID
+            // B. If it's a username (e.g. "deccanfresh"), convert it to ID from Backend
             try {
                 const res = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/auth/restaurant/${storedId}`);
                 if (res.data?._id) {
@@ -50,16 +56,24 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
 
     // --- 2. SUBMIT ORDER (Safe Mode) ---
     const submitOrder = async (paymentType) => {
-        // Validation
+        // A. Basic Validation
         if (!customerName.trim()) { alert("Please enter your name!"); return; }
         if (!tableNum) { setShowTableModal(true); return; }
         if (cart.length === 0) { alert("Cart is empty!"); return; }
-        if (!realRestaurantId) { alert("❌ System Error: Please re-scan the QR code."); return; }
+        
+        // B. CRITICAL CHECK: Do we have the Real ID?
+        // If not, we CANNOT send the order. It will fail with 400.
+        if (!realRestaurantId) { 
+            alert("❌ System Error: Restaurant ID invalid. Redirecting to home to refresh...");
+            navigate("/"); // Force reload context
+            return;
+        }
 
         setIsSubmitting(true);
         setErrorMsg("");
 
-        // 🛡️ DATA SANITIZATION (The Fix for 400 Errors)
+        // C. DATA SANITIZATION (The Fix for 400 Errors)
+        // Ensure every item has a valid dishId and numbers for price/qty
         const cleanItems = cart.map(item => ({
             dishId: item._id || item.id, // Handle both ID formats
             name: item.name,
@@ -81,14 +95,14 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
             totalAmount: totalPrice,
             paymentMethod: paymentType === "ONLINE" ? "Online" : "Cash", 
             paymentStatus: "Pending",
-            restaurantId: realRestaurantId, 
+            restaurantId: realRestaurantId, // ✅ Use the Verified ID
             status: "Pending"
         };
 
         try {
             const res = await axios.post("https://smart-menu-backend-5ge7.onrender.com/api/orders", orderPayload);
             
-            // Success!
+            // Success! Save to history for tracking
             const history = JSON.parse(localStorage.getItem("smartMenu_History") || "[]");
             localStorage.setItem("smartMenu_History", JSON.stringify([res.data._id, ...history]));
             

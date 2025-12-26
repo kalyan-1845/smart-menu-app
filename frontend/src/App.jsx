@@ -1,8 +1,11 @@
 import React, { useState, useEffect, Suspense, lazy } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 
-// --- LAZY LOAD PAGES ---
-const LandingPage = lazy(() => import("./pages/LandingPage.jsx"));
+// --- 1. CRITICAL: DIRECT IMPORT FOR LANDING PAGE ---
+// This ensures the first screen loads INSTANTLY (Fixes "Stuck Loading")
+import LandingPage from "./pages/LandingPage.jsx";
+
+// --- 2. LAZY LOAD OTHER PAGES (Keeps app fast) ---
 const Menu = lazy(() => import("./pages/Menu.jsx"));
 const Cart = lazy(() => import("./pages/Cart.jsx"));
 const OrderSuccess = lazy(() => import("./pages/OrderSuccess.jsx"));
@@ -15,7 +18,7 @@ const SuperLogin = lazy(() => import("./pages/SuperLogin.jsx"));
 const OwnerLogin = lazy(() => import("./pages/OwnerLogin.jsx"));
 const Register = lazy(() => import("./pages/Register.jsx"));
 
-// --- LOADING SPINNER ---
+// --- LOADING SPINNER (For transitions) ---
 const LoadingScreen = () => (
   <div style={{ height: '100vh', background: '#050505', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f97316', flexDirection: 'column' }}>
     <div className="spinner"></div>
@@ -33,32 +36,7 @@ const GlobalStyles = () => (
 );
 
 function App() {
-  // --- 1. AUTOMATIC GARBAGE COLLECTION (CRITICAL FIX) ---
-  useEffect(() => {
-    const APP_VERSION = "v3.0"; // Increment this to force-reset everyone
-    const currentVersion = localStorage.getItem("app_version");
-    const activeResId = localStorage.getItem("activeResId");
-
-    // CHECK 1: Is this a new update?
-    if (currentVersion !== APP_VERSION) {
-      console.log("🧹 New Version Detected: Wiping old data...");
-      localStorage.clear();
-      localStorage.setItem("app_version", APP_VERSION);
-      // Reload page once to apply clean slate
-      window.location.reload();
-      return;
-    }
-
-    // CHECK 2: Is the Restaurant ID broken? (e.g. "undefined" or username instead of ID)
-    if (activeResId && (activeResId.length < 20 || activeResId.includes(" "))) {
-      console.log("⚠️ Corrupt ID Detected: Auto-Cleaning...");
-      localStorage.removeItem("activeResId");
-      localStorage.removeItem("smartMenu_Cart");
-      // We don't reload here, just let the user re-scan
-    }
-  }, []);
-
-  // --- STATE ---
+  // --- STATE MANAGEMENT ---
   const [cart, setCart] = useState(() => {
     try {
       const saved = localStorage.getItem("smartMenu_Cart");
@@ -71,11 +49,8 @@ function App() {
 
   // --- HANDLERS ---
   const handleRestaurantChange = (newId) => {
-    if (newId && newId !== restaurantId) {
+    if (newId) {
       setCart([]); 
-      setRestaurantId(newId);
-      localStorage.setItem("activeResId", newId);
-    } else if (newId && !restaurantId) {
       setRestaurantId(newId);
       localStorage.setItem("activeResId", newId);
     }
@@ -115,9 +90,12 @@ function App() {
   return (
     <Router>
       <GlobalStyles /> 
+      {/* Suspense handles the loading state for the Lazy components */}
       <Suspense fallback={<LoadingScreen />}>
         <Routes>
+            {/* DIRECT LOAD (Instant) */}
             <Route path="/" element={<LandingPage />} /> 
+            
             <Route path="/login" element={<OwnerLogin />} />
             <Route path="/register" element={<Register />} />
 

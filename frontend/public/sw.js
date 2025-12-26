@@ -1,5 +1,5 @@
-const CACHE_NAME = "bitebox-v5"; // 👈 Version Bump to force update
-const DYNAMIC_CACHE = "bitebox-dynamic-v5";
+const CACHE_NAME = "bitebox-v6"; // 👈 Updated to v6 to force fresh install
+const DYNAMIC_CACHE = "bitebox-dynamic-v6";
 
 // 1. STATIC ASSETS (The "Shell" of your app)
 const ASSETS = [
@@ -13,7 +13,7 @@ const ASSETS = [
 
 // 2. INSTALL: Cache the Shell immediately
 self.addEventListener("install", (event) => {
-  self.skipWaiting(); // ⚡ Activate immediately
+  self.skipWaiting(); // ⚡ Activate immediately (No waiting)
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       console.log("✅ SW: Caching App Shell");
@@ -28,7 +28,7 @@ self.addEventListener("activate", (event) => {
     caches.keys().then((keys) => {
       return Promise.all(
         keys.map((key) => {
-          // If the cache name doesn't match V5, delete it
+          // If the cache name doesn't match V6, delete it!
           if (key !== CACHE_NAME && key !== DYNAMIC_CACHE) {
             console.log("🧹 SW: Cleaning Old Cache", key);
             return caches.delete(key);
@@ -46,6 +46,7 @@ self.addEventListener("fetch", (event) => {
 
   // --- RULE A: IGNORE API & NON-GET REQUESTS (Network Only) ---
   // This is CRITICAL. It ensures Orders/Logins NEVER get stuck in cache.
+  // It fixes the "400 Bad Request" and "Stale Data" issues.
   if (
     url.pathname.startsWith("/api") || 
     url.href.includes("onrender.com") || // 🛡️ Extra Safety for your Backend
@@ -60,7 +61,7 @@ self.addEventListener("fetch", (event) => {
     caches.match(event.request).then((cachedRes) => {
       // 1. Return cached file if found (Instant Load)
       if (cachedRes) {
-        // (Optional) Update cache in background for next time
+        // (Optional) Update cache in background for next time so users always get latest code
         fetch(event.request)
             .then(res => caches.open(DYNAMIC_CACHE).then(cache => cache.put(event.request, res.clone())))
             .catch(() => {}); 
@@ -78,6 +79,7 @@ self.addEventListener("fetch", (event) => {
         })
         .catch(() => {
           // 3. OFFLINE FALLBACK (If internet dies)
+          // If they try to load a page while offline, show the main page
           if (event.request.headers.get("accept").includes("text/html")) {
             return caches.match("/index.html");
           }
