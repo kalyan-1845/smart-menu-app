@@ -5,10 +5,10 @@ import io from "socket.io-client";
 import confetti from "canvas-confetti";
 import { 
     FaPlus, FaTrash, FaUtensils, 
-    FaBell, FaCheckCircle, FaCircle, FaCrown, FaSignOutAlt, FaRocket, FaUnlock, FaStore, FaExternalLinkAlt, FaCopy, FaImage
+    FaBell, FaCheckCircle, FaCircle, FaCrown, FaSignOutAlt, FaRocket, FaUnlock, FaStore, FaExternalLinkAlt, FaCopy
 } from "react-icons/fa";
 
-// --- STYLES (Mobile Optimized & Beautiful) ---
+// --- STYLES ---
 const styles = `
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;900&display=swap');
 .admin-container { min-height: 100vh; padding: 20px; background: radial-gradient(circle at top center, #1a0f0a 0%, #050505 60%); color: white; font-family: 'Inter', sans-serif; }
@@ -40,7 +40,6 @@ const styles = `
 .action-btn:hover { color: white; }
 `;
 
-// --- SETUP WIZARD COMPONENT ---
 const SetupWizard = ({ dishesCount, pushEnabled }) => {
     const steps = [
         { id: 1, label: "Add 3 dishes", done: dishesCount >= 3, hint: "Go to Menu tab" },
@@ -94,10 +93,8 @@ const RestaurantAdmin = () => {
     const [trialEndsAt, setTrialEndsAt] = useState(null);
     const [isPro, setIsPro] = useState(false);
     const [dishes, setDishes] = useState([]);
-    // UPDATED FORM DATA: added image field
     const [formData, setFormData] = useState({ name: "", price: "", category: "Starters", image: "" });
 
-    // --- LOGIN HANDLER ---
     const handleLogin = async (e) => {
         e.preventDefault();
         setAuthLoading(true);
@@ -122,7 +119,6 @@ const RestaurantAdmin = () => {
         } catch (error) { console.error(error); } finally { setLoading(false); }
     };
 
-    // --- LIVE UPDATES (SOCKET.IO) ---
     useEffect(() => {
         if (isAuthenticated) {
             const mongoId = localStorage.getItem(`owner_id_${id}`);
@@ -159,7 +155,6 @@ const RestaurantAdmin = () => {
         const token = localStorage.getItem(`owner_token_${id}`);
         const mongoId = localStorage.getItem(`owner_id_${id}`);
         try {
-            // POST data including image URL
             await axios.post(`${API_BASE}/dishes`, { ...formData, owner: mongoId }, { headers: { Authorization: `Bearer ${token}` } });
             setFormData({ name: "", price: "", category: "Starters", image: "" });
             fetchData(token, mongoId);
@@ -195,6 +190,7 @@ const RestaurantAdmin = () => {
                     <FaStore size={40} color="#f97316" style={{ marginBottom: '15px' }} />
                     <h1 style={{ fontSize: '20px', fontWeight: '900' }}>{id.toUpperCase()} ADMIN</h1>
                     <form onSubmit={handleLogin} style={{ marginTop: '20px' }}>
+                        <input type="text" name="username" value={id} readOnly style={{display:'none'}} autoComplete="username" />
                         <input 
                             type="password" placeholder="Password" 
                             value={password} onChange={e => setPassword(e.target.value)} 
@@ -288,19 +284,11 @@ const RestaurantAdmin = () => {
                         <h2 style={{ fontSize: '14px', fontWeight: 900, marginBottom: '20px' }}><FaPlus /> ADD ITEM</h2>
                         <form onSubmit={handleAddDish}>
                             <input className="input-dark" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} placeholder="Dish Name" required />
-                            
-                            {/* ADDED: IMAGE URL INPUT FIELD AS REQUESTED */}
-                            <input 
-                                className="input-dark" 
-                                value={formData.image} 
-                                onChange={e => setFormData({ ...formData, image: e.target.value })} 
-                                placeholder="Image URL (e.g. https://...)" 
-                            />
-                            
+                            <input className="input-dark" value={formData.image} onChange={e => setFormData({ ...formData, image: e.target.value })} placeholder="Image URL (e.g. https://...)" />
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
                                 <input className="input-dark" type="number" value={formData.price} onChange={e => setFormData({ ...formData, price: e.target.value })} placeholder="Price ₹" required />
                                 <select className="input-dark" value={formData.category} onChange={e => setFormData({ ...formData, category: e.target.value })}>
-                                    <option>Starters</option><option>Main Course</option><option>Dessert</option><option>Drinks</option>
+                                    <option>Starters</option><option>Main Course</option><option>Fast Food</option><option>Dessert</option><option>Beverages</option>
                                 </select>
                             </div>
                             <button type="submit" className="btn-primary">Save Dish</button>
@@ -309,18 +297,13 @@ const RestaurantAdmin = () => {
                             {dishes.map(dish => (
                                 <div key={dish._id} className="dish-item">
                                     <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
-                                        
-                                        {/* ADDED: DISH IMAGE PREVIEW IN THE LIST */}
                                         <div style={{ width: '50px', height: '50px', borderRadius: '10px', background: '#222', overflow: 'hidden' }}>
                                             {dish.image ? (
                                                 <img src={dish.image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                             ) : (
-                                                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                    <FaUtensils color="#333" />
-                                                </div>
+                                                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><FaUtensils color="#333" /></div>
                                             )}
                                         </div>
-                                        
                                         <div>
                                             <p style={{ fontWeight: 900, margin: 0, fontSize: '14px' }}>{dish.name}</p>
                                             <p style={{ margin: 0, fontSize: '11px', color: '#FF9933', fontWeight: 900 }}>₹{dish.price} • {dish.category.toUpperCase()}</p>
