@@ -1,60 +1,72 @@
 import jsPDF from "jspdf";
-import "jspdf-autotable";
 
 export const generateCustomerReceipt = (order, restaurant) => {
-    const doc = new jsPDF({ unit: "mm", format: [80, 180] }); 
-    const taxRate = restaurant?.taxRate || 5; 
-    
-    // --- CENTERED LOGO ---
-    const logoUrl = "/logo192.png"; 
-    try {
-        doc.addImage(logoUrl, 'PNG', 22, 5, 35, 25); 
-    } catch (e) {
-        console.error("Logo not found");
-    }
-
-    let startY = 35;
-
-    // --- RESTAURANT HEADER ---
-    doc.setFontSize(12);
-    doc.setFont("helvetica", "bold");
-    doc.text(restaurant?.restaurantName?.toUpperCase() || "BITEBOX PARTNER", 40, startY, { align: "center" });
-    
-    // --- CENTERED URL ---
-    const publicMenuUrl = `bitebox.in/menu/${restaurant?.username || 'order'}`;
-    doc.setFontSize(7);
-    doc.setTextColor(100); 
-    doc.text(publicMenuUrl, 40, startY + 8, { align: "center" });
-    doc.setTextColor(0); 
-    
-    doc.line(5, startY + 12, 75, startY + 12);
-
-    // --- ORDER ITEMS TABLE ---
-    const tableRows = order.items.map(item => [
-        item.name,
-        item.quantity,
-        `Rs.${(item.price * item.quantity).toFixed(2)}`
-    ]);
-
-    doc.autoTable({
-        startY: startY + 18,
-        head: [['Item', 'Qty', 'Total']],
-        body: tableRows,
-        theme: 'plain',
-        styles: { fontSize: 7, cellPadding: 1 },
-        columnStyles: { 0: { cellWidth: 45 }, 2: { halign: 'right' } },
-        margin: { left: 5, right: 5 }
+    const doc = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: [80, 200] // Thermal receipt paper size
     });
 
-    // --- TOTALS ---
-    const subtotal = order.totalAmount;
-    const grandTotal = subtotal + (subtotal * taxRate / 100);
-    let finalY = doc.lastAutoTable.finalY + 10;
-    
-    doc.setFontSize(11);
-    doc.setFont("helvetica", "bold");
-    doc.text("GRAND TOTAL:", 5, finalY);
-    doc.text(`Rs.${grandTotal.toFixed(2)}`, 75, finalY, { align: "right" });
+    const centerX = 40; // Center of 80mm paper
+    let y = 10; // Start Y position
 
-    doc.save(`BiteBox_Order_${order._id.slice(-6)}.pdf`);
+    // --- HEADER ---
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.text(restaurant?.restaurantName || "BiteBox", centerX, y, { align: "center" });
+    y += 5;
+
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.text("Original Receipt", centerX, y, { align: "center" });
+    y += 5;
+    
+    doc.text("--------------------------------", centerX, y, { align: "center" });
+    y += 5;
+
+    // --- INFO ---
+    doc.setFontSize(9);
+    doc.text(`Order ID: #${order._id.slice(-4).toUpperCase()}`, 5, y);
+    y += 5;
+    doc.text(`Table: ${order.tableNum}`, 5, y);
+    y += 5;
+    doc.text(`Date: ${new Date().toLocaleDateString()}`, 5, y);
+    y += 5;
+    
+    doc.text("--------------------------------", centerX, y, { align: "center" });
+    y += 5;
+
+    // --- ITEMS ---
+    doc.setFontSize(9);
+    order.items.forEach((item) => {
+        const itemLine = `${item.quantity} x ${item.name}`;
+        const priceLine = `Rs.${item.price * item.quantity}`;
+        
+        // Print item name on left, price on right
+        doc.text(itemLine.substring(0, 20), 5, y); 
+        doc.text(priceLine, 75, y, { align: "right" });
+        y += 5;
+    });
+
+    doc.text("--------------------------------", centerX, y, { align: "center" });
+    y += 5;
+
+    // --- TOTAL ---
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.text("TOTAL", 5, y);
+    doc.text(`Rs.${order.totalAmount}`, 75, y, { align: "right" });
+    y += 7;
+
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.text(order.paymentMethod === "Cash" ? "(Pending Payment)" : "(Paid Online)", centerX, y, { align: "center" });
+    y += 10;
+
+    // --- FOOTER ---
+    doc.setFontSize(8);
+    doc.text("Thank you for dining with us!", centerX, y, { align: "center" });
+
+    // Save File
+    doc.save(`Receipt_${order._id.slice(-4)}.pdf`);
 };

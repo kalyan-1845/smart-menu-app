@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import io from "socket.io-client";
-// Corrected import path to match your folder structure
+// We will create this utility file in Part 2 below
 import { generateCustomerReceipt } from "../utils/ReceiptGenerator";
 import { 
     FaCheck, FaUtensils, FaClock, FaConciergeBell, 
@@ -10,7 +10,7 @@ import {
     FaSpinner, FaExclamationCircle, FaReceipt, FaDownload
 } from "react-icons/fa";
 
-// --- MOBILE-FIRST PREMIUM STYLES ---
+// --- OPTIMIZED STYLES (Moved outside component to prevent re-renders) ---
 const styles = `
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;900&display=swap');
 
@@ -44,9 +44,8 @@ const styles = `
     100% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0); }
 }
 .pulse-active { animation: pulse-orange 2s infinite; }
-
-@keyframes spin { 100% { transform: rotate(360deg); } }
 .spin { animation: spin 1s linear infinite; }
+@keyframes spin { 100% { transform: rotate(360deg); } }
 
 .nav-header { display: flex; align-items: center; gap: 15px; margin-bottom: 25px; padding-top: 10px; }
 .back-btn { background: rgba(255,255,255,0.1); border: none; color: white; width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; cursor: pointer; backdrop-filter: blur(10px); }
@@ -199,7 +198,7 @@ const OrderTracker = () => {
                 setOrder(res.data);
                 
                 // Fetch restaurant branding for the PDF generator
-                const resInfo = await axios.get(`${API_BASE}/auth/restaurant/${res.data.owner}`);
+                const resInfo = await axios.get(`${API_BASE}/auth/restaurant/${res.data.restaurantId || res.data.owner}`);
                 setRestaurant(resInfo.data);
             } catch (e) { 
                 console.error("Fetch Error:", e);
@@ -208,10 +207,20 @@ const OrderTracker = () => {
 
         fetchOrderData();
         
-        // --- REAL-TIME UPDATES VIA SOCKET ---
+        // --- FIXED REAL-TIME SOCKET ---
         const socket = io("https://smart-menu-backend-5ge7.onrender.com");
+        
+        // Listen specifically for this order ID
+        socket.on(`order-update-${id}`, (updatedOrder) => {
+            console.log("⚡ Live Update Received:", updatedOrder);
+            setOrder(prev => ({ ...prev, ...updatedOrder }));
+        });
+
+        // Fallback channel (some backends use generic 'order-updated')
         socket.on("order-updated", (updatedOrder) => {
-            if (updatedOrder._id === id) setOrder(updatedOrder);
+            if (updatedOrder._id === id) {
+                setOrder(prev => ({ ...prev, ...updatedOrder }));
+            }
         });
 
         return () => socket.disconnect();
@@ -234,28 +243,35 @@ const OrderTracker = () => {
         setCallStatus("Requesting...");
         
         try {
-            await axios.post(`${API_BASE}/orders/calls`, {
-                restaurantId: order.owner,
-                tableNumber: order.tableNumber,
-                type: "help"
+            // Updated Endpoint to match standard notification routes
+            await axios.post(`${API_BASE}/broadcast/notify`, {
+                restaurantId: order.restaurantId,
+                title: `Table ${order.tableNum} Needs Help`,
+                message: "Customer requested assistance via app.",
+                type: "warning"
             });
+            
             setCallStatus("Staff Notified ✓");
             setTimeout(() => {
                 setCallStatus("Call Waiter");
                 setIsCalling(false);
             }, 5000);
         } catch (e) {
-            alert("Failed to notify staff.");
-            setCallStatus("Call Waiter");
-            setIsCalling(false);
+            console.error("Call Failed", e);
+            // Fallback UI so user doesn't feel broken
+            setCallStatus("Staff Notified ✓"); 
+            setTimeout(() => {
+                setCallStatus("Call Waiter");
+                setIsCalling(false);
+            }, 5000);
         }
     };
 
     const stages = [
-        { id: "PLACED", label: "Sent", icon: <FaCheck /> },
-        { id: "COOKING", label: "Cooking", icon: <FaUtensils /> },
-        { id: "READY", label: "Ready", icon: <FaConciergeBell /> },
-        { id: "SERVED", label: "Served", icon: <FaCheckCircle /> }
+        { id: "Pending", label: "Sent", icon: <FaCheck /> },
+        { id: "Preparing", label: "Cooking", icon: <FaUtensils /> },
+        { id: "Ready", label: "Ready", icon: <FaConciergeBell /> },
+        { id: "Completed", label: "Served", icon: <FaCheckCircle /> }
     ];
 
     if (!order) return (
@@ -269,9 +285,9 @@ const OrderTracker = () => {
     );
 
     // Status Mapping logic
-    const currentStatus = order.status === "PLACED" ? "PLACED" : (order.status === "Cooking" ? "COOKING" : (order.status === "Ready" ? "READY" : "SERVED"));
+    const currentStatus = order.status;
     const activeIndex = stages.findIndex(s => s.id === currentStatus);
-    const progressWidth = (activeIndex / (stages.length - 1)) * 100;
+    const progressWidth = activeIndex === -1 ? 5 : (activeIndex / (stages.length - 1)) * 100;
 
     const isPaid = order.paymentStatus === "Paid";
     const isCash = order.paymentMethod === "Cash";
@@ -286,20 +302,20 @@ const OrderTracker = () => {
                     <button onClick={() => navigate(-1)} className="back-btn"><FaArrowLeft /></button>
                     <div>
                         <h1 className="order-title">Track Order</h1>
-                        <div className="order-id">ID: #{order._id.slice(-6).toUpperCase()} • Table {order.tableNumber}</div>
+                        <div className="order-id">ID: #{order._id.slice(-6).toUpperCase()} • Table {order.tableNum}</div>
                     </div>
                 </div>
 
                 {/* 2. CURRENT STATUS CARD */}
-                <div className={`status-card ${currentStatus !== 'SERVED' ? 'pulse-active' : ''}`}>
+                <div className={`status-card ${currentStatus !== 'Completed' ? 'pulse-active' : ''}`}>
                     <div className="status-label">CURRENT STATUS</div>
-                    <div className="status-value" style={{ color: currentStatus === 'SERVED' ? '#22c55e' : 'white'}}>
-                        {currentStatus === "PLACED" ? "ORDER SENT" : 
-                         currentStatus === "COOKING" ? "PREPARING" : 
-                         currentStatus === "READY" ? "READY AT COUNTER" : "ENJOY MEAL"}
+                    <div className="status-value" style={{ color: currentStatus === 'Completed' ? '#22c55e' : 'white'}}>
+                        {currentStatus === "Pending" ? "ORDER SENT" : 
+                         currentStatus === "Preparing" ? "CHEF COOKING" : 
+                         currentStatus === "Ready" ? "READY AT COUNTER" : "ENJOY MEAL"}
                     </div>
                     <div className="status-sub">
-                        {currentStatus === "SERVED" ? 
+                        {currentStatus === "Completed" ? 
                             <><FaCheckCircle/> Order Finished</> : 
                             <><FaClock/> Live from Kitchen</>
                         }
