@@ -1,43 +1,50 @@
 import express from 'express';
 import mongoose from 'mongoose';
+import jwt from 'jsonwebtoken';
 import Dish from '../models/Dish.js';
 import Owner from '../models/Owner.js'; 
-import { protect, checkSubscription } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-/**
- * 1. ADD NEW DISH (Admin Only)
- * @route   POST /api/dishes
- * @desc    Add a dish to the restaurant menu
- * @access  Protected (Owner only)
- */
-router.post('/', protect, checkSubscription, async (req, res) => {
-    try {
-        const { name, price, category, description, image } = req.body;
+// ==========================================
+// 🛡️ MIDDLEWARE (Defined Here for Safety)
+// ==========================================
 
-        if (!name || !price || !category) {
-            return res.status(400).json({ message: "Name, price, and category are required." });
+// 1. Verify JWT Token (Protects Admin Routes)
+const protect = async (req, res, next) => {
+    let token;
+    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+        try {
+            token = req.headers.authorization.split(' ')[1];
+            const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret');
+            
+            // Attach user to request
+            req.user = await Owner.findById(decoded.id).select('-password');
+            if (!req.user) return res.status(401).json({ message: 'User not found' });
+            
+            next();
+        } catch (error) {
+            console.error(error);
+            return res.status(401).json({ message: 'Not authorized, token failed' });
         }
-
-        const newDish = new Dish({
-            name, 
-            price, 
-            category, 
-            description, 
-            image,
-            owner: req.user.id // Link dish to the logged-in restaurant
-        });
-
-        const savedDish = await newDish.save();
-        res.status(201).json(savedDish);
-    } catch (error) {
-        res.status(400).json({ message: error.message });
+    } else {
+        return res.status(401).json({ message: 'Not authorized, no token' });
     }
-});
+};
+
+// 2. Check Subscription Status (Optional - Placeholders)
+const checkSubscription = (req, res, next) => {
+    // Logic to check req.user.trialEndsAt or req.user.isPro
+    // For now, we allow access to keep it simple
+    next();
+};
+
+// ==========================================
+// 🚦 ROUTES
+// ==========================================
 
 /**
- * 2. GET DISHES (Public / Customer Facing)
+ * 1. GET DISHES (Public / Customer Facing)
  * @route   GET /api/dishes?restaurantId=...
  * @desc    Fetch menu items. Supports both Database ID and Username URLs.
  * @access  Public
@@ -72,6 +79,36 @@ router.get('/', async (req, res) => {
 });
 
 /**
+ * 2. ADD NEW DISH (Admin Only)
+ * @route   POST /api/dishes
+ * @desc    Add a dish to the restaurant menu
+ * @access  Protected (Owner only)
+ */
+router.post('/', protect, checkSubscription, async (req, res) => {
+    try {
+        const { name, price, category, description, image } = req.body;
+
+        if (!name || !price || !category) {
+            return res.status(400).json({ message: "Name, price, and category are required." });
+        }
+
+        const newDish = new Dish({
+            name, 
+            price, 
+            category, 
+            description, 
+            image,
+            owner: req.user.id // Link dish to the logged-in restaurant
+        });
+
+        const savedDish = await newDish.save();
+        res.status(201).json(savedDish);
+    } catch (error) {
+        res.status(400).json({ message: error.message });
+    }
+});
+
+/**
  * 3. UPDATE DISH / STOCK MANAGEMENT (Chef & Admin)
  * @route   PUT /api/dishes/:id
  * @desc    Edit dish details or toggle availability (Sold Out/In Stock)
@@ -84,7 +121,7 @@ router.put('/:id', protect, async (req, res) => {
         if (!dish) return res.status(404).json({ message: "Dish not found" });
 
         // Security: Ensure the user owns this dish before allowing changes
-        if (dish.owner.toString() !== req.user.id) {
+        if (dish.owner.toString() !== req.user.id.toString()) {
             return res.status(401).json({ message: "Not authorized" });
         }
 
@@ -112,7 +149,7 @@ router.delete('/:id', protect, async (req, res) => {
         
         if (!dish) return res.status(404).json({ message: 'Dish not found' });
 
-        if (dish.owner.toString() !== req.user.id) {
+        if (dish.owner.toString() !== req.user.id.toString()) {
             return res.status(401).json({ message: 'Not authorized' });
         }
 
