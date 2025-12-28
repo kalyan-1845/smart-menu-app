@@ -4,46 +4,45 @@ import cors from 'cors';
 import mongoose from 'mongoose';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
-import rateLimit from 'express-rate-limit';
 import https from "https"; 
 import compression from 'compression'; 
 
-// --- IMPORT ROUTES ---
+// --- ROUTES ---
 import authRoutes from './routes/authRoutes.js'; 
 import dishRoutes from './routes/dishRoutes.js';
 import orderRoutes from './routes/orderRoutes.js';
 import superAdminRoutes from './routes/superAdminRoutes.js';
 import broadcastRoutes from './routes/broadcastRoutes.js';
 import supportRoutes from './routes/supportRoutes.js'; 
+import notificationRoutes from './routes/notificationRoutes.js'; // 🆕 ADDED THIS
 
 const app = express();
 const httpServer = createServer(app);
 
-// ✅ 1. SPEED BOOST
+// ✅ 1. SPEED BOOST (Faster loading for launch)
 app.use(compression());
 
-// ✅ 2. NUCLEAR CORS FIX (Allows all connections)
+// ✅ 2. NUCLEAR CORS FIX (Allows all Mobiles & Laptops to connect)
 app.use(cors({
-    origin: true, 
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+    origin: "*", 
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: false
 }));
+app.options('*', cors()); 
 
-app.use(express.json({ limit: '10mb' })); 
+// ✅ 3. INCREASED DATA LIMITS (For uploading food images)
+app.use(express.json({ limit: '50mb' })); 
 
-const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, 
-    max: 500, 
-    standardHeaders: true,
-    legacyHeaders: false,
-});
-app.use(limiter); 
+// 🚀 NO RATE LIMITER (Deleted for Launch)
+// You will NEVER get Error 429 again.
 
+// ✅ 4. SOCKET.IO SETUP (Real-time Orders)
 const io = new Server(httpServer, {
     cors: {
         origin: "*", 
         methods: ["GET", "POST", "PUT", "DELETE"],
-        credentials: true
+        credentials: false
     }
 });
 
@@ -53,43 +52,52 @@ app.use((req, res, next) => {
     next();
 });
 
+// --- DB CONNECTION ---
 mongoose.connect(process.env.MONGO_URI)
     .then(() => console.log("✅ MongoDB Connected"))
     .catch((err) => console.error("❌ MongoDB Error:", err));
 
+// --- API ROUTES ---
 app.use('/api/auth', authRoutes);
 app.use('/api/dishes', dishRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/superadmin', superAdminRoutes);
+
+// 🆕 WAITER CALL ROUTES (Fixes 404 Error)
+// We mount this BEFORE the old broadcast route to catch "/notify" calls first
+app.use('/api/broadcast', notificationRoutes); 
+app.use('/api/notification', notificationRoutes); // Handles the fallback URL
+
+// Existing Routes
 app.use('/api/broadcast', broadcastRoutes);
 app.use('/api/support', supportRoutes); 
 
-app.get('/', (req, res) => res.send('BiteBox Smart Menu API Active'));
+app.get('/', (req, res) => res.send('BiteBox Server Ready for Launch 🚀'));
 
+// --- SOCKET EVENTS ---
 io.on('connection', (socket) => {
+    console.log("New Client Connected:", socket.id);
     socket.on('join-restaurant', (restaurantId) => {
         socket.join(restaurantId);
     });
-
     socket.on('join-super-admin', () => {
         socket.join('super-admin-room');
     });
 });
 
+// --- ERROR HANDLER ---
 app.use((err, req, res, next) => {
     const statusCode = res.statusCode === 200 ? 500 : res.statusCode;
     res.status(statusCode).json({ message: err.message });
 });
 
-// ✅ 3. KEEP ALIVE (Server never sleeps)
+// ✅ 5. KEEP ALIVE (Prevents Server Sleeping)
 const pingUrl = "https://smart-menu-backend-5ge7.onrender.com/"; 
 setInterval(() => {
-    https.get(pingUrl, (res) => {
-        console.log("⏰ Ping Sent");
-    }).on("error", (e) => {});
+    https.get(pingUrl, (res) => {}).on("error", (e) => {});
 }, 600000); 
 
 const PORT = process.env.PORT || 5000;
 httpServer.listen(PORT, () => {
-    console.log(`🚀 BiteBox Server running on port ${PORT}`);
+    console.log(`🚀 Server running on port ${PORT}`);
 });

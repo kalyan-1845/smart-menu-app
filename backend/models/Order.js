@@ -1,16 +1,40 @@
-import mongoose from 'mongoose';
+import mongoose from "mongoose";
 
-const orderSchema = mongoose.Schema({
-    // ... your existing schema fields ...
-    restaurantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Owner', required: true },
-    // ...
-}, { timestamps: true });
+const OrderSchema = new mongoose.Schema(
+  {
+    restaurantId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Restaurant",
+      required: true,
+    },
+    tableNumber: {
+      type: String,
+      required: true,
+    },
+    // 🔥 FIX: Defined as flexible array to prevent Mongoose from deleting data
+    items: [], 
+    totalAmount: {
+      type: Number,
+      required: true,
+    },
+    paymentMethod: {
+      type: String, // 'Cash' or 'Online'
+      default: "Cash",
+    },
+    status: {
+      type: String,
+      enum: ["pending", "preparing", "ready", "completed"],
+      default: "pending",
+    },
+    customerName: {
+      type: String,
+      default: "Guest",
+    },
+    note: {
+      type: String,
+    },
+  },
+  { timestamps: true, strict: false } // ✅ FIX: Allows flexible data saving
+);
 
-// ✅ ADD THESE INDEXES FOR SPEED
-// This makes finding orders for a specific restaurant instant
-orderSchema.index({ restaurantId: 1 }); 
-// This makes sorting by newest orders instant
-orderSchema.index({ createdAt: -1 });
-
-const Order = mongoose.model('Order', orderSchema);
-export default Order;
+export default mongoose.model("Order", OrderSchema);

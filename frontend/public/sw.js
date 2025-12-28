@@ -1,7 +1,6 @@
-const CACHE_NAME = "bitebox-v6"; // 👈 Updated to v6 to force fresh install
-const DYNAMIC_CACHE = "bitebox-dynamic-v6";
+const CACHE_NAME = "bitebox-v9"; // Changed version
+const DYNAMIC_CACHE = "bitebox-dynamic-v9";
 
-// 1. STATIC ASSETS (The "Shell" of your app)
 const ASSETS = [
   "/",
   "/index.html",
@@ -11,26 +10,21 @@ const ASSETS = [
   "/logo512.png"
 ];
 
-// 2. INSTALL: Cache the Shell immediately
+// 1. INSTALL
 self.addEventListener("install", (event) => {
-  self.skipWaiting(); // ⚡ Activate immediately (No waiting)
+  self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      console.log("✅ SW: Caching App Shell");
-      return cache.addAll(ASSETS);
-    })
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
   );
 });
 
-// 3. ACTIVATE: Delete OLD Caches (Self-Cleaning)
+// 2. ACTIVATE
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
       return Promise.all(
         keys.map((key) => {
-          // If the cache name doesn't match V6, delete it!
           if (key !== CACHE_NAME && key !== DYNAMIC_CACHE) {
-            console.log("🧹 SW: Cleaning Old Cache", key);
             return caches.delete(key);
           }
         })
@@ -40,50 +34,31 @@ self.addEventListener("activate", (event) => {
   return self.clients.claim();
 });
 
-// 4. FETCH: The Smart Logic
+// 3. FETCH (THE FIX)
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
 
-  // --- RULE A: IGNORE API & NON-GET REQUESTS (Network Only) ---
-  // This is CRITICAL. It ensures Orders/Logins NEVER get stuck in cache.
-  // It fixes the "400 Bad Request" and "Stale Data" issues.
+  // 🚨 IGNORE API & SOCKET REQUESTS
   if (
     url.pathname.startsWith("/api") || 
-    url.href.includes("onrender.com") || // 🛡️ Extra Safety for your Backend
-    event.request.method !== "GET"
+    url.pathname.startsWith("/socket.io") || 
+    url.hostname === "localhost" || // Ignore local backend
+    url.port === "5000" // Ignore backend port
   ) {
-    return; // Let the browser handle it (Internet Only)
+    return; // Let it go to the network directly
   }
 
-  // --- RULE B: CACHE STATIC FILES (Stale-While-Revalidate) ---
-  // Images, CSS, JS load from cache first (Fast), then update in background.
   event.respondWith(
     caches.match(event.request).then((cachedRes) => {
-      // 1. Return cached file if found (Instant Load)
-      if (cachedRes) {
-        // (Optional) Update cache in background for next time so users always get latest code
-        fetch(event.request)
-            .then(res => caches.open(DYNAMIC_CACHE).then(cache => cache.put(event.request, res.clone())))
-            .catch(() => {}); 
-        return cachedRes;
-      }
-
-      // 2. If not in cache, fetch from internet
-      return fetch(event.request)
-        .then((fetchRes) => {
+      return (
+        cachedRes ||
+        fetch(event.request).then((fetchRes) => {
           return caches.open(DYNAMIC_CACHE).then((cache) => {
-            // Save it for next time
             cache.put(event.request.url, fetchRes.clone());
             return fetchRes;
           });
         })
-        .catch(() => {
-          // 3. OFFLINE FALLBACK (If internet dies)
-          // If they try to load a page while offline, show the main page
-          if (event.request.headers.get("accept").includes("text/html")) {
-            return caches.match("/index.html");
-          }
-        });
+      );
     })
   );
 });

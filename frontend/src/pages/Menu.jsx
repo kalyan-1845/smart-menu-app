@@ -2,44 +2,62 @@ import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { 
-  FaSearch, FaShoppingCart, FaPlus, FaMinus, FaInfoCircle, FaUtensils 
-} from "react-icons/fa"; // ✅ Fixed typo FaInfoCircle
+  FaSearch, FaShoppingCart, FaPlus, FaUtensils, FaExclamationCircle
+} from "react-icons/fa";
+
+// 🚀 SMART API SWITCHER
+const getApiBase = () => {
+    const host = window.location.hostname;
+    if (host === "localhost" || host.startsWith("192.168") || host.startsWith("10.")) {
+        return `http://${host}:5000/api`;
+    }
+    return "https://smart-menu-backend-5ge7.onrender.com/api";
+};
 
 const Menu = ({ cart, addToCart, setRestaurantId, setTableNum }) => {
   const { id, table } = useParams();
   const navigate = useNavigate();
+  const API_BASE = getApiBase(); 
   
   const [menu, setMenu] = useState([]);
   const [restaurant, setRestaurant] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [category, setCategory] = useState("All");
 
-  // --- 1. INITIALIZE & FETCH MENU ---
   useEffect(() => {
     if (id) {
       setRestaurantId(id); 
       if (table) setTableNum(table);
       
-      const fetchMenu = async () => {
+      const fetchData = async () => {
         try {
-          const res = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/menu/${id}`);
-          setMenu(res.data);
+          // 1. FETCH DISHES (Critical - If this fails, show error)
+          const dishRes = await axios.get(`${API_BASE}/dishes?restaurantId=${id}`);
+          setMenu(dishRes.data);
           
-          const resInfo = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/auth/restaurant/${id}`);
-          setRestaurant(resInfo.data);
-          
+          // 2. FETCH RESTAURANT INFO (Optional - If this fails, ignore it)
+          try {
+             const infoRes = await axios.get(`${API_BASE}/auth/restaurant/${id}`);
+             setRestaurant(infoRes.data);
+          } catch (infoErr) {
+             console.warn("Restaurant Info Failed (Ignoring):", infoErr);
+             // Do NOT set error here. Keep showing the menu.
+          }
+
         } catch (err) {
-          console.error("Menu Load Failed", err);
+          console.error("Critical Menu Load Failed:", err);
+          setError("Could not load dishes. Check connection.");
         } finally {
           setLoading(false);
         }
       };
-      fetchMenu();
+      fetchData();
     }
-  }, [id, table, setRestaurantId, setTableNum]);
+  }, [id, table, setRestaurantId, setTableNum, API_BASE]);
 
-  // --- 2. CALCULATE CART COUNTS ---
+  // ... (Rest of your component stays exactly the same)
   const getQty = (itemId) => {
     const item = cart.find(i => i._id === itemId);
     return item ? item.quantity : 0;
@@ -48,7 +66,6 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum }) => {
   const totalItems = cart.reduce((acc, item) => acc + item.quantity, 0);
   const totalPrice = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
 
-  // --- 3. FILTERING ---
   const filteredItems = menu.filter(item => 
     item.name.toLowerCase().includes(searchTerm.toLowerCase()) &&
     (category === "All" || item.category === category)
@@ -64,99 +81,96 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum }) => {
     </div>
   );
 
+  if (error) return (
+      <div style={{height:'100vh', background:'#050505', color:'white', display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', padding:'20px', textAlign:'center'}}>
+          <FaExclamationCircle size={40} color="#ef4444" />
+          <h2 style={{marginTop:'20px'}}>Menu Unavailable</h2>
+          <p style={{color:'#888', marginBottom:'20px'}}>{error}</p>
+          <button onClick={() => window.location.reload()} style={{padding:'10px 20px', borderRadius:'8px', background:'#333', color:'white', border:'none', cursor:'pointer'}}>Retry</button>
+      </div>
+  );
+
   return (
     <div style={styles.container}>
       
-      {/* --- TOP NAVBAR --- */}
+      {/* NAVBAR */}
       <div style={styles.navbar}>
         <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
-             <div style={styles.logoBox}>
-                <FaUtensils />
-             </div>
+             <div style={styles.logoBox}><FaUtensils /></div>
              <div>
                 <h2 style={styles.resName}>{restaurant?.restaurantName || "Smart Menu"}</h2>
                 <p style={styles.tableBadge}>{table ? `Table ${table}` : "Takeaway / Counter"}</p>
              </div>
         </div>
-        
-        {/* CART ICON (Top Right) */}
         <div onClick={() => navigate('/cart')} style={styles.cartIconWrapper}>
             <FaShoppingCart size={20} color="white" />
             {totalItems > 0 && <span style={styles.cartBadge}>{totalItems}</span>}
         </div>
       </div>
 
-      {/* --- SEARCH & CATEGORIES --- */}
+      {/* SEARCH */}
       <div style={styles.controls}>
         <div style={styles.searchBox}>
             <FaSearch color="#666" />
-            <input 
-                type="text" 
-                placeholder="Search dishes..." 
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                style={styles.searchInput}
-            />
+            <input type="text" placeholder="Search dishes..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={styles.searchInput} />
         </div>
-        
         <div style={styles.catScroll}>
             {categories.map(cat => (
-                <button 
-                    key={cat} 
-                    onClick={() => setCategory(cat)}
-                    style={{
-                        ...styles.catBtn, 
-                        background: category === cat ? '#f97316' : '#1a1a1a',
-                        color: category === cat ? 'white' : '#888'
-                    }}
-                >
+                <button key={cat} onClick={() => setCategory(cat)} style={{...styles.catBtn, background: category === cat ? '#f97316' : '#1a1a1a', color: category === cat ? 'white' : '#888'}}>
                     {cat}
                 </button>
             ))}
         </div>
       </div>
 
-      {/* --- MENU GRID --- */}
+      {/* GRID */}
       <div style={styles.grid}>
-        {filteredItems.map(item => (
-            <div key={item._id} style={styles.card}>
-                <img src={item.image || "https://via.placeholder.com/150"} alt={item.name} style={styles.foodImg} />
-                <div style={styles.cardContent}>
-                    <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start'}}>
-                        <h3 style={styles.foodName}>{item.name}</h3>
-                        {item.isVeg ? <span style={styles.vegDot}>●</span> : <span style={styles.nonVegDot}>●</span>}
+        {filteredItems.length === 0 ? (
+            <div style={{gridColumn:'1/-1', textAlign:'center', padding:'40px', color:'#666'}}>
+                <p>No dishes found.</p>
+            </div>
+        ) : (
+            filteredItems.map(item => (
+                <div key={item._id} style={{...styles.card, opacity: item.isAvailable !== false ? 1 : 0.6}}>
+                    <div style={{position:'relative'}}>
+                        <img src={item.image || "https://via.placeholder.com/150"} alt={item.name} style={styles.foodImg} />
+                        {item.isAvailable === false && <div style={styles.soldOutOverlay}>SOLD OUT</div>}
                     </div>
-                    <p style={styles.desc}>{item.description.slice(0, 45)}...</p>
-                    <div style={styles.priceRow}>
-                        <span style={styles.price}>₹{item.price}</span>
-                        
-                        {/* ADD BUTTON logic */}
-                        {getQty(item._id) > 0 ? (
-                            <div style={styles.qtyControl}>
-                                <span style={{fontSize:'12px', fontWeight:'bold'}}>{getQty(item._id)}</span>
-                                <span style={{fontSize:'10px'}}>ADDED</span>
-                            </div>
-                        ) : (
-                            <button onClick={() => addToCart(item)} style={styles.addBtn}>
-                                ADD <FaPlus size={10}/>
-                            </button>
-                        )}
+                    <div style={styles.cardContent}>
+                        <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start'}}>
+                            <h3 style={styles.foodName}>{item.name}</h3>
+                            {item.isVeg ? <span style={styles.vegDot}>●</span> : <span style={{...styles.nonVegDot, color:'#ef4444'}}>●</span>}
+                        </div>
+                        <p style={styles.desc}>{item.description?.slice(0, 45)}...</p>
+                        <div style={styles.priceRow}>
+                            <span style={styles.price}>₹{item.price}</span>
+                            {item.isAvailable !== false ? (
+                                getQty(item._id) > 0 ? (
+                                    <div style={styles.qtyControl}>
+                                        <span style={{fontSize:'12px', fontWeight:'bold'}}>{getQty(item._id)}</span>
+                                        <span style={{fontSize:'10px'}}>ADDED</span>
+                                    </div>
+                                ) : (
+                                    <button onClick={() => addToCart(item)} style={styles.addBtn}>ADD <FaPlus size={10}/></button>
+                                )
+                            ) : (
+                                <span style={{fontSize:'10px', color:'#ef4444', fontWeight:'bold'}}>UNAVAILABLE</span>
+                            )}
+                        </div>
                     </div>
                 </div>
-            </div>
-        ))}
+            ))
+        )}
       </div>
 
-      {/* --- BOTTOM FLOATING CART BAR --- */}
+      {/* CART */}
       {totalItems > 0 && (
         <div onClick={() => navigate('/cart')} style={styles.floatingCart}>
             <div style={{display:'flex', flexDirection:'column'}}>
                 <span style={{fontSize:'12px', opacity:0.8}}>{totalItems} ITEMS</span>
                 <span style={{fontSize:'16px', fontWeight:'900'}}>₹{totalPrice}</span>
             </div>
-            <div style={{display:'flex', alignItems:'center', gap:'10px', fontWeight:'bold'}}>
-                VIEW CART <FaShoppingCart />
-            </div>
+            <div style={{display:'flex', alignItems:'center', gap:'10px', fontWeight:'bold'}}>VIEW CART <FaShoppingCart /></div>
         </div>
       )}
     </div>
@@ -179,6 +193,7 @@ const styles = {
     grid: { padding:'0 20px', display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(150px, 1fr))', gap:'15px' },
     card: { background:'#111', borderRadius:'16px', overflow:'hidden', border:'1px solid #1a1a1a', display:'flex', flexDirection:'column' },
     foodImg: { width:'100%', height:'120px', objectFit:'cover' },
+    soldOutOverlay: { position:'absolute', inset:0, background:'rgba(0,0,0,0.7)', display:'flex', alignItems:'center', justifyContent:'center', color:'white', fontWeight:'900', letterSpacing:'1px', fontSize:'14px' },
     cardContent: { padding:'12px', flex:1, display:'flex', flexDirection:'column' },
     foodName: { margin:'0 0 5px 0', fontSize:'15px', fontWeight:'700', color:'#eee' },
     desc: { fontSize:'11px', color:'#777', margin:'0 0 10px 0', lineHeight:1.4 },

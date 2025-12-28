@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import io from "socket.io-client";
 import confetti from "canvas-confetti";
 import { 
     FaPlus, FaTrash, FaUtensils, 
-    FaBell, FaCheckCircle, FaCircle, FaCrown, FaSignOutAlt, FaRocket, FaUnlock, FaStore, FaExternalLinkAlt, FaCopy, FaImage
+    FaBell, FaCheckCircle, FaCircle, FaCrown, FaSignOutAlt, FaRocket, FaUnlock, FaStore, FaExternalLinkAlt, FaCopy
 } from "react-icons/fa";
 
-// --- STYLES (Mobile Optimized & Beautiful) ---
+// --- STYLES ---
 const styles = `
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;900&display=swap');
 .admin-container { min-height: 100vh; padding: 20px; background: radial-gradient(circle at top center, #1a0f0a 0%, #050505 60%); color: white; font-family: 'Inter', sans-serif; }
@@ -18,17 +18,13 @@ const styles = `
 .shop-title { font-size: 28px; font-weight: 900; margin: 0; letter-spacing: -1px; text-transform: uppercase; }
 .badge-pro { background: rgba(255, 153, 51, 0.15); color: #FF9933; border: 1px solid rgba(255, 153, 51, 0.3); padding: 4px 10px; border-radius: 20px; font-size: 10px; font-weight: 900; display: inline-flex; align-items: center; gap: 5px; }
 .btn-glass { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); color: white; padding: 10px 16px; border-radius: 12px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: 0.2s; }
-.btn-glass:hover { background: rgba(255, 255, 255, 0.1); }
 .btn-primary { background: linear-gradient(135deg, #FF8800 0%, #FF5500 100%); border: none; color: white; width: 100%; padding: 16px; border-radius: 16px; font-size: 14px; font-weight: 700; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; box-shadow: 0 4px 15px rgba(255, 85, 0, 0.4); transition: 0.2s; }
-.btn-primary:active { transform: scale(0.98); }
 .glass-card { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); backdrop-filter: blur(12px); border-radius: 24px; padding: 24px; margin-bottom: 24px; }
 .nav-tabs { display: flex; background: rgba(0,0,0,0.3); padding: 4px; border-radius: 16px; margin-bottom: 24px; }
 .tab-btn { flex: 1; padding: 12px; background: transparent; border: none; color: #888; font-size: 11px; font-weight: 900; cursor: pointer; border-radius: 12px; text-transform: uppercase; transition: 0.3s; }
 .tab-btn.active { background: rgba(255,255,255,0.1); color: #FF9933; }
 .input-dark { width: 100%; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); padding: 14px; border-radius: 12px; color: white; margin-bottom: 15px; outline: none; transition: 0.3s; }
-.input-dark:focus { border-color: #FF9933; background: rgba(0,0,0,0.6); }
 .dish-item { display: flex; justify-content: space-between; align-items: center; padding: 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
-.dish-item:last-child { border-bottom: none; }
 .toast-container { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); width: 90%; max-width: 400px; z-index: 1000; display: flex; flex-direction: column; gap: 10px; }
 .toast-alert { background: #FF9933; color: black; padding: 15px; border-radius: 15px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5); animation: slideDown 0.3s ease-out; }
 @keyframes slideDown { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
@@ -39,6 +35,24 @@ const styles = `
 .action-btn { background: none; border: none; color: #888; cursor: pointer; padding: 5px; transition: 0.2s; }
 .action-btn:hover { color: white; }
 `;
+
+// --- 🚀 AUTO-DETECT API URL (Local vs Cloud) ---
+const getApiBase = () => {
+    const host = window.location.hostname;
+    // If running on Localhost or Network IP (Mobile Testing)
+    if (host === "localhost" || host.startsWith("192.168") || host.startsWith("10.")) {
+        return `http://${host}:5000/api`; // Talk to Laptop Backend
+    }
+    return "https://smart-menu-backend-5ge7.onrender.com/api"; // Talk to Cloud (After Deployment)
+};
+
+const getSocketBase = () => {
+    const host = window.location.hostname;
+    if (host === "localhost" || host.startsWith("192.168") || host.startsWith("10.")) {
+        return `http://${host}:5000`; 
+    }
+    return "https://smart-menu-backend-5ge7.onrender.com";
+};
 
 const SetupWizard = ({ dishesCount, pushEnabled }) => {
     const steps = [
@@ -77,11 +91,13 @@ const SetupWizard = ({ dishesCount, pushEnabled }) => {
 };
 
 const RestaurantAdmin = () => {
-    const { id } = useParams(); // This grabs "kalyanresto1" from URL
-    const API_BASE = "https://smart-menu-backend-5ge7.onrender.com/api";
+    const { id } = useParams();
+    const navigate = useNavigate();
     
-    // --- STATE ---
-    const [publicMenuUrl, setPublicMenuUrl] = useState(`${window.location.origin}/menu/${id}`);
+    // Use the Smart Auto-Detect URL
+    const API_BASE = getApiBase(); 
+    
+    const [publicMenuUrl, setPublicMenuUrl] = useState("");
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [password, setPassword] = useState("");
     const [authLoading, setAuthLoading] = useState(false);
@@ -96,30 +112,46 @@ const RestaurantAdmin = () => {
     const [dishes, setDishes] = useState([]);
     const [formData, setFormData] = useState({ name: "", price: "", category: "Starters", image: "" });
 
-    // --- LOGIN HANDLER (FIXED TO UPDATE LINK) ---
+    // --- 1. AUTO LOGIN ---
+    useEffect(() => {
+        const token = localStorage.getItem(`owner_token_${id}`);
+        const mongoId = localStorage.getItem(`owner_id_${id}`);
+        
+        if (token && mongoId) {
+            setIsAuthenticated(true);
+            const correctLink = `${window.location.origin}/menu/${mongoId}`;
+            setPublicMenuUrl(correctLink);
+            fetchData(token, mongoId);
+        } else {
+            navigate(`/${id}/login`);
+        }
+    }, [id, navigate]);
+
+    // --- LOGIN HANDLER ---
     const handleLogin = async (e) => {
         e.preventDefault();
         setAuthLoading(true);
         try {
             const res = await axios.post(`${API_BASE}/auth/login`, { username: id, password });
             
-            // SAVE TOKEN
             localStorage.setItem(`owner_token_${id}`, res.data.token);
             localStorage.setItem(`owner_id_${id}`, res.data._id);
             
-            // UPDATE STATE
             setRestaurantName(res.data.restaurantName);
             setIsPro(res.data.isPro);
             setTrialEndsAt(res.data.trialEndsAt);
             setIsAuthenticated(true);
             
-            // ✅ IMPORTANT FIX: Update the link to use the REAL ID (e.g. 65a...), not the username
             const correctLink = `${window.location.origin}/menu/${res.data._id}`;
             setPublicMenuUrl(correctLink);
 
-            // Fetch dishes
             fetchData(res.data.token, res.data._id);
-        } catch (err) { alert("❌ Invalid Password"); } finally { setAuthLoading(false); }
+        } catch (err) { 
+            console.error("Login Failed:", err);
+            alert(err.response?.data?.message || "Login Failed. Ensure Backend is Running!"); 
+        } finally { 
+            setAuthLoading(false); 
+        }
     };
 
     const fetchData = async (token, mongoId) => {
@@ -128,14 +160,21 @@ const RestaurantAdmin = () => {
             const config = { headers: { Authorization: `Bearer ${token}` } };
             const dishRes = await axios.get(`${API_BASE}/dishes?restaurantId=${mongoId}`, config);
             setDishes(dishRes.data || []);
-        } catch (error) { console.error(error); } finally { setLoading(false); }
+        } catch (error) { 
+            console.error("Fetch Error:", error); 
+            if(error.response?.status === 401) handleLogout();
+        } finally { 
+            setLoading(false); 
+        }
     };
 
     // --- LIVE UPDATES ---
     useEffect(() => {
         if (isAuthenticated) {
             const mongoId = localStorage.getItem(`owner_id_${id}`);
-            const socket = io("https://smart-menu-backend-5ge7.onrender.com");
+            if(!mongoId) return;
+
+            const socket = io(getSocketBase()); // Connect to Local or Cloud Socket
             socket.emit("join-restaurant", mongoId);
 
             socket.on("new-waiter-call", (data) => {
@@ -161,6 +200,7 @@ const RestaurantAdmin = () => {
         setIsAuthenticated(false); 
         setPassword(""); 
         localStorage.removeItem(`owner_token_${id}`);
+        navigate(`/${id}/login`);
     };
 
     const handleAddDish = async (e) => {
@@ -168,10 +208,16 @@ const RestaurantAdmin = () => {
         const token = localStorage.getItem(`owner_token_${id}`);
         const mongoId = localStorage.getItem(`owner_id_${id}`);
         try {
-            await axios.post(`${API_BASE}/dishes`, { ...formData, owner: mongoId }, { headers: { Authorization: `Bearer ${token}` } });
+            // ✅ Send robust data so it matches the ID
+            const payload = { ...formData, owner: mongoId, restaurant: mongoId, restaurantId: mongoId };
+            await axios.post(`${API_BASE}/dishes`, payload, { headers: { Authorization: `Bearer ${token}` } });
+            
             setFormData({ name: "", price: "", category: "Starters", image: "" });
             fetchData(token, mongoId);
-        } catch (e) { alert("Error saving dish."); }
+        } catch (e) { 
+            console.error(e);
+            alert("Error saving dish. Is Backend running?"); 
+        }
     };
 
     const handleDeleteDish = async (dishId) => {
@@ -192,7 +238,7 @@ const RestaurantAdmin = () => {
 
     const copyToClipboard = () => {
         navigator.clipboard.writeText(publicMenuUrl);
-        alert("Link Copied! Use this link.");
+        alert("Link Copied! Share this link with customers.");
     };
 
     if (!isAuthenticated) return (
@@ -261,7 +307,6 @@ const RestaurantAdmin = () => {
                             </div>
                             <div style={{overflow:'hidden'}}>
                                 <p style={{fontSize:'10px', color:'#888', margin:0, fontWeight:'bold'}}>CUSTOMER MENU LINK</p>
-                                {/* THIS IS THE FIXED LINK */}
                                 <a href={publicMenuUrl} target="_blank" rel="noreferrer" className="link-text">{publicMenuUrl}</a>
                             </div>
                         </div>
