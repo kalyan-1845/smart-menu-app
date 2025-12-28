@@ -1,16 +1,12 @@
-import express from 'express';
-import { createTicket, getAllTickets, replyToTicket } from '../controllers/supportController.js';
-import { protect } from '../middleware/authMiddleware.js';
-
+import express from "express";
 const router = express.Router();
 
-// Super Admin Route: Get all tickets
-router.get('/all', protect, getAllTickets);
+let tickets = [];
 
-// Owner Route: Create a new ticket
-router.post('/create', protect, createTicket);
+router.post("/", (req, res) => {
+  tickets.push(req.body);
+  res.json({ msg: "Ticket created" });
+});
 
-// Shared Route: Reply to a ticket
-router.post('/reply/:id', protect, replyToTicket);
-
+router.get("/", (req, res) => res.json(tickets));
 export default router;
