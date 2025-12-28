@@ -1,149 +1,154 @@
-import { useState } from "react";
+import React, { useState } from "react";
+import axios from "axios";
+import { 
+    FaStore, FaUser, FaEnvelope, FaLock, FaPhone, 
+    FaMagic, FaTimes, FaEye, FaEyeSlash 
+} from "react-icons/fa";
 
-export default function AddRestaurant({ createRestaurant }) {
-  const [form, setForm] = useState({
-    name: "",
-    phone: "",
-    email: "",
-    password: "",
-    plan: "trial",
-  });
-
-  const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState("");
-
-  const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
-  };
-
-  const submit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setSuccess("");
-
-    try {
-      await createRestaurant(form);
-      setSuccess("Restaurant created successfully");
-      setForm({
-        name: "",
+const AddRestaurant = ({ onClose, refreshList }) => {
+    const [formData, setFormData] = useState({
+        username: "", 
+        password: "", 
+        restaurantName: "",
+        email: "",    
         phone: "",
-        email: "",
-        password: "",
-        plan: "trial",
-      });
-    } catch (err) {
-      alert("Failed to create restaurant");
-    } finally {
-      setLoading(false);
-    }
-  };
+        address: ""
+    });
+    const [loading, setLoading] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
 
-  return (
-    <div style={styles.container}>
-      <h2 style={styles.title}>🏪 Add Restaurant</h2>
+    // --- LOGIC: AUTO-GENERATE SECURE PASSWORD ---
+    const generatePassword = () => {
+        const randomPass = Math.random().toString(36).slice(-8).toUpperCase();
+        setFormData({ ...formData, password: `BB${randomPass}` }); // BiteBox Prefix
+    };
 
-      <form onSubmit={submit} style={styles.card}>
-        <input
-          name="name"
-          placeholder="Restaurant Name"
-          value={form.name}
-          onChange={handleChange}
-          required
-          style={styles.input}
-        />
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        try {
+            // API call to the multi-tenant backend registration endpoint
+            const res = await axios.post("https://smart-menu-backend-5ge7.onrender.com/api/auth/register", formData);
+            
+            const successMsg = `✅ Account Created Successfully!\n\nRestaurant: ${formData.restaurantName}\nUsername: ${formData.username}\nPassword: ${formData.password}`;
+            alert(successMsg);
+            
+            // Auto-copy details so you can send them to the owner immediately
+            navigator.clipboard.writeText(successMsg);
+            
+            refreshList(); 
+            onClose();     
+        } catch (err) {
+            alert("Registration Failed: " + (err.response?.data?.message || err.message));
+        } finally {
+            setLoading(false);
+        }
+    };
 
-        <input
-          name="phone"
-          placeholder="Owner Phone"
-          value={form.phone}
-          onChange={handleChange}
-          required
-          style={styles.input}
-        />
+    return (
+        <div style={styles.modalOverlay}>
+            <div style={styles.modalCard}>
+                <div style={styles.header}>
+                    <h2 style={styles.title}>Onboard New Partner</h2>
+                    <button onClick={onClose} style={styles.closeBtn}><FaTimes /></button>
+                </div>
 
-        <input
-          name="email"
-          type="email"
-          placeholder="Owner Email"
-          value={form.email}
-          onChange={handleChange}
-          required
-          style={styles.input}
-        />
+                <p style={styles.subtitle}>Setup login credentials for the restaurant owner.</p>
 
-        <input
-          name="password"
-          type="password"
-          placeholder="Login Password"
-          value={form.password}
-          onChange={handleChange}
-          required
-          style={styles.input}
-        />
+                <form onSubmit={handleSubmit} style={styles.form}>
+                    <div style={styles.inputGroup}>
+                        <label style={styles.label}><FaStore /> Restaurant Name</label>
+                        <input 
+                            style={styles.input} 
+                            placeholder="e.g. Skyline Cafe" 
+                            value={formData.restaurantName} 
+                            onChange={e => setFormData({...formData, restaurantName: e.target.value})} 
+                            required 
+                        />
+                    </div>
 
-        <select
-          name="plan"
-          value={form.plan}
-          onChange={handleChange}
-          style={styles.select}
-        >
-          <option value="trial">Trial (2 Months)</option>
-          <option value="basic">Basic</option>
-          <option value="pro">Pro</option>
-        </select>
+                    <div style={styles.inputGroup}>
+                        <label style={styles.label}><FaUser /> Login Username</label>
+                        <input 
+                            style={styles.input} 
+                            placeholder="e.g. skylineadmin" 
+                            value={formData.username} 
+                            onChange={e => setFormData({...formData, username: e.target.value})} 
+                            required 
+                        />
+                    </div>
 
-        <button style={styles.button} disabled={loading}>
-          {loading ? "Creating..." : "Create Restaurant"}
-        </button>
+                    <div style={styles.inputGroup}>
+                        <label style={styles.label}><FaEnvelope /> Owner Email</label>
+                        <input 
+                            style={styles.input} 
+                            type="email" 
+                            placeholder="owner@email.com" 
+                            value={formData.email} 
+                            onChange={e => setFormData({...formData, email: e.target.value})} 
+                            required 
+                        />
+                    </div>
+                    
+                    <div style={styles.inputGroup}>
+                        <label style={styles.label}><FaLock /> Dashboard Password</label>
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                            <div style={{ position: 'relative', flex: 1 }}>
+                                <input 
+                                    style={{...styles.input, width: '100%'}} 
+                                    type={showPassword ? "text" : "password"} 
+                                    placeholder="Click Generate" 
+                                    value={formData.password} 
+                                    onChange={e => setFormData({...formData, password: e.target.value})} 
+                                    required 
+                                />
+                                <button 
+                                    type="button" 
+                                    onClick={() => setShowPassword(!showPassword)} 
+                                    style={styles.eyeBtn}
+                                >
+                                    {showPassword ? <FaEyeSlash /> : <FaEye />}
+                                </button>
+                            </div>
+                            <button type="button" onClick={generatePassword} style={styles.genBtn} title="Generate Password">
+                                <FaMagic />
+                            </button>
+                        </div>
+                    </div>
 
-        {success && <p style={styles.success}>{success}</p>}
-      </form>
-    </div>
-  );
-}
-const styles = {
-  container: {
-    padding: 16,
-    maxWidth: 420,
-    margin: "40px auto",
-  },
-  title: {
-    textAlign: "center",
-    marginBottom: 16,
-  },
-  card: {
-    background: "#fff",
-    padding: 20,
-    borderRadius: 12,
-    boxShadow: "0 4px 16px rgba(0,0,0,0.08)",
-  },
-  input: {
-    width: "100%",
-    padding: 10,
-    marginBottom: 10,
-    borderRadius: 6,
-    border: "1px solid #ddd",
-  },
-  select: {
-    width: "100%",
-    padding: 10,
-    marginBottom: 12,
-    borderRadius: 6,
-    border: "1px solid #ddd",
-  },
-  button: {
-    width: "100%",
-    padding: 12,
-    borderRadius: 8,
-    border: "none",
-    background: "#2563eb",
-    color: "#fff",
-    fontWeight: "bold",
-  },
-  success: {
-    marginTop: 10,
-    textAlign: "center",
-    color: "#16a34a",
-    fontSize: 14,
-  },
+                    <div style={styles.inputGroup}>
+                        <label style={styles.label}><FaPhone /> Contact Phone</label>
+                        <input 
+                            style={styles.input} 
+                            placeholder="10-digit number" 
+                            value={formData.phone} 
+                            onChange={e => setFormData({...formData, phone: e.target.value})} 
+                        />
+                    </div>
+
+                    <button type="submit" style={styles.submitBtn} disabled={loading}>
+                        {loading ? "Creating..." : "ACTIVATE ACCOUNT"}
+                    </button>
+                </form>
+            </div>
+        </div>
+    );
 };
+
+const styles = {
+    modalOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
+    modalCard: { background: '#111', padding: '35px', borderRadius: '24px', width: '100%', maxWidth: '450px', border: '1px solid #222', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' },
+    header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' },
+    title: { color: 'white', fontSize: '20px', fontWeight: '900', margin: 0 },
+    subtitle: { color: '#666', fontSize: '12px', marginBottom: '25px' },
+    closeBtn: { background: 'none', border: 'none', color: '#444', fontSize: '20px', cursor: 'pointer' },
+    form: { display: 'flex', flexDirection: 'column', gap: '18px' },
+    inputGroup: { display: 'flex', flexDirection: 'column', gap: '6px' },
+    label: { color: '#f97316', fontSize: '10px', fontWeight: '900', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '8px' },
+    input: { padding: '14px', background: '#000', border: '1px solid #333', color: 'white', borderRadius: '12px', fontSize: '14px', outline: 'none' },
+    genBtn: { padding: '0 15px', background: '#222', color: '#f97316', border: '1px solid #333', borderRadius: '12px', cursor: 'pointer' },
+    eyeBtn: { position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: '16px' },
+    submitBtn: { padding: '16px', background: '#f97316', color: 'black', border: 'none', borderRadius: '12px', fontWeight: '900', cursor: 'pointer', marginTop: '10px', textTransform: 'uppercase', letterSpacing: '1px' }
+};
+
+export default AddRestaurant;

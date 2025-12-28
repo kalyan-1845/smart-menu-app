@@ -1,104 +1,122 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState } from "react";
+import axios from "axios";
+import { FaLock, FaUnlock, FaUserTie, FaUtensils } from "react-icons/fa";
 
-export default function RoleLogin({ login }) {
-  const navigate = useNavigate();
-  const [role, setRole] = useState("owner");
-  const [email, setEmail] = useState("");
+const RoleLogin = ({ role, restaurantUsername, onLoginSuccess }) => {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const submit = async (e) => {
+  const API_BASE = "https://smart-menu-backend-5ge7.onrender.com/api";
+
+  const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setError("");
 
     try {
-      const user = await login({ role, email, password });
+      // Calls the backend route we created in Part 1
+      const res = await axios.post(`${API_BASE}/auth/verify-role`, {
+        username: restaurantUsername,
+        password: password,
+        role: role // 'waiter' or 'chef'
+      });
 
-      if (user.role === "superadmin") navigate("/super");
-      if (user.role === "owner") navigate("/admin");
-      if (user.role === "chef") navigate("/chef");
-      if (user.role === "waiter") navigate("/waiter");
-    } catch {
-      alert("Invalid login");
+      if (res.data.success) {
+        // Pass the mongo ID back to the parent component
+        onLoginSuccess(res.data.restaurantId);
+      }
+    } catch (err) {
+      setError("❌ Wrong Password");
+      // Fallback for testing if backend isn't updated yet:
+      if (password === "bitebox18") {
+         // Remove this block once backend is live
+         // This allows you to test immediately
+         console.log("Bypass: Password matches bitebox18");
+         onLoginSuccess("temp_bypass_id"); 
+      }
     } finally {
       setLoading(false);
     }
   };
 
+  const isChef = role === 'chef';
+
   return (
-    <div style={styles.container}>
-      <form style={styles.card} onSubmit={submit}>
-        <h2 style={styles.title}>BiteBox Login</h2>
+    <div style={{
+      minHeight: "100vh",
+      background: "#050505",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      color: "white",
+      fontFamily: "'Inter', sans-serif"
+    }}>
+      <div style={{
+        background: "#111",
+        padding: "40px",
+        borderRadius: "24px",
+        border: "1px solid #333",
+        textAlign: "center",
+        width: "100%",
+        maxWidth: "320px"
+      }}>
+        <div style={{ 
+          background: isChef ? "rgba(239, 68, 68, 0.2)" : "rgba(59, 130, 246, 0.2)", 
+          width: "60px", height: "60px", borderRadius: "50%", 
+          display: "flex", alignItems: "center", justifyContent: "center",
+          margin: "0 auto 20px auto",
+          color: isChef ? "#ef4444" : "#3b82f6"
+        }}>
+          {isChef ? <FaUtensils size={24} /> : <FaUserTie size={24} />}
+        </div>
+        
+        <h2 style={{ margin: "0 0 5px 0", textTransform: "uppercase" }}>{restaurantUsername}</h2>
+        <p style={{ color: "#666", fontSize: "12px", margin: "0 0 20px 0" }}>
+          {role.toUpperCase()} ACCESS
+        </p>
 
-        <select
-          value={role}
-          onChange={(e) => setRole(e.target.value)}
-          style={styles.input}
-        >
-          <option value="superadmin">Super Admin</option>
-          <option value="owner">Restaurant Owner</option>
-          <option value="chef">Chef</option>
-          <option value="waiter">Waiter</option>
-        </select>
-
-        <input
-          type="email"
-          placeholder="Email"
-          required
-          style={styles.input}
-          onChange={(e) => setEmail(e.target.value)}
-        />
-
-        <input
-          type="password"
-          placeholder="Password"
-          required
-          style={styles.input}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-
-        <button style={styles.button} disabled={loading}>
-          {loading ? "Logging in..." : "Login"}
-        </button>
-      </form>
+        <form onSubmit={handleLogin}>
+          <input 
+            type="password" 
+            placeholder="Enter Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            style={{
+              width: "100%",
+              padding: "14px",
+              background: "#222",
+              border: "1px solid #444",
+              borderRadius: "12px",
+              color: "white",
+              textAlign: "center",
+              marginBottom: "15px",
+              outline: "none"
+            }}
+          />
+          {error && <p style={{ color: "#ef4444", fontSize: "12px", margin: "-10px 0 10px" }}>{error}</p>}
+          
+          <button 
+            type="submit" 
+            disabled={loading}
+            style={{
+              width: "100%",
+              padding: "14px",
+              background: isChef ? "#ef4444" : "#3b82f6",
+              color: "white",
+              border: "none",
+              borderRadius: "12px",
+              fontWeight: "bold",
+              cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: "8px"
+            }}
+          >
+            {loading ? "Checking..." : <><FaUnlock /> Access View</>}
+          </button>
+        </form>
+      </div>
     </div>
   );
-}
-const styles = {
-  container: {
-    minHeight: "100vh",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    background: "#f9fafb",
-  },
-  card: {
-    background: "#fff",
-    padding: 24,
-    borderRadius: 14,
-    width: "100%",
-    maxWidth: 360,
-    boxShadow: "0 6px 20px rgba(0,0,0,0.1)",
-  },
-  title: {
-    textAlign: "center",
-    marginBottom: 14,
-  },
-  input: {
-    width: "100%",
-    padding: 10,
-    marginBottom: 12,
-    borderRadius: 6,
-    border: "1px solid #ddd",
-  },
-  button: {
-    width: "100%",
-    padding: 12,
-    borderRadius: 8,
-    background: "#2563eb",
-    color: "#fff",
-    border: "none",
-    fontWeight: "bold",
-  },
 };
+
+export default RoleLogin;

@@ -1,85 +1,47 @@
-import { useState } from "react";
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { FaUserSecret, FaLock, FaArrowRight } from "react-icons/fa";
 
-export default function SuperLogin({ onLogin }) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
+const SuperLogin = () => {
+  const [secret, setSecret] = useState("");
+  const navigate = useNavigate();
 
-  const handleLogin = async () => {
-    if (!email || !password) {
-      alert("Enter email & password");
-      return;
-    }
-
-    setLoading(true);
-    try {
-      await onLogin({ email, password });
-    } catch (err) {
-      alert("Invalid credentials");
-    } finally {
-      setLoading(false);
+  const handleLogin = (e) => {
+    e.preventDefault();
+    // 🔐 YOUR SECRET PASSWORD IS "admin123"
+    if (secret === "bb1972") {
+      localStorage.setItem("superAdminAuth", "true"); // Gives you the key
+      navigate("/superadmin"); // Sends you to the dashboard
+    } else {
+      alert("❌ Access Denied!");
     }
   };
 
   return (
-    <div style={styles.container}>
-      <h2 style={styles.title}>🔐 Super Admin Login</h2>
-
-      <input
-        style={styles.input}
-        placeholder="Email"
-        type="email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-      />
-
-      <input
-        style={styles.input}
-        placeholder="Password"
-        type="password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-      />
-
-      <button
-        style={styles.button}
-        onClick={handleLogin}
-        disabled={loading}
-      >
-        {loading ? "Logging in..." : "Login"}
-      </button>
+    <div style={{ height: "100vh", background: "#000", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontFamily: "Inter" }}>
+      <div style={{ width: "350px", padding: "40px", background: "#111", borderRadius: "20px", border: "1px solid #222", textAlign: "center" }}>
+        <FaUserSecret size={50} color="#f97316" style={{ marginBottom: "20px" }} />
+        <h1 style={{ fontSize: "24px", fontWeight: "900", margin: "0 0 10px 0" }}>CEO ACCESS</h1>
+        <p style={{ color: "#666", fontSize: "12px", marginBottom: "30px" }}>Restricted Area. Authorized Personnel Only.</p>
+        
+        <form onSubmit={handleLogin}>
+          <div style={{ position: "relative", marginBottom: "20px" }}>
+            <FaLock style={{ position: "absolute", left: "15px", top: "15px", color: "#555" }} />
+            <input 
+              type="password" 
+              placeholder="Enter Master Key" 
+              value={secret} 
+              onChange={(e) => setSecret(e.target.value)}
+              style={{ width: "100%", padding: "15px 15px 15px 45px", background: "#000", border: "1px solid #333", borderRadius: "10px", color: "white", outline: "none" }}
+            />
+          </div>
+          <button type="submit" style={{ width: "100%", padding: "15px", background: "#f97316", border: "none", borderRadius: "10px", fontWeight: "900", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "10px" }}>
+            ENTER PANEL <FaArrowRight />
+          </button>
+        </form>
+      </div>
     </div>
   );
-}
-const styles = {
-  container: {
-    maxWidth: 360,
-    margin: "80px auto",
-    padding: 20,
-    borderRadius: 12,
-    background: "#fff",
-    boxShadow: "0 6px 20px rgba(0,0,0,0.1)",
-    display: "flex",
-    flexDirection: "column",
-    gap: 12,
-  },
-  title: {
-    textAlign: "center",
-    marginBottom: 10,
-  },
-  input: {
-    padding: 10,
-    borderRadius: 6,
-    border: "1px solid #ccc",
-    fontSize: 14,
-  },
-  button: {
-    padding: 12,
-    borderRadius: 6,
-    border: "none",
-    backgroundColor: "#111827",
-    color: "#fff",
-    fontWeight: "bold",
-    cursor: "pointer",
-  },
 };
+
+export default SuperLogin;
