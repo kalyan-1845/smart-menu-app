@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import axios from "axios";
 import { 
   FaCrown, FaStore, FaSync, FaSignOutAlt, FaTimes, 
   FaServer, FaSearch, FaMoneyBillWave, FaExclamationTriangle, 
@@ -6,10 +8,10 @@ import {
   FaExternalLinkAlt, FaKey, FaPlus, FaUsers, FaChartLine, 
   FaTrash, FaEye, FaCalendarAlt, FaPhone, FaEnvelope, FaBuilding,
   FaShieldAlt, FaLock, FaUnlock, FaUserCog, FaArrowUp,
-  FaToggleOn, FaToggleOff, FaEdit, FaCopy
+  FaToggleOn, FaToggleOff, FaEdit, FaCopy, FaFilter,
+  FaRupeeSign, FaFileExport, FaDownload, FaPrint,
+  FaCogs, FaUserPlus, FaChartBar, FaHistory
 } from "react-icons/fa";
-import { useNavigate } from "react-router-dom";
-import axios from "axios";
 
 // ==========================================
 // 🚀 CONFIGURATION
@@ -22,670 +24,14 @@ const getApiBase = () => {
 };
 
 // ==========================================
-// 🧩 SUB-COMPONENTS
-// ==========================================
-
-// 1. SIDEBAR
-const Sidebar = ({ activeTab, setActiveTab, onLogout, stats }) => {
-  const menuItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: <FaChartLine /> },
-    { id: 'restaurants', label: 'Partner Management', icon: <FaStore /> },
-    { id: 'revenue', label: 'Revenue', icon: <FaFileInvoiceDollar /> },
-    { id: 'system', label: 'System', icon: <FaServer /> },
-  ];
-
-  return (
-    <aside className="sidebar">
-      <div className="sidebar-header">
-        <div className="brand-logo-circle"><FaCrown /></div>
-        <div>
-          <span className="brand-name">BITEBOX CEO</span>
-          <span className="admin-badge">SUPER ADMIN</span>
-        </div>
-      </div>
-      
-      <div className="user-profile-mini">
-        <div className="avatar-circle">
-          <FaShieldAlt />
-        </div>
-        <div className="user-info">
-          <span className="name">Master Administrator</span>
-          <span className="role">Full System Access</span>
-        </div>
-      </div>
-
-      <div className="quick-stats">
-        <div className="stat-item">
-          <FaUsers />
-          <div>
-            <span className="number">{stats.totalPartners || 0}</span>
-            <span className="label">Partners</span>
-          </div>
-        </div>
-        <div className="stat-item">
-          <FaMoneyBillWave />
-          <div>
-            <span className="number">₹{stats.totalRevenue?.toLocaleString() || 0}</span>
-            <span className="label">Revenue</span>
-          </div>
-        </div>
-      </div>
-
-      <nav className="sidebar-nav">
-        <label className="nav-label">MAIN NAVIGATION</label>
-        {menuItems.map(item => (
-          <button 
-            key={item.id} 
-            className={`nav-item ${activeTab === item.id ? 'active' : ''}`}
-            onClick={() => setActiveTab(item.id)}
-          >
-            {item.icon}
-            <span>{item.label}</span>
-          </button>
-        ))}
-      </nav>
-
-      <div className="sidebar-footer">
-        <div className="system-status">
-          <div className="status-indicator online"></div>
-          <span>System Operational</span>
-        </div>
-        <button onClick={onLogout} className="logout-btn">
-          <FaSignOutAlt /> <span>Logout</span>
-        </button>
-      </div>
-    </aside>
-  );
-};
-
-// 2. DASHBOARD OVERVIEW
-const DashboardOverview = ({ restaurants, refreshData }) => {
-  const totalRevenue = restaurants.reduce((acc, curr) => acc + (curr.totalRevenue || 0), 0);
-  const activePartners = restaurants.filter(r => r.isActive).length;
-  const premiumPartners = restaurants.filter(r => r.isPro).length;
-  const today = new Date().toLocaleDateString('en-IN', { 
-    weekday: 'long', 
-    year: 'numeric', 
-    month: 'long', 
-    day: 'numeric' 
-  });
-
-  return (
-    <div className="fade-in">
-      <div className="dashboard-header">
-        <div>
-          <h1>CEO Dashboard</h1>
-          <p className="subtitle">Complete control panel • {today}</p>
-        </div>
-        <button onClick={refreshData} className="btn-refresh">
-          <FaSync /> Refresh
-        </button>
-      </div>
-
-      <div className="stats-grid">
-        <div className="stat-card total-partners">
-          <div className="stat-icon"><FaUsers /></div>
-          <div className="stat-content">
-            <span className="number">{restaurants.length}</span>
-            <span className="label">Total Partners</span>
-            <span className="trend">All restaurants in system</span>
-          </div>
-        </div>
-        
-        <div className="stat-card active-partners">
-          <div className="stat-icon"><FaCheckCircle /></div>
-          <div className="stat-content">
-            <span className="number">{activePartners}</span>
-            <span className="label">Active Now</span>
-            <span className="trend">Currently operational</span>
-          </div>
-        </div>
-        
-        <div className="stat-card premium-partners">
-          <div className="stat-icon"><FaCrown /></div>
-          <div className="stat-content">
-            <span className="number">{premiumPartners}</span>
-            <span className="label">Premium Partners</span>
-            <span className="trend">Subscribed plans</span>
-          </div>
-        </div>
-        
-        <div className="stat-card total-revenue">
-          <div className="stat-icon"><FaMoneyBillWave /></div>
-          <div className="stat-content">
-            <span className="number">₹{totalRevenue.toLocaleString()}</span>
-            <span className="label">Total Revenue</span>
-            <span className="trend">All-time collection</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid-2">
-        <div className="glass-panel">
-          <div className="panel-header">
-            <h3>Recent Activity</h3>
-          </div>
-          <div className="activity-list">
-            {restaurants.slice(0, 4).map((restaurant, index) => (
-              <div key={restaurant._id} className="activity-item">
-                <div className="activity-avatar">
-                  {restaurant.restaurantName?.charAt(0) || "R"}
-                </div>
-                <div className="activity-details">
-                  <div className="activity-title">
-                    <strong>{restaurant.restaurantName || "Unnamed Restaurant"}</strong>
-                    <span className="activity-time">
-                      Added {new Date(restaurant.createdAt).toLocaleDateString()}
-                    </span>
-                  </div>
-                  <div className="activity-meta">
-                    <span className="tag username">@{restaurant.username}</span>
-                    <span className={`tag status ${restaurant.isActive ? 'active' : 'inactive'}`}>
-                      {restaurant.isActive ? 'Active' : 'Inactive'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="glass-panel">
-          <div className="panel-header">
-            <h3>Quick Actions</h3>
-          </div>
-          <div className="quick-actions-grid">
-            <button className="quick-action-btn add-partner">
-              <FaPlus />
-              <span>Add New Partner</span>
-            </button>
-            <button className="quick-action-btn view-reports">
-              <FaChartLine />
-              <span>View Reports</span>
-            </button>
-            <button className="quick-action-btn system-health">
-              <FaServer />
-              <span>System Health</span>
-            </button>
-            <button className="quick-action-btn export-data">
-              <FaCopy />
-              <span>Export Data</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// 3. PARTNER MANAGEMENT TABLE
-const PartnerManagement = ({ 
-  restaurants, 
-  onSelectPartner, 
-  searchQuery, 
-  setSearchQuery, 
-  onAddPartner,
-  loading 
-}) => {
-  const filteredRestaurants = restaurants.filter(r => 
-    (r.restaurantName || "").toLowerCase().includes(searchQuery.toLowerCase()) || 
-    (r.username || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (r.email || "").toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  return (
-    <div className="fade-in">
-      <div className="section-header">
-        <div>
-          <h1>Partner Management</h1>
-          <p className="subtitle">Manage all restaurant partners in the system</p>
-        </div>
-        <div className="header-actions">
-          <div className="search-wrapper">
-            <FaSearch />
-            <input
-              type="text"
-              placeholder="Search restaurants..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              disabled={loading}
-            />
-          </div>
-          <button onClick={onAddPartner} className="btn-primary" disabled={loading}>
-            <FaPlus /> Add Partner
-          </button>
-        </div>
-      </div>
-
-      <div className="table-container">
-        {loading ? (
-          <div className="loading-table">
-            <div className="spinner"></div>
-            <p>Loading partner data...</p>
-          </div>
-        ) : (
-          <>
-            <div className="table-responsive">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Restaurant</th>
-                    <th>Owner</th>
-                    <th>Status</th>
-                    <th>Plan</th>
-                    <th>Revenue</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredRestaurants.map(partner => (
-                    <tr key={partner._id} className="table-row">
-                      <td>
-                        <div className="restaurant-cell">
-                          <div className="avatar">{partner.restaurantName?.charAt(0) || "R"}</div>
-                          <div className="restaurant-info">
-                            <strong>{partner.restaurantName || "Unnamed Restaurant"}</strong>
-                            <span className="restaurant-id">ID: {partner._id?.substring(0, 8)}</span>
-                          </div>
-                        </div>
-                      </td>
-                      <td>
-                        <div className="owner-cell">
-                          <div className="owner-name">@{partner.username}</div>
-                          <div className="owner-email">{partner.email || "No email"}</div>
-                        </div>
-                      </td>
-                      <td>
-                        <span className={`status-badge ${partner.isActive ? 'active' : 'inactive'}`}>
-                          {partner.isActive ? (
-                            <>Active <FaCheckCircle /></>
-                          ) : (
-                            <>Inactive <FaBan /></>
-                          )}
-                        </span>
-                      </td>
-                      <td>
-                        <span className={`plan-badge ${partner.isPro ? 'premium' : 'basic'}`}>
-                          {partner.isPro ? 'Premium' : 'Basic'}
-                        </span>
-                      </td>
-                      <td>
-                        <div className="revenue-cell">
-                          <div className="revenue-amount">₹{partner.totalRevenue?.toLocaleString() || 0}</div>
-                          <div className="revenue-meta">{partner.orders || 0} orders</div>
-                        </div>
-                      </td>
-                      <td>
-                        <div className="action-buttons">
-                          <button 
-                            onClick={() => onSelectPartner(partner)}
-                            className="btn-action view"
-                            title="View Details"
-                          >
-                            <FaEye />
-                          </button>
-                          <button 
-                            className="btn-action edit"
-                            title="Edit"
-                            onClick={() => alert(`Edit ${partner.restaurantName}`)}
-                          >
-                            <FaEdit />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            
-            {filteredRestaurants.length === 0 && (
-              <div className="empty-table">
-                <div className="empty-state">
-                  <FaStore size={48} />
-                  <h3>No partners found</h3>
-                  <p>Try adjusting your search or add your first partner</p>
-                  <button onClick={onAddPartner} className="btn-primary">
-                    <FaPlus /> Add First Partner
-                  </button>
-                </div>
-              </div>
-            )}
-          </>
-        )}
-      </div>
-    </div>
-  );
-};
-
-// 4. PARTNER DETAIL MODAL
-const PartnerDetailModal = ({ partner, onClose, onAction }) => {
-  if (!partner) return null;
-
-  const handleBlockToggle = () => {
-    onAction('TOGGLE_BLOCK', partner._id);
-  };
-
-  const handlePasswordReset = () => {
-    const newPass = prompt(`Enter new password for ${partner.username}:`, "password123");
-    if (newPass && newPass.length >= 6) {
-      onAction('RESET_PASS', partner._id, newPass);
-    } else if (newPass) {
-      alert("Password must be at least 6 characters");
-    }
-  };
-
-  const handleExtendPlan = () => {
-    if (window.confirm(`Extend premium plan for ${partner.restaurantName}?`)) {
-      onAction('EXTEND', partner._id);
-    }
-  };
-
-  const handleDelete = () => {
-    if (window.confirm(`PERMANENTLY delete ${partner.restaurantName}?\n\nThis cannot be undone!`)) {
-      onAction('DELETE', partner._id);
-    }
-  };
-
-  return (
-    <div className="modal-overlay">
-      <div className="modal-content">
-        <div className="modal-header">
-          <div className="modal-title">
-            <h2>
-              <div className="partner-avatar-large">
-                {partner.restaurantName?.charAt(0) || "R"}
-              </div>
-              {partner.restaurantName || "Unnamed Restaurant"}
-            </h2>
-            <div className="partner-tags">
-              <span className={`tag ${partner.isActive ? 'active' : 'inactive'}`}>
-                {partner.isActive ? 'Active' : 'Inactive'}
-              </span>
-              <span className={`tag ${partner.isPro ? 'premium' : 'basic'}`}>
-                {partner.isPro ? 'Premium' : 'Basic'}
-              </span>
-              <span className="tag id">ID: {partner._id?.substring(0, 10)}...</span>
-            </div>
-          </div>
-          <button onClick={onClose} className="btn-close">
-            <FaTimes />
-          </button>
-        </div>
-
-        <div className="modal-body">
-          <div className="info-sections">
-            <div className="info-section">
-              <h3><FaBuilding /> Restaurant Details</h3>
-              <div className="info-grid">
-                <div className="info-item">
-                  <label>Restaurant Name</label>
-                  <div className="info-value">{partner.restaurantName || "Not set"}</div>
-                </div>
-                <div className="info-item">
-                  <label>Owner Username</label>
-                  <div className="info-value">@{partner.username}</div>
-                </div>
-                <div className="info-item">
-                  <label>Email</label>
-                  <div className="info-value">{partner.email || "Not set"}</div>
-                </div>
-                <div className="info-item">
-                  <label>Phone</label>
-                  <div className="info-value">{partner.phone || "Not set"}</div>
-                </div>
-                <div className="info-item">
-                  <label>Created On</label>
-                  <div className="info-value">
-                    {new Date(partner.createdAt).toLocaleDateString()}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="info-section">
-              <h3><FaChartLine /> Performance</h3>
-              <div className="info-grid">
-                <div className="info-item">
-                  <label>Total Revenue</label>
-                  <div className="info-value revenue">₹{partner.totalRevenue?.toLocaleString() || 0}</div>
-                </div>
-                <div className="info-item">
-                  <label>Total Orders</label>
-                  <div className="info-value">{partner.orders || 0}</div>
-                </div>
-                <div className="info-item">
-                  <label>Account Status</label>
-                  <div className={`info-value status ${partner.isActive ? 'active' : 'inactive'}`}>
-                    {partner.isActive ? 'Active' : 'Blocked'}
-                  </div>
-                </div>
-                <div className="info-item">
-                  <label>Subscription Plan</label>
-                  <div className={`info-value plan ${partner.isPro ? 'premium' : 'basic'}`}>
-                    {partner.isPro ? 'Premium (₹999/year)' : 'Basic'}
-                  </div>
-                </div>
-                <div className="info-item">
-                  <label>Subscription Ends</label>
-                  <div className="info-value">
-                    {partner.trialEndsAt ? new Date(partner.trialEndsAt).toLocaleDateString() : 'N/A'}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="action-section">
-            <h3><FaShieldAlt /> Management Actions</h3>
-            <div className="action-grid">
-              <button 
-                onClick={handleBlockToggle}
-                className={`action-btn ${partner.isActive ? 'danger' : 'success'}`}
-              >
-                {partner.isActive ? (
-                  <>
-                    <FaBan /> Block Access
-                  </>
-                ) : (
-                  <>
-                    <FaUnlock /> Unblock Access
-                  </>
-                )}
-              </button>
-              
-              <button 
-                onClick={handlePasswordReset}
-                className="action-btn warning"
-              >
-                <FaLock /> Reset Password
-              </button>
-              
-              <button 
-                onClick={handleExtendPlan}
-                className="action-btn primary"
-              >
-                <FaCalendarAlt /> Extend Plan
-              </button>
-              
-              <button 
-                onClick={handleDelete}
-                className="action-btn danger"
-              >
-                <FaTrash /> Delete Partner
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// 5. ADD PARTNER MODAL
-const AddPartnerModal = ({ show, onClose, onAdd }) => {
-  const [formData, setFormData] = useState({
-    restaurantName: "",
-    username: "",
-    email: "",
-    phone: "",
-    password: "password123",
-    isPro: false
-  });
-
-  const [loading, setLoading] = useState(false);
-
-  if (!show) return null;
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    if (!formData.restaurantName.trim() || !formData.username.trim() || !formData.password.trim()) {
-      alert("Please fill Restaurant Name, Username, and Password!");
-      return;
-    }
-
-    if (formData.password.length < 6) {
-      alert("Password must be at least 6 characters!");
-      return;
-    }
-
-    setLoading(true);
-    try {
-      await onAdd(formData);
-      onClose();
-    } catch (error) {
-      alert("Failed to add partner: " + error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="modal-overlay">
-      <div className="modal-content add-modal">
-        <div className="modal-header">
-          <h2><FaPlus /> Add New Partner</h2>
-          <button onClick={onClose} className="btn-close"><FaTimes /></button>
-        </div>
-        
-        <form onSubmit={handleSubmit}>
-          <div className="modal-body">
-            <div className="form-grid">
-              <div className="form-group">
-                <label>Restaurant Name *</label>
-                <input 
-                  type="text" 
-                  placeholder="Enter restaurant name"
-                  value={formData.restaurantName}
-                  onChange={(e) => setFormData({...formData, restaurantName: e.target.value})}
-                  required
-                  disabled={loading}
-                />
-              </div>
-              
-              <div className="form-group">
-                <label>Owner Username *</label>
-                <input 
-                  type="text" 
-                  placeholder="Choose a username"
-                  value={formData.username}
-                  onChange={(e) => setFormData({...formData, username: e.target.value})}
-                  required
-                  disabled={loading}
-                />
-              </div>
-              
-              <div className="form-group">
-                <label>Email Address</label>
-                <input 
-                  type="email" 
-                  placeholder="owner@example.com"
-                  value={formData.email}
-                  onChange={(e) => setFormData({...formData, email: e.target.value})}
-                  disabled={loading}
-                />
-              </div>
-              
-              <div className="form-group">
-                <label>Phone Number</label>
-                <input 
-                  type="tel" 
-                  placeholder="+91 9876543210"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                  disabled={loading}
-                />
-              </div>
-              
-              <div className="form-group">
-                <label>Password *</label>
-                <input 
-                  type="text" 
-                  placeholder="At least 6 characters"
-                  value={formData.password}
-                  onChange={(e) => setFormData({...formData, password: e.target.value})}
-                  required
-                  disabled={loading}
-                />
-                <div className="form-hint">Default: password123</div>
-              </div>
-              
-              <div className="form-group checkbox-group">
-                <label className="checkbox-label">
-                  <input 
-                    type="checkbox" 
-                    checked={formData.isPro}
-                    onChange={(e) => setFormData({...formData, isPro: e.target.checked})}
-                    disabled={loading}
-                  />
-                  <span>Premium Partner (₹999/year)</span>
-                </label>
-                <div className="form-hint">Unchecked = Basic Plan</div>
-              </div>
-            </div>
-            
-            <div className="form-actions">
-              <button 
-                type="submit" 
-                className="btn-submit"
-                disabled={loading}
-              >
-                {loading ? (
-                  <>
-                    <div className="spinner-small"></div>
-                    Creating...
-                  </>
-                ) : (
-                  <>
-                    <FaPlus /> Create Partner Account
-                  </>
-                )}
-              </button>
-              <button 
-                type="button" 
-                onClick={onClose}
-                className="btn-cancel"
-                disabled={loading}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-};
-
-// ==========================================
-// 👑 MAIN COMPONENT
+// 👑 MAIN SUPER ADMIN COMPONENT
 // ==========================================
 
 const SuperAdmin = () => {
   const navigate = useNavigate();
   const BASE_URL = getApiBase();
 
+  // State Management
   const [activeTab, setActiveTab] = useState("dashboard");
   const [restaurants, setRestaurants] = useState([]); 
   const [loading, setLoading] = useState(true);
@@ -693,10 +39,30 @@ const SuperAdmin = () => {
   const [selectedPartner, setSelectedPartner] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showSalesModal, setShowSalesModal] = useState(false);
+  const [timeRange, setTimeRange] = useState("all");
+  const [exportFormat, setExportFormat] = useState("csv");
+  
+  // Stats
   const [stats, setStats] = useState({
     totalPartners: 0,
     totalRevenue: 0,
-    activePartners: 0
+    activePartners: 0,
+    premiumPartners: 0,
+    premiumRevenue: 0,
+    monthlyRevenue: 0,
+    todayRevenue: 0
+  });
+
+  // Add Restaurant Form
+  const [addForm, setAddForm] = useState({
+    restaurantName: "",
+    username: "",
+    email: "",
+    phone: "",
+    password: "password123",
+    isPro: false,
+    trialDays: 30
   });
 
   // Fetch all partners
@@ -728,11 +94,22 @@ const SuperAdmin = () => {
         // Calculate stats
         const totalRevenue = res.data.reduce((acc, curr) => acc + (curr.totalRevenue || 0), 0);
         const activePartners = res.data.filter(r => r.isActive).length;
+        const premiumPartners = res.data.filter(r => r.isPro).length;
+        const premiumRevenue = premiumPartners * 999;
+        const todayRevenue = res.data.reduce((acc, curr) => {
+          const today = new Date().toDateString();
+          const createdDate = new Date(curr.createdAt).toDateString();
+          return today === createdDate ? acc + (curr.totalRevenue || 0) : acc;
+        }, 0);
         
         setStats({
           totalPartners: res.data.length,
           totalRevenue,
-          activePartners
+          activePartners,
+          premiumPartners,
+          premiumRevenue,
+          monthlyRevenue: totalRevenue / 12,
+          todayRevenue
         });
       } else {
         setRestaurants([]);
@@ -755,79 +132,42 @@ const SuperAdmin = () => {
     }
   };
 
-  // Handle partner actions
-  const handlePartnerAction = async (type, id, data) => {
-    try {
-      const token = localStorage.getItem("superAdminToken");
-      const config = { headers: { Authorization: `Bearer ${token}` } };
-      
-      let response;
-      
-      switch(type) {
-        case 'TOGGLE_BLOCK':
-          const partner = restaurants.find(r => r._id === id);
-          response = await axios.put(
-            `${BASE_URL}/superadmin/restaurant/${id}/status`, 
-            { isActive: !partner.isActive }, 
-            config
-          );
-          alert(`Partner ${!partner.isActive ? 'activated' : 'blocked'} successfully!`);
-          break;
-          
-        case 'RESET_PASS':
-          response = await axios.put(
-            `${BASE_URL}/superadmin/restaurant/${id}/password`, 
-            { password: data }, 
-            config
-          );
-          alert("Password reset successfully!");
-          break;
-          
-        case 'EXTEND':
-          response = await axios.put(
-            `${BASE_URL}/superadmin/restaurant/${id}/subscription`, 
-            { days: 365 }, 
-            config
-          );
-          alert("Plan extended by 1 year!");
-          break;
-          
-        case 'DELETE':
-          response = await axios.delete(
-            `${BASE_URL}/superadmin/delete-owner/${id}`, 
-            config
-          );
-          alert("Partner deleted successfully!");
-          break;
-          
-        default:
-          return;
-      }
-      
-      // Refresh data after action
-      fetchData();
-      setSelectedPartner(null);
-      
-    } catch (err) {
-      alert("Action failed: " + (err.response?.data?.message || err.message));
-    }
-  };
-
   // Add new partner
   const handleAddPartner = async (formData) => {
     try {
       const token = localStorage.getItem("superAdminToken");
       const config = { headers: { Authorization: `Bearer ${token}` } };
       
+      // Prepare data
+      const dataToSend = {
+        restaurantName: formData.restaurantName,
+        username: formData.username,
+        email: formData.email || "",
+        phone: formData.phone || "",
+        password: formData.password,
+        isPro: formData.isPro,
+        trialDays: formData.trialDays
+      };
+      
       const response = await axios.post(
         `${BASE_URL}/superadmin/restaurant/add`, 
-        formData, 
+        dataToSend, 
         config
       );
       
       if (response.data.success) {
         alert("✅ Partner added successfully!");
         fetchData();
+        setShowAddModal(false);
+        setAddForm({
+          restaurantName: "",
+          username: "",
+          email: "",
+          phone: "",
+          password: "password123",
+          isPro: false,
+          trialDays: 30
+        });
         return Promise.resolve();
       } else {
         throw new Error(response.data.message || "Failed to add partner");
@@ -835,6 +175,110 @@ const SuperAdmin = () => {
     } catch (error) {
       throw new Error(error.response?.data?.message || error.message);
     }
+  };
+
+  // Handle subscription activation
+  const handleActivatePro = async (restaurantId, days, name) => {
+    const confirmPay = window.confirm(`Activate PRO plan for ${name}?\n\nDuration: ${days} days`);
+    if (!confirmPay) return;
+
+    try {
+      const token = localStorage.getItem("superAdminToken");
+      const config = { headers: { Authorization: `Bearer ${token}` } };
+      
+      await axios.put(`${BASE_URL}/auth/admin/update-subscription/${restaurantId}`, {
+        isPro: true,
+        extendDays: days
+      }, config);
+      
+      alert(`✅ Success! ${name} is now active for ${days} days.`);
+      fetchData();
+    } catch (err) {
+      alert("❌ Update Failed. Check network.");
+    }
+  };
+
+  // Handle delete partner
+  const handleDeletePartner = async (id, name) => {
+    if (!window.confirm(`Are you sure you want to delete "${name}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem("superAdminToken");
+      const config = { headers: { Authorization: `Bearer ${token}` } };
+      
+      await axios.delete(`${BASE_URL}/superadmin/delete-owner/${id}`, config);
+      alert("✅ Partner deleted successfully!");
+      fetchData();
+      setSelectedPartner(null);
+    } catch (error) {
+      alert("❌ Failed to delete: " + (error.response?.data?.message || error.message));
+    }
+  };
+
+  // Export revenue data
+  const handleExportRevenue = () => {
+    const data = restaurants.map(r => ({
+      Restaurant: r.restaurantName,
+      Owner: r.username,
+      Status: r.isActive ? 'Active' : 'Inactive',
+      Plan: r.isPro ? 'Premium' : 'Basic',
+      Revenue: r.totalRevenue || 0,
+      Orders: r.orders || 0,
+      'Subscription Revenue': r.isPro ? 999 : 0,
+      'Created Date': new Date(r.createdAt).toLocaleDateString()
+    }));
+
+    if (exportFormat === 'csv') {
+      exportToCSV(data);
+    } else {
+      exportToPDF(data);
+    }
+  };
+
+  const exportToCSV = (data) => {
+    if (data.length === 0) {
+      alert("No data to export!");
+      return;
+    }
+    
+    const headers = Object.keys(data[0]);
+    const csvContent = [
+      headers.join(','),
+      ...data.map(row => headers.map(header => row[header]).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `revenue_report_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+  };
+
+  const exportToPDF = (data) => {
+    alert('PDF export would be implemented with a PDF library');
+  };
+
+  // Calculate subscription stats
+  const getSubscriptionStats = () => {
+    const expiringSoon = restaurants.filter(r => {
+      if (r.isPro) return false;
+      const daysLeft = Math.ceil((new Date(r.trialEndsAt) - new Date()) / (1000 * 60 * 60 * 24));
+      return daysLeft <= 5 && daysLeft >= 0;
+    }).length;
+
+    const expired = restaurants.filter(r => {
+      if (r.isPro) return false;
+      const daysLeft = Math.ceil((new Date(r.trialEndsAt) - new Date()) / (1000 * 60 * 60 * 24));
+      return daysLeft < 0;
+    }).length;
+
+    return { expiringSoon, expired };
   };
 
   // Logout
@@ -849,23 +293,97 @@ const SuperAdmin = () => {
   // Initial load
   useEffect(() => {
     fetchData();
-    
-    // Auto-refresh every 30 seconds
-    const interval = setInterval(fetchData, 30000);
-    return () => clearInterval(interval);
   }, []);
+
+  // ==========================================
+  // 🎨 RENDER COMPONENTS
+  // ==========================================
 
   return (
     <div className="super-admin-layout">
       <style>{cssStyles}</style>
       
-      <Sidebar 
-        activeTab={activeTab} 
-        setActiveTab={setActiveTab} 
-        onLogout={handleLogout}
-        stats={stats}
-      />
+      {/* SIDEBAR */}
+      <aside className="sidebar">
+        <div className="sidebar-header">
+          <div className="brand-logo-circle"><FaCrown /></div>
+          <div>
+            <span className="brand-name">BITEBOX CEO</span>
+            <span className="admin-badge">SUPER ADMIN</span>
+          </div>
+        </div>
+        
+        <div className="user-profile-mini">
+          <div className="avatar-circle">
+            <FaShieldAlt />
+          </div>
+          <div className="user-info">
+            <span className="name">Master Administrator</span>
+            <span className="role">Full System Access</span>
+          </div>
+        </div>
 
+        <div className="quick-stats">
+          <div className="stat-item">
+            <FaUsers />
+            <div>
+              <span className="number">{stats.totalPartners || 0}</span>
+              <span className="label">Partners</span>
+            </div>
+          </div>
+          <div className="stat-item">
+            <FaMoneyBillWave />
+            <div>
+              <span className="number">₹{stats.totalRevenue?.toLocaleString() || 0}</span>
+              <span className="label">Revenue</span>
+            </div>
+          </div>
+        </div>
+
+        <nav className="sidebar-nav">
+          <label className="nav-label">MAIN NAVIGATION</label>
+          <button 
+            className={`nav-item ${activeTab === 'dashboard' ? 'active' : ''}`}
+            onClick={() => setActiveTab('dashboard')}
+          >
+            <FaChartLine />
+            <span>Dashboard</span>
+          </button>
+          <button 
+            className={`nav-item ${activeTab === 'restaurants' ? 'active' : ''}`}
+            onClick={() => setActiveTab('restaurants')}
+          >
+            <FaStore />
+            <span>Partner Management</span>
+          </button>
+          <button 
+            className={`nav-item ${activeTab === 'revenue' ? 'active' : ''}`}
+            onClick={() => setActiveTab('revenue')}
+          >
+            <FaFileInvoiceDollar />
+            <span>Revenue</span>
+          </button>
+          <button 
+            className={`nav-item ${activeTab === 'subscriptions' ? 'active' : ''}`}
+            onClick={() => setActiveTab('subscriptions')}
+          >
+            <FaCrown />
+            <span>Subscriptions</span>
+          </button>
+        </nav>
+
+        <div className="sidebar-footer">
+          <div className="system-status">
+            <div className="status-indicator online"></div>
+            <span>System Operational</span>
+          </div>
+          <button onClick={handleLogout} className="logout-btn">
+            <FaSignOutAlt /> <span>Logout</span>
+          </button>
+        </div>
+      </aside>
+
+      {/* MAIN CONTENT */}
       <main className="content-area">
         <header className="top-bar">
           <div className="header-left">
@@ -905,51 +423,494 @@ const SuperAdmin = () => {
             </div>
           ) : (
             <>
-              {/* Dashboard Tab */}
+              {/* DASHBOARD TAB */}
               {activeTab === 'dashboard' && (
-                <DashboardOverview 
-                  restaurants={restaurants} 
-                  refreshData={fetchData} 
-                />
-              )}
-              
-              {/* Partner Management Tab */}
-              {activeTab === 'restaurants' && (
-                <PartnerManagement 
-                  restaurants={restaurants}
-                  onSelectPartner={setSelectedPartner}
-                  searchQuery={searchQuery}
-                  setSearchQuery={setSearchQuery}
-                  onAddPartner={() => setShowAddModal(true)}
-                  loading={loading}
-                />
-              )}
-              
-              {/* Revenue Tab */}
-              {activeTab === 'revenue' && (
-                <div className="revenue-tab">
-                  <h2>Revenue Dashboard</h2>
-                  <div className="revenue-summary">
-                    <div className="revenue-card">
-                      <h3>Total Platform Revenue</h3>
-                      <div className="revenue-amount">₹{stats.totalRevenue.toLocaleString()}</div>
+                <div className="fade-in">
+                  <div className="dashboard-header">
+                    <div>
+                      <h1>CEO Dashboard</h1>
+                      <p className="subtitle">
+                        {new Date().toLocaleDateString('en-IN', { 
+                          weekday: 'long', 
+                          year: 'numeric', 
+                          month: 'long', 
+                          day: 'numeric' 
+                        })}
+                      </p>
+                    </div>
+                    <button onClick={fetchData} className="btn-refresh">
+                      <FaSync /> Refresh
+                    </button>
+                  </div>
+
+                  <div className="stats-grid">
+                    <div className="stat-card total-partners">
+                      <div className="stat-icon"><FaUsers /></div>
+                      <div className="stat-content">
+                        <span className="number">{stats.totalPartners}</span>
+                        <span className="label">Total Partners</span>
+                        <span className="trend">All restaurants in system</span>
+                      </div>
+                    </div>
+                    
+                    <div className="stat-card active-partners">
+                      <div className="stat-icon"><FaCheckCircle /></div>
+                      <div className="stat-content">
+                        <span className="number">{stats.activePartners}</span>
+                        <span className="label">Active Now</span>
+                        <span className="trend">Currently operational</span>
+                      </div>
+                    </div>
+                    
+                    <div className="stat-card premium-partners">
+                      <div className="stat-icon"><FaCrown /></div>
+                      <div className="stat-content">
+                        <span className="number">{stats.premiumPartners}</span>
+                        <span className="label">Premium Partners</span>
+                        <span className="trend">Subscribed plans</span>
+                      </div>
+                    </div>
+                    
+                    <div className="stat-card total-revenue">
+                      <div className="stat-icon"><FaMoneyBillWave /></div>
+                      <div className="stat-content">
+                        <span className="number">₹{stats.totalRevenue.toLocaleString()}</span>
+                        <span className="label">Total Revenue</span>
+                        <span className="trend">All-time collection</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid-2">
+                    <div className="glass-panel">
+                      <div className="panel-header">
+                        <h3>Recent Partners</h3>
+                        <button 
+                          onClick={() => setShowAddModal(true)}
+                          className="btn-small"
+                        >
+                          <FaPlus /> Add New
+                        </button>
+                      </div>
+                      <div className="activity-list">
+                        {restaurants.slice(0, 5).map((restaurant) => (
+                          <div key={restaurant._id} className="activity-item">
+                            <div className="activity-avatar">
+                              {restaurant.restaurantName?.charAt(0) || "R"}
+                            </div>
+                            <div className="activity-details">
+                              <div className="activity-title">
+                                <strong>{restaurant.restaurantName || "Unnamed Restaurant"}</strong>
+                                <span className="activity-time">
+                                  Added {new Date(restaurant.createdAt).toLocaleDateString()}
+                                </span>
+                              </div>
+                              <div className="activity-meta">
+                                <span className={`tag status ${restaurant.isPro ? 'premium' : 'basic'}`}>
+                                  {restaurant.isPro ? 'Premium' : 'Basic'}
+                                </span>
+                                <span className="tag revenue">₹{restaurant.totalRevenue?.toLocaleString() || 0}</span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="glass-panel">
+                      <div className="panel-header">
+                        <h3>Subscription Status</h3>
+                      </div>
+                      <div className="subscription-summary">
+                        <div className="sub-stat">
+                          <div className="sub-label">Active Premium</div>
+                          <div className="sub-value">{stats.premiumPartners}</div>
+                          <div className="sub-trend">₹{stats.premiumRevenue.toLocaleString()}/mo</div>
+                        </div>
+                        <div className="sub-stat">
+                          <div className="sub-label">Expiring Soon</div>
+                          <div className="sub-value">{getSubscriptionStats().expiringSoon}</div>
+                          <div className="sub-trend">Within 5 days</div>
+                        </div>
+                        <div className="sub-stat">
+                          <div className="sub-label">Expired Trials</div>
+                          <div className="sub-value">{getSubscriptionStats().expired}</div>
+                          <div className="sub-trend">Needs attention</div>
+                        </div>
+                      </div>
+                      <div className="quick-actions">
+                        <button 
+                          onClick={() => setActiveTab('subscriptions')}
+                          className="action-btn primary"
+                        >
+                          <FaCrown /> Manage Subscriptions
+                        </button>
+                        <button 
+                          onClick={() => setActiveTab('revenue')}
+                          className="action-btn"
+                        >
+                          <FaChartBar /> View Revenue
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
               )}
-              
-              {/* System Tab */}
-              {activeTab === 'system' && (
-                <div className="system-tab">
-                  <h2>System Health</h2>
-                  <div className="system-status-grid">
-                    <div className="status-card ok">
-                      <FaDatabase />
-                      <div>Database Connected</div>
+
+              {/* PARTNER MANAGEMENT TAB */}
+              {activeTab === 'restaurants' && (
+                <div className="fade-in">
+                  <div className="section-header">
+                    <div>
+                      <h1>Partner Management</h1>
+                      <p className="subtitle">Manage all restaurant partners in the system</p>
                     </div>
-                    <div className="status-card ok">
-                      <FaServer />
-                      <div>API Server Online</div>
+                    <div className="header-actions">
+                      <div className="search-wrapper">
+                        <FaSearch />
+                        <input
+                          type="text"
+                          placeholder="Search restaurants..."
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          disabled={loading}
+                        />
+                      </div>
+                      <button onClick={() => setShowAddModal(true)} className="btn-primary" disabled={loading}>
+                        <FaPlus /> Add Partner
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="table-container">
+                    {loading ? (
+                      <div className="loading-table">
+                        <div className="spinner"></div>
+                        <p>Loading partner data...</p>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="table-responsive">
+                          <table className="data-table">
+                            <thead>
+                              <tr>
+                                <th>Restaurant</th>
+                                <th>Owner</th>
+                                <th>Plan</th>
+                                <th>Revenue</th>
+                                <th>Created</th>
+                                <th>Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {restaurants
+                                .filter(r => 
+                                  (r.restaurantName || "").toLowerCase().includes(searchQuery.toLowerCase()) || 
+                                  (r.username || "").toLowerCase().includes(searchQuery.toLowerCase())
+                                )
+                                .map(partner => (
+                                <tr key={partner._id} className="table-row">
+                                  <td>
+                                    <div className="restaurant-cell">
+                                      <div className="avatar">{partner.restaurantName?.charAt(0) || "R"}</div>
+                                      <div className="restaurant-info">
+                                        <strong>{partner.restaurantName || "Unnamed Restaurant"}</strong>
+                                        <span className="restaurant-id">ID: {partner._id?.substring(0, 8)}</span>
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td>
+                                    <div className="owner-cell">
+                                      <div className="owner-name">@{partner.username}</div>
+                                      <div className="owner-email">{partner.email || "No email"}</div>
+                                    </div>
+                                  </td>
+                                  <td>
+                                    <span className={`plan-badge ${partner.isPro ? 'premium' : 'basic'}`}>
+                                      {partner.isPro ? 'Premium' : 'Basic'}
+                                    </span>
+                                  </td>
+                                  <td>
+                                    <div className="revenue-cell">
+                                      <div className="revenue-amount">₹{partner.totalRevenue?.toLocaleString() || 0}</div>
+                                      <div className="revenue-meta">{partner.orders || 0} orders</div>
+                                    </div>
+                                  </td>
+                                  <td>
+                                    {new Date(partner.createdAt).toLocaleDateString()}
+                                  </td>
+                                  <td>
+                                    <div className="action-buttons">
+                                      <button 
+                                        onClick={() => setSelectedPartner(partner)}
+                                        className="btn-action view"
+                                        title="View Details"
+                                      >
+                                        <FaEye />
+                                      </button>
+                                      <button 
+                                        onClick={() => handleDeletePartner(partner._id, partner.restaurantName)}
+                                        className="btn-action delete"
+                                        title="Delete"
+                                      >
+                                        <FaTrash />
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                        
+                        {restaurants.length === 0 && (
+                          <div className="empty-table">
+                            <div className="empty-state">
+                              <FaStore size={48} />
+                              <h3>No partners found</h3>
+                              <p>Add your first partner to get started</p>
+                              <button onClick={() => setShowAddModal(true)} className="btn-primary">
+                                <FaPlus /> Add First Partner
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* REVENUE TAB */}
+              {activeTab === 'revenue' && (
+                <div className="fade-in">
+                  <div className="section-header">
+                    <div>
+                      <h1>Revenue Dashboard</h1>
+                      <p className="subtitle">Complete financial overview and reporting</p>
+                    </div>
+                    <div className="header-actions">
+                      <div className="filter-group">
+                        <select 
+                          value={timeRange} 
+                          onChange={(e) => setTimeRange(e.target.value)}
+                          className="select-filter"
+                        >
+                          <option value="all">All Time</option>
+                          <option value="month">This Month</option>
+                          <option value="year">This Year</option>
+                        </select>
+                        <select 
+                          value={exportFormat} 
+                          onChange={(e) => setExportFormat(e.target.value)}
+                          className="select-filter"
+                        >
+                          <option value="csv">CSV</option>
+                          <option value="pdf">PDF</option>
+                        </select>
+                      </div>
+                      <button onClick={handleExportRevenue} className="btn-primary">
+                        <FaFileExport /> Export Report
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="stats-grid revenue-grid">
+                    <div className="stat-card total-revenue-card">
+                      <div className="stat-icon">
+                        <FaMoneyBillWave />
+                      </div>
+                      <div className="stat-content">
+                        <span className="number">₹{stats.totalRevenue.toLocaleString()}</span>
+                        <span className="label">Total Revenue</span>
+                        <span className="trend">All-time collection</span>
+                      </div>
+                    </div>
+                    
+                    <div className="stat-card premium-revenue-card">
+                      <div className="stat-icon">
+                        <FaCrown />
+                      </div>
+                      <div className="stat-content">
+                        <span className="number">₹{stats.premiumRevenue.toLocaleString()}</span>
+                        <span className="label">Subscription Revenue</span>
+                        <span className="trend">From premium partners</span>
+                      </div>
+                    </div>
+                    
+                    <div className="stat-card avg-revenue-card">
+                      <div className="stat-icon">
+                        <FaChartLine />
+                      </div>
+                      <div className="stat-content">
+                        <span className="number">₹{stats.totalPartners > 0 ? Math.round(stats.totalRevenue / stats.totalPartners) : 0}</span>
+                        <span className="label">Average per Partner</span>
+                        <span className="trend">Mean revenue</span>
+                      </div>
+                    </div>
+                    
+                    <div className="stat-card today-revenue-card">
+                      <div className="stat-icon">
+                        <FaCalendarAlt />
+                      </div>
+                      <div className="stat-content">
+                        <span className="number">₹{stats.todayRevenue.toLocaleString()}</span>
+                        <span className="label">Today's Revenue</span>
+                        <span className="trend">From new partners</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Revenue Breakdown */}
+                  <div className="glass-panel">
+                    <div className="panel-header">
+                      <h3>Revenue Breakdown</h3>
+                    </div>
+                    <div className="revenue-breakdown">
+                      <div className="breakdown-item">
+                        <div className="breakdown-label">
+                          <div className="color-dot premium"></div>
+                          <span>Premium Subscriptions</span>
+                        </div>
+                        <div className="breakdown-value">
+                          ₹{stats.premiumRevenue.toLocaleString()}
+                          <span className="percentage">
+                            {stats.totalRevenue > 0 ? 
+                              Math.round((stats.premiumRevenue / stats.totalRevenue) * 100) : 0}%
+                          </span>
+                        </div>
+                      </div>
+                      <div className="breakdown-item">
+                        <div className="breakdown-label">
+                          <div className="color-dot basic"></div>
+                          <span>Partner Revenue</span>
+                        </div>
+                        <div className="breakdown-value">
+                          ₹{(stats.totalRevenue - stats.premiumRevenue).toLocaleString()}
+                          <span className="percentage">
+                            {stats.totalRevenue > 0 ? 
+                              Math.round(((stats.totalRevenue - stats.premiumRevenue) / stats.totalRevenue) * 100) : 0}%
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Top Partners */}
+                  <div className="glass-panel">
+                    <div className="panel-header">
+                      <h3>Top Performing Partners</h3>
+                    </div>
+                    <div className="top-partners">
+                      {restaurants
+                        .sort((a, b) => (b.totalRevenue || 0) - (a.totalRevenue || 0))
+                        .slice(0, 5)
+                        .map((partner, index) => (
+                          <div key={partner._id} className="partner-row">
+                            <div className="partner-rank">#{index + 1}</div>
+                            <div className="partner-info">
+                              <div className="partner-name">{partner.restaurantName}</div>
+                              <div className="partner-plan">{partner.isPro ? 'Premium' : 'Basic'}</div>
+                            </div>
+                            <div className="partner-revenue">₹{(partner.totalRevenue || 0).toLocaleString()}</div>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* SUBSCRIPTIONS TAB */}
+              {activeTab === 'subscriptions' && (
+                <div className="fade-in">
+                  <div className="section-header">
+                    <div>
+                      <h1>Subscription Management</h1>
+                      <p className="subtitle">Manage partner subscriptions and payments</p>
+                    </div>
+                  </div>
+
+                  <div className="subscription-stats">
+                    <div className="sub-stat-card premium">
+                      <h3>Premium Partners</h3>
+                      <div className="sub-stat-value">{stats.premiumPartners}</div>
+                      <div className="sub-stat-label">Active Subscriptions</div>
+                    </div>
+                    <div className="sub-stat-card revenue">
+                      <h3>Monthly Revenue</h3>
+                      <div className="sub-stat-value">₹{stats.premiumRevenue.toLocaleString()}</div>
+                      <div className="sub-stat-label">From Subscriptions</div>
+                    </div>
+                    <div className="sub-stat-card expiring">
+                      <h3>Expiring Soon</h3>
+                      <div className="sub-stat-value">{getSubscriptionStats().expiringSoon}</div>
+                      <div className="sub-stat-label">Within 5 days</div>
+                    </div>
+                  </div>
+
+                  <div className="glass-panel">
+                    <div className="panel-header">
+                      <h3>All Partners</h3>
+                      <input
+                        type="text"
+                        placeholder="Search partners..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="search-input-small"
+                      />
+                    </div>
+                    <div className="subscription-list">
+                      {restaurants
+                        .filter(r => 
+                          (r.restaurantName || "").toLowerCase().includes(searchQuery.toLowerCase()) || 
+                          (r.username || "").toLowerCase().includes(searchQuery.toLowerCase())
+                        )
+                        .map(partner => {
+                          const daysLeft = partner.trialEndsAt 
+                            ? Math.ceil((new Date(partner.trialEndsAt) - new Date()) / (1000 * 60 * 60 * 24))
+                            : 0;
+                          const isExpired = daysLeft < 0;
+                          const isUrgent = daysLeft <= 5 && !partner.isPro;
+                          
+                          return (
+                            <div key={partner._id} className="subscription-item">
+                              <div className="sub-info">
+                                <div className="sub-name">
+                                  <strong>{partner.restaurantName}</strong>
+                                  <span className="sub-owner">@{partner.username}</span>
+                                </div>
+                                <div className="sub-status">
+                                  <span className={`status-badge ${partner.isPro ? 'premium' : 'trial'}`}>
+                                    {partner.isPro ? 'Premium' : 'Trial'}
+                                  </span>
+                                  <span className={`days-badge ${isUrgent ? 'urgent' : isExpired ? 'expired' : 'normal'}`}>
+                                    {partner.isPro ? 'Active' : isExpired ? `Expired ${Math.abs(daysLeft)} days ago` : `${daysLeft} days left`}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="sub-actions">
+                                {!partner.isPro ? (
+                                  <>
+                                    <button 
+                                      onClick={() => handleActivatePro(partner._id, 30, partner.restaurantName)}
+                                      className="btn-subscription month"
+                                    >
+                                      <FaMoneyBillWave /> 1 Month
+                                    </button>
+                                    <button 
+                                      onClick={() => handleActivatePro(partner._id, 365, partner.restaurantName)}
+                                      className="btn-subscription year"
+                                    >
+                                      <FaCrown /> 1 Year
+                                    </button>
+                                  </>
+                                ) : (
+                                  <span className="active-label">Active Premium</span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
                     </div>
                   </div>
                 </div>
@@ -959,21 +920,227 @@ const SuperAdmin = () => {
         </div>
       </main>
 
-      {/* Partner Detail Modal */}
-      {selectedPartner && (
-        <PartnerDetailModal
-          partner={selectedPartner}
-          onClose={() => setSelectedPartner(null)}
-          onAction={handlePartnerAction}
-        />
+      {/* ADD PARTNER MODAL */}
+      {showAddModal && (
+        <div className="modal-overlay">
+          <div className="modal-content add-modal">
+            <div className="modal-header">
+              <h2><FaUserPlus /> Add New Partner</h2>
+              <button onClick={() => setShowAddModal(false)} className="btn-close"><FaTimes /></button>
+            </div>
+            
+            <div className="modal-body">
+              <div className="form-grid">
+                <div className="form-group">
+                  <label>Restaurant Name *</label>
+                  <input 
+                    type="text" 
+                    placeholder="Enter restaurant name"
+                    value={addForm.restaurantName}
+                    onChange={(e) => setAddForm({...addForm, restaurantName: e.target.value})}
+                    required
+                  />
+                </div>
+                
+                <div className="form-group">
+                  <label>Owner Username *</label>
+                  <input 
+                    type="text" 
+                    placeholder="Choose a username"
+                    value={addForm.username}
+                    onChange={(e) => setAddForm({...addForm, username: e.target.value})}
+                    required
+                  />
+                </div>
+                
+                <div className="form-group">
+                  <label>Email Address</label>
+                  <input 
+                    type="email" 
+                    placeholder="owner@example.com"
+                    value={addForm.email}
+                    onChange={(e) => setAddForm({...addForm, email: e.target.value})}
+                  />
+                </div>
+                
+                <div className="form-group">
+                  <label>Phone Number</label>
+                  <input 
+                    type="tel" 
+                    placeholder="+91 9876543210"
+                    value={addForm.phone}
+                    onChange={(e) => setAddForm({...addForm, phone: e.target.value})}
+                  />
+                </div>
+                
+                <div className="form-group">
+                  <label>Password *</label>
+                  <input 
+                    type="text" 
+                    placeholder="At least 6 characters"
+                    value={addForm.password}
+                    onChange={(e) => setAddForm({...addForm, password: e.target.value})}
+                    required
+                  />
+                  <div className="form-hint">Default: password123</div>
+                </div>
+                
+                <div className="form-group">
+                  <label>Trial Days</label>
+                  <input 
+                    type="number" 
+                    placeholder="30"
+                    value={addForm.trialDays}
+                    onChange={(e) => setAddForm({...addForm, trialDays: parseInt(e.target.value) || 30})}
+                    min="1"
+                    max="365"
+                  />
+                  <div className="form-hint">Free trial period in days</div>
+                </div>
+                
+                <div className="form-group checkbox-group">
+                  <label className="checkbox-label">
+                    <input 
+                      type="checkbox" 
+                      checked={addForm.isPro}
+                      onChange={(e) => setAddForm({...addForm, isPro: e.target.checked})}
+                    />
+                    <span>Premium Partner (₹999/year)</span>
+                  </label>
+                  <div className="form-hint">Unchecked = Basic Plan (Free trial)</div>
+                </div>
+              </div>
+              
+              <div className="form-actions">
+                <button 
+                  onClick={() => handleAddPartner(addForm)}
+                  className="btn-submit"
+                  disabled={!addForm.restaurantName || !addForm.username || !addForm.password}
+                >
+                  <FaPlus /> Create Partner Account
+                </button>
+                <button 
+                  onClick={() => setShowAddModal(false)}
+                  className="btn-cancel"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
-      {/* Add Partner Modal */}
-      <AddPartnerModal
-        show={showAddModal}
-        onClose={() => setShowAddModal(false)}
-        onAdd={handleAddPartner}
-      />
+      {/* PARTNER DETAIL MODAL */}
+      {selectedPartner && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <div className="modal-header">
+              <div className="modal-title">
+                <h2>
+                  <div className="partner-avatar-large">
+                    {selectedPartner.restaurantName?.charAt(0) || "R"}
+                  </div>
+                  {selectedPartner.restaurantName || "Unnamed Restaurant"}
+                </h2>
+                <div className="partner-tags">
+                  <span className={`tag ${selectedPartner.isPro ? 'premium' : 'basic'}`}>
+                    {selectedPartner.isPro ? 'Premium' : 'Basic'}
+                  </span>
+                  <span className="tag id">ID: {selectedPartner._id?.substring(0, 10)}...</span>
+                </div>
+              </div>
+              <button onClick={() => setSelectedPartner(null)} className="btn-close">
+                <FaTimes />
+              </button>
+            </div>
+
+            <div className="modal-body">
+              <div className="info-sections">
+                <div className="info-section">
+                  <h3><FaBuilding /> Restaurant Details</h3>
+                  <div className="info-grid">
+                    <div className="info-item">
+                      <label>Restaurant Name</label>
+                      <div className="info-value">{selectedPartner.restaurantName || "Not set"}</div>
+                    </div>
+                    <div className="info-item">
+                      <label>Owner Username</label>
+                      <div className="info-value">@{selectedPartner.username}</div>
+                    </div>
+                    <div className="info-item">
+                      <label>Email</label>
+                      <div className="info-value">{selectedPartner.email || "Not set"}</div>
+                    </div>
+                    <div className="info-item">
+                      <label>Phone</label>
+                      <div className="info-value">{selectedPartner.phone || "Not set"}</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="info-section">
+                  <h3><FaChartLine /> Performance</h3>
+                  <div className="info-grid">
+                    <div className="info-item">
+                      <label>Total Revenue</label>
+                      <div className="info-value revenue">₹{selectedPartner.totalRevenue?.toLocaleString() || 0}</div>
+                    </div>
+                    <div className="info-item">
+                      <label>Total Orders</label>
+                      <div className="info-value">{selectedPartner.orders || 0}</div>
+                    </div>
+                    <div className="info-item">
+                      <label>Subscription Plan</label>
+                      <div className={`info-value plan ${selectedPartner.isPro ? 'premium' : 'basic'}`}>
+                        {selectedPartner.isPro ? 'Premium (₹999/year)' : 'Basic'}
+                      </div>
+                    </div>
+                    <div className="info-item">
+                      <label>Trial Ends</label>
+                      <div className="info-value">
+                        {selectedPartner.trialEndsAt ? new Date(selectedPartner.trialEndsAt).toLocaleDateString() : 'N/A'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="action-section">
+                <h3><FaCogs /> Actions</h3>
+                <div className="action-grid">
+                  {!selectedPartner.isPro && (
+                    <>
+                      <button 
+                        onClick={() => handleActivatePro(selectedPartner._id, 30, selectedPartner.restaurantName)}
+                        className="action-btn primary"
+                      >
+                        <FaMoneyBillWave /> Activate 1 Month
+                      </button>
+                      <button 
+                        onClick={() => handleActivatePro(selectedPartner._id, 365, selectedPartner.restaurantName)}
+                        className="action-btn success"
+                      >
+                        <FaCrown /> Activate 1 Year
+                      </button>
+                    </>
+                  )}
+                  <button 
+                    onClick={() => {
+                      if (window.confirm(`Delete ${selectedPartner.restaurantName}?`)) {
+                        handleDeletePartner(selectedPartner._id, selectedPartner.restaurantName);
+                      }
+                    }}
+                    className="action-btn danger"
+                  >
+                    <FaTrash /> Delete Partner
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -1009,6 +1176,7 @@ const cssStyles = `
   min-height: 100vh;
   background: var(--bg-darker);
   color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
 /* Sidebar */
@@ -1065,7 +1233,7 @@ const cssStyles = `
   margin-top: 4px;
 }
 
-/* Sidebar Styles */
+/* Sidebar Components */
 .sidebar-header {
   padding: 25px;
   border-bottom: 1px solid var(--border);
@@ -1121,10 +1289,6 @@ const cssStyles = `
   font-size: 20px;
 }
 
-.user-info {
-  flex: 1;
-}
-
 .user-info .name {
   font-weight: 600;
   font-size: 15px;
@@ -1148,10 +1312,6 @@ const cssStyles = `
   align-items: center;
   gap: 12px;
   margin-bottom: 15px;
-}
-
-.stat-item:last-child {
-  margin-bottom: 0;
 }
 
 .stat-item svg {
@@ -1200,7 +1360,6 @@ const cssStyles = `
   cursor: pointer;
   text-align: left;
   transition: all 0.2s;
-  position: relative;
 }
 
 .nav-item:hover {
@@ -1284,14 +1443,14 @@ const cssStyles = `
   background: var(--bg-panel);
   border: 1px solid var(--border);
   color: var(--text);
-  width: 40px;
-  height: 40px;
+  padding: 12px 20px;
   border-radius: 10px;
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 8px;
   cursor: pointer;
   transition: all 0.2s;
+  font-weight: 600;
 }
 
 .btn-refresh:hover {
@@ -1343,7 +1502,6 @@ const cssStyles = `
   color: var(--primary);
 }
 
-.stat-card.total-partners .stat-icon { color: var(--primary); }
 .stat-card.active-partners .stat-icon { color: var(--success); }
 .stat-card.premium-partners .stat-icon { color: var(--warning); }
 .stat-card.total-revenue .stat-icon { color: var(--info); }
@@ -1481,40 +1639,83 @@ const cssStyles = `
   color: var(--danger);
 }
 
-/* Quick Actions */
-.quick-actions-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
-}
-
-.quick-action-btn {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.quick-action-btn:hover {
-  border-color: var(--primary);
-  transform: translateY(-2px);
-}
-
-.quick-action-btn svg {
-  font-size: 24px;
+.tag.premium {
+  background: rgba(249, 115, 22, 0.15);
   color: var(--primary);
 }
 
-.quick-action-btn span {
-  font-size: 13px;
+.tag.basic {
+  background: rgba(100, 116, 139, 0.15);
+  color: #64748b;
+}
+
+.tag.revenue {
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--success);
+}
+
+/* Subscription Summary */
+.subscription-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+.sub-stat {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  padding: 15px;
+  border-radius: 10px;
+  text-align: center;
+}
+
+.sub-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 5px;
+}
+
+.sub-value {
+  font-size: 24px;
+  font-weight: 700;
+  margin-bottom: 5px;
+}
+
+.sub-trend {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.quick-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.action-btn {
+  flex: 1;
+  padding: 12px;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   font-weight: 600;
+  transition: all 0.2s;
+  font-size: 14px;
+}
+
+.action-btn.primary {
+  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+  color: white;
+}
+
+.action-btn:hover {
+  transform: translateY(-2px);
+  opacity: 0.9;
 }
 
 /* Section Header */
@@ -1555,10 +1756,6 @@ const cssStyles = `
   font-size: 14px;
   width: 100%;
   outline: none;
-}
-
-.search-wrapper svg {
-  color: var(--text-muted);
 }
 
 .btn-primary {
@@ -1710,22 +1907,22 @@ const cssStyles = `
   gap: 4px;
 }
 
-.status-badge.active {
-  background: rgba(34, 197, 94, 0.15);
-  color: var(--success);
-}
-
-.status-badge.inactive {
-  background: rgba(239, 68, 68, 0.15);
-  color: var(--danger);
-}
-
 .plan-badge.premium {
   background: rgba(249, 115, 22, 0.15);
   color: var(--primary);
 }
 
 .plan-badge.basic {
+  background: rgba(100, 116, 139, 0.15);
+  color: #64748b;
+}
+
+.status-badge.premium {
+  background: rgba(249, 115, 22, 0.15);
+  color: var(--primary);
+}
+
+.status-badge.trial {
   background: rgba(100, 116, 139, 0.15);
   color: #64748b;
 }
@@ -1772,9 +1969,9 @@ const cssStyles = `
   color: var(--info);
 }
 
-.btn-action.edit {
-  background: rgba(34, 197, 94, 0.1);
-  color: var(--success);
+.btn-action.delete {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--danger);
 }
 
 .btn-action:hover {
@@ -2030,14 +2227,6 @@ const cssStyles = `
   font-weight: 700;
 }
 
-.info-value.status.active {
-  color: var(--success);
-}
-
-.info-value.status.inactive {
-  color: var(--danger);
-}
-
 .info-value.plan.premium {
   color: var(--primary);
 }
@@ -2069,32 +2258,8 @@ const cssStyles = `
   gap: 16px;
 }
 
-.action-btn {
-  padding: 14px;
-  border: none;
-  border-radius: 10px;
-  font-weight: 600;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  font-size: 14px;
-  transition: all 0.2s;
-}
-
-.action-btn.primary {
-  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-  color: white;
-}
-
 .action-btn.success {
   background: linear-gradient(135deg, var(--success), var(--success-dark));
-  color: white;
-}
-
-.action-btn.warning {
-  background: linear-gradient(135deg, #f59e0b, #d97706);
   color: white;
 }
 
@@ -2106,11 +2271,6 @@ const cssStyles = `
 .action-btn:hover:not(:disabled) {
   transform: translateY(-2px);
   opacity: 0.9;
-}
-
-.action-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 /* Add Partner Form */
@@ -2147,11 +2307,6 @@ const cssStyles = `
 .form-group input:focus {
   border-color: var(--primary);
   box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.1);
-}
-
-.form-group input:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 .form-hint {
@@ -2238,78 +2393,307 @@ const cssStyles = `
   background: rgba(255,255,255,0.05);
 }
 
-.btn-cancel:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+/* Revenue Styles */
+.revenue-grid .stat-card {
+  border-left: 4px solid var(--primary);
 }
 
-.spinner-small {
-  width: 20px;
-  height: 20px;
-  border: 2px solid rgba(255,255,255,0.3);
-  border-top-color: white;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
+.revenue-grid .total-revenue-card {
+  border-left-color: #22c55e;
 }
 
-/* Revenue Tab */
-.revenue-tab {
-  padding: 20px;
+.revenue-grid .premium-revenue-card {
+  border-left-color: #f97316;
 }
 
-.revenue-summary {
-  margin-top: 30px;
+.revenue-grid .avg-revenue-card {
+  border-left-color: #3b82f6;
 }
 
-.revenue-card {
+.revenue-grid .today-revenue-card {
+  border-left-color: #8b5cf6;
+}
+
+.filter-group {
+  display: flex;
+  gap: 10px;
+}
+
+.select-filter {
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 30px;
-  text-align: center;
+  color: var(--text);
+  padding: 10px;
+  border-radius: 8px;
+  font-size: 14px;
+  outline: none;
 }
 
-.revenue-card h3 {
-  margin: 0 0 10px 0;
-  font-size: 18px;
+.revenue-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.breakdown-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background: var(--bg-card);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.breakdown-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.color-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.color-dot.premium {
+  background: #f97316;
+}
+
+.color-dot.basic {
+  background: #64748b;
+}
+
+.breakdown-value {
+  font-size: 16px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.percentage {
+  font-size: 12px;
   color: var(--text-muted);
+  font-weight: 600;
 }
 
-.revenue-amount {
-  font-size: 42px;
-  font-weight: 800;
+.top-partners {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.partner-row {
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  background: var(--bg-card);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.partner-rank {
+  background: var(--primary);
+  color: white;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  margin-right: 15px;
+}
+
+.partner-info {
+  flex: 1;
+}
+
+.partner-name {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.partner-plan {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.partner-revenue {
+  font-size: 16px;
+  font-weight: 700;
   color: var(--success);
 }
 
-/* System Tab */
-.system-tab {
-  padding: 20px;
-}
-
-.system-status-grid {
+/* Subscription Styles */
+.subscription-stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
   gap: 20px;
-  margin-top: 30px;
+  margin-bottom: 30px;
 }
 
-.status-card {
+.sub-stat-card {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 24px;
+  text-align: center;
+}
+
+.sub-stat-card.premium {
+  border-left: 4px solid var(--primary);
+}
+
+.sub-stat-card.revenue {
+  border-left: 4px solid #22c55e;
+}
+
+.sub-stat-card.expiring {
+  border-left: 4px solid #ef4444;
+}
+
+.sub-stat-card h3 {
+  margin: 0 0 10px 0;
+  font-size: 16px;
+  color: var(--text-muted);
+}
+
+.sub-stat-value {
+  font-size: 32px;
+  font-weight: 800;
+  margin-bottom: 5px;
+}
+
+.sub-stat-label {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.search-input-small {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  padding: 10px 16px;
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 14px;
+  outline: none;
+  width: 200px;
+}
+
+.subscription-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.subscription-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px;
+  background: var(--bg-card);
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+
+.sub-info {
+  flex: 1;
+}
+
+.sub-name {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sub-name strong {
+  font-size: 16px;
+}
+
+.sub-owner {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.sub-status {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.days-badge {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-weight: 600;
+}
+
+.days-badge.urgent {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--danger);
+}
+
+.days-badge.expired {
+  background: rgba(239, 68, 68, 0.1);
+  color: #fca5a5;
+}
+
+.days-badge.normal {
+  background: rgba(100, 116, 139, 0.15);
+  color: #64748b;
+}
+
+.sub-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.btn-subscription {
+  padding: 10px 16px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 12px;
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 5px;
+  transition: all 0.2s;
 }
 
-.status-card.ok {
-  border-left: 4px solid var(--success);
-}
-
-.status-card.ok svg {
+.btn-subscription.month {
+  background: rgba(34, 197, 94, 0.1);
   color: var(--success);
-  font-size: 28px;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.btn-subscription.year {
+  background: rgba(249, 115, 22, 0.1);
+  color: var(--primary);
+  border: 1px solid rgba(249, 115, 22, 0.3);
+}
+
+.btn-subscription:hover {
+  transform: translateY(-2px);
+  opacity: 0.9;
+}
+
+.active-label {
+  padding: 8px 16px;
+  background: rgba(34, 197, 94, 0.1);
+  color: var(--success);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 /* Responsive */
@@ -2366,8 +2750,8 @@ const cssStyles = `
     justify-content: center;
   }
   
-  .quick-actions-grid {
-    grid-template-columns: 1fr;
+  .quick-actions {
+    flex-direction: column;
   }
   
   .info-sections {
@@ -2384,6 +2768,28 @@ const cssStyles = `
   
   .form-actions {
     flex-direction: column;
+  }
+  
+  .subscription-summary {
+    grid-template-columns: 1fr;
+  }
+  
+  .subscription-stats {
+    grid-template-columns: 1fr;
+  }
+  
+  .subscription-item {
+    flex-direction: column;
+    gap: 15px;
+    align-items: flex-start;
+  }
+  
+  .sub-actions {
+    width: 100%;
+  }
+  
+  .btn-subscription {
+    flex: 1;
   }
 }
 `;

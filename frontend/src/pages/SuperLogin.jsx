@@ -308,8 +308,8 @@ const SuperLogin = () => {
 
         <div className="demo-credentials">
           <h4>Default CEO Credentials:</h4>
-          <p>Username: <strong>srinivas</strong></p>
-          <p>Password: <strong>bsr18</strong></p>
+          <p>Username: <strong>my team is tracking you!</strong></p>
+          <p>Password: <strong>what you want ree</strong></p>
         </div>
 
         <div className="security-note">

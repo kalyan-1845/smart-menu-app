@@ -14,16 +14,50 @@ const app = express();
 const httpServer = createServer(app);
 
 // ============================================================
-// 🚨 CRITICAL: CORS MUST BE FIRST
+// 🚨 CRITICAL: FIXED CORS CONFIGURATION
 // ============================================================
+const allowedOrigins = [
+    'http://localhost:5173',
+    'http://localhost:3000',
+    'http://localhost:5174',
+    'http://127.0.0.1:5173',
+    'http://127.0.0.1:3000',
+    'https://smart-menu-backend-5ge7.onrender.com'
+];
+
 app.use(cors({ 
-    origin: "*", 
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"], 
-    allowedHeaders: ["Content-Type", "Authorization"], 
-    credentials: false 
+    origin: function (origin, callback) {
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) return callback(null, true);
+        
+        if (allowedOrigins.indexOf(origin) === -1) {
+            const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+            return callback(new Error(msg), false);
+        }
+        return callback(null, true);
+    },
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: [
+        "Content-Type", 
+        "Authorization", 
+        "X-Requested-With",
+        "Accept",
+        "Origin",
+        "Cache-Control",
+        "X-Request-ID"
+    ],
+    exposedHeaders: ["Content-Length", "X-Request-ID"],
+    credentials: true,
+    maxAge: 86400, // 24 hours
+    preflightContinue: false,
+    optionsSuccessStatus: 204
 }));
-app.options('*', cors()); 
+
+// Handle pre-flight requests
+app.options('*', cors());
+
 app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(compression());
 
 // ============================================================
@@ -81,6 +115,11 @@ app.post('/api/super-login', async (req, res) => {
 
         console.log("🎟️ TOKEN GENERATED. Sending response...");
         console.log("------------------------------------------------");
+        
+        // Set CORS headers explicitly
+        res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+        res.header('Access-Control-Allow-Credentials', 'true');
+        
         return res.json({ 
             success: true, 
             token, 
@@ -214,6 +253,10 @@ app.get('/api/ceo-stats', async (req, res) => {
 // 🚀 HEALTH CHECK ENDPOINT
 // ============================================================
 app.get('/api/health', (req, res) => {
+    // Add CORS headers
+    res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    
     res.json({
         status: 'OK',
         timestamp: new Date().toISOString(),
@@ -266,12 +309,29 @@ app.get('/api/system-info', async (req, res) => {
     }
 });
 
+// ============================================================
+// 🎯 TEST ENDPOINT FOR CORS
+// ============================================================
+app.get('/api/test-cors', (req, res) => {
+    console.log("Test CORS endpoint called");
+    console.log("Origin:", req.headers.origin);
+    console.log("Headers:", req.headers);
+    
+    res.json({
+        message: "CORS test successful!",
+        origin: req.headers.origin,
+        timestamp: new Date().toISOString(),
+        headers: req.headers
+    });
+});
+
 // --- SOCKET.IO ---
 const io = new Server(httpServer, { 
     cors: { 
-        origin: "*", 
-        methods: ["GET", "POST", "PUT", "DELETE"], 
-        credentials: false 
+        origin: allowedOrigins,
+        methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allowedHeaders: ["Content-Type", "Authorization", "Cache-Control"],
+        credentials: true
     } 
 });
 
@@ -282,7 +342,12 @@ app.use((req, res, next) => {
 });
 
 // --- DB CONNECTION ---
-mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/bitebox')
+mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/bitebox', {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+    serverSelectionTimeoutMS: 5000,
+    socketTimeoutMS: 45000,
+})
     .then(() => {
         console.log("✅ MongoDB Connected");
         console.log(`📊 Database: ${mongoose.connection.db.databaseName}`);
@@ -322,7 +387,8 @@ app.get('/', (req, res) => {
                 login: 'POST /api/super-login',
                 verifyToken: 'GET /api/verify-token',
                 stats: 'GET /api/ceo-stats',
-                systemInfo: 'GET /api/system-info'
+                systemInfo: 'GET /api/system-info',
+                testCors: 'GET /api/test-cors'
             },
             superAdmin: 'GET /api/superadmin/restaurants',
             health: 'GET /api/health'
@@ -364,6 +430,10 @@ io.on('connection', (socket) => {
 app.use((err, req, res, next) => {
     console.error("🚨 Server Error:", err.stack);
     
+    // Set CORS headers even for errors
+    res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    
     const statusCode = err.statusCode || 500;
     const message = err.message || 'Internal Server Error';
     
@@ -384,20 +454,25 @@ app.use((err, req, res, next) => {
 // 🚀 START SERVER
 // ============================================================
 const PORT = process.env.PORT || 5000;
-httpServer.listen(PORT, () => {
+httpServer.listen(PORT, '0.0.0.0', () => {
     console.log("=".repeat(50));
     console.log(`🚀 BiteBox Server running on port ${PORT}`);
+    console.log(`🌐 Access: http://localhost:${PORT}`);
     console.log("=".repeat(50));
     console.log("📋 Available Routes:");
     console.log(`👉 CEO Login:        POST http://localhost:${PORT}/api/super-login`);
     console.log(`👉 Token Verify:     GET  http://localhost:${PORT}/api/verify-token`);
     console.log(`👉 CEO Stats:        GET  http://localhost:${PORT}/api/ceo-stats`);
+    console.log(`👉 CORS Test:        GET  http://localhost:${PORT}/api/test-cors`);
     console.log(`👉 System Health:    GET  http://localhost:${PORT}/api/health`);
     console.log(`👉 Super Admin:      GET  http://localhost:${PORT}/api/superadmin/restaurants`);
     console.log("=".repeat(50));
     console.log("👑 Default CEO Credentials:");
     console.log("   Username: srinivas");
     console.log("   Password: bsr18");
+    console.log("=".repeat(50));
+    console.log("🛡️  CORS Allowed Origins:");
+    allowedOrigins.forEach(origin => console.log(`   ${origin}`));
     console.log("=".repeat(50));
 });
 
@@ -424,4 +499,23 @@ process.on('SIGINT', () => {
             process.exit(0);
         });
     });
+});
+
+// ============================================================
+// 🛠️ GLOBAL HEADERS MIDDLEWARE
+// ============================================================
+app.use((req, res, next) => {
+    // Add CORS headers to all responses
+    res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Cache-Control, X-Requested-With, Accept, Origin');
+    res.header('Access-Control-Expose-Headers', 'Content-Length, X-Request-ID');
+    
+    // Handle preflight requests
+    if (req.method === 'OPTIONS') {
+        return res.sendStatus(200);
+    }
+    
+    next();
 });
