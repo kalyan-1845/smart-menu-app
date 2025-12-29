@@ -5,10 +5,12 @@ import io from "socket.io-client";
 import confetti from "canvas-confetti";
 import { 
     FaPlus, FaTrash, FaUtensils, 
-    FaBell, FaCheckCircle, FaCircle, FaCrown, FaSignOutAlt, FaRocket, FaUnlock, FaStore, FaExternalLinkAlt, FaCopy
+    FaBell, FaCheckCircle, FaCircle, FaCrown, 
+    FaSignOutAlt, FaRocket, FaUnlock, FaStore, 
+    FaExternalLinkAlt, FaCopy
 } from "react-icons/fa";
 
-// --- STYLES ---
+// --- STYLES (Glassmorphism & Dark Mode) ---
 const styles = `
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;900&display=swap');
 .admin-container { min-height: 100vh; padding: 20px; background: radial-gradient(circle at top center, #1a0f0a 0%, #050505 60%); color: white; font-family: 'Inter', sans-serif; }
@@ -54,6 +56,7 @@ const getSocketBase = () => {
     return "https://smart-menu-backend-5ge7.onrender.com";
 };
 
+// --- SETUP PROGRESS COMPONENT ---
 const SetupWizard = ({ dishesCount, pushEnabled }) => {
     const steps = [
         { id: 1, label: "Add 3 dishes", done: dishesCount >= 3, hint: "Go to Menu tab" },
@@ -90,6 +93,7 @@ const SetupWizard = ({ dishesCount, pushEnabled }) => {
     );
 };
 
+// --- MAIN COMPONENT ---
 const RestaurantAdmin = () => {
     const { id } = useParams();
     const navigate = useNavigate();
@@ -103,7 +107,7 @@ const RestaurantAdmin = () => {
     const [authLoading, setAuthLoading] = useState(false);
     const [activeTab, setActiveTab] = useState("menu");
     const [loading, setLoading] = useState(false);
-    const [restaurantName, setRestaurantName] = useState(id);
+    const [restaurantName, setRestaurantName] = useState(id || "Restaurant");
     const [activeAlerts, setActiveAlerts] = useState([]);
     const [broadcast, setBroadcast] = useState(null);
     const [pushEnabled, setPushEnabled] = useState(Notification.permission === 'granted');
@@ -112,8 +116,20 @@ const RestaurantAdmin = () => {
     const [dishes, setDishes] = useState([]);
     const [formData, setFormData] = useState({ name: "", price: "", category: "Starters", image: "" });
 
-    // --- 1. AUTO LOGIN ---
+    // --- 0. URL & NAVIGATION FIX ---
+    // If user goes to '/admin' without ID, but ID exists in localStorage, redirect them correctly
     useEffect(() => {
+        const storedId = localStorage.getItem("activeResId"); // Check global ID
+        if (!id && storedId) {
+            navigate(`/${storedId}/admin`, { replace: true });
+        }
+    }, [id, navigate]);
+
+    // --- 1. AUTO LOGIN & AUTH CHECK ---
+    useEffect(() => {
+        // We need an ID to function. If no ID from URL and no ID from redirect, stop.
+        if (!id) return;
+
         const token = localStorage.getItem(`owner_token_${id}`);
         const mongoId = localStorage.getItem(`owner_id_${id}`);
         
@@ -123,9 +139,10 @@ const RestaurantAdmin = () => {
             setPublicMenuUrl(correctLink);
             fetchData(token, mongoId);
         } else {
-            navigate(`/${id}/login`);
+            // Stay on this page but show Lock Screen
+            setIsAuthenticated(false);
         }
-    }, [id, navigate]);
+    }, [id]);
 
     // --- LOGIN HANDLER ---
     const handleLogin = async (e) => {
@@ -134,8 +151,10 @@ const RestaurantAdmin = () => {
         try {
             const res = await axios.post(`${API_BASE}/auth/login`, { username: id, password });
             
+            // SAVE CRITICAL DATA
             localStorage.setItem(`owner_token_${id}`, res.data.token);
             localStorage.setItem(`owner_id_${id}`, res.data._id);
+            localStorage.setItem("activeResId", id); // Save globally for the router fix
             
             setRestaurantName(res.data.restaurantName);
             setIsPro(res.data.isPro);
@@ -168,9 +187,9 @@ const RestaurantAdmin = () => {
         }
     };
 
-    // --- LIVE UPDATES ---
+    // --- LIVE UPDATES (Socket.io) ---
     useEffect(() => {
-        if (isAuthenticated) {
+        if (isAuthenticated && id) {
             const mongoId = localStorage.getItem(`owner_id_${id}`);
             if(!mongoId) return;
 
@@ -178,13 +197,14 @@ const RestaurantAdmin = () => {
             socket.emit("join-restaurant", mongoId);
 
             socket.on("new-waiter-call", (data) => {
-                new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3").play().catch(() => {});
+                // Play Sound safely
+                new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3").play().catch(e => console.log("Audio play failed:", e));
                 setActiveAlerts(prev => [...prev, data]);
             });
 
             socket.on('new-broadcast', (data) => {
                 setBroadcast(data);
-                new Audio("https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3").play().catch(() => {});
+                new Audio("https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3").play().catch(e => console.log("Audio play failed:", e));
             });
 
             return () => socket.disconnect();
@@ -200,7 +220,8 @@ const RestaurantAdmin = () => {
         setIsAuthenticated(false); 
         setPassword(""); 
         localStorage.removeItem(`owner_token_${id}`);
-        navigate(`/${id}/login`);
+        // Optional: Do not clear 'activeResId' so they can log back in easily
+        // navigate(`/${id}/login`); // Stay on the page, just show lock screen
     };
 
     const handleAddDish = async (e) => {
@@ -237,17 +258,21 @@ const RestaurantAdmin = () => {
     };
 
     const copyToClipboard = () => {
+        if (!publicMenuUrl) return;
         navigator.clipboard.writeText(publicMenuUrl);
         alert("Link Copied! Share this link with customers.");
     };
 
+    // --- RENDER: LOCK SCREEN (If not authenticated) ---
     if (!isAuthenticated) return (
         <div className="admin-container">
             <style>{styles}</style>
             <div className="lock-container">
                 <div className="lock-card">
                     <FaStore size={40} color="#f97316" style={{ marginBottom: '15px' }} />
-                    <h1 style={{ fontSize: '20px', fontWeight: '900' }}>{id.toUpperCase()} ADMIN</h1>
+                    <h1 style={{ fontSize: '20px', fontWeight: '900' }}>
+                        {id ? id.toUpperCase() : "ADMIN"} LOGIN
+                    </h1>
                     <form onSubmit={handleLogin} style={{ marginTop: '20px' }}>
                         <input 
                             type="password" placeholder="Password" 
@@ -259,15 +284,19 @@ const RestaurantAdmin = () => {
                             {authLoading ? "Unlocking..." : <><FaUnlock /> Access Control</>}
                         </button>
                     </form>
+                    {/* Fallback navigation helper */}
+                    {!id && <p style={{fontSize: '10px', color: '#666', marginTop: '10px'}}>Error: No Restaurant ID found in URL</p>}
                 </div>
             </div>
         </div>
     );
 
+    // --- RENDER: DASHBOARD (If authenticated) ---
     return (
         <div className="admin-container">
             <style>{styles}</style>
             
+            {/* --- TOAST NOTIFICATIONS --- */}
             <div className="toast-container">
                 {activeAlerts.map((alert, i) => (
                     <div key={i} className="toast-alert">
@@ -281,6 +310,7 @@ const RestaurantAdmin = () => {
             </div>
 
             <div className="max-w-wrapper">
+                {/* --- BROADCAST MESSAGE --- */}
                 {broadcast && (
                     <div style={{ background: '#3b82f6', color: 'white', padding: '12px', textAlign: 'left', fontSize: '12px', borderRadius: '15px', marginBottom: '20px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
                         <span>📢 <strong>{broadcast.title}</strong>: {broadcast.message}</span>
@@ -307,12 +337,12 @@ const RestaurantAdmin = () => {
                             </div>
                             <div style={{overflow:'hidden'}}>
                                 <p style={{fontSize:'10px', color:'#888', margin:0, fontWeight:'bold'}}>CUSTOMER MENU LINK</p>
-                                <a href={publicMenuUrl} target="_blank" rel="noreferrer" className="link-text">{publicMenuUrl}</a>
+                                <a href={publicMenuUrl} target="_blank" rel="noreferrer" className="link-text">{publicMenuUrl || "Loading..."}</a>
                             </div>
                         </div>
                         <div style={{display:'flex', gap:'5px'}}>
                             <button onClick={copyToClipboard} className="action-btn"><FaCopy /></button>
-                            <a href={publicMenuUrl} target="_blank" rel="noreferrer" className="action-btn"><FaExternalLinkAlt /></a>
+                            {publicMenuUrl && <a href={publicMenuUrl} target="_blank" rel="noreferrer" className="action-btn"><FaExternalLinkAlt /></a>}
                         </div>
                     </div>
 
@@ -353,6 +383,7 @@ const RestaurantAdmin = () => {
                             <button type="submit" className="btn-primary">Save Dish</button>
                         </form>
                         <div style={{ marginTop: '30px' }}>
+                            {dishes.length === 0 && <p style={{textAlign:'center', color:'#555', fontSize:'12px'}}>No dishes yet. Add your first dish!</p>}
                             {dishes.map(dish => (
                                 <div key={dish._id} className="dish-item">
                                     <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>

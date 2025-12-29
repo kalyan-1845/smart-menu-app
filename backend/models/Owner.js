@@ -2,37 +2,40 @@ import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 
 const ownerSchema = new mongoose.Schema({
-  // Unique identifiers for the restaurant login
+  // --- 1. IDENTITY & LOGIN ---
   username: { type: String, required: true, unique: true, index: true },
   email: { type: String, required: true, unique: true, index: true },
   password: { type: String, required: true },
-  
-  // Restaurant branding used across the Menu and Dashboards
+
+  // --- 2. SUPER ADMIN CONTROLS (🔥 NEW & CRITICAL) ---
+  // This lets the system know if this is YOU (superadmin) or a Client (admin)
+  role: { 
+    type: String, 
+    enum: ['admin', 'superadmin'], 
+    default: 'admin' 
+  },
+  // This is the "Kill Switch" for the restaurant
+  isActive: { type: Boolean, default: true },
+
+  // --- 3. RESTAURANT BRANDING ---
   restaurantName: { type: String, required: true },
-  
-  // Trial logic for the 60-day MVP startup phase
+
+  // --- 4. SUBSCRIPTION & BILLING ---
   trialEndsAt: { type: Date, required: true },
   isPro: { type: Boolean, default: false },
-  
-  /**
-   * 🔑 STAFF PASSWORDS
-   * Used for the Chef and Waiter login flow you requested.
-   * Default is set to 'bitebox18' for easy first-time onboarding.
-   */
+
+  // --- 5. STAFF ACCESS (Your Custom Logic) ---
   waiterPassword: { type: String, default: "bitebox18" },
   chefPassword: { type: String, default: "bitebox18" },
 
-  // Field for Web Push notifications (linked to orderRoutes.js logic)
-  pushSubscription: { type: String } 
+  // --- 6. NOTIFICATIONS ---
+  pushSubscription: { type: String }
+
 }, { 
-  // Tracks account creation and last update
   timestamps: true 
 });
 
-/**
- * 🔒 PASSWORD ENCRYPTION
- * Automatically hashes the owner's main password before saving to the database.
- */
+// --- PASSWORD ENCRYPTION ---
 ownerSchema.pre('save', async function (next) {
   if (!this.isModified('password')) return next();
   const salt = await bcrypt.genSalt(10);
@@ -40,17 +43,13 @@ ownerSchema.pre('save', async function (next) {
   next();
 });
 
-/**
- * 🛡️ MATCH PASSWORD METHOD
- * Used during the login process to verify the owner's credentials.
- */
+// --- PASSWORD VERIFICATION ---
 ownerSchema.methods.matchPassword = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
 };
 
-/**
- * 🏗️ EXPORT MODEL
- * Includes the "Exists" check to prevent crashes during hot-reloads.
- */
-const Owner = mongoose.models.Owner || mongoose.model('Owner', ownerSchema);
+// ⚠️ IMPORTANT: We use 'User' as the model name internally to match your Super Admin logic, 
+// even though the file is Owner.js. This prevents "Missing Schema" errors.
+const Owner = mongoose.models.User || mongoose.model('User', ownerSchema);
+
 export default Owner;

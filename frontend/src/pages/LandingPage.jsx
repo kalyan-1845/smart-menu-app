@@ -39,7 +39,6 @@ const LandingPage = () => {
     }
   };
 
-  // --- MAIN LANDING PAGE (NO AUTO-REDIRECT) ---
   return (
     <div className="landing-container">
       <style>{`
@@ -80,7 +79,7 @@ const LandingPage = () => {
         .modal-content { background: #111; padding: 40px; border-radius: 24px; width: 100%; max-width: 450px; border: 1px solid #222; text-align: center; }
         .modal-input { width: 100%; padding: 15px; margin-bottom: 15px; background: #000; border: 1px solid #333; color: white; border-radius: 12px; outline: none; }
 
-        @media (max-width: 768px) { .hero h1 { font-size: 38px; } .nav-links { display: none; } }
+        @media (max-width: 768px) { .hero h1 { font-size: 38px; } }
       `}</style>
 
       <nav className="navbar">
@@ -88,8 +87,7 @@ const LandingPage = () => {
           <img src="/logo192.png" className="logo-img" alt="BiteBox Logo" />
           <span className="brand-name">BiteBox</span>
         </Link>
-        <div className="nav-links" style={{display:'flex', gap:'20px'}}>
-          <Link to="/login" style={{color:'#888', textDecoration:'none', fontWeight:'bold', fontSize:'14px'}}>STAFF LOGIN</Link>
+        <div className="nav-links">
           <button onClick={() => setShowModal(true)} className="btn-primary" style={{padding:'10px 20px', fontSize:'12px'}}>GET STARTED</button>
         </div>
       </nav>
@@ -106,9 +104,6 @@ const LandingPage = () => {
           <button onClick={() => setShowModal(true)} className="btn-primary">
             Request Access <FaArrowRight />
           </button>
-          <Link to="/login" style={{background:'#111', border:'1px solid #222', color:'white', padding:'16px 32px', borderRadius:'12px', textDecoration:'none', fontWeight:'bold'}}>
-            Partner Login
-          </Link>
         </div>
       </section>
 

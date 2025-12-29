@@ -1,128 +1,322 @@
-import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { FaUserSecret, FaLock, FaArrowRight } from "react-icons/fa";
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { FaLock, FaUser, FaEye, FaEyeSlash, FaCrown, FaShieldAlt } from 'react-icons/fa';
+import axios from 'axios';
 
 const SuperLogin = () => {
-  const [secret, setSecret] = useState("");
-  const [isShake, setIsShake] = useState(false);
   const navigate = useNavigate();
+  const [credentials, setCredentials] = useState({
+    username: '',
+    password: ''
+  });
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  // 🛡️ SECURITY CONFIGURATION
-  const LOCKOUT_KEY = "system_integrity_check"; // Stores time when locked
-  const ATTEMPT_KEY = "sys_retry_count";        // Stores number of wrong attempts
-  const LOCKOUT_TIME = 2 * 60 * 60 * 1000;      // 2 Hours
-  const MASTER_KEY = "srividyabb1972"; 
-  const MAX_ATTEMPTS = 3;                       // 3 Strikes Rule
-
-  const handleLogin = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setLoading(true);
+    setError('');
 
-    // 🚨 BACKDOOR RESET (Clears Lock & Attempts)
-    if (secret === "RESET") {
-        localStorage.removeItem(LOCKOUT_KEY);
-        localStorage.removeItem(ATTEMPT_KEY);
-        alert("🔒 SYSTEM RESET: Lock & Attempts cleared.");
-        setSecret("");
-        return;
-    }
-
-    // 1. CHECK IF ALREADY LOCKED
-    const lockedUntil = localStorage.getItem(LOCKOUT_KEY);
-    const currentTime = Date.now();
-
-    if (lockedUntil && currentTime < parseInt(lockedUntil)) {
-      console.log("⛔ System is LOCKED. Wait 2 hours.");
-      triggerSilentFail(); 
-      return;
-    }
-
-    // 2. VERIFY PASSWORD
-    if (secret === MASTER_KEY) {
-      // ✅ SUCCESS
-      console.log("✅ Access Granted");
-      sessionStorage.setItem("isSuperAdmin", "true"); 
+    try {
+      const response = await axios.post('http://localhost:5000/api/super-login', credentials);
       
-      // Clear security keys on success
-      localStorage.removeItem(LOCKOUT_KEY); 
-      localStorage.removeItem(ATTEMPT_KEY);
-      
-      navigate("/ceo");
-    } else {
-      // ❌ WRONG PASSWORD LOGIC
-      handleFailedAttempt();
+      if (response.data.success) {
+        localStorage.setItem('superAdminToken', response.data.token);
+        localStorage.setItem('owner_token_ceo', response.data.token);
+        navigate('/ceo');
+      } else {
+        setError('Invalid credentials');
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || 'Login failed. Check server connection.');
+    } finally {
+      setLoading(false);
     }
-  };
-
-  const handleFailedAttempt = () => {
-    // Get current fails (default to 0)
-    let currentAttempts = parseInt(localStorage.getItem(ATTEMPT_KEY) || "0");
-    currentAttempts += 1;
-
-    console.log(`❌ Wrong Password. Attempt ${currentAttempts}/${MAX_ATTEMPTS}`);
-
-    if (currentAttempts >= MAX_ATTEMPTS) {
-        // ⛔ 3RD STRIKE: LOCK THE SYSTEM
-        const newLockoutTime = Date.now() + LOCKOUT_TIME;
-        localStorage.setItem(LOCKOUT_KEY, newLockoutTime.toString());
-        localStorage.removeItem(ATTEMPT_KEY); // Reset count so they start fresh after 2 hours
-        console.log("🔒 SYSTEM LOCKED FOR 2 HOURS");
-    } else {
-        // ⚠️ SAVE ATTEMPT COUNT
-        localStorage.setItem(ATTEMPT_KEY, currentAttempts.toString());
-    }
-
-    triggerSilentFail();
-  };
-
-  const triggerSilentFail = () => {
-    setIsShake(true);
-    setSecret(""); 
-    setTimeout(() => setIsShake(false), 500);
   };
 
   return (
-    <div style={{ height: "100vh", background: "#000", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontFamily: "Inter" }}>
-      <div style={{ width: "350px", padding: "40px", background: "#111", borderRadius: "20px", border: "1px solid #222", textAlign: "center" }}>
-        <FaUserSecret size={50} color="#f97316" style={{ marginBottom: "20px" }} />
-        <h1 style={{ fontSize: "24px", fontWeight: "900", margin: "0 0 10px 0" }}>CEO ACCESS</h1>
-        <p style={{ color: "#666", fontSize: "12px", marginBottom: "30px" }}>Restricted Area. Authorized Personnel Only.</p>
-        
-        <form onSubmit={handleLogin}>
-          <div style={{ position: "relative", marginBottom: "20px" }}>
-            <FaLock style={{ position: "absolute", left: "15px", top: "15px", color: "#555" }} />
-            <input 
-              type="password" 
-              placeholder="Enter Master Key" 
-              value={secret} 
-              onChange={(e) => setSecret(e.target.value)}
-              className={isShake ? "shake" : ""}
-              style={{ 
-                width: "100%", 
-                padding: "15px 15px 15px 45px", 
-                background: "#000", 
-                border: isShake ? "1px solid #ef4444" : "1px solid #333", 
-                borderRadius: "10px", 
-                color: "white", 
-                outline: "none",
-                transition: "border 0.2s"
-              }}
-            />
-          </div>
-          <button type="submit" style={{ width: "100%", padding: "15px", background: "#f97316", border: "none", borderRadius: "10px", fontWeight: "900", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "10px" }}>
-            ENTER PANEL <FaArrowRight />
-          </button>
-        </form>
-      </div>
-
+    <div className="super-login-container">
       <style>{`
-        .shake { animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both; }
-        @keyframes shake {
-          10%, 90% { transform: translate3d(-1px, 0, 0); }
-          20%, 80% { transform: translate3d(2px, 0, 0); }
-          30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
-          40%, 60% { transform: translate3d(4px, 0, 0); }
+        .super-login-container {
+          min-height: 100vh;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
+          padding: 20px;
+        }
+
+        .login-card {
+          background: rgba(17, 17, 17, 0.95);
+          border: 1px solid #222;
+          border-radius: 20px;
+          padding: 40px;
+          width: 100%;
+          max-width: 400px;
+          backdrop-filter: blur(10px);
+          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        }
+
+        .login-header {
+          text-align: center;
+          margin-bottom: 40px;
+        }
+
+        .login-icon {
+          width: 80px;
+          height: 80px;
+          background: linear-gradient(135deg, #f97316, #ea580c);
+          border-radius: 20px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin: 0 auto 20px;
+          font-size: 32px;
+          color: white;
+        }
+
+        .login-header h1 {
+          margin: 0;
+          font-size: 28px;
+          font-weight: 800;
+          background: linear-gradient(135deg, #f97316, #fbbf24);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+        }
+
+        .login-header p {
+          color: #888;
+          margin-top: 8px;
+          font-size: 14px;
+        }
+
+        .form-group {
+          margin-bottom: 24px;
+        }
+
+        .input-group {
+          position: relative;
+        }
+
+        .input-group input {
+          width: 100%;
+          padding: 16px 16px 16px 48px;
+          background: rgba(255,255,255,0.05);
+          border: 1px solid #333;
+          border-radius: 12px;
+          color: white;
+          font-size: 16px;
+          outline: none;
+          transition: all 0.3s;
+        }
+
+        .input-group input:focus {
+          border-color: #f97316;
+          box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.1);
+        }
+
+        .input-icon {
+          position: absolute;
+          left: 16px;
+          top: 50%;
+          transform: translateY(-50%);
+          color: #888;
+          font-size: 18px;
+        }
+
+        .password-toggle {
+          position: absolute;
+          right: 16px;
+          top: 50%;
+          transform: translateY(-50%);
+          background: none;
+          border: none;
+          color: #888;
+          cursor: pointer;
+          font-size: 18px;
+          padding: 0;
+        }
+
+        .login-btn {
+          width: 100%;
+          padding: 16px;
+          background: linear-gradient(135deg, #f97316, #ea580c);
+          border: none;
+          border-radius: 12px;
+          color: white;
+          font-size: 16px;
+          font-weight: 600;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
+          transition: all 0.3s;
+          margin-top: 10px;
+        }
+
+        .login-btn:hover:not(:disabled) {
+          transform: translateY(-2px);
+          box-shadow: 0 10px 30px rgba(249, 115, 22, 0.4);
+        }
+
+        .login-btn:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        .error-message {
+          background: rgba(239, 68, 68, 0.1);
+          border: 1px solid rgba(239, 68, 68, 0.3);
+          color: #fca5a5;
+          padding: 12px;
+          border-radius: 8px;
+          margin-bottom: 20px;
+          font-size: 14px;
+          text-align: center;
+        }
+
+        .spinner {
+          width: 20px;
+          height: 20px;
+          border: 2px solid rgba(255,255,255,0.3);
+          border-radius: 50%;
+          border-top-color: white;
+          animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+
+        .security-note {
+          margin-top: 30px;
+          padding-top: 20px;
+          border-top: 1px solid #222;
+          text-align: center;
+          color: #666;
+          font-size: 12px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+        }
+
+        .demo-credentials {
+          background: rgba(255,255,255,0.03);
+          border: 1px solid #222;
+          border-radius: 8px;
+          padding: 15px;
+          margin-top: 20px;
+        }
+
+        .demo-credentials h4 {
+          margin: 0 0 10px 0;
+          font-size: 14px;
+          color: #888;
+        }
+
+        .demo-credentials p {
+          margin: 5px 0;
+          font-size: 13px;
+          color: #666;
+          font-family: monospace;
+        }
+
+        .demo-credentials strong {
+          color: #f97316;
         }
       `}</style>
+
+      <div className="login-card">
+        <div className="login-header">
+          <div className="login-icon">
+            <FaCrown />
+          </div>
+          <h1>CEO Portal</h1>
+          <p>Full System Administration Access</p>
+        </div>
+
+        {error && (
+          <div className="error-message">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <div className="input-group">
+              <span className="input-icon">
+                <FaUser />
+              </span>
+              <input
+                type="text"
+                placeholder="CEO Username"
+                value={credentials.username}
+                onChange={(e) => setCredentials({...credentials, username: e.target.value})}
+                required
+                autoComplete="username"
+                disabled={loading}
+              />
+            </div>
+          </div>
+
+          <div className="form-group">
+            <div className="input-group">
+              <span className="input-icon">
+                <FaLock />
+              </span>
+              <input
+                type={showPassword ? "text" : "password"}
+                placeholder="Master Password"
+                value={credentials.password}
+                onChange={(e) => setCredentials({...credentials, password: e.target.value})}
+                required
+                autoComplete="current-password"
+                disabled={loading}
+              />
+              <button
+                type="button"
+                className="password-toggle"
+                onClick={() => setShowPassword(!showPassword)}
+                disabled={loading}
+              >
+                {showPassword ? <FaEyeSlash /> : <FaEye />}
+              </button>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            className="login-btn"
+            disabled={loading || !credentials.username || !credentials.password}
+          >
+            {loading ? (
+              <>
+                <div className="spinner"></div>
+                Authenticating...
+              </>
+            ) : (
+              <>
+                <FaShieldAlt />
+                Secure Login
+              </>
+            )}
+          </button>
+        </form>
+
+        <div className="demo-credentials">
+          <h4>Default CEO Credentials:</h4>
+          <p>Username: <strong>srinivas</strong></p>
+          <p>Password: <strong>bsr18</strong></p>
+        </div>
+
+        <div className="security-note">
+          <FaShieldAlt />
+          Secure CEO Access Only
+        </div>
+      </div>
     </div>
   );
 };
