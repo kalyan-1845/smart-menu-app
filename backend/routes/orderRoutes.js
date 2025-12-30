@@ -1,81 +1,228 @@
-import express from 'express';
-import Order from '../models/Order.js'; 
-
+const express = require('express');
 const router = express.Router();
+const Order = require('../models/Order');
 
-// 1. CREATE NEW ORDER (Used by Cart)
+// Get all orders
+router.get('/', async (req, res) => {
+  try {
+    const { status, type, date } = req.query;
+    let filter = {};
+    
+    if (status) filter.status = status;
+    if (type) filter.orderType = type;
+    if (date) {
+      const startDate = new Date(date);
+      startDate.setHours(0, 0, 0, 0);
+      const endDate = new Date(date);
+      endDate.setHours(23, 59, 59, 999);
+      filter.orderedAt = { $gte: startDate, $lte: endDate };
+    }
+    
+    const orders = await Order.find(filter)
+      .populate('items.dishId')
+      .sort({ orderedAt: -1 })
+      .limit(100);
+    
+    res.json({
+      success: true,
+      count: orders.length,
+      orders
+    });
+    
+  } catch (error) {
+    console.error('Get orders error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Server error' 
+    });
+  }
+});
+
+// Get single order
+router.get('/:id', async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id)
+      .populate('items.dishId');
+    
+    if (!order) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Order not found' 
+      });
+    }
+    
+    res.json({
+      success: true,
+      order
+    });
+    
+  } catch (error) {
+    console.error('Get order error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Server error' 
+    });
+  }
+});
+
+// Create new order
 router.post('/', async (req, res) => {
   try {
-    console.log("📥 Received Order Data:", req.body); 
-
-    if (!req.body.restaurantId) {
-        return res.status(400).json({ message: "Restaurant ID is missing" });
-    }
-
-    const newOrder = new Order(req.body);
-    const savedOrder = await newOrder.save();
-
-    console.log("✅ Order Saved:", savedOrder._id);
-
-    // Notify Restaurant
-    if (req.io) {
-        req.io.to(req.body.restaurantId).emit('new-order', savedOrder);
-        req.io.to('super-admin-room').emit('global-new-order', savedOrder);
-    }
-
-    res.status(201).json(savedOrder);
-  } catch (err) {
-    console.error("❌ ORDER FAILED:", err.message); 
-    res.status(400).json({ message: err.message });
+    const order = new Order(req.body);
+    await order.save();
+    
+    // Emit socket event for real-time update
+    req.app.get('io').emit('new-order', order);
+    
+    res.status(201).json({
+      success: true,
+      order
+    });
+    
+  } catch (error) {
+    console.error('Create order error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Server error' 
+    });
   }
 });
 
-// 2. 🚀 TRACK SINGLE ORDER (This is the specific part you were missing!)
-router.get('/track/:id', async (req, res) => {
-    try {
-        const order = await Order.findById(req.params.id);
-        if (!order) {
-            return res.status(404).json({ message: "Order not found" });
-        }
-        res.json(order);
-    } catch (err) {
-        console.error("Tracking Error:", err);
-        res.status(500).json({ message: "Server Error during tracking" });
+// Update order status
+router.patch('/:id/status', async (req, res) => {
+  try {
+    const { status, chefNotes } = req.body;
+    const updateData = { status };
+    
+    if (chefNotes) updateData.chefNotes = chefNotes;
+    
+    // Set timestamps based on status
+    const now = new Date();
+    switch(status) {
+      case 'confirmed':
+        updateData.confirmedAt = now;
+        break;
+      case 'preparing':
+        updateData.startedAt = now;
+        break;
+      case 'ready':
+        updateData.readyAt = now;
+        updateData.actualPrepTime = now - this.startedAt;
+        break;
+      case 'completed':
+        updateData.completedAt = now;
+        break;
     }
-});
-
-// 3. GET ALL ORDERS (Used by Restaurant Admin)
-router.get('/:restaurantId', async (req, res) => {
-  try {
-    const orders = await Order.find({ restaurantId: req.params.restaurantId }).sort({ createdAt: -1 });
-    res.json(orders);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
-// 4. UPDATE ORDER STATUS (Used by Chef/Waiter)
-router.put('/:id', async (req, res) => {
-  try {
-    const updatedOrder = await Order.findByIdAndUpdate(
-      req.params.id, 
-      { status: req.body.status }, 
+    
+    const order = await Order.findByIdAndUpdate(
+      req.params.id,
+      updateData,
       { new: true }
-    );
+    ).populate('items.dishId');
     
-    // Notify Tracker & Admin
-    if (req.io && updatedOrder) {
-        // Notify the specific customer tracking page
-        req.io.emit(`order-update-${updatedOrder._id}`, updatedOrder);
-        
-        // Notify the restaurant dashboard
-        req.io.to(updatedOrder.restaurantId).emit('order-status-updated', updatedOrder);
+    if (!order) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Order not found' 
+      });
     }
     
-    res.json(updatedOrder);
-  } catch (err) {
-    res.status(400).json({ message: err.message });
+    // Emit socket event for real-time update
+    req.app.get('io').emit('order-status-update', {
+      orderId: order._id,
+      status: order.status,
+      updatedAt: now
+    });
+    
+    res.json({
+      success: true,
+      order
+    });
+    
+  } catch (error) {
+    console.error('Update status error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Server error' 
+    });
   }
 });
 
-export default router;
+// Get kitchen orders (for chef dashboard)
+router.get('/kitchen/pending', async (req, res) => {
+  try {
+    const orders = await Order.find({ 
+      status: { $in: ['pending', 'confirmed', 'preparing'] } 
+    })
+    .populate('items.dishId')
+    .sort({ orderedAt: 1 })
+    .limit(50);
+    
+    res.json({
+      success: true,
+      orders
+    });
+    
+  } catch (error) {
+    console.error('Kitchen orders error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Server error' 
+    });
+  }
+});
+
+// Get today's statistics
+router.get('/stats/today', async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    const stats = await Order.aggregate([
+      {
+        $match: {
+          orderedAt: { $gte: today, $lt: tomorrow }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalOrders: { $sum: 1 },
+          totalRevenue: { $sum: '$finalAmount' },
+          pendingOrders: {
+            $sum: { $cond: [{ $in: ['$status', ['pending', 'confirmed']] }, 1, 0] }
+          },
+          preparingOrders: {
+            $sum: { $cond: [{ $eq: ['$status', 'preparing'] }, 1, 0] }
+          },
+          completedOrders: {
+            $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] }
+          }
+        }
+      }
+    ]);
+    
+    res.json({
+      success: true,
+      stats: stats[0] || {
+        totalOrders: 0,
+        totalRevenue: 0,
+        pendingOrders: 0,
+        preparingOrders: 0,
+        completedOrders: 0
+      }
+    });
+    
+  } catch (error) {
+    console.error('Stats error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Server error' 
+    });
+  }
+});
+
+module.exports = router;
