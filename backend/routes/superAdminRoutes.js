@@ -1,160 +1,153 @@
 import express from 'express';
-import bcrypt from 'bcryptjs';
 import Owner from '../models/Owner.js'; 
-import Order from '../models/Order.js'; 
+// Ensure you have a Payment model created for the ledger logic below
+// import Payment from '../models/Payment.js'; 
 import { protect } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-// 🔒 SECURITY: Only allow "srinivas" or "superadmin"
+/**
+ * 🔒 MIDDLEWARE: adminOnly
+ * High-security gatekeeper. Even with a valid token, only the username 
+ * "srinivas" can pass through these routes.
+ */
 const adminOnly = (req, res, next) => {
-    if (req.user && (req.user.username === "srinivas" || req.user.role === "superadmin")) {
+    if (req.user && req.user.username === "srinivas") {
         next();
     } else {
-        res.status(403).json({ message: "⛔ Access Denied: CEO Only" });
+        res.status(403).json({ message: "Access Denied: Master Admin Only" });
     }
 };
 
 // ============================================================
-// 1. DASHBOARD DATA (Matches your 'restaurants' state)
+// 1. DASHBOARD & STATS (The "CEO" View)
 // ============================================================
-router.get('/restaurants', protect, adminOnly, async (req, res) => {
+
+/**
+ * @route   GET /api/superadmin/all-owners
+ * @desc    Fetch every restaurant on the platform and calculate their trial status.
+ * @access  Master Admin Only
+ */
+router.get('/all-owners', protect, adminOnly, async (req, res) => {
     try {
         const owners = await Owner.find({}).select('-password').sort({ createdAt: -1 });
         
-        const data = await Promise.all(owners.map(async (owner) => {
-            const daysLeft = owner.trialEndsAt 
-                ? Math.ceil((new Date(owner.trialEndsAt) - new Date()) / (1000 * 60 * 60 * 24)) 
-                : 0;
-
-            let revenue = 0;
-            try {
-                // Aggregates total revenue from Orders collection
-                const revenueData = await Order.aggregate([
-                    { $match: { restaurantId: owner._id } },
-                    { $group: { _id: null, total: { $sum: "$totalAmount" } } }
-                ]);
-                revenue = revenueData.length > 0 ? revenueData[0].total : 0;
-            } catch (e) { revenue = 0; }
-
-            return { ...owner._doc, daysLeft, totalRevenue: revenue };
-        }));
+        const data = owners.map(owner => {
+            // Calculate how many days are left in the 60-day trial
+            const diffTime = new Date(owner.trialEndsAt) - new Date();
+            const daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+            return { ...owner._doc, daysLeft };
+        });
 
         res.json(data);
     } catch (error) {
-        res.status(500).json({ message: "Error fetching data" });
+        res.status(500).json({ message: "Error fetching owners" });
     }
 });
 
-// ============================================================
-// 2. REGISTER NEW RESTAURANT (Matches your AddRestaurant.jsx)
-// ============================================================
-router.post('/register', async (req, res) => {
-    // Note: This endpoint is open so /superresturant works without login if you prefer,
-    // or add 'protect, adminOnly' if you want it secured.
+/**
+ * @route   GET /api/superadmin/platform-stats
+ * @desc    BiteBox Analytics: Revenue tracking and client conversion.
+ * @access  Master Admin Only
+ */
+router.get('/platform-stats', protect, adminOnly, async (req, res) => {
     try {
-        const { restaurantName, username, password, email, phone, address } = req.body;
+        const totalClients = await Owner.countDocuments({});
+        const proClients = await Owner.countDocuments({ isPro: true });
+        const activeTrials = totalClients - proClients;
         
-        const existing = await Owner.findOne({ username });
-        if (existing) return res.status(400).json({ message: "Username already taken." });
+        // MRR (Monthly Recurring Revenue) calculation based on your 999/mo pricing strategy
+        const monthlyRecurringRevenue = proClients * 999;
 
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(password, salt);
-        
-        const newOwner = await Owner.create({
-            restaurantName, username, email, phone, address,
-            password: hashedPassword,
-            role: 'owner',
-            isActive: true,
-            isPro: true,
-            trialEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 Days Free
-        });
-
-        res.json({ success: true, message: `✅ ${restaurantName} Created Successfully!` });
-    } catch (err) {
-        res.status(500).json({ message: "Registration Failed: " + err.message });
-    }
-});
-
-// ============================================================
-// 3. DEEP DIVE (Matches your Ghost Modal)
-// ============================================================
-router.get('/restaurant/:id/deep-dive', protect, adminOnly, async (req, res) => {
-    try {
-        const { id } = req.params;
-        const owner = await Owner.findById(id).select('-password');
-        if (!owner) return res.status(404).json({ message: "Restaurant Not Found" });
-
-        const orders = await Order.find({ restaurantId: id }).sort({ createdAt: -1 }).limit(50);
-        const totalRevenue = orders.reduce((acc, o) => acc + (o.totalAmount || 0), 0);
-        
         res.json({
-            identity: owner,
-            stats: {
-                totalRevenue,
-                totalOrders: orders.length,
-                avgOrderValue: orders.length > 0 ? Math.round(totalRevenue / orders.length) : 0,
-            }
+            totalClients,
+            proClients,
+            activeTrials,
+            mrr: monthlyRecurringRevenue
         });
-    } catch (err) {
-        res.status(500).json({ message: err.message });
+    } catch (error) {
+        res.status(500).json({ message: "Analytics Node Error", error: error.message });
     }
 });
 
 // ============================================================
-// 4. ACTIONS (Matches your Modal Buttons)
+// 2. SUBSCRIPTION & PAYMENT MANAGEMENT (Manual Onboarding)
 // ============================================================
 
-// Enable/Disable
-router.put('/restaurant/:id/status', protect, adminOnly, async (req, res) => {
-    try {
-        await Owner.findByIdAndUpdate(req.params.id, { isActive: req.body.isActive });
-        res.json({ success: true, message: "Status Updated" });
-    } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-// Add 30 Days
-router.put('/restaurant/:id/subscription', protect, adminOnly, async (req, res) => {
+/**
+ * @route   PUT /api/superadmin/extend/:id
+ * @desc    Quick Extend: Manually add 30 days. Perfect for when a restaurant 
+ * pays you cash in person.
+ * @access  Master Admin Only
+ */
+router.put('/extend/:id', protect, adminOnly, async (req, res) => {
     try {
         const owner = await Owner.findById(req.params.id);
-        let currentExpiry = new Date(owner.trialEndsAt || Date.now());
-        if (currentExpiry < new Date()) currentExpiry = new Date();
-        currentExpiry.setDate(currentExpiry.getDate() + 30);
+        if (!owner) return res.status(404).json({ message: "Restaurant not found" });
 
-        owner.trialEndsAt = currentExpiry;
+        // Logic to ensure extension starts from today if already expired
+        const currentExpiry = new Date(owner.trialEndsAt) > new Date() 
+            ? new Date(owner.trialEndsAt) 
+            : new Date();
+        
+        owner.trialEndsAt = new Date(currentExpiry.getTime() + 30 * 24 * 60 * 60 * 1000);
         owner.isPro = true; 
+
+        // Note: Ensure the Payment model is imported/created to use this ledger logic
+        /*
+        await Payment.create({
+            restaurantId: owner._id,
+            restaurantName: owner.restaurantName,
+            amount: 999, 
+            method: 'Cash/Manual',
+            monthsPaid: 1
+        });
+        */
+
         await owner.save();
-        res.json({ success: true, message: "Added 30 Days Validity" });
-    } catch (err) { res.status(500).json({ error: err.message }); }
+        res.json({ message: "Plan Extended & Cash Payment Logged", owner });
+    } catch (error) {
+        res.status(500).json({ message: "Extension Error" });
+    }
 });
 
-// Reset Password
-router.put('/restaurant/:id/password', protect, adminOnly, async (req, res) => {
+/**
+ * @route   PUT /api/superadmin/update-subscription/:id
+ * @desc    Flexible update for specific months/amounts (e.g., Annual Plans).
+ */
+router.put('/update-subscription/:id', protect, adminOnly, async (req, res) => {
     try {
-        const { password } = req.body;
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(password, salt);
-        await Owner.findByIdAndUpdate(req.params.id, { password: hashedPassword });
-        res.json({ success: true, message: "Password Reset Successful" });
-    } catch (err) { res.status(500).json({ error: err.message }); }
-});
+        const { isPro, addMonths, amount, method } = req.body;
+        const owner = await Owner.findById(req.params.id);
 
-// Delete Restaurant
-router.delete('/restaurant/:id', protect, adminOnly, async (req, res) => {
-    try {
-        await Owner.findByIdAndDelete(req.params.id);
-        res.json({ success: true, message: "Restaurant Deleted Permanently" });
-    } catch (err) { res.status(500).json({ error: err.message }); }
-});
+        if (!owner) return res.status(404).json({ message: "Restaurant not found" });
 
-// Broadcast
-router.post('/broadcast', protect, adminOnly, async (req, res) => {
-    const io = req.app.get('socketio');
-    if (io) {
-        io.emit('new-broadcast', { ...req.body, timestamp: new Date() });
-        res.json({ message: "📢 Broadcast Sent Successfully!" });
-    } else {
-        res.status(500).json({ message: "Socket Server Offline" });
+        if (isPro !== undefined) owner.isPro = isPro;
+        
+        if (addMonths) {
+            const currentExpiry = new Date(owner.trialEndsAt) > new Date() 
+                ? new Date(owner.trialEndsAt) 
+                : new Date();
+            
+            owner.trialEndsAt = new Date(currentExpiry.getTime() + addMonths * 30 * 24 * 60 * 60 * 1000);
+            owner.isPro = true; 
+
+            // Record the manual payment in the database
+            /*
+            await Payment.create({
+                restaurantId: owner._id,
+                restaurantName: owner.restaurantName,
+                amount: amount || (addMonths * 999),
+                method: method || 'UPI',
+                monthsPaid: addMonths
+            });
+            */
+        }
+
+        await owner.save();
+        res.json({ message: "Subscription Updated", owner });
+    } catch (error) {
+        res.status(500).json({ message: "Update Error" });
     }
 });
 

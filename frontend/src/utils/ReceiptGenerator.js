@@ -1,89 +1,72 @@
 import jsPDF from "jspdf";
 
 export const generateCustomerReceipt = (order, restaurant) => {
-    // 1. Setup 80mm Thermal Receipt Size
     const doc = new jsPDF({
         orientation: "portrait",
         unit: "mm",
-        format: [80, 220] 
+        format: [80, 200] // Thermal receipt paper size
     });
 
-    const centerX = 40; 
-    let y = 10; 
+    const centerX = 40; // Center of 80mm paper
+    let y = 10; // Start Y position
 
-    // --- LOGO / HEADER ---
-    doc.setFontSize(16);
+    // --- HEADER ---
+    doc.setFontSize(14);
     doc.setFont("helvetica", "bold");
     doc.text(restaurant?.restaurantName || "BiteBox", centerX, y, { align: "center" });
-    y += 6;
+    y += 5;
 
-    doc.setFontSize(9);
+    doc.setFontSize(8);
     doc.setFont("helvetica", "normal");
-    doc.text("Official Digital Receipt", centerX, y, { align: "center" });
+    doc.text("Original Receipt", centerX, y, { align: "center" });
     y += 5;
     
-    doc.text("------------------------------------------", centerX, y, { align: "center" });
+    doc.text("--------------------------------", centerX, y, { align: "center" });
     y += 5;
 
-    // --- ORDER DETAILS ---
-    doc.setFontSize(10);
-    doc.text(`Order: #${order._id.slice(-6).toUpperCase()}`, 5, y);
+    // --- INFO ---
+    doc.setFontSize(9);
+    doc.text(`Order ID: #${order._id.slice(-4).toUpperCase()}`, 5, y);
     y += 5;
     doc.text(`Table: ${order.tableNum}`, 5, y);
     y += 5;
-    doc.text(`Date: ${new Date(order.createdAt).toLocaleDateString()}`, 5, y);
+    doc.text(`Date: ${new Date().toLocaleDateString()}`, 5, y);
     y += 5;
     
-    doc.text("------------------------------------------", centerX, y, { align: "center" });
+    doc.text("--------------------------------", centerX, y, { align: "center" });
     y += 5;
 
-    // --- ITEMS LIST ---
-    doc.setFont("helvetica", "bold");
-    doc.text("Item", 5, y);
-    doc.text("Price", 75, y, { align: "right" });
-    doc.setFont("helvetica", "normal");
-    y += 5;
-
+    // --- ITEMS ---
+    doc.setFontSize(9);
     order.items.forEach((item) => {
-        const name = `${item.quantity} x ${item.name}`;
-        const price = `₹${item.price * item.quantity}`;
+        const itemLine = `${item.quantity} x ${item.name}`;
+        const priceLine = `Rs.${item.price * item.quantity}`;
         
-        // Handle long names
-        if (name.length > 25) {
-            doc.text(name.substring(0, 25) + "...", 5, y);
-        } else {
-            doc.text(name, 5, y);
-        }
-        
-        doc.text(price, 75, y, { align: "right" });
+        // Print item name on left, price on right
+        doc.text(itemLine.substring(0, 20), 5, y); 
+        doc.text(priceLine, 75, y, { align: "right" });
         y += 5;
     });
 
-    doc.text("------------------------------------------", centerX, y, { align: "center" });
+    doc.text("--------------------------------", centerX, y, { align: "center" });
     y += 5;
 
     // --- TOTAL ---
-    y += 2;
-    doc.setFontSize(14);
+    doc.setFontSize(12);
     doc.setFont("helvetica", "bold");
     doc.text("TOTAL", 5, y);
-    doc.text(`Rs. ${order.totalAmount}`, 75, y, { align: "right" });
-    y += 8;
+    doc.text(`Rs.${order.totalAmount}`, 75, y, { align: "right" });
+    y += 7;
 
-    // --- PAYMENT STATUS ---
-    doc.setFontSize(10);
+    doc.setFontSize(8);
     doc.setFont("helvetica", "normal");
-    const statusText = order.paymentMethod === "Cash" ? "Payment Due (Cash)" : "Paid Online";
-    doc.text(`Status: ${statusText}`, centerX, y, { align: "center" });
+    doc.text(order.paymentMethod === "Cash" ? "(Pending Payment)" : "(Paid Online)", centerX, y, { align: "center" });
     y += 10;
 
     // --- FOOTER ---
     doc.setFontSize(8);
-    doc.setTextColor(100);
     doc.text("Thank you for dining with us!", centerX, y, { align: "center" });
-    y += 4;
-    doc.text("Powered by BiteBox", centerX, y, { align: "center" });
 
-    // Download
-    doc.save(`Bill_${order._id.slice(-4)}.pdf`);
+    // Save File
+    doc.save(`Receipt_${order._id.slice(-4)}.pdf`);
 };

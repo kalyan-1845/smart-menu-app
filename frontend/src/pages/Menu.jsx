@@ -1,194 +1,237 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import axios from "axios";
 import { 
-  FaSearch, FaShoppingCart, FaPlus, FaMinus, FaInfoCircle, FaUtensils 
-} from "react-icons/fa"; // ✅ Fixed typo here
+  FaSearch, FaShoppingCart, FaStar, FaPlus, FaMinus, 
+  FaUtensils, FaInfoCircle, FaFire 
+} from "react-icons/fa";
+import axios from "axios";
 
-const Menu = ({ cart, addToCart, setRestaurantId, setTableNum }) => {
+// --- CONSTANTS ---
+const CATEGORIES = ["All", "Starters", "Main Course", "Fast Food", "Dessert", "Beverages"];
+const FALLBACK_IMG = "https://cdn-icons-png.flaticon.com/512/706/706164.png";
+const API_BASE = "https://smart-menu-backend-5ge7.onrender.com/api";
+
+// --- SKELETON LOADER COMPONENT ---
+const SkeletonCard = () => (
+  <div style={{...styles.card, height: '240px', animation: 'pulse 1.5s infinite'}}>
+    <div style={{height: '140px', background: '#222'}}></div>
+    <div style={{padding: '10px'}}>
+      <div style={{height: '20px', width: '70%', background: '#333', marginBottom: '10px', borderRadius: '4px'}}></div>
+      <div style={{height: '15px', width: '40%', background: '#333', borderRadius: '4px'}}></div>
+    </div>
+  </div>
+);
+
+// --- MAIN MENU COMPONENT ---
+const Menu = ({ cart, addToCart, removeFromCart, setRestaurantId, setTableNum }) => {
   const { id, table } = useParams();
   const navigate = useNavigate();
   
-  const [menu, setMenu] = useState([]);
-  const [restaurant, setRestaurant] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [restaurantName, setRestaurantName] = useState("Loading...");
+  const [activeCategory, setActiveCategory] = useState("All");
   const [searchTerm, setSearchTerm] = useState("");
-  const [category, setCategory] = useState("All");
+  const [dishes, setDishes] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  // --- 1. INITIALIZE & FETCH MENU ---
+  // 1. INITIAL SETUP
   useEffect(() => {
-    if (id) {
-      setRestaurantId(id); 
-      if (table) setTableNum(table);
-      
-      const fetchMenu = async () => {
-        try {
-          const res = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/menu/${id}`);
-          setMenu(res.data);
-          
-          const resInfo = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/auth/restaurant/${id}`);
-          setRestaurant(resInfo.data);
-          
-        } catch (err) {
-          console.error("Menu Load Failed", err);
-        } finally {
-          setLoading(false);
-        }
-      };
-      fetchMenu();
-    }
-  }, [id, table, setRestaurantId, setTableNum]);
+    if (id) setRestaurantId(id);
+    if (table) setTableNum(table);
+    // eslint-disable-next-line
+  }, [id, table]);
 
-  // --- 2. CALCULATE CART COUNTS ---
-  const getQty = (itemId) => {
-    const item = cart.find(i => i._id === itemId);
+  // 2. DATA FETCHING
+  useEffect(() => {
+    const fetchMenu = async () => {
+      try {
+        const res = await axios.get(`${API_BASE}/dishes?restaurantId=${id}`);
+        setDishes(res.data);
+        setRestaurantName(id.toUpperCase());
+      } catch (e) {
+        console.error("Menu Load Failed", e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchMenu();
+  }, [id]);
+
+  // 3. OPTIMIZED FILTERING
+  const filteredItems = useMemo(() => {
+    return dishes.filter(item => {
+      const matchesCategory = activeCategory === "All" || item.category === activeCategory;
+      const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase());
+      return matchesCategory && matchesSearch;
+    });
+  }, [dishes, activeCategory, searchTerm]);
+
+  // 4. CART HELPERS
+  const getItemQty = (itemId) => {
+    const item = cart.find(c => c._id === itemId);
     return item ? item.quantity : 0;
   };
 
   const totalItems = cart.reduce((acc, item) => acc + item.quantity, 0);
   const totalPrice = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
 
-  // --- 3. FILTERING ---
-  const filteredItems = menu.filter(item => 
-    item.name.toLowerCase().includes(searchTerm.toLowerCase()) &&
-    (category === "All" || item.category === category)
-  );
-
-  const categories = ["All", ...new Set(menu.map(item => item.category))];
-
-  if (loading) return (
-    <div style={{height:'100vh', background:'#050505', color:'#f97316', display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column'}}>
-       <div className="spinner"></div>
-       <p style={{marginTop:'20px', fontWeight:'bold'}}>LOADING MENU...</p>
-       <style>{`.spinner { width: 40px; height: 40px; border: 4px solid #333; border-top: 4px solid #f97316; border-radius: 50%; animation: spin 1s linear infinite; } @keyframes spin { 100% { transform: rotate(360deg); } }`}</style>
-    </div>
-  );
-
+  // --- RENDER ---
   return (
     <div style={styles.container}>
-      
-      {/* --- TOP NAVBAR (Fixed) --- */}
-      <div style={styles.navbar}>
-        <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
-             <div style={styles.logoBox}>
-                <FaUtensils />
-             </div>
-             <div>
-                <h2 style={styles.resName}>{restaurant?.restaurantName || "Smart Menu"}</h2>
-                <p style={styles.tableBadge}>{table ? `Table ${table}` : "Takeaway / Counter"}</p>
-             </div>
+      <style>
+        {`
+          .hide-scroll::-webkit-scrollbar { display: none; }
+          .hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }
+          @keyframes pulse { 0% { opacity: 0.6; } 50% { opacity: 1; } 100% { opacity: 0.6; } }
+        `}
+      </style>
+
+      {/* --- HEADER --- */}
+      <div style={styles.header}>
+        <div style={styles.headerTop}>
+          <h1 style={styles.restaurantTitle}>
+            <FaUtensils color="#f97316" size={18} /> {restaurantName}
+          </h1>
+          <div style={styles.tableBadge}>
+            {table ? `Table ${table}` : "Pickup"}
+          </div>
         </div>
-        
-        {/* CART ICON (Top Right) */}
-        <div onClick={() => navigate('/cart')} style={styles.cartIconWrapper}>
-            <FaShoppingCart size={20} color="white" />
-            {totalItems > 0 && <span style={styles.cartBadge}>{totalItems}</span>}
+
+        <div style={styles.searchWrapper}>
+          <FaSearch style={styles.searchIcon} />
+          <input 
+            type="text" 
+            placeholder="Search dishes..." 
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            style={styles.searchInput}
+          />
+        </div>
+
+        <div className="hide-scroll" style={styles.categoryScroll}>
+          {CATEGORIES.map(cat => (
+            <button 
+              key={cat} 
+              onClick={() => setActiveCategory(cat)}
+              style={activeCategory === cat ? styles.catBtnActive : styles.catBtn}
+            >
+              {cat === "Fast Food" && <FaFire style={{marginRight: '5px'}} />}
+              {cat}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* --- SEARCH & CATEGORIES --- */}
-      <div style={styles.controls}>
-        <div style={styles.searchBox}>
-            <FaSearch color="#666" />
-            <input 
-                type="text" 
-                placeholder="Search dishes..." 
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                style={styles.searchInput}
-            />
-        </div>
-        
-        <div style={styles.catScroll}>
-            {categories.map(cat => (
-                <button 
-                    key={cat} 
-                    onClick={() => setCategory(cat)}
-                    style={{
-                        ...styles.catBtn, 
-                        background: category === cat ? '#f97316' : '#1a1a1a',
-                        color: category === cat ? 'white' : '#888'
-                    }}
-                >
-                    {cat}
-                </button>
-            ))}
-        </div>
-      </div>
-
-      {/* --- MENU GRID --- */}
+      {/* --- GRID --- */}
       <div style={styles.grid}>
-        {filteredItems.map(item => (
-            <div key={item._id} style={styles.card}>
-                <img src={item.image || "https://via.placeholder.com/150"} alt={item.name} style={styles.foodImg} />
+        {loading ? (
+          [...Array(4)].map((_, i) => <SkeletonCard key={i} />)
+        ) : filteredItems.length > 0 ? (
+          filteredItems.map(item => {
+            const qty = getItemQty(item._id);
+            return (
+              <div key={item._id} style={styles.card}>
+                <div style={styles.imageWrapper}>
+                  <img 
+                    src={item.image || FALLBACK_IMG} 
+                    alt={item.name} 
+                    style={styles.dishImage}
+                    loading="lazy" 
+                  />
+                  {!item.isAvailable && (
+                    <div style={styles.soldOutOverlay}>SOLD OUT</div>
+                  )}
+                </div>
+
                 <div style={styles.cardContent}>
-                    <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start'}}>
-                        <h3 style={styles.foodName}>{item.name}</h3>
-                        {item.isVeg ? <span style={styles.vegDot}>●</span> : <span style={styles.nonVegDot}>●</span>}
+                  <div>
+                    <div style={styles.dishHeader}>
+                      <h3 style={styles.dishName}>{item.name}</h3>
+                      {item.isVeg ? <span style={styles.vegDot}>●</span> : null}
                     </div>
-                    <p style={styles.desc}>{item.description.slice(0, 45)}...</p>
-                    <div style={styles.priceRow}>
-                        <span style={styles.price}>₹{item.price}</span>
-                        
-                        {/* ADD BUTTON logic */}
-                        {getQty(item._id) > 0 ? (
+                  </div>
+                  
+                  <div style={styles.cardFooter}>
+                    <div style={styles.price}>₹{item.price}</div>
+                    {item.isAvailable ? (
+                        qty > 0 ? (
                             <div style={styles.qtyControl}>
-                                <span style={{fontSize:'12px', fontWeight:'bold'}}>{getQty(item._id)}</span>
-                                <span style={{fontSize:'10px'}}>ADDED</span>
+                                <button onClick={() => removeFromCart(item)} style={styles.qtyBtn}><FaMinus size={10}/></button>
+                                <span style={styles.qtyText}>{qty}</span>
+                                <button onClick={() => addToCart(item)} style={styles.qtyBtn}><FaPlus size={10}/></button>
                             </div>
                         ) : (
-                            <button onClick={() => addToCart(item)} style={styles.addBtn}>
-                                ADD <FaPlus size={10}/>
-                            </button>
-                        )}
-                    </div>
+                            <button onClick={() => addToCart(item)} style={styles.addBtn}>ADD</button>
+                        )
+                    ) : (
+                        <button disabled style={styles.disabledBtn}>N/A</button>
+                    )}
+                  </div>
                 </div>
-            </div>
-        ))}
+              </div>
+            );
+          })
+        ) : (
+            <div style={styles.emptyState}>No dishes found.</div>
+        )}
       </div>
 
-      {/* --- BOTTOM FLOATING CART BAR (Only shows if items in cart) --- */}
+      {/* --- FLOATING CART --- */}
       {totalItems > 0 && (
-        <div onClick={() => navigate('/cart')} style={styles.floatingCart}>
-            <div style={{display:'flex', flexDirection:'column'}}>
-                <span style={{fontSize:'12px', opacity:0.8}}>{totalItems} ITEMS</span>
-                <span style={{fontSize:'16px', fontWeight:'900'}}>₹{totalPrice}</span>
+        <div style={styles.cartSticky}>
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <div style={{ display: "flex", gap: "10px", alignItems: "baseline" }}>
+              <span style={{ fontSize: "16px", fontWeight: "900", color: "#fff" }}>₹{totalPrice}</span>
+              <span style={{ fontSize: "10px", fontWeight: "bold", color: "#ddd" }}>{totalItems} ITEMS</span>
             </div>
-            <div style={{display:'flex', alignItems:'center', gap:'10px', fontWeight:'bold'}}>
-                VIEW CART <FaShoppingCart />
+            <div style={{ fontSize: "9px", color: "#eee", display: "flex", alignItems: "center", gap: "4px", fontWeight: "bold", marginTop: "2px" }}>
+              <FaInfoCircle /> Pay at counter
             </div>
+          </div>
+          <button onClick={() => navigate("/cart")} style={styles.viewCartBtn}>
+            View Cart <FaShoppingCart />
+          </button>
         </div>
       )}
+
+      <div style={styles.branding}>POWERED BY BITEBOX</div>
     </div>
   );
 };
 
+// --- STYLES ---
 const styles = {
-    container: { minHeight:'100vh', background:'#050505', color:'white', fontFamily:'Inter, sans-serif', paddingBottom:'100px' },
-    navbar: { position:'sticky', top:0, zIndex:50, background:'rgba(5,5,5,0.95)', backdropFilter:'blur(10px)', padding:'15px 20px', display:'flex', justifyContent:'space-between', alignItems:'center', borderBottom:'1px solid #1a1a1a' },
-    logoBox: { width:'40px', height:'40px', borderRadius:'10px', background:'#f97316', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'18px', color:'white' },
-    resName: { margin:0, fontSize:'16px', fontWeight:'800', lineHeight:1.2 },
-    tableBadge: { margin:0, fontSize:'11px', color:'#f97316', fontWeight:'600' },
-    cartIconWrapper: { position:'relative', padding:'8px', background:'#1a1a1a', borderRadius:'50%', cursor:'pointer' },
-    cartBadge: { position:'absolute', top:-2, right:-2, background:'#f97316', color:'white', fontSize:'10px', fontWeight:'bold', width:'16px', height:'16px', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', border:'2px solid #050505' },
-    controls: { padding:'15px 20px', background:'#050505' },
-    searchBox: { display:'flex', alignItems:'center', gap:'10px', background:'#111', padding:'12px 15px', borderRadius:'12px', border:'1px solid #222', marginBottom:'15px' },
-    searchInput: { background:'transparent', border:'none', color:'white', width:'100%', fontSize:'14px', outline:'none' },
-    catScroll: { display:'flex', gap:'10px', overflowX:'auto', paddingBottom:'5px', scrollbarWidth:'none' },
-    catBtn: { padding:'8px 16px', borderRadius:'20px', border:'none', fontSize:'13px', fontWeight:'600', whiteSpace:'nowrap', cursor:'pointer', transition:'0.2s' },
-    grid: { padding:'0 20px', display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(150px, 1fr))', gap:'15px' },
-    card: { background:'#111', borderRadius:'16px', overflow:'hidden', border:'1px solid #1a1a1a', display:'flex', flexDirection:'column' },
-    foodImg: { width:'100%', height:'120px', objectFit:'cover' },
-    cardContent: { padding:'12px', flex:1, display:'flex', flexDirection:'column' },
-    foodName: { margin:'0 0 5px 0', fontSize:'15px', fontWeight:'700', color:'#eee' },
-    desc: { fontSize:'11px', color:'#777', margin:'0 0 10px 0', lineHeight:1.4 },
-    priceRow: { marginTop:'auto', display:'flex', justifyContent:'space-between', alignItems:'center' },
-    price: { fontSize:'15px', fontWeight:'800', color:'white' },
-    addBtn: { background:'#1a1a1a', color:'#f97316', border:'1px solid #333', padding:'6px 12px', borderRadius:'8px', fontSize:'11px', fontWeight:'800', display:'flex', alignItems:'center', gap:'5px', cursor:'pointer' },
-    qtyControl: { background:'#f97316', color:'black', padding:'6px 10px', borderRadius:'8px', display:'flex', flexDirection:'column', alignItems:'center', lineHeight:1 },
-    vegDot: { color:'#22c55e', fontSize:'10px' },
-    nonVegDot: { color:'#ef4444', fontSize:'10px' },
-    floatingCart: { position:'fixed', bottom:'20px', left:'5%', width:'90%', background:'#f97316', color:'white', borderRadius:'16px', padding:'15px 20px', display:'flex', justifyContent:'space-between', alignItems:'center', boxShadow:'0 10px 30px rgba(249, 115, 22, 0.4)', zIndex:100, cursor:'pointer' }
+  container: { minHeight: "100vh", background: "#050505", color: "white", paddingBottom: "100px", fontFamily: "'Inter', sans-serif" },
+  header: { padding: "15px", background: "rgba(17, 17, 17, 0.95)", backdropFilter: "blur(10px)", position: "sticky", top: 0, zIndex: 100, borderBottom: "1px solid #222" },
+  headerTop: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" },
+  restaurantTitle: { fontSize: "18px", margin: 0, display: "flex", alignItems: "center", gap: "8px", fontWeight: "900", textTransform: "uppercase", letterSpacing: "-0.5px" },
+  tableBadge: { background: "#222", padding: "6px 12px", borderRadius: "20px", fontSize: "11px", fontWeight: "bold", color: "#f97316", border: "1px solid #333" },
+  searchWrapper: { position: "relative", marginBottom: "15px" },
+  searchIcon: { position: "absolute", left: "15px", top: "12px", color: "#666" },
+  searchInput: { width: "100%", padding: "12px 12px 12px 40px", borderRadius: "12px", background: "#222", border: "1px solid #333", color: "white", outline: "none", fontSize: "14px" },
+  categoryScroll: { display: "flex", gap: "8px", overflowX: "auto", paddingBottom: "5px" },
+  catBtn: { padding: "8px 16px", borderRadius: "20px", border: "1px solid #333", whiteSpace: "nowrap", cursor: "pointer", background: "#1a1a1a", color: "#aaa", fontSize: "12px", fontWeight: "600", display: 'flex', alignItems: 'center' },
+  catBtnActive: { padding: "8px 16px", borderRadius: "20px", border: "1px solid #f97316", whiteSpace: "nowrap", cursor: "pointer", background: "#f97316", color: "white", fontSize: "12px", fontWeight: "bold", display: 'flex', alignItems: 'center' },
+  grid: { padding: "15px", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: "15px" },
+  card: { background: "#111", borderRadius: "16px", overflow: "hidden", border: "1px solid #222", display: "flex", flexDirection: "column", height: "100%" },
+  imageWrapper: { height: "140px", width: "100%", position: "relative", background: "#222" },
+  dishImage: { width: "100%", height: "100%", objectFit: "cover" },
+  soldOutOverlay: { position: "absolute", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", color: "#ef4444", fontWeight: "900", fontSize: "14px", backdropFilter: "blur(2px)" },
+  cardContent: { padding: "12px", flex: 1, display: "flex", flexDirection: "column", justifyContent: "space-between" },
+  dishHeader: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "5px" },
+  dishName: { fontSize: "14px", margin: 0, lineHeight: "1.3", fontWeight: "700", color: "#eee" },
+  vegDot: { color: "#22c55e", fontSize: "10px", marginTop: "2px" },
+  rating: { fontSize: "10px", color: "#888", display: "flex", alignItems: "center", gap: "3px", marginTop: "4px" },
+  cardFooter: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "12px" },
+  price: { fontWeight: "900", fontSize: "15px", color: "#fff" },
+  addBtn: { background: "#f97316", border: "none", color: "#fff", padding: "8px 20px", borderRadius: "8px", cursor: "pointer", fontSize: "11px", fontWeight: "900", boxShadow: "0 4px 10px rgba(249, 115, 22, 0.3)" },
+  disabledBtn: { background: "#333", border: "none", color: "#666", padding: "6px 15px", borderRadius: "8px", fontSize: "11px", fontWeight: "bold" },
+  qtyControl: { display: "flex", alignItems: "center", gap: "8px", background: "#222", padding: "4px", borderRadius: "8px", border: "1px solid #333" },
+  qtyBtn: { width: "24px", height: "24px", display: "flex", alignItems: "center", justifyContent: "center", background: "#333", border: "none", color: "white", borderRadius: "6px", cursor: "pointer" },
+  qtyText: { fontSize: "12px", fontWeight: "bold", minWidth: "15px", textAlign: "center" },
+  cartSticky: { position: "fixed", bottom: "20px", left: "5%", width: "90%", background: "linear-gradient(135deg, #f97316 0%, #ea580c 100%)", padding: "15px 20px", borderRadius: "16px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 10px 30px rgba(249, 115, 22, 0.4)", zIndex: 200, border: "1px solid rgba(255,255,255,0.1)" },
+  viewCartBtn: { background: "#fff", color: "#ea580c", border: "none", padding: "10px 18px", borderRadius: "10px", fontWeight: "900", fontSize: "12px", display: "flex", alignItems: "center", gap: "8px" },
+  emptyState: { gridColumn: "1 / -1", textAlign: "center", padding: "40px", color: "#444", fontSize: "14px", fontWeight: "bold" },
+  branding: { textAlign: "center", padding: "20px", opacity: 0.3, fontSize: "10px", letterSpacing: "1px", color: "#666" }
 };
 
 export default Menu;

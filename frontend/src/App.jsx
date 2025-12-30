@@ -1,51 +1,133 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import React, { useState, useEffect } from "react";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 
-// --- IMPORT YOUR EXISTING FILES ---
-import OwnerLogin from './pages/OwnerLogin';       
-import SuperLogin from './pages/SuperLogin';       
-import SuperAdmin from './pages/SuperAdmin';       
-import AddRestaurant from './pages/AddRestaurant'; // Your form component
-import RestaurantAdmin from './pages/RestaurantAdmin'; 
-import Menu from './pages/Menu';                   
+// --- ✅ FIXED: Pointing to the "pages" folder ---
+import LandingPage from "./pages/LandingPage.jsx"; 
+import Menu from "./pages/Menu.jsx"; 
+import Cart from "./pages/Cart.jsx";
+import OrderSuccess from "./pages/OrderSuccess.jsx";
+import OrderTracker from "./pages/OrderTracker.jsx";
 
-const App = () => {
+// --- STAFF PANELS (Inside pages folder) ---
+import SuperAdmin from "./pages/SuperAdmin.jsx";
+import RestaurantAdmin from "./pages/RestaurantAdmin.jsx"; 
+import ChefDashboard from "./pages/ChefDashboard.jsx"; 
+import WaiterDashboard from "./pages/WaiterDashboard.jsx";
+
+// --- AUTH PAGES (Usually in root, but check if they are in pages) ---
+// If these are also in the 'pages' folder, add '/pages/' before the name
+import OwnerLogin from "./OwnerLogin.jsx"; 
+import Register from "./Register.jsx";
+
+// --- GLOBAL STYLES ---
+const GlobalStyles = () => (
+  <style>{`
+    :root { background-color: #050505; color: white; font-family: 'Inter', sans-serif; }
+    body { margin: 0; padding: 0; background: #050505; overflow-x: hidden; }
+    * { box-sizing: border-box; }
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-thumb { background: #f97316; border-radius: 10px; }
+    #kot-receipt { display: none; }
+    @media print { #kot-receipt { display: block !important; } }
+  `}</style>
+);
+
+function App() {
+  // --- STATE ---
+  const [cart, setCart] = useState(() => {
+    try {
+      const saved = localStorage.getItem("smartMenu_Cart");
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) { return []; }
+  });
+  
+  const [restaurantId, setRestaurantId] = useState(localStorage.getItem("activeResId") || null);
+  const [tableNum, setTableNum] = useState(localStorage.getItem("activeTable") || ""); 
+
+  // --- PERSISTENCE ---
+  useEffect(() => {
+    localStorage.setItem("smartMenu_Cart", JSON.stringify(cart));
+    if (restaurantId) localStorage.setItem("activeResId", restaurantId);
+    if (tableNum) localStorage.setItem("activeTable", tableNum);
+  }, [cart, restaurantId, tableNum]);
+
+  // --- CART HANDLERS ---
+  const addToCart = (dish) => {
+    setCart((prev) => {
+      const exists = prev.find((item) => item._id === dish._id);
+      if (exists) {
+        return prev.map((i) => i._id === dish._id ? { ...i, quantity: i.quantity + 1 } : i);
+      }
+      return [...prev, { ...dish, quantity: 1 }];
+    });
+  };
+
+  const updateQuantity = (id, newQuantity) => {
+    if (newQuantity <= 0) {
+      removeFromCart(id);
+      return;
+    }
+    setCart((prev) => 
+      prev.map((item) => item._id === id ? { ...item, quantity: newQuantity } : item)
+    );
+  };
+
+  const removeFromCart = (id) => setCart((prev) => prev.filter((item) => item._id !== id));
+  const clearCart = () => setCart([]);
+
   return (
     <Router>
+      <GlobalStyles /> 
       <Routes>
-        {/* 1. PUBLIC LANDING & LOGIN */}
-        <Route path="/" element={<Navigate to="/login" />} />
+        {/* --- PUBLIC ROUTES --- */}
+        <Route path="/" element={<LandingPage />} /> 
         <Route path="/login" element={<OwnerLogin />} />
+        <Route path="/register" element={<Register />} />
 
-        {/* 2. CEO ROUTES */}
-        <Route path="/superlogin" element={<SuperLogin />} />
+        {/* --- CUSTOMER EXPERIENCE --- */}
+        <Route 
+          path="/menu/:id/:table" 
+          element={<Menu cart={cart} addToCart={addToCart} setRestaurantId={setRestaurantId} setTableNum={setTableNum} />} 
+        />
+        <Route 
+          path="/menu/:id" 
+          element={<Menu cart={cart} addToCart={addToCart} setRestaurantId={setRestaurantId} setTableNum={setTableNum} />} 
+        />
+        <Route 
+          path="/cart" 
+          element={
+            <Cart 
+              cart={cart} 
+              removeFromCart={removeFromCart} 
+              clearCart={clearCart} 
+              updateQuantity={updateQuantity} 
+              restaurantId={restaurantId} 
+              tableNum={tableNum} 
+              setTableNum={setTableNum} 
+            />
+          } 
+        />
+        <Route path="/order-success" element={<OrderSuccess />} />
+        <Route path="/track/:id" element={<OrderTracker />} />
+
+        {/* --- STAFF DASHBOARDS --- */}
         <Route path="/superadmin" element={<SuperAdmin />} />
         
-        {/* 3. YOUR REQUESTED URL: /superresturant 
-            This renders the AddRestaurant component full screen
-        */}
-        <Route path="/superresturant" element={
-            <div style={{height:'100vh', background:'#050505', display:'flex', alignItems:'center', justifyContent:'center'}}>
-                <AddRestaurant onClose={() => window.location.href='/superadmin'} refreshList={() => {}} />
-            </div>
-        } />
-
-        {/* 4. DYNAMIC RESTAURANT ADMIN
-            Example: localhost:3000/kfc/admin 
-        */}
+        <Route path="/admin" element={<RestaurantAdmin />} /> 
         <Route path="/:id/admin" element={<RestaurantAdmin />} />
         
-        {/* 5. CUSTOMER MENU
-            Example: localhost:3000/kfc/menu 
-        */}
-        <Route path="/:id/menu" element={<Menu cart={[]} addToCart={()=>{}} setRestaurantId={()=>{}} setTableNum={()=>{}} />} /> 
-        <Route path="/:id/menu/:table" element={<Menu cart={[]} addToCart={()=>{}} setRestaurantId={()=>{}} setTableNum={()=>{}} />} />
+        <Route path="/chef" element={<ChefDashboard />} /> 
+        <Route path="/:id/chef" element={<ChefDashboard />} />
+        <Route path="/kitchen" element={<Navigate to="/chef" replace />} />
 
-        {/* Fallback */}
-        <Route path="*" element={<div style={{color:'white', background:'black', height:'100vh', display:'flex', justifyContent:'center', alignItems:'center'}}>404 - Page Not Found</div>} />
+        <Route path="/waiter" element={<WaiterDashboard />} />
+        <Route path="/:id/waiter" element={<WaiterDashboard />} />
+
+        {/* --- FALLBACK --- */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>
   );
-};
+}
 
 export default App;
