@@ -1,0 +1,15 @@
+[build]
+  # 1. Tell Netlify your code is in the 'frontend' folder
+  base = "frontend"
+  
+  # 2. Tell Netlify the output is in 'dist' (relative to frontend)
+  publish = "dist"
+  
+  # 3. The command to run
+  command = "npm install && npm run build"
+
+[build.environment]
+  # 4. FORCE Node version to 22 (Fixes your error)
+  NODE_VERSION = "22"
+  # 5. Prevent warnings about strictly enforcing engine versions
+  NPM_FLAGS = "--no-engine-strict"
