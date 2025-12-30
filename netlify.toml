@@ -1,12 +1,11 @@
 [build]
+  base = "./frontend"
+  publish = "./dist"
   command = "npm run build"
-  publish = "dist"
 
 [build.environment]
-  NODE_VERSION = "20"
-  CI = "false"
+  NODE_VERSION = "18"
 
-# React Router / SPA redirect
 [[redirects]]
   from = "/*"
   to = "/index.html"
