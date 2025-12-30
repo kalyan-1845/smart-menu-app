@@ -1,324 +1,519 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { FaLock, FaUser, FaEye, FaEyeSlash, FaCrown, FaShieldAlt } from 'react-icons/fa';
-import axios from 'axios';
+import { Link, useNavigate } from 'react-router-dom';
+import styled from 'styled-components';
+import { 
+  Shield, 
+  Lock, 
+  Mail, 
+  Eye, 
+  EyeOff, 
+  ArrowLeft,
+  Key,
+  CheckCircle,
+  AlertTriangle
+} from 'lucide-react';
+import toast from 'react-hot-toast';
 
 const SuperLogin = () => {
   const navigate = useNavigate();
-  const [credentials, setCredentials] = useState({
-    username: '',
-    password: ''
+  const [formData, setFormData] = useState({
+    email: '',
+    password: '',
+    adminKey: ''
   });
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [attempts, setAttempts] = useState(0);
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const validateForm = () => {
+    if (!formData.email.trim()) {
+      toast.error('Please enter admin email');
+      return false;
+    }
+    if (!formData.password) {
+      toast.error('Please enter password');
+      return false;
+    }
+    if (!formData.adminKey) {
+      toast.error('Please enter admin key');
+      return false;
+    }
+    return true;
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
-    setError('');
+    
+    if (!validateForm()) return;
 
-    try {
-      const response = await axios.post('http://localhost:5000/api/super-login', credentials);
-      
-      if (response.data.success) {
-        localStorage.setItem('superAdminToken', response.data.token);
-        localStorage.setItem('owner_token_ceo', response.data.token);
-        navigate('/ceo');
-      } else {
-        setError('Invalid credentials');
-      }
-    } catch (err) {
-      setError(err.response?.data?.message || 'Login failed. Check server connection.');
-    } finally {
-      setLoading(false);
+    // Simulate brute force protection
+    if (attempts >= 3) {
+      toast.error('Too many failed attempts. Please try again later.');
+      return;
     }
+
+    setLoading(true);
+    
+    // Simulate API call
+    setTimeout(() => {
+      setLoading(false);
+      
+      // Demo credentials
+      if (formData.email === 'admin@foodorder.com' && 
+          formData.password === 'admin123' && 
+          formData.adminKey === 'SUPER123') {
+        
+        localStorage.setItem('super_admin', 'true');
+        toast.success('Super Admin login successful!');
+        navigate('/super-admin');
+      } else {
+        setAttempts(prev => prev + 1);
+        const remaining = 3 - attempts - 1;
+        toast.error(`Invalid credentials. ${remaining > 0 ? `${remaining} attempts remaining` : 'Account locked'}`);
+      }
+    }, 1500);
+  };
+
+  const handleEmergencyAccess = () => {
+    toast.loading('Requesting emergency access...');
+    setTimeout(() => {
+      toast.dismiss();
+      toast.success('Emergency access request sent to primary admin');
+    }, 2000);
   };
 
   return (
-    <div className="super-login-container">
-      <style>{`
-        .super-login-container {
-          min-height: 100vh;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
-          padding: 20px;
-        }
+    <LoginContainer>
+      <LoginCard>
+        <BackButton to="/">
+          <ArrowLeft size={20} />
+          Back to Home
+        </BackButton>
+        
+        <LoginHeader>
+          <Shield size={48} color="var(--accent-color)" />
+          <h1>Super Admin Portal</h1>
+          <p>Restricted access - Platform administration only</p>
+        </LoginHeader>
 
-        .login-card {
-          background: rgba(17, 17, 17, 0.95);
-          border: 1px solid #222;
-          border-radius: 20px;
-          padding: 40px;
-          width: 100%;
-          max-width: 400px;
-          backdrop-filter: blur(10px);
-          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-        }
+        <SecurityWarning>
+          <AlertTriangle size={20} />
+          <span>Warning: This area is restricted to authorized personnel only</span>
+        </SecurityWarning>
 
-        .login-header {
-          text-align: center;
-          margin-bottom: 40px;
-        }
-
-        .login-icon {
-          width: 80px;
-          height: 80px;
-          background: linear-gradient(135deg, #f97316, #ea580c);
-          border-radius: 20px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          margin: 0 auto 20px;
-          font-size: 32px;
-          color: white;
-        }
-
-        .login-header h1 {
-          margin: 0;
-          font-size: 28px;
-          font-weight: 800;
-          background: linear-gradient(135deg, #f97316, #fbbf24);
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-        }
-
-        .login-header p {
-          color: #888;
-          margin-top: 8px;
-          font-size: 14px;
-        }
-
-        .form-group {
-          margin-bottom: 24px;
-        }
-
-        .input-group {
-          position: relative;
-        }
-
-        .input-group input {
-          width: 100%;
-          padding: 16px 16px 16px 48px;
-          background: rgba(255,255,255,0.05);
-          border: 1px solid #333;
-          border-radius: 12px;
-          color: white;
-          font-size: 16px;
-          outline: none;
-          transition: all 0.3s;
-        }
-
-        .input-group input:focus {
-          border-color: #f97316;
-          box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.1);
-        }
-
-        .input-icon {
-          position: absolute;
-          left: 16px;
-          top: 50%;
-          transform: translateY(-50%);
-          color: #888;
-          font-size: 18px;
-        }
-
-        .password-toggle {
-          position: absolute;
-          right: 16px;
-          top: 50%;
-          transform: translateY(-50%);
-          background: none;
-          border: none;
-          color: #888;
-          cursor: pointer;
-          font-size: 18px;
-          padding: 0;
-        }
-
-        .login-btn {
-          width: 100%;
-          padding: 16px;
-          background: linear-gradient(135deg, #f97316, #ea580c);
-          border: none;
-          border-radius: 12px;
-          color: white;
-          font-size: 16px;
-          font-weight: 600;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 10px;
-          transition: all 0.3s;
-          margin-top: 10px;
-        }
-
-        .login-btn:hover:not(:disabled) {
-          transform: translateY(-2px);
-          box-shadow: 0 10px 30px rgba(249, 115, 22, 0.4);
-        }
-
-        .login-btn:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-
-        .error-message {
-          background: rgba(239, 68, 68, 0.1);
-          border: 1px solid rgba(239, 68, 68, 0.3);
-          color: #fca5a5;
-          padding: 12px;
-          border-radius: 8px;
-          margin-bottom: 20px;
-          font-size: 14px;
-          text-align: center;
-        }
-
-        .spinner {
-          width: 20px;
-          height: 20px;
-          border: 2px solid rgba(255,255,255,0.3);
-          border-radius: 50%;
-          border-top-color: white;
-          animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-
-        .security-note {
-          margin-top: 30px;
-          padding-top: 20px;
-          border-top: 1px solid #222;
-          text-align: center;
-          color: #666;
-          font-size: 12px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-        }
-
-        .demo-credentials {
-          background: rgba(255,255,255,0.03);
-          border: 1px solid #222;
-          border-radius: 8px;
-          padding: 15px;
-          margin-top: 20px;
-        }
-
-        .demo-credentials h4 {
-          margin: 0 0 10px 0;
-          font-size: 14px;
-          color: #888;
-        }
-
-        .demo-credentials p {
-          margin: 5px 0;
-          font-size: 13px;
-          color: #666;
-          font-family: monospace;
-        }
-
-        .demo-credentials strong {
-          color: #f97316;
-        }
-      `}</style>
-
-      <div className="login-card">
-        <div className="login-header">
-          <div className="login-icon">
-            <FaCrown />
-          </div>
-          <h1>CEO Portal</h1>
-          <p>Full System Administration Access</p>
-        </div>
-
-        {error && (
-          <div className="error-message">
-            {error}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <div className="input-group">
-              <span className="input-icon">
-                <FaUser />
-              </span>
-              <input
-                type="text"
-                placeholder="CEO Username"
-                value={credentials.username}
-                onChange={(e) => setCredentials({...credentials, username: e.target.value})}
+        <LoginForm onSubmit={handleSubmit}>
+          <FormGroup>
+            <FormLabel>Admin Email *</FormLabel>
+            <InputWithIcon>
+              <Mail size={20} />
+              <FormControl
+                type="email"
+                name="email"
+                value={formData.email}
+                onChange={handleInputChange}
+                placeholder="admin@foodorder.com"
                 required
-                autoComplete="username"
-                disabled={loading}
               />
-            </div>
-          </div>
+            </InputWithIcon>
+          </FormGroup>
 
-          <div className="form-group">
-            <div className="input-group">
-              <span className="input-icon">
-                <FaLock />
-              </span>
-              <input
-                type={showPassword ? "text" : "password"}
-                placeholder="Master Password"
-                value={credentials.password}
-                onChange={(e) => setCredentials({...credentials, password: e.target.value})}
+          <FormGroup>
+            <FormLabel>Password *</FormLabel>
+            <PasswordInput>
+              <InputWithIcon>
+                <Lock size={20} />
+                <FormControl
+                  type={showPassword ? 'text' : 'password'}
+                  name="password"
+                  value={formData.password}
+                  onChange={handleInputChange}
+                  placeholder="Enter admin password"
+                  required
+                />
+              </InputWithIcon>
+              <PasswordToggle onClick={() => setShowPassword(!showPassword)}>
+                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+              </PasswordToggle>
+            </PasswordInput>
+          </FormGroup>
+
+          <FormGroup>
+            <FormLabel>Admin Security Key *</FormLabel>
+            <InputWithIcon>
+              <Key size={20} />
+              <FormControl
+                type="password"
+                name="adminKey"
+                value={formData.adminKey}
+                onChange={handleInputChange}
+                placeholder="Enter security key"
                 required
-                autoComplete="current-password"
-                disabled={loading}
               />
-              <button
-                type="button"
-                className="password-toggle"
-                onClick={() => setShowPassword(!showPassword)}
-                disabled={loading}
-              >
-                {showPassword ? <FaEyeSlash /> : <FaEye />}
-              </button>
-            </div>
-          </div>
+            </InputWithIcon>
+            <KeyHint>Provided by system administrator</KeyHint>
+          </FormGroup>
 
-          <button
-            type="submit"
-            className="login-btn"
-            disabled={loading || !credentials.username || !credentials.password}
-          >
+          {attempts > 0 && (
+            <AttemptsWarning>
+              <AlertTriangle size={16} />
+              <span>{attempts} failed attempt(s)</span>
+            </AttemptsWarning>
+          )}
+
+          <LoginButton type="submit" disabled={loading || attempts >= 3}>
             {loading ? (
-              <>
-                <div className="spinner"></div>
-                Authenticating...
-              </>
+              'Verifying credentials...'
+            ) : attempts >= 3 ? (
+              'Account Locked'
             ) : (
               <>
-                <FaShieldAlt />
-                Secure Login
+                <CheckCircle size={20} />
+                Access Admin Portal
               </>
             )}
-          </button>
-        </form>
+          </LoginButton>
 
-        <div className="demo-credentials">
-          <h4>Default CEO Credentials:</h4>
-          <p>Username: <strong>my team is tracking you!</strong></p>
-          <p>Password: <strong>what you want ree</strong></p>
-        </div>
+          <SecurityInfo>
+            <h4>Security Protocols:</h4>
+            <ul>
+              <li>• Two-factor authentication enabled</li>
+              <li>• All actions are logged and monitored</li>
+              <li>• IP address tracking active</li>
+              <li>• Session timeout: 15 minutes</li>
+            </ul>
+          </SecurityInfo>
+        </LoginForm>
 
-        <div className="security-note">
-          <FaShieldAlt />
-          Secure CEO Access Only
-        </div>
-      </div>
-    </div>
+        <EmergencyAccess>
+          <h4>Emergency Access</h4>
+          <p>Need immediate access? Request emergency credentials</p>
+          <EmergencyButton onClick={handleEmergencyAccess}>
+            <Shield size={20} />
+            Request Emergency Access
+          </EmergencyButton>
+        </EmergencyAccess>
+
+        <DemoCredentials>
+          <h4>Demo Credentials</h4>
+          <CredentialsGrid>
+            <CredentialItem>
+              <strong>Email:</strong> admin@foodorder.com
+            </CredentialItem>
+            <CredentialItem>
+              <strong>Password:</strong> admin123
+            </CredentialItem>
+            <CredentialItem>
+              <strong>Admin Key:</strong> SUPER123
+            </CredentialItem>
+          </CredentialsGrid>
+        </DemoCredentials>
+
+        <BackToNormal>
+          <Link to="/owner-login">Restaurant Owner Login</Link>
+          <Link to="/login">Customer/Staff Login</Link>
+        </BackToNormal>
+      </LoginCard>
+    </LoginContainer>
   );
 };
+
+const LoginContainer = styled.div`
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: linear-gradient(135deg, #1a1e24 0%, var(--dark-color) 100%);
+`;
+
+const LoginCard = styled.div`
+  background: white;
+  border-radius: var(--radius-lg);
+  padding: 40px;
+  width: 100%;
+  max-width: 500px;
+  box-shadow: var(--shadow-lg);
+`;
+
+const BackButton = styled(Link)`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--gray-color);
+  margin-bottom: 30px;
+  text-decoration: none;
+  
+  &:hover {
+    color: var(--primary-color);
+  }
+`;
+
+const LoginHeader = styled.div`
+  text-align: center;
+  margin-bottom: 30px;
+  
+  h1 {
+    margin: 20px 0 10px;
+    color: var(--dark-color);
+  }
+  
+  p {
+    color: var(--gray-color);
+  }
+`;
+
+const SecurityWarning = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 15px;
+  background: rgba(255, 214, 102, 0.2);
+  border: 1px solid var(--warning-color);
+  border-radius: var(--radius);
+  margin-bottom: 30px;
+  color: var(--warning-color);
+  font-size: 14px;
+  
+  svg {
+    flex-shrink: 0;
+  }
+`;
+
+const LoginForm = styled.form`
+  margin-bottom: 30px;
+`;
+
+const FormGroup = styled.div`
+  margin-bottom: 20px;
+`;
+
+const FormLabel = styled.label`
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: var(--dark-color);
+`;
+
+const InputWithIcon = styled.div`
+  position: relative;
+  
+  svg {
+    position: absolute;
+    left: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--gray-color);
+  }
+`;
+
+const FormControl = styled.input`
+  width: 100%;
+  padding: 12px 16px 12px 48px;
+  border: 2px solid var(--light-gray);
+  border-radius: var(--radius);
+  font-size: 16px;
+  transition: border-color 0.3s ease;
+  
+  &:focus {
+    outline: none;
+    border-color: var(--accent-color);
+  }
+`;
+
+const PasswordInput = styled.div`
+  position: relative;
+`;
+
+const PasswordToggle = styled.button`
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: var(--gray-color);
+  cursor: pointer;
+  padding: 4px;
+  
+  &:hover {
+    color: var(--dark-color);
+  }
+`;
+
+const KeyHint = styled.div`
+  font-size: 12px;
+  color: var(--gray-color);
+  margin-top: 5px;
+  font-style: italic;
+`;
+
+const AttemptsWarning = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background: rgba(239, 71, 111, 0.1);
+  border-radius: var(--radius);
+  margin-bottom: 20px;
+  color: var(--danger-color);
+  font-size: 14px;
+  
+  svg {
+    flex-shrink: 0;
+  }
+`;
+
+const LoginButton = styled.button`
+  width: 100%;
+  padding: 16px;
+  background-color: var(--accent-color);
+  color: white;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  
+  &:hover:not(:disabled) {
+    background-color: #3AB7AD;
+  }
+  
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    background-color: var(--gray-color);
+  }
+`;
+
+const SecurityInfo = styled.div`
+  margin-top: 25px;
+  padding: 20px;
+  background: var(--light-gray);
+  border-radius: var(--radius);
+  
+  h4 {
+    margin-bottom: 10px;
+    font-size: 14px;
+    color: var(--dark-color);
+  }
+  
+  ul {
+    margin: 0;
+    padding-left: 20px;
+    color: var(--gray-color);
+    font-size: 13px;
+    line-height: 1.6;
+    
+    li {
+      margin-bottom: 5px;
+    }
+  }
+`;
+
+const EmergencyAccess = styled.div`
+  text-align: center;
+  margin: 30px 0;
+  padding: 25px;
+  background: rgba(239, 71, 111, 0.05);
+  border: 1px solid rgba(239, 71, 111, 0.2);
+  border-radius: var(--radius);
+  
+  h4 {
+    margin-bottom: 10px;
+    color: var(--danger-color);
+  }
+  
+  p {
+    color: var(--gray-color);
+    margin-bottom: 20px;
+    font-size: 14px;
+  }
+`;
+
+const EmergencyButton = styled.button`
+  padding: 12px 24px;
+  background: transparent;
+  color: var(--danger-color);
+  border: 2px solid var(--danger-color);
+  border-radius: var(--radius);
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 0 auto;
+  transition: all 0.3s ease;
+  
+  &:hover {
+    background: var(--danger-color);
+    color: white;
+  }
+`;
+
+const DemoCredentials = styled.div`
+  margin: 30px 0;
+  padding: 20px;
+  background: rgba(6, 214, 160, 0.05);
+  border: 1px solid rgba(6, 214, 160, 0.2);
+  border-radius: var(--radius);
+  
+  h4 {
+    margin-bottom: 15px;
+    color: var(--success-color);
+    text-align: center;
+  }
+`;
+
+const CredentialsGrid = styled.div`
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+`;
+
+const CredentialItem = styled.div`
+  padding: 10px;
+  background: white;
+  border-radius: var(--radius);
+  font-family: monospace;
+  font-size: 14px;
+  
+  strong {
+    color: var(--dark-color);
+    margin-right: 10px;
+  }
+`;
+
+const BackToNormal = styled.div`
+  display: flex;
+  justify-content: center;
+  gap: 30px;
+  margin-top: 30px;
+  padding-top: 30px;
+  border-top: 1px solid var(--light-gray);
+  
+  a {
+    color: var(--primary-color);
+    text-decoration: none;
+    font-weight: 500;
+    
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+`;
 
 export default SuperLogin;

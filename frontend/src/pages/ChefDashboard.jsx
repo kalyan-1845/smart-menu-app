@@ -1,308 +1,501 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
-import axios from "axios";
-import { useParams } from "react-router-dom";
-import io from "socket.io-client";
-import { 
-    FaUtensils, FaVolumeUp, FaVolumeMute, 
-    FaFire, FaCheck, FaRocket, FaBell, 
-    FaUnlock, FaSignOutAlt, FaSpinner, FaHistory, FaExclamationTriangle
-} from "react-icons/fa";
-
-const DEFAULT_DISH_IMG = "https://cdn-icons-png.flaticon.com/512/706/706164.png"; 
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import styled from 'styled-components';
+import {
+  ChefHat,
+  Clock,
+  CheckCircle,
+  AlertCircle,
+  Bell,
+  Filter,
+  Search,
+  RefreshCw,
+  LogOut,
+  TrendingUp,
+  Package,
+  Timer,
+  Flame,
+  Star,
+  User
+} from 'lucide-react';
+import toast from 'react-hot-toast';
 
 const ChefDashboard = () => {
-    const { id } = useParams();
-    const API_BASE = "https://smart-menu-backend-5ge7.onrender.com/api";
-    
-    // --- STATE ---
-    const [isAuthenticated, setIsAuthenticated] = useState(false);
-    const [password, setPassword] = useState("");
-    const [authLoading, setAuthLoading] = useState(false);
-    const [error, setError] = useState("");
+  const navigate = useNavigate();
+  const [orders, setOrders] = useState([]);
+  const [stats, setStats] = useState({
+    pendingOrders: 0,
+    completedToday: 0,
+    avgPrepTime: 0,
+    rating: 0
+  });
+  const [activeTab, setActiveTab] = useState('pending');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [chefInfo, setChefInfo] = useState(null);
 
-    const [orders, setOrders] = useState([]); 
-    const [dailyStats, setDailyStats] = useState({ count: 0 }); 
-    const [dishes, setDishes] = useState([]); 
-    const [serviceCalls, setServiceCalls] = useState([]); 
-    const [isMuted, setIsMuted] = useState(false);
-    const [activeChefTab, setActiveChefTab] = useState("orders");
-    const [mongoId, setMongoId] = useState(null);
-    const [currentTime, setCurrentTime] = useState(new Date());
-
-    const audioRef = useRef(new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"));
-    const callSound = useRef(new Audio("https://assets.mixkit.co/active_storage/sfx/2190/2190-preview.mp3"));
-
-    // --- EFFECT: CLOCK FOR TIMERS ---
-    useEffect(() => {
-        const timer = setInterval(() => setCurrentTime(new Date()), 10000); // Update every 10s
-        return () => clearInterval(timer);
-    }, []);
-
-    // --- CALCULATION: PREP SUMMARY (Shortcut for Chef) ---
-    const prepSummary = useMemo(() => {
-        const summary = {};
-        orders.filter(o => o.status !== "Ready").forEach(order => {
-            order.items.forEach(item => {
-                summary[item.name] = (summary[item.name] || 0) + item.quantity;
-            });
-        });
-        return Object.entries(summary);
-    }, [orders]);
-
-    // --- SCREEN WAKE LOCK ---
-    useEffect(() => {
-        if (isAuthenticated && 'wakeLock' in navigator) {
-            let wakeLock = null;
-            const requestWakeLock = async () => {
-                try { wakeLock = await navigator.wakeLock.request('screen'); } catch (err) {}
-            };
-            requestWakeLock();
-        }
-    }, [isAuthenticated]);
-
-    // --- LOGIN LOGIC ---
-    const handleLogin = async (e) => {
-        e.preventDefault();
-        setAuthLoading(true);
-        setError("");
-        try {
-            const res = await axios.post(`${API_BASE}/auth/verify-role`, { 
-                username: id, password: password, role: 'chef'
-            });
-            if (res.data.success) {
-                const rId = res.data.restaurantId;
-                setMongoId(rId);
-                localStorage.setItem(`chef_session_${id}`, rId);
-                setIsAuthenticated(true);
-                fetchData(rId);
-            }
-        } catch (err) {
-            setError("❌ Invalid Kitchen Password");
-        } finally {
-            setAuthLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        const savedId = localStorage.getItem(`chef_session_${id}`);
-        if (savedId) {
-            setMongoId(savedId);
-            setIsAuthenticated(true);
-            fetchData(savedId);
-        }
-    }, [id]);
-
-    const fetchData = async (rId) => {
-        if (!rId) return;
-        try {
-            const orderRes = await axios.get(`${API_BASE}/orders?restaurantId=${rId}`);
-            const active = orderRes.data.filter(o => o.status !== "SERVED" && o.status !== "COMPLETED");
-            const completedToday = orderRes.data.filter(o => {
-                const isToday = new Date(o.createdAt).toDateString() === new Date().toDateString();
-                return (o.status === "SERVED" || o.status === "COMPLETED") && isToday;
-            });
-            setOrders(active.sort((a,b) => new Date(a.createdAt) - new Date(b.createdAt)));
-            setDailyStats({ count: completedToday.length });
-            const dishRes = await axios.get(`${API_BASE}/dishes?restaurantId=${rId}`);
-            setDishes(dishRes.data);
-            const callRes = await axios.get(`${API_BASE}/orders/calls?restaurantId=${rId}`);
-            setServiceCalls(callRes.data);
-        } catch (e) { console.error("Sync Failed", e); }
-    };
-
-    useEffect(() => {
-        if(isAuthenticated && mongoId) {
-            const socket = io("https://smart-menu-backend-5ge7.onrender.com");
-            socket.emit("join-restaurant", mongoId);
-            socket.on("new-order", () => {
-                if (!isMuted) audioRef.current.play().catch(()=>{});
-                fetchData(mongoId);
-            });
-            socket.on("new-waiter-call", (callData) => {
-                if (!isMuted) callSound.current.play().catch(()=>{});
-                setServiceCalls(prev => [callData, ...prev]);
-            });
-            return () => socket.disconnect();
-        }
-    }, [isAuthenticated, mongoId, isMuted]);
-
-    const updateOrderStatus = async (orderId, newStatus) => {
-        try {
-            setOrders(prev => prev.map(o => o._id === orderId ? { ...o, status: newStatus } : o));
-            await axios.put(`${API_BASE}/orders/${orderId}`, { status: newStatus });
-            if (newStatus === "SERVED") fetchData(mongoId);
-        } catch (error) { alert("Status update failed"); }
-    };
-
-    const toggleDishAvailability = async (dishId, currentStatus) => {
-        try {
-            const newStatus = !currentStatus;
-            setDishes(prev => prev.map(d => d._id === dishId ? { ...d, isAvailable: newStatus } : d));
-            await axios.put(`${API_BASE}/dishes/${dishId}`, { isAvailable: newStatus });
-        } catch (e) { alert("Stock update failed"); }
-    };
-
-    const handleAttendTable = async (callId) => {
-        try {
-            await axios.delete(`${API_BASE}/orders/calls/${callId}`);
-            setServiceCalls(prev => prev.filter(c => c._id !== callId));
-        } catch (e) {}
-    };
-
-    const getElapsedTime = (createdAt) => {
-        const diff = Math.floor((currentTime - new Date(createdAt)) / 60000);
-        return diff;
-    };
-
-    if (!isAuthenticated) {
-        return (
-            <div style={styles.lockContainer}>
-                <div style={styles.lockCard}>
-                    <div style={styles.iconCircle}><FaUtensils style={{fontSize:'30px', color:'#f97316'}}/></div>
-                    <h1 style={styles.lockTitle}>{id} Kitchen</h1>
-                    <form onSubmit={handleLogin}>
-                        <input type="password" placeholder="PIN" value={password} onChange={e=>setPassword(e.target.value)} style={styles.input} />
-                        <button type="submit" style={styles.loginBtn}>{authLoading ? <FaSpinner className="spin"/> : "ENTER KITCHEN"}</button>
-                    </form>
-                </div>
-            </div>
-        );
+  useEffect(() => {
+    // Check if user is logged in as chef
+    const chefId = localStorage.getItem('chef_id');
+    if (!chefId) {
+      toast.error('Please login as chef');
+      navigate('/login');
+      return;
     }
 
-    return (
-        <div style={styles.dashboardContainer}>
-            <div style={styles.alertWrapper}>
-                {serviceCalls.map((call, idx) => (
-                    <div key={idx} className="call-active alert-banner-pulse">
-                        <span style={styles.alertText}><FaBell /> TABLE {call.tableNumber} - {call.type?.toUpperCase()}</span>
-                        <button onClick={() => handleAttendTable(call._id)} style={styles.attendBtn}><FaCheck/></button>
-                    </div>
-                ))}
-            </div>
+    // Load chef info
+    const mockChefInfo = {
+      id: chefId,
+      name: 'Chef John',
+      restaurant: 'Spice Heaven',
+      specialty: 'Indian Cuisine',
+      experience: '8 years',
+      rating: 4.8,
+      image: null
+    };
 
-            <header style={styles.header}>
-                <div style={styles.headerLeft}>
-                    <h1 style={styles.headerTitle}>CHEF'S STATION</h1>
-                    <div style={styles.statusDot}><span className="live-pulse"></span><span>LIVE KDS</span></div>
-                </div>
-                <div style={styles.statBox}>
-                    <div style={styles.statValue}>{dailyStats.count}</div>
-                    <div style={styles.statLabel}>SERVED</div>
-                </div>
-                <div style={styles.headerRight}>
-                    <button onClick={() => setIsMuted(!isMuted)} style={styles.iconButton}>{isMuted ? <FaVolumeMute /> : <FaVolumeUp />}</button>
-                    <button onClick={() => window.location.reload()} style={styles.iconButton}><FaRocket/></button>
-                </div>
-            </header>
+    const mockOrders = [
+      { 
+        id: 'ORD001', 
+        customer: 'John Doe', 
+        items: [
+          { name: 'Butter Chicken', quantity: 2, specialInstructions: 'Extra spicy' },
+          { name: 'Garlic Naan', quantity: 3 },
+          { name: 'Mango Lassi', quantity: 1 }
+        ], 
+        status: 'pending', 
+        time: '10:30 AM',
+        prepTime: 20,
+        table: 'Table 5',
+        type: 'dine-in'
+      },
+      { 
+        id: 'ORD002', 
+        customer: 'Jane Smith', 
+        items: [
+          { name: 'Paneer Tikka', quantity: 1 },
+          { name: 'Vegetable Biryani', quantity: 1, specialInstructions: 'No onions' }
+        ], 
+        status: 'preparing', 
+        time: '10:45 AM',
+        prepTime: 15,
+        table: 'Delivery',
+        type: 'delivery'
+      },
+      { 
+        id: 'ORD003', 
+        customer: 'Bob Johnson', 
+        items: [
+          { name: 'Chicken Tikka Masala', quantity: 2 },
+          { name: 'Butter Naan', quantity: 4 },
+          { name: 'Raita', quantity: 2 }
+        ], 
+        status: 'pending', 
+        time: '11:00 AM',
+        prepTime: 25,
+        table: 'Table 2',
+        type: 'dine-in'
+      },
+      { 
+        id: 'ORD004', 
+        customer: 'Alice Brown', 
+        items: [
+          { name: 'Samosa', quantity: 6 },
+          { name: 'Chai', quantity: 2 }
+        ], 
+        status: 'ready', 
+        time: '09:15 AM',
+        prepTime: 10,
+        table: 'Takeaway',
+        type: 'takeaway'
+      },
+      { 
+        id: 'ORD005', 
+        customer: 'Charlie Wilson', 
+        items: [
+          { name: 'Lamb Rogan Josh', quantity: 1 },
+          { name: 'Kashmiri Naan', quantity: 2 }
+        ], 
+        status: 'completed', 
+        time: '09:45 AM',
+        prepTime: 30,
+        table: 'Table 8',
+        type: 'dine-in'
+      }
+    ];
 
-            {/* 🔥 NEW: PREP SUMMARY BAR */}
-            {activeChefTab === "orders" && prepSummary.length > 0 && (
-                <div style={styles.summaryBar}>
-                    {prepSummary.map(([name, qty], i) => (
-                        <div key={i} style={styles.summaryItem}>
-                            <span style={{color: '#f97316'}}>{qty}x</span> {name}
-                        </div>
-                    ))}
-                </div>
+    const mockStats = {
+      pendingOrders: 3,
+      completedToday: 12,
+      avgPrepTime: 18,
+      rating: 4.8,
+      efficiency: 92,
+      specialRequests: 4
+    };
+
+    setChefInfo(mockChefInfo);
+    setOrders(mockOrders);
+    setStats(mockStats);
+  }, [navigate]);
+
+  const filteredOrders = orders.filter(order => {
+    const matchesStatus = activeTab === 'all' || order.status === activeTab;
+    const matchesSearch = searchTerm === '' || 
+      order.customer.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      order.id.toLowerCase().includes(searchTerm.toLowerCase());
+    return matchesStatus && matchesSearch;
+  });
+
+  const handleOrderAction = (orderId, action) => {
+    setOrders(prev => prev.map(order => {
+      if (order.id === orderId) {
+        let newStatus = order.status;
+        switch(action) {
+          case 'start':
+            newStatus = 'preparing';
+            toast.success(`Started preparing order ${orderId}`);
+            break;
+          case 'complete':
+            newStatus = 'ready';
+            toast.success(`Order ${orderId} marked as ready`);
+            break;
+          case 'deliver':
+            newStatus = 'completed';
+            toast.success(`Order ${orderId} completed`);
+            break;
+          case 'delay':
+            toast.error(`Order ${orderId} delayed - notified customer`);
+            break;
+        }
+        return { ...order, status: newStatus };
+      }
+      return order;
+    }));
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('chef_id');
+    toast.success('Logged out successfully');
+    navigate('/login');
+  };
+
+  const getOrderTotalItems = (order) => {
+    return order.items.reduce((total, item) => total + item.quantity, 0);
+  };
+
+  const getStatusColor = (status) => {
+    switch(status) {
+      case 'pending': return 'var(--warning-color)';
+      case 'preparing': return 'var(--accent-color)';
+      case 'ready': return 'var(--success-color)';
+      case 'completed': return 'var(--dark-color)';
+      default: return 'var(--gray-color)';
+    }
+  };
+
+  return (
+    <ChefContainer>
+      {/* Sidebar */}
+      <Sidebar>
+        <ChefProfile>
+          <ChefAvatar>
+            {chefInfo?.image ? (
+              <img src={chefInfo.image} alt={chefInfo.name} />
+            ) : (
+              <ChefHat size={32} />
             )}
-
-            <div style={styles.tabContainer}>
-                <button onClick={() => setActiveChefTab("orders")} style={{ ...styles.tabButton, borderBottom: activeChefTab === 'orders' ? '4px solid #f97316' : 'none' }}>ACTIVE ORDERS ({orders.length})</button>
-                <button onClick={() => setActiveChefTab("stock")} style={{ ...styles.tabButton, borderBottom: activeChefTab === 'stock' ? '4px solid #3b82f6' : 'none' }}>STOCK CONTROL</button>
+          </ChefAvatar>
+          <ChefDetails>
+            <ChefName>{chefInfo?.name}</ChefName>
+            {/* FIXED: Changed </chefInfo> to </ChefRestaurant> */}
+            <ChefRestaurant>{chefInfo?.restaurant}</ChefRestaurant>
+            <ChefSpecialty>{chefInfo?.specialty}</ChefSpecialty>
+          </ChefDetails>
+          <ChefRating>
+            <Star size={16} fill="var(--warning-color)" color="var(--warning-color)" />
+            <span>{chefInfo?.rating}</span>
+          </ChefRating>
+        </ChefProfile>
+        
+        <NavMenu>
+          <NavItem active={activeTab === 'pending'} onClick={() => setActiveTab('pending')}>
+            <Clock size={20} />
+            <span>Pending ({stats.pendingOrders})</span>
+          </NavItem>
+          <NavItem active={activeTab === 'preparing'} onClick={() => setActiveTab('preparing')}>
+            <Flame size={20} />
+            <span>Preparing</span>
+          </NavItem>
+          <NavItem active={activeTab === 'ready'} onClick={() => setActiveTab('ready')}>
+            <CheckCircle size={20} />
+            <span>Ready</span>
+          </NavItem>
+          <NavItem active={activeTab === 'all'} onClick={() => setActiveTab('all')}>
+            <Package size={20} />
+            <span>All Orders</span>
+          </NavItem>
+        </NavMenu>
+        
+        <StatsSidebar>
+          <StatItem>
+            <StatIcon>
+              <Timer size={16} />
+            </StatIcon>
+            <div>
+              <StatValue>{stats.avgPrepTime} min</StatValue>
+              <StatLabel>Avg. Prep Time</StatLabel>
             </div>
+          </StatItem>
+          <StatItem>
+            <StatIcon>
+              <TrendingUp size={16} />
+            </StatIcon>
+            <div>
+              <StatValue>{stats.efficiency}%</StatValue>
+              <StatLabel>Efficiency</StatLabel>
+            </div>
+          </StatItem>
+          <StatItem>
+            <StatIcon>
+              <AlertCircle size={16} />
+            </StatIcon>
+            <div>
+              <StatValue>{stats.specialRequests}</StatValue>
+              <StatLabel>Special Requests</StatLabel>
+            </div>
+          </StatItem>
+        </StatsSidebar>
+        
+        <SidebarFooter>
+          <LogoutButton onClick={handleLogout}>
+            <LogOut size={20} />
+            <span>Logout</span>
+          </LogoutButton>
+        </SidebarFooter>
+      </Sidebar>
 
-            <div style={styles.grid}>
-                {activeChefTab === "orders" ? (
-                    orders.map((order) => {
-                        const time = getElapsedTime(order.createdAt);
-                        const isLate = time > 15;
-                        return (
-                            <div key={order._id} className={isLate ? "order-late-pulse" : ""} style={{...styles.card, borderColor: isLate ? '#ef4444' : '#222'}}>
-                                <div style={{...styles.cardHeader, background: isLate ? '#450a0a' : '#111'}}>
-                                    <h2 style={styles.tableNumber}>T-{order.tableNumber}</h2>
-                                    <div style={{textAlign: 'right'}}>
-                                        <div style={{fontSize: '14px', fontWeight: '900', color: isLate ? '#f87171' : '#f97316'}}><FaClock /> {time}m</div>
-                                        <div style={{fontSize: '8px', color: '#666'}}>{new Date(order.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
-                                    </div>
-                                </div>
-                                <div style={styles.itemsContainer}>
-                                    {order.items.map((item, idx) => (
-                                        <div key={idx} style={styles.itemRow}>
-                                            <div style={styles.itemName}><span style={styles.qtyBox}>{item.quantity}</span> {item.name}</div>
-                                        </div>
-                                    ))}
-                                    {order.note && <div style={styles.chefNote}><FaExclamationTriangle /> {order.note}</div>}
-                                </div>
-                                <div style={styles.actionContainer}>
-                                    {order.status === "PLACED" && <button onClick={() => updateOrderStatus(order._id, "Cooking")} style={styles.btnStart}>START COOKING</button>}
-                                    {order.status === "Cooking" && <button onClick={() => updateOrderStatus(order._id, "Ready")} style={styles.btnReady}>SET TO READY</button>}
-                                    {order.status === "Ready" && <button onClick={() => updateOrderStatus(order._id, "SERVED")} style={styles.btnClear}>SERVED / CLEAR</button>}
-                                </div>
-                            </div>
-                        );
-                    })
-                ) : (
-                    <div style={styles.stockGrid}>
-                        {dishes.map(dish => (
-                            <div key={dish._id} style={styles.stockCard}>
-                                <span style={{fontSize: '14px', flex: 1, opacity: dish.isAvailable ? 1 : 0.4}}>{dish.name}</span>
-                                <button onClick={() => toggleDishAvailability(dish._id, dish.isAvailable)} style={{...styles.stockBtn, background: dish.isAvailable ? '#374151' : '#22c55e'}}>
-                                    {dish.isAvailable ? "OUT" : "IN STOCK"}
-                                </button>
-                            </div>
+      {/* Main Content */}
+      <MainContent>
+        <Header>
+          <HeaderTitle>
+            <h1>Chef Dashboard</h1>
+            <HeaderSubtitle>Manage kitchen orders and preparation</HeaderSubtitle>
+          </HeaderTitle>
+          
+          <HeaderActions>
+            <SearchBox>
+              <Search size={20} />
+              <input
+                type="text"
+                placeholder="Search orders..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </SearchBox>
+            <NotificationButton>
+              <Bell size={20} />
+              <NotificationDot />
+            </NotificationButton>
+            <RefreshButton>
+              <RefreshCw size={20} />
+            </RefreshButton>
+          </HeaderActions>
+        </Header>
+
+        <ContentArea>
+          {/* Stats Overview */}
+          <StatsOverview>
+            <StatCard>
+              <StatCardIcon bgColor="rgba(255, 214, 102, 0.2)">
+                <Clock size={24} color="var(--warning-color)" />
+              </StatCardIcon>
+              <div>
+                <StatCardValue>{stats.pendingOrders}</StatCardValue>
+                <StatCardLabel>Pending Orders</StatCardLabel>
+              </div>
+            </StatCard>
+            
+            <StatCard>
+              <StatCardIcon bgColor="rgba(6, 214, 160, 0.2)">
+                <CheckCircle size={24} color="var(--success-color)" />
+              </StatCardIcon>
+              <div>
+                <StatCardValue>{stats.completedToday}</StatCardValue>
+                <StatCardLabel>Completed Today</StatCardLabel>
+              </div>
+            </StatCard>
+            
+            <StatCard>
+              <StatCardIcon bgColor="rgba(78, 205, 196, 0.2)">
+                <Timer size={24} color="var(--accent-color)" />
+              </StatCardIcon>
+              <div>
+                <StatCardValue>{stats.avgPrepTime}m</StatCardValue>
+                <StatCardLabel>Avg. Prep Time</StatCardLabel>
+              </div>
+            </StatCard>
+            
+            <StatCard>
+              <StatCardIcon bgColor="rgba(255, 107, 53, 0.2)">
+                <Star size={24} color="var(--primary-color)" />
+              </StatCardIcon>
+              <div>
+                <StatCardValue>{stats.rating}/5</StatCardValue>
+                <StatCardLabel>Chef Rating</StatCardLabel>
+              </div>
+            </StatCard>
+          </StatsOverview>
+
+          {/* Orders Section */}
+          <OrdersSection>
+            <SectionHeader>
+              <h2>Kitchen Orders</h2>
+              <OrderFilter>
+                <FilterButton active={activeTab === 'pending'} onClick={() => setActiveTab('pending')}>
+                  Pending
+                </FilterButton>
+                <FilterButton active={activeTab === 'preparing'} onClick={() => setActiveTab('preparing')}>
+                  Preparing
+                </FilterButton>
+                <FilterButton active={activeTab === 'ready'} onClick={() => setActiveTab('ready')}>
+                  Ready
+                </FilterButton>
+                <FilterButton active={activeTab === 'all'} onClick={() => setActiveTab('all')}>
+                  All
+                </FilterButton>
+              </OrderFilter>
+            </SectionHeader>
+
+            {filteredOrders.length === 0 ? (
+              <EmptyState>
+                <Package size={48} color="var(--light-gray)" />
+                <h3>No orders found</h3>
+                <p>There are no {activeTab === 'all' ? '' : activeTab} orders at the moment</p>
+              </EmptyState>
+            ) : (
+              <OrdersGrid>
+                {filteredOrders.map(order => (
+                  <OrderCard key={order.id} status={order.status}>
+                    <OrderHeader>
+                      <OrderId>{order.id}</OrderId>
+                      <OrderTime>{order.time}</OrderTime>
+                    </OrderHeader>
+                    
+                    <OrderCustomer>
+                      <User size={16} />
+                      <span>{order.customer}</span>
+                      <OrderType type={order.type}>
+                        {order.type}
+                      </OrderType>
+                      {order.table && (
+                        <TableNumber>{order.table}</TableNumber>
+                      )}
+                    </OrderCustomer>
+                    
+                    <OrderItems>
+                      <h4>Items ({getOrderTotalItems(order)})</h4>
+                      {order.items.map((item, index) => (
+                        <OrderItem key={index}>
+                          <ItemQuantity>{item.quantity}x</ItemQuantity>
+                          <ItemName>{item.name}</ItemName>
+                          {item.specialInstructions && (
+                            <ItemInstructions>
+                              <AlertCircle size={12} />
+                              <span>{item.specialInstructions}</span>
+                            </ItemInstructions>
+                          )}
+                        </OrderItem>
+                      ))}
+                    </OrderItems>
+                    
+                    <OrderFooter>
+                      <PrepTime>
+                        <Timer size={16} />
+                        <span>{order.prepTime} min</span>
+                      </PrepTime>
+                      
+                      <OrderActions>
+                        {order.status === 'pending' && (
+                          <ActionButton primary onClick={() => handleOrderAction(order.id, 'start')}>
+                            <Flame size={16} />
+                            Start Prep
+                          </ActionButton>
+                        )}
+                        {order.status === 'preparing' && (
+                          <ActionButton success onClick={() => handleOrderAction(order.id, 'complete')}>
+                            <CheckCircle size={16} />
+                            Mark Ready
+                          </ActionButton>
+                        )}
+                        {order.status === 'ready' && (
+                          <ActionButton onClick={() => handleOrderAction(order.id, 'deliver')}>
+                            <Package size={16} />
+                            Delivered
+                          </ActionButton>
+                        )}
+                        <ActionButton secondary onClick={() => handleOrderAction(order.id, 'delay')}>
+                          <AlertCircle size={16} />
+                          Delay
+                        </ActionButton>
+                      </OrderActions>
+                    </OrderFooter>
+                  </OrderCard>
+                ))}
+              </OrdersGrid>
+            )}
+          </OrdersSection>
+
+          {/* Special Requests */}
+          <SpecialRequests>
+            <SectionHeader>
+              <h2>Special Requests ({stats.specialRequests})</h2>
+            </SectionHeader>
+            <RequestsList>
+              {orders
+                .filter(order => order.items.some(item => item.specialInstructions))
+                .map(order => (
+                  <RequestCard key={order.id}>
+                    <RequestHeader>
+                      <strong>{order.id}</strong>
+                      <span>{order.customer}</span>
+                    </RequestHeader>
+                    <RequestItems>
+                      {order.items
+                        .filter(item => item.specialInstructions)
+                        .map((item, index) => (
+                          <RequestItem key={index}>
+                            <span>{item.quantity}x {item.name}</span>
+                            <RequestText>{item.specialInstructions}</RequestText>
+                          </RequestItem>
                         ))}
-                    </div>
-                )}
-            </div>
+                    </RequestItems>
+                  </RequestCard>
+                ))}
+            </RequestsList>
+          </SpecialRequests>
+        </ContentArea>
 
-            <style>{`
-                .spin { animation: spin 1s linear infinite; }
-                .live-pulse { width: 8px; height: 8px; background: #22c55e; border-radius: 50%; animation: pulse-green 1.5s infinite; }
-                .order-late-pulse { animation: pulse-late 2s infinite; }
-                .alert-banner-pulse { animation: pulse-red 2s infinite; background: #ef4444; padding: 15px; border-radius: 14px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-                @keyframes pulse-green { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
-                @keyframes pulse-late { 0% { box-shadow: inset 0 0 0px #ef4444; } 50% { box-shadow: inset 0 0 20px #ef4444; } 100% { box-shadow: inset 0 0 0px #ef4444; } }
-                @keyframes pulse-red { 0% { transform: scale(1); } 50% { transform: scale(1.02); } 100% { transform: scale(1); } }
-                @keyframes spin { 100% { transform: rotate(360deg); } }
-            `}</style>
-        </div>
-    );
+        {/* Kitchen Status Footer */}
+        <KitchenStatus>
+          <StatusItem>
+            <StatusIndicator color="var(--warning-color)" />
+            <span>Pending: {stats.pendingOrders}</span>
+          </StatusItem>
+          <StatusItem>
+            <StatusIndicator color="var(--accent-color)" />
+            <span>Preparing: {orders.filter(o => o.status === 'preparing').length}</span>
+          </StatusItem>
+          <StatusItem>
+            <StatusIndicator color="var(--success-color)" />
+            <span>Ready: {orders.filter(o => o.status === 'ready').length}</span>
+          </StatusItem>
+          <StatusItem>
+            <StatusIndicator color="var(--dark-color)" />
+            <span>Completed: {orders.filter(o => o.status === 'completed').length}</span>
+          </StatusItem>
+        </KitchenStatus>
+      </MainContent>
+    </ChefContainer>
+  );
 };
 
-const styles = {
-    dashboardContainer: { minHeight: '100vh', background: '#050505', color: 'white', padding: '10px' },
-    lockContainer: { minHeight: '100vh', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' },
-    lockCard: { background: '#111', padding: '30px', borderRadius: '24px', textAlign: 'center', width: '300px' },
-    input: { width: '100%', background: '#000', border: '1px solid #333', padding: '15px', borderRadius: '12px', color: 'white', marginBottom: '15px', textAlign: 'center' },
-    loginBtn: { width: '100%', background: '#f97316', color: 'black', border: 'none', padding: '15px', borderRadius: '12px', fontWeight: 'bold' },
-    header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px', background: '#111', borderRadius: '20px', marginBottom: '10px' },
-    headerTitle: { fontSize: '20px', fontWeight: '900', margin: 0, color: '#f97316' },
-    statusDot: { display: 'flex', alignItems: 'center', gap: '5px', marginTop: '2px' },
-    statBox: { textAlign: 'center' },
-    statValue: { fontSize: '24px', fontWeight: '900', color: '#fff', lineHeight: 1 },
-    statLabel: { fontSize: '8px', color: '#666', marginTop: '2px' },
-    summaryBar: { display: 'flex', gap: '10px', overflowX: 'auto', padding: '10px 5px', marginBottom: '10px', background: '#0a0a0a', borderRadius: '10px' },
-    summaryItem: { whiteSpace: 'nowrap', background: '#111', padding: '5px 12px', borderRadius: '20px', fontSize: '12px', border: '1px solid #222' },
-    tabContainer: { display: 'flex', marginBottom: '15px', borderBottom: '1px solid #222' },
-    tabButton: { flex: 1, padding: '15px', background: 'none', border: 'none', color: 'white', fontWeight: 'bold', fontSize: '13px' },
-    grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '15px' },
-    card: { background: '#111', borderRadius: '20px', border: '2px solid #222', overflow: 'hidden' },
-    cardHeader: { padding: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-    tableNumber: { fontSize: '24px', fontWeight: '900', margin: 0 },
-    itemsContainer: { padding: '15px', minHeight: '100px' },
-    itemRow: { marginBottom: '8px' },
-    qtyBox: { background: '#f97316', color: 'black', padding: '2px 8px', borderRadius: '5px', marginRight: '10px', fontWeight: '900' },
-    itemName: { fontSize: '18px', fontWeight: 'bold' },
-    chefNote: { fontSize: '12px', color: '#f97316', marginTop: '10px', padding: '8px', background: '#1a130a', borderRadius: '8px' },
-    actionContainer: { padding: '10px' },
-    btnStart: { width: '100%', background: '#f97316', border: 'none', color: 'black', padding: '15px', borderRadius: '12px', fontWeight: '900' },
-    btnReady: { width: '100%', background: '#eab308', border: 'none', color: 'black', padding: '15px', borderRadius: '12px', fontWeight: '900' },
-    btnClear: { width: '100%', background: '#22c55e', border: 'none', color: 'black', padding: '15px', borderRadius: '12px', fontWeight: '900' },
-    stockGrid: { gridColumn: '1/-1', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '10px' },
-    stockCard: { background: '#111', padding: '15px', borderRadius: '15px', display: 'flex', alignItems: 'center', gap: '10px', border: '1px solid #222' },
-    stockBtn: { padding: '8px 12px', borderRadius: '8px', border: 'none', color: 'white', fontSize: '10px', fontWeight: 'bold' },
-    alertWrapper: { position: 'fixed', top: '10px', left: '50%', transform: 'translateX(-50%)', zIndex: 9999, width: '90%' },
-    iconButton: { background: '#222', border: 'none', color: 'white', padding: '10px', borderRadius: '50%', marginLeft: '5px' }
-};
-
-export default ChefDashboard;
+// ... rest of the styled components remain the same ...

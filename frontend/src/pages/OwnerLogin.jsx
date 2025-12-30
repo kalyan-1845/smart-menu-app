@@ -1,161 +1,546 @@
-import React, { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom"; 
-import axios from "axios";
-import { FaLock, FaStore, FaKey, FaArrowRight } from "react-icons/fa";
-
-// 🚀 SMART API SWITCHER
-const getApiBase = () => {
-    const host = window.location.hostname;
-    // Check for local development environments
-    if (host === "localhost" || host.startsWith("192.168") || host.startsWith("10.") || host === "127.0.0.1") {
-        return `http://${window.location.hostname}:5000/api`;
-    }
-    // Production URL
-    return "https://smart-menu-backend-5ge7.onrender.com/api";
-};
-
-// --- STYLES ---
-const styles = `
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
-.login-container { background: radial-gradient(circle at top, #1a0f0a 0%, #000000 70%); min-height: 100vh; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; font-family: 'Inter', sans-serif; padding: 20px; }
-.login-card { background: rgba(20, 20, 20, 0.8); backdrop-filter: blur(15px); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 24px; padding: 40px 30px; width: 100%; max-width: 400px; z-index: 10; box-shadow: 0 20px 50px rgba(0,0,0,0.5); }
-.input-group { position: relative; margin-bottom: 20px; }
-.input-icon { position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: #666; }
-.input-field { width: 100%; background: rgba(0,0,0,0.3); border: 1px solid #333; padding: 14px 14px 14px 45px; border-radius: 12px; color: white; font-size: 14px; transition: 0.3s; outline: none; }
-.input-field:focus { border-color: #f97316; box-shadow: 0 0 0 4px rgba(249, 115, 22, 0.1); background: rgba(0,0,0,0.5); }
-.login-btn { width: 100%; background: linear-gradient(135deg, #f97316 0%, #ea580c 100%); padding: 16px; border-radius: 14px; font-weight: 800; color: white; cursor: pointer; border: none; font-size: 14px; letter-spacing: 0.5px; display: flex; align-items: center; justify-content: center; gap: 10px; transition: 0.3s; margin-top: 10px; }
-.login-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(234, 88, 12, 0.3); }
-.login-btn:disabled { opacity: 0.7; cursor: not-allowed; }
-.error-message { color: #ef4444; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.2); padding: 12px; border-radius: 10px; margin-bottom: 20px; font-size: 13px; text-align: center; display: flex; align-items: center; justify-content: center; gap: 8px; }
-.brand-icon { width: 60px; height: 60px; background: rgba(249, 115, 22, 0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; border: 1px solid rgba(249, 115, 22, 0.2); }
-`;
+import React, { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import styled from 'styled-components';
+import { 
+  Store, 
+  Lock, 
+  Mail, 
+  Eye, 
+  EyeOff, 
+  ArrowLeft,
+  Key,
+  Building,
+  Shield,
+  CheckCircle
+} from 'lucide-react';
+import toast from 'react-hot-toast';
 
 const OwnerLogin = () => {
-    const { id } = useParams(); 
-    const navigate = useNavigate();
+  const navigate = useNavigate();
+  const [formData, setFormData] = useState({
+    email: '',
+    password: '',
+    restaurantId: ''
+  });
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
+
+  const restaurants = [
+    { id: 'RST001', name: 'Spice Heaven', address: '123 Main St' },
+    { id: 'RST002', name: 'Pasta Paradise', address: '456 Oak Ave' },
+    { id: 'RST003', name: 'Sushi Zen', address: '789 Pine Rd' },
+    { id: 'RST004', name: 'Burger Hub', address: '321 Elm St' }
+  ];
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
     
-    // Auto-fill username from URL
-    const [formData, setFormData] = useState({ username: id || "", password: "" });
-    const [error, setError] = useState("");
-    const [loading, setLoading] = useState(false);
-    
-    const API_BASE = getApiBase();
-
-    // 🔒 SECURITY: Block access without ID
-    useEffect(() => {
-        if (!id) {
-            // Optional: You could redirect to a general login page instead
-            // navigate("/login"); 
-        } else {
-            setFormData(prev => ({ ...prev, username: id }));
-        }
-    }, [id]);
-
-    const handleChange = (e) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
-    };
-
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setLoading(true);
-        setError("");
-
-        try {
-            const response = await axios.post(`${API_BASE}/auth/login`, formData);
-            
-            if (response.data && response.data.token) {
-                // ✅ 1. SAVE TO LOCAL STORAGE
-                // Using keys consistent with your Admin Panel
-                localStorage.setItem(`owner_token_${id}`, response.data.token);
-                localStorage.setItem(`owner_id_${id}`, response.data._id || response.data.restaurant?._id);
-                localStorage.setItem("activeResId", id); // Global backup
-
-                // ✅ 2. NAVIGATE CORRECTLY
-                // This ensures the URL is /restaurantName/admin
-                navigate(`/${id}/admin`); 
-            } else {
-                setError("Login succeeded but server sent no token.");
-            }
-        } catch (err) {
-            console.error("Login Error:", err);
-            setError(err.response?.data?.message || "Connection Failed. Is the backend running?");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    if (!id) {
-        return (
-            <div className="login-container">
-                 <style>{styles}</style>
-                 <div className="login-card" style={{textAlign: 'center'}}>
-                    <h2 style={{color: 'white'}}>Welcome</h2>
-                    <p style={{color: '#888', fontSize: '14px', marginBottom: '20px'}}>Please scan your QR code or use your specific restaurant link to log in.</p>
-                 </div>
-            </div>
-        )
+    if (!formData.email || !formData.password || !formData.restaurantId) {
+      toast.error('Please fill in all fields');
+      return;
     }
 
-    return (
-        <div className="login-container">
-            <style>{styles}</style>
-            
-            {/* Background decoration */}
-            <div style={{position:'absolute', top:'-10%', left:'-10%', width:'300px', height:'300px', background:'#f97316', filter:'blur(150px)', opacity:'0.2', borderRadius:'50%'}}></div>
+    setLoading(true);
+    
+    // Simulate API call
+    setTimeout(() => {
+      setLoading(false);
+      toast.success('Login successful!');
+      
+      // Save to localStorage
+      if (rememberMe) {
+        localStorage.setItem('owner_email', formData.email);
+        localStorage.setItem('restaurant_id', formData.restaurantId);
+      }
+      
+      // Navigate to restaurant admin dashboard
+      navigate('/restaurant-admin');
+    }, 1500);
+  };
 
-            <div className="login-card">
-                <div className="brand-icon">
-                    <FaStore size={24} color="#f97316" />
-                </div>
-                
-                <h1 style={{color:'white', textAlign:'center', fontSize:'24px', margin:'0 0 5px 0', fontWeight:'800'}}>
-                    {id.toUpperCase()}
-                </h1>
-                <p style={{color:'#888', textAlign:'center', fontSize:'13px', margin:'0 0 30px 0'}}>
-                    Owner Dashboard Access
-                </p>
+  const handleForgotPassword = () => {
+    toast.loading('Sending password reset email...');
+    setTimeout(() => {
+      toast.dismiss();
+      toast.success('Password reset email sent!');
+    }, 1500);
+  };
 
-                <form onSubmit={handleSubmit}>
-                    {/* Username Field (Read Only) */}
-                    <div className="input-group">
-                        <FaStore className="input-icon" />
-                        <input 
-                            className="input-field" 
-                            type="text" 
-                            name="username" 
-                            value={formData.username} 
-                            readOnly 
-                            style={{ opacity: 0.7, cursor: 'not-allowed' }}
-                        />
-                    </div>
+  const handleQuickLogin = (restaurantId) => {
+    setFormData(prev => ({
+      ...prev,
+      restaurantId,
+      email: 'owner@example.com',
+      password: 'password123'
+    }));
+    toast.success('Demo credentials filled');
+  };
 
-                    {/* Password Field */}
-                    <div className="input-group">
-                        <FaKey className="input-icon" />
-                        <input 
-                            className="input-field"
-                            type="password" 
-                            name="password" 
-                            value={formData.password} 
-                            onChange={handleChange} 
-                            placeholder="Enter Admin Password"
-                            required
-                        />
-                    </div>
+  return (
+    <LoginContainer>
+      <LoginCard>
+        <BackButton to="/">
+          <ArrowLeft size={20} />
+          Back to Home
+        </BackButton>
+        
+        <LoginHeader>
+          <Store size={48} color="var(--primary-color)" />
+          <h1>Restaurant Owner Login</h1>
+          <p>Access your restaurant management dashboard</p>
+        </LoginHeader>
 
-                    {error && (
-                        <div className="error-message">
-                            <FaLock size={12} /> {error}
-                        </div>
-                    )}
+        {/* Quick Select Restaurant */}
+        <RestaurantSelect>
+          <h3>Quick Select Restaurant</h3>
+          <RestaurantGrid>
+            {restaurants.map(restaurant => (
+              <RestaurantOption
+                key={restaurant.id}
+                selected={formData.restaurantId === restaurant.id}
+                onClick={() => handleQuickLogin(restaurant.id)}
+              >
+                <Building size={20} />
+                <RestaurantInfo>
+                  <RestaurantName>{restaurant.name}</RestaurantName>
+                  <RestaurantAddress>{restaurant.address}</RestaurantAddress>
+                </RestaurantInfo>
+                <RestaurantId>{restaurant.id}</RestaurantId>
+              </RestaurantOption>
+            ))}
+          </RestaurantGrid>
+        </RestaurantSelect>
 
-                    <button type="submit" className="login-btn" disabled={loading}>
-                        {loading ? "Authenticating..." : <>Access Dashboard <FaArrowRight /></>}
-                    </button>
-                </form>
-            </div>
-        </div>
-    );
+        <LoginForm onSubmit={handleSubmit}>
+          <FormGroup>
+            <FormLabel>Restaurant ID</FormLabel>
+            <InputWithIcon>
+              <Key size={20} />
+              <FormControl
+                type="text"
+                name="restaurantId"
+                value={formData.restaurantId}
+                onChange={handleInputChange}
+                placeholder="Enter your Restaurant ID"
+                required
+              />
+            </InputWithIcon>
+          </FormGroup>
+
+          <FormGroup>
+            <FormLabel>Email Address</FormLabel>
+            <InputWithIcon>
+              <Mail size={20} />
+              <FormControl
+                type="email"
+                name="email"
+                value={formData.email}
+                onChange={handleInputChange}
+                placeholder="owner@restaurant.com"
+                required
+              />
+            </InputWithIcon>
+          </FormGroup>
+
+          <FormGroup>
+            <FormLabel>Password</FormLabel>
+            <PasswordInput>
+              <InputWithIcon>
+                <Lock size={20} />
+                <FormControl
+                  type={showPassword ? 'text' : 'password'}
+                  name="password"
+                  value={formData.password}
+                  onChange={handleInputChange}
+                  placeholder="Enter your password"
+                  required
+                />
+              </InputWithIcon>
+              <PasswordToggle onClick={() => setShowPassword(!showPassword)}>
+                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+              </PasswordToggle>
+            </PasswordInput>
+          </FormGroup>
+
+          <FormOptions>
+            <RememberMeOption>
+              <Checkbox
+                type="checkbox"
+                id="remember"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+              />
+              <label htmlFor="remember">Remember me</label>
+            </RememberMeOption>
+            <ForgotPassword onClick={handleForgotPassword}>
+              Forgot Password?
+            </ForgotPassword>
+          </FormOptions>
+
+          <LoginButton type="submit" disabled={loading}>
+            {loading ? (
+              'Signing in...'
+            ) : (
+              <>
+                <CheckCircle size={20} />
+                Sign In to Dashboard
+              </>
+            )}
+          </LoginButton>
+
+          <SecurityNotice>
+            <Shield size={16} />
+            <span>Your data is protected with 256-bit encryption</span>
+          </SecurityNotice>
+        </LoginForm>
+
+        <RegisterSection>
+          <h3>New Restaurant Owner?</h3>
+          <p>Register your restaurant to get started</p>
+          <RegisterButton to="/setup-wizard">
+            <Store size={20} />
+            Register Restaurant
+          </RegisterButton>
+        </RegisterSection>
+
+        <SupportSection>
+          <h4>Need Help?</h4>
+          <SupportLinks>
+            <SupportLink href="tel:+15551234567">
+              📞 Call Owner Support
+            </SupportLink>
+            <SupportLink href="mailto:owners@foodorder.com">
+              ✉️ Email Support
+            </SupportLink>
+            <SupportLink to="/qr-generator">
+              🖨️ QR Code Generator
+            </SupportLink>
+          </SupportLinks>
+        </SupportSection>
+      </LoginCard>
+    </LoginContainer>
+  );
 };
+
+const LoginContainer = styled.div`
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+`;
+
+const LoginCard = styled.div`
+  background: white;
+  border-radius: var(--radius-lg);
+  padding: 40px;
+  width: 100%;
+  max-width: 600px;
+  box-shadow: var(--shadow-lg);
+`;
+
+const BackButton = styled(Link)`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--gray-color);
+  margin-bottom: 30px;
+  text-decoration: none;
+  
+  &:hover {
+    color: var(--primary-color);
+  }
+`;
+
+const LoginHeader = styled.div`
+  text-align: center;
+  margin-bottom: 40px;
+  
+  h1 {
+    margin: 20px 0 10px;
+  }
+  
+  p {
+    color: var(--gray-color);
+  }
+`;
+
+const RestaurantSelect = styled.div`
+  margin-bottom: 30px;
+  
+  h3 {
+    margin-bottom: 15px;
+    font-size: 1.1rem;
+  }
+`;
+
+const RestaurantGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 15px;
+  margin-bottom: 20px;
+`;
+
+const RestaurantOption = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 15px;
+  border: 2px solid ${props => props.selected ? 'var(--primary-color)' : 'var(--light-gray)'};
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: ${props => props.selected ? 'rgba(255, 107, 53, 0.05)' : 'white'};
+  
+  &:hover {
+    border-color: var(--primary-color);
+    transform: translateY(-2px);
+  }
+  
+  svg {
+    color: ${props => props.selected ? 'var(--primary-color)' : 'var(--gray-color)'};
+  }
+`;
+
+const RestaurantInfo = styled.div`
+  flex: 1;
+`;
+
+const RestaurantName = styled.div`
+  font-weight: 500;
+  margin-bottom: 5px;
+`;
+
+const RestaurantAddress = styled.div`
+  font-size: 12px;
+  color: var(--gray-color);
+`;
+
+const RestaurantId = styled.div`
+  font-size: 12px;
+  padding: 4px 8px;
+  background: var(--light-gray);
+  border-radius: 4px;
+  color: var(--dark-color);
+  font-family: monospace;
+`;
+
+const LoginForm = styled.form`
+  margin-top: 30px;
+`;
+
+const FormGroup = styled.div`
+  margin-bottom: 20px;
+`;
+
+const FormLabel = styled.label`
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: var(--dark-color);
+`;
+
+const InputWithIcon = styled.div`
+  position: relative;
+  
+  svg {
+    position: absolute;
+    left: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--gray-color);
+  }
+`;
+
+const FormControl = styled.input`
+  width: 100%;
+  padding: 12px 16px 12px 48px;
+  border: 2px solid var(--light-gray);
+  border-radius: var(--radius);
+  font-size: 16px;
+  transition: border-color 0.3s ease;
+  
+  &:focus {
+    outline: none;
+    border-color: var(--primary-color);
+  }
+`;
+
+const PasswordInput = styled.div`
+  position: relative;
+`;
+
+const PasswordToggle = styled.button`
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: var(--gray-color);
+  cursor: pointer;
+  padding: 4px;
+  
+  &:hover {
+    color: var(--dark-color);
+  }
+`;
+
+const FormOptions = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 25px;
+`;
+
+const RememberMeOption = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  
+  label {
+    cursor: pointer;
+    color: var(--dark-color);
+  }
+`;
+
+const Checkbox = styled.input`
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+`;
+
+const ForgotPassword = styled.button`
+  background: transparent;
+  border: none;
+  color: var(--primary-color);
+  cursor: pointer;
+  font-size: 14px;
+  
+  &:hover {
+    text-decoration: underline;
+  }
+`;
+
+const LoginButton = styled.button`
+  width: 100%;
+  padding: 16px;
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  
+  &:hover:not(:disabled) {
+    background-color: #E55A2E;
+  }
+  
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+`;
+
+const SecurityNotice = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 20px;
+  padding: 15px;
+  background: var(--light-gray);
+  border-radius: var(--radius);
+  font-size: 14px;
+  color: var(--gray-color);
+  
+  svg {
+    color: var(--success-color);
+  }
+`;
+
+const RegisterSection = styled.div`
+  text-align: center;
+  margin-top: 40px;
+  padding-top: 30px;
+  border-top: 1px solid var(--light-gray);
+  
+  h3 {
+    margin-bottom: 10px;
+  }
+  
+  p {
+    color: var(--gray-color);
+    margin-bottom: 20px;
+  }
+`;
+
+const RegisterButton = styled(Link)`
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 15px 30px;
+  background: var(--secondary-color);
+  color: white;
+  border: none;
+  border-radius: var(--radius);
+  font-weight: 600;
+  text-decoration: none;
+  transition: background-color 0.3s ease;
+  
+  &:hover {
+    background: #E59400;
+  }
+`;
+
+const SupportSection = styled.div`
+  margin-top: 30px;
+  padding-top: 30px;
+  border-top: 1px solid var(--light-gray);
+  
+  h4 {
+    text-align: center;
+    margin-bottom: 20px;
+    color: var(--gray-color);
+  }
+`;
+
+const SupportLinks = styled.div`
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  flex-wrap: wrap;
+`;
+
+const SupportLink = styled.a`
+  padding: 10px 20px;
+  background: var(--light-gray);
+  color: var(--dark-color);
+  border-radius: var(--radius);
+  text-decoration: none;
+  font-size: 14px;
+  transition: all 0.3s ease;
+  
+  &:hover {
+    background: var(--primary-color);
+    color: white;
+  }
+`;
 
 export default OwnerLogin;

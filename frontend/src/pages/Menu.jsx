@@ -1,209 +1,912 @@
-import React, { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import axios from "axios";
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import styled from 'styled-components';
 import { 
-  FaSearch, FaShoppingCart, FaPlus, FaUtensils, FaExclamationCircle
-} from "react-icons/fa";
+  ShoppingCart, 
+  Search, 
+  Filter, 
+  Star, 
+  Clock, 
+  ChevronRight,
+  Plus,
+  Minus,
+  Heart,
+  Share2,
+  ArrowLeft,
+  Utensils
+} from 'lucide-react';
+import toast from 'react-hot-toast';
 
-// 🚀 SMART API SWITCHER
-const getApiBase = () => {
-    const host = window.location.hostname;
-    if (host === "localhost" || host.startsWith("192.168") || host.startsWith("10.")) {
-        return `http://${host}:5000/api`;
-    }
-    return "https://smart-menu-backend-5ge7.onrender.com/api";
-};
-
-const Menu = ({ cart, addToCart, setRestaurantId, setTableNum }) => {
-  const { id, table } = useParams();
+const Menu = () => {
+  const { restaurantId } = useParams();
   const navigate = useNavigate();
-  const API_BASE = getApiBase(); 
-  
-  const [menu, setMenu] = useState([]);
   const [restaurant, setRestaurant] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [category, setCategory] = useState("All");
+  const [menuItems, setMenuItems] = useState([]);
+  const [cart, setCart] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [categories, setCategories] = useState([]);
+  const [favorites, setFavorites] = useState([]);
 
   useEffect(() => {
-    if (id) {
-      setRestaurantId(id); 
-      if (table) setTableNum(table);
-      
-      const fetchData = async () => {
-        try {
-          // 1. FETCH DISHES (Critical - If this fails, show error)
-          const dishRes = await axios.get(`${API_BASE}/dishes?restaurantId=${id}`);
-          setMenu(dishRes.data);
-          
-          // 2. FETCH RESTAURANT INFO (Optional - If this fails, ignore it)
-          try {
-             const infoRes = await axios.get(`${API_BASE}/auth/restaurant/${id}`);
-             setRestaurant(infoRes.data);
-          } catch (infoErr) {
-             console.warn("Restaurant Info Failed (Ignoring):", infoErr);
-             // Do NOT set error here. Keep showing the menu.
-          }
+    // Mock restaurant data
+    const mockRestaurant = {
+      id: restaurantId,
+      name: 'Spice Heaven',
+      cuisine: 'Indian',
+      rating: 4.5,
+      deliveryTime: '30-40 min',
+      description: 'Authentic Indian cuisine with modern twists',
+      image: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&h=400&fit=crop'
+    };
 
-        } catch (err) {
-          console.error("Critical Menu Load Failed:", err);
-          setError("Could not load dishes. Check connection.");
-        } finally {
-          setLoading(false);
-        }
-      };
-      fetchData();
+    const mockMenuItems = [
+      { id: 1, name: 'Butter Chicken', description: 'Tender chicken in rich tomato butter sauce', price: 16.99, category: 'Main Course', image: 'https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?w=400&h=300&fit=crop', popular: true, spicy: true, vegetarian: false },
+      { id: 2, name: 'Paneer Tikka', description: 'Grilled cottage cheese with spices', price: 14.99, category: 'Appetizers', image: 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=400&h=300&fit=crop', popular: true, spicy: false, vegetarian: true },
+      { id: 3, name: 'Chicken Biryani', description: 'Fragrant rice with spiced chicken', price: 18.99, category: 'Main Course', image: 'https://images.unsplash.com/photo-1563379091339-03246963d9d6?w=400&h=300&fit=crop', popular: true, spicy: true, vegetarian: false },
+      { id: 4, name: 'Garlic Naan', description: 'Traditional Indian bread with garlic', price: 4.99, category: 'Breads', image: 'https://images.unsplash.com/photo-1565299585323-38d6b0865b47?w=400&h=300&fit=crop', popular: false, spicy: false, vegetarian: true },
+      { id: 5, name: 'Mango Lassi', description: 'Refreshing yogurt drink with mango', price: 5.99, category: 'Beverages', image: 'https://images.unsplash.com/photo-1541658016709-82535e94bc69?w=400&h=300&fit=crop', popular: false, spicy: false, vegetarian: true },
+      { id: 6, name: 'Vegetable Curry', description: 'Mixed vegetables in creamy sauce', price: 13.99, category: 'Main Course', image: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=400&h=300&fit=crop', popular: false, spicy: false, vegetarian: true },
+      { id: 7, name: 'Samosa', description: 'Crispy pastry with spiced potatoes', price: 6.99, category: 'Appetizers', image: 'https://images.unsplash.com/photo-1601050690597-df0568f70950?w=400&h=300&fit=crop', popular: true, spicy: false, vegetarian: true },
+      { id: 8, name: 'Gulab Jamun', description: 'Sweet milk dumplings in syrup', price: 7.99, category: 'Desserts', image: 'https://images.unsplash.com/photo-1563805042-7684c019e1cb?w=400&h=300&fit=crop', popular: false, spicy: false, vegetarian: true }
+    ];
+
+    const uniqueCategories = ['all', ...new Set(mockMenuItems.map(item => item.category))];
+    
+    setRestaurant(mockRestaurant);
+    setMenuItems(mockMenuItems);
+    setCategories(uniqueCategories);
+    
+    // Load cart from localStorage
+    const savedCart = JSON.parse(localStorage.getItem(`cart_${restaurantId}`)) || [];
+    setCart(savedCart);
+    
+    // Load favorites
+    const savedFavorites = JSON.parse(localStorage.getItem('favorites')) || [];
+    setFavorites(savedFavorites);
+  }, [restaurantId]);
+
+  const filteredItems = menuItems.filter(item => {
+    const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         item.description.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCategory = selectedCategory === 'all' || item.category === selectedCategory;
+    return matchesSearch && matchesCategory;
+  });
+
+  const addToCart = (item) => {
+    const existingItem = cart.find(cartItem => cartItem.id === item.id);
+    
+    let updatedCart;
+    if (existingItem) {
+      updatedCart = cart.map(cartItem =>
+        cartItem.id === item.id
+          ? { ...cartItem, quantity: cartItem.quantity + 1 }
+          : cartItem
+      );
+    } else {
+      updatedCart = [...cart, { ...item, quantity: 1 }];
     }
-  }, [id, table, setRestaurantId, setTableNum, API_BASE]);
-
-  // ... (Rest of your component stays exactly the same)
-  const getQty = (itemId) => {
-    const item = cart.find(i => i._id === itemId);
-    return item ? item.quantity : 0;
+    
+    setCart(updatedCart);
+    localStorage.setItem(`cart_${restaurantId}`, JSON.stringify(updatedCart));
+    toast.success(`${item.name} added to cart`);
   };
 
-  const totalItems = cart.reduce((acc, item) => acc + item.quantity, 0);
-  const totalPrice = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+  const removeFromCart = (itemId) => {
+    const updatedCart = cart.filter(item => item.id !== itemId);
+    setCart(updatedCart);
+    localStorage.setItem(`cart_${restaurantId}`, JSON.stringify(updatedCart));
+    toast.success('Item removed from cart');
+  };
 
-  const filteredItems = menu.filter(item => 
-    item.name.toLowerCase().includes(searchTerm.toLowerCase()) &&
-    (category === "All" || item.category === category)
-  );
+  const updateQuantity = (itemId, newQuantity) => {
+    if (newQuantity < 1) {
+      removeFromCart(itemId);
+      return;
+    }
+    
+    const updatedCart = cart.map(item =>
+      item.id === itemId ? { ...item, quantity: newQuantity } : item
+    );
+    setCart(updatedCart);
+    localStorage.setItem(`cart_${restaurantId}`, JSON.stringify(updatedCart));
+  };
 
-  const categories = ["All", ...new Set(menu.map(item => item.category))];
+  const toggleFavorite = (itemId) => {
+    let updatedFavorites;
+    if (favorites.includes(itemId)) {
+      updatedFavorites = favorites.filter(id => id !== itemId);
+      toast.success('Removed from favorites');
+    } else {
+      updatedFavorites = [...favorites, itemId];
+      toast.success('Added to favorites');
+    }
+    setFavorites(updatedFavorites);
+    localStorage.setItem('favorites', JSON.stringify(updatedFavorites));
+  };
 
-  if (loading) return (
-    <div style={{height:'100vh', background:'#050505', color:'#f97316', display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column'}}>
-       <div className="spinner"></div>
-       <p style={{marginTop:'20px', fontWeight:'bold'}}>LOADING MENU...</p>
-       <style>{`.spinner { width: 40px; height: 40px; border: 4px solid #333; border-top: 4px solid #f97316; border-radius: 50%; animation: spin 1s linear infinite; } @keyframes spin { 100% { transform: rotate(360deg); } }`}</style>
-    </div>
-  );
+  const getCartTotal = () => {
+    return cart.reduce((total, item) => total + (item.price * item.quantity), 0);
+  };
 
-  if (error) return (
-      <div style={{height:'100vh', background:'#050505', color:'white', display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', padding:'20px', textAlign:'center'}}>
-          <FaExclamationCircle size={40} color="#ef4444" />
-          <h2 style={{marginTop:'20px'}}>Menu Unavailable</h2>
-          <p style={{color:'#888', marginBottom:'20px'}}>{error}</p>
-          <button onClick={() => window.location.reload()} style={{padding:'10px 20px', borderRadius:'8px', background:'#333', color:'white', border:'none', cursor:'pointer'}}>Retry</button>
-      </div>
-  );
+  const handleCheckout = () => {
+    if (cart.length === 0) {
+      toast.error('Your cart is empty');
+      return;
+    }
+    navigate('/cart');
+  };
+
+  if (!restaurant) {
+    return <Loading>Loading menu...</Loading>;
+  }
 
   return (
-    <div style={styles.container}>
-      
-      {/* NAVBAR */}
-      <div style={styles.navbar}>
-        <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
-             <div style={styles.logoBox}><FaUtensils /></div>
-             <div>
-                <h2 style={styles.resName}>{restaurant?.restaurantName || "Smart Menu"}</h2>
-                <p style={styles.tableBadge}>{table ? `Table ${table}` : "Takeaway / Counter"}</p>
-             </div>
-        </div>
-        <div onClick={() => navigate('/cart')} style={styles.cartIconWrapper}>
-            <FaShoppingCart size={20} color="white" />
-            {totalItems > 0 && <span style={styles.cartBadge}>{totalItems}</span>}
-        </div>
-      </div>
+    <MenuContainer>
+      {/* Restaurant Header */}
+      <RestaurantHeader>
+        <BackButton onClick={() => navigate('/')}>
+          <ArrowLeft size={20} />
+          Back to Restaurants
+        </BackButton>
+        
+        <RestaurantInfo>
+          <RestaurantImage src={restaurant.image} alt={restaurant.name} />
+          <RestaurantDetails>
+            <h1>{restaurant.name}</h1>
+            <RestaurantMeta>
+              <CuisineBadge>
+                <Utensils size={16} />
+                {restaurant.cuisine}
+              </CuisineBadge>
+              <Rating>
+                <Star size={16} fill="var(--warning-color)" color="var(--warning-color)" />
+                <span>{restaurant.rating}</span>
+              </Rating>
+              <DeliveryTime>
+                <Clock size={16} />
+                <span>{restaurant.deliveryTime}</span>
+              </DeliveryTime>
+            </RestaurantMeta>
+            <p>{restaurant.description}</p>
+          </RestaurantDetails>
+        </RestaurantInfo>
+      </RestaurantHeader>
 
-      {/* SEARCH */}
-      <div style={styles.controls}>
-        <div style={styles.searchBox}>
-            <FaSearch color="#666" />
-            <input type="text" placeholder="Search dishes..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={styles.searchInput} />
-        </div>
-        <div style={styles.catScroll}>
-            {categories.map(cat => (
-                <button key={cat} onClick={() => setCategory(cat)} style={{...styles.catBtn, background: category === cat ? '#f97316' : '#1a1a1a', color: category === cat ? 'white' : '#888'}}>
-                    {cat}
-                </button>
+      {/* Search and Filter */}
+      <SearchFilterSection>
+        <SearchBox>
+          <SearchIcon size={20} />
+          <SearchInput
+            type="text"
+            placeholder="Search menu items..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </SearchBox>
+        
+        <CategoryFilter>
+          <FilterLabel>
+            <Filter size={16} />
+            Categories
+          </FilterLabel>
+          <CategoryScroll>
+            {categories.map(category => (
+              <CategoryButton
+                key={category}
+                active={selectedCategory === category}
+                onClick={() => setSelectedCategory(category)}
+              >
+                {category === 'all' ? 'All Items' : category}
+              </CategoryButton>
             ))}
-        </div>
-      </div>
+          </CategoryScroll>
+        </CategoryFilter>
+      </SearchFilterSection>
 
-      {/* GRID */}
-      <div style={styles.grid}>
-        {filteredItems.length === 0 ? (
-            <div style={{gridColumn:'1/-1', textAlign:'center', padding:'40px', color:'#666'}}>
-                <p>No dishes found.</p>
-            </div>
+      {/* Menu Items */}
+      <MenuSection>
+        <SectionHeader>
+          <h2>Menu Items</h2>
+          <ItemCount>{filteredItems.length} items</ItemCount>
+        </SectionHeader>
+        
+        <MenuGrid>
+          {filteredItems.map(item => (
+            <MenuItemCard key={item.id}>
+              <ItemImage src={item.image} alt={item.name} />
+              
+              <ItemBadges>
+                {item.popular && <Badge popular>Popular</Badge>}
+                {item.spicy && <Badge spicy>Spicy</Badge>}
+                {item.vegetarian && <Badge vegetarian>Vegetarian</Badge>}
+              </ItemBadges>
+              
+              <FavoriteButton
+                active={favorites.includes(item.id)}
+                onClick={() => toggleFavorite(item.id)}
+              >
+                <Heart size={20} fill={favorites.includes(item.id) ? 'var(--danger-color)' : 'none'} />
+              </FavoriteButton>
+              
+              <ItemInfo>
+                <ItemHeader>
+                  <ItemName>{item.name}</ItemName>
+                  <ItemPrice>${item.price.toFixed(2)}</ItemPrice>
+                </ItemHeader>
+                
+                <ItemDescription>{item.description}</ItemDescription>
+                
+                <ItemFooter>
+                  <CategoryTag>{item.category}</CategoryTag>
+                  <AddButton onClick={() => addToCart(item)}>
+                    <Plus size={20} />
+                    Add to Cart
+                  </AddButton>
+                </ItemFooter>
+              </ItemInfo>
+            </MenuItemCard>
+          ))}
+        </MenuGrid>
+      </MenuSection>
+
+      {/* Cart Sidebar */}
+      <CartSidebar>
+        <CartHeader>
+          <h3>Your Order</h3>
+          <CartCount>{cart.length} items</CartCount>
+        </CartHeader>
+        
+        {cart.length === 0 ? (
+          <EmptyCart>
+            <ShoppingCart size={48} color="var(--light-gray)" />
+            <p>Your cart is empty</p>
+            <span>Add items from the menu</span>
+          </EmptyCart>
         ) : (
-            filteredItems.map(item => (
-                <div key={item._id} style={{...styles.card, opacity: item.isAvailable !== false ? 1 : 0.6}}>
-                    <div style={{position:'relative'}}>
-                        <img src={item.image || "https://via.placeholder.com/150"} alt={item.name} style={styles.foodImg} />
-                        {item.isAvailable === false && <div style={styles.soldOutOverlay}>SOLD OUT</div>}
-                    </div>
-                    <div style={styles.cardContent}>
-                        <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start'}}>
-                            <h3 style={styles.foodName}>{item.name}</h3>
-                            {item.isVeg ? <span style={styles.vegDot}>●</span> : <span style={{...styles.nonVegDot, color:'#ef4444'}}>●</span>}
-                        </div>
-                        <p style={styles.desc}>{item.description?.slice(0, 45)}...</p>
-                        <div style={styles.priceRow}>
-                            <span style={styles.price}>₹{item.price}</span>
-                            {item.isAvailable !== false ? (
-                                getQty(item._id) > 0 ? (
-                                    <div style={styles.qtyControl}>
-                                        <span style={{fontSize:'12px', fontWeight:'bold'}}>{getQty(item._id)}</span>
-                                        <span style={{fontSize:'10px'}}>ADDED</span>
-                                    </div>
-                                ) : (
-                                    <button onClick={() => addToCart(item)} style={styles.addBtn}>ADD <FaPlus size={10}/></button>
-                                )
-                            ) : (
-                                <span style={{fontSize:'10px', color:'#ef4444', fontWeight:'bold'}}>UNAVAILABLE</span>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            ))
+          <>
+            <CartItems>
+              {cart.map(item => (
+                <CartItem key={item.id}>
+                  <CartItemInfo>
+                    <CartItemName>{item.name}</CartItemName>
+                    <CartItemPrice>${(item.price * item.quantity).toFixed(2)}</CartItemPrice>
+                  </CartItemInfo>
+                  
+                  <CartItemActions>
+                    <QuantityControls>
+                      <QuantityButton onClick={() => updateQuantity(item.id, item.quantity - 1)}>
+                        <Minus size={16} />
+                      </QuantityButton>
+                      <Quantity>{item.quantity}</Quantity>
+                      <QuantityButton onClick={() => updateQuantity(item.id, item.quantity + 1)}>
+                        <Plus size={16} />
+                      </QuantityButton>
+                    </QuantityControls>
+                    
+                    <RemoveButton onClick={() => removeFromCart(item.id)}>
+                      Remove
+                    </RemoveButton>
+                  </CartItemActions>
+                </CartItem>
+              ))}
+            </CartItems>
+            
+            <CartSummary>
+              <SummaryRow>
+                <span>Subtotal</span>
+                <span>${getCartTotal().toFixed(2)}</span>
+              </SummaryRow>
+              <SummaryRow>
+                <span>Tax (8.5%)</span>
+                <span>${(getCartTotal() * 0.085).toFixed(2)}</span>
+              </SummaryRow>
+              <SummaryRow>
+                <span>Delivery</span>
+                <span>$2.99</span>
+              </SummaryRow>
+              <SummaryTotal>
+                <span>Total</span>
+                <span>${(getCartTotal() * 1.085 + 2.99).toFixed(2)}</span>
+              </SummaryTotal>
+            </CartSummary>
+            
+            <CartActions>
+              <ShareButton>
+                <Share2 size={20} />
+                Share Order
+              </ShareButton>
+              <CheckoutButton onClick={handleCheckout}>
+                <ShoppingCart size={20} />
+                Checkout
+                <ChevronRight size={20} />
+              </CheckoutButton>
+            </CartActions>
+          </>
         )}
-      </div>
-
-      {/* CART */}
-      {totalItems > 0 && (
-        <div onClick={() => navigate('/cart')} style={styles.floatingCart}>
-            <div style={{display:'flex', flexDirection:'column'}}>
-                <span style={{fontSize:'12px', opacity:0.8}}>{totalItems} ITEMS</span>
-                <span style={{fontSize:'16px', fontWeight:'900'}}>₹{totalPrice}</span>
-            </div>
-            <div style={{display:'flex', alignItems:'center', gap:'10px', fontWeight:'bold'}}>VIEW CART <FaShoppingCart /></div>
-        </div>
-      )}
-    </div>
+      </CartSidebar>
+    </MenuContainer>
   );
 };
 
-const styles = {
-    container: { minHeight:'100vh', background:'#050505', color:'white', fontFamily:'Inter, sans-serif', paddingBottom:'100px' },
-    navbar: { position:'sticky', top:0, zIndex:50, background:'rgba(5,5,5,0.95)', backdropFilter:'blur(10px)', padding:'15px 20px', display:'flex', justifyContent:'space-between', alignItems:'center', borderBottom:'1px solid #1a1a1a' },
-    logoBox: { width:'40px', height:'40px', borderRadius:'10px', background:'#f97316', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'18px', color:'white' },
-    resName: { margin:0, fontSize:'16px', fontWeight:'800', lineHeight:1.2 },
-    tableBadge: { margin:0, fontSize:'11px', color:'#f97316', fontWeight:'600' },
-    cartIconWrapper: { position:'relative', padding:'8px', background:'#1a1a1a', borderRadius:'50%', cursor:'pointer' },
-    cartBadge: { position:'absolute', top:-2, right:-2, background:'#f97316', color:'white', fontSize:'10px', fontWeight:'bold', width:'16px', height:'16px', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', border:'2px solid #050505' },
-    controls: { padding:'15px 20px', background:'#050505' },
-    searchBox: { display:'flex', alignItems:'center', gap:'10px', background:'#111', padding:'12px 15px', borderRadius:'12px', border:'1px solid #222', marginBottom:'15px' },
-    searchInput: { background:'transparent', border:'none', color:'white', width:'100%', fontSize:'14px', outline:'none' },
-    catScroll: { display:'flex', gap:'10px', overflowX:'auto', paddingBottom:'5px', scrollbarWidth:'none' },
-    catBtn: { padding:'8px 16px', borderRadius:'20px', border:'none', fontSize:'13px', fontWeight:'600', whiteSpace:'nowrap', cursor:'pointer', transition:'0.2s' },
-    grid: { padding:'0 20px', display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(150px, 1fr))', gap:'15px' },
-    card: { background:'#111', borderRadius:'16px', overflow:'hidden', border:'1px solid #1a1a1a', display:'flex', flexDirection:'column' },
-    foodImg: { width:'100%', height:'120px', objectFit:'cover' },
-    soldOutOverlay: { position:'absolute', inset:0, background:'rgba(0,0,0,0.7)', display:'flex', alignItems:'center', justifyContent:'center', color:'white', fontWeight:'900', letterSpacing:'1px', fontSize:'14px' },
-    cardContent: { padding:'12px', flex:1, display:'flex', flexDirection:'column' },
-    foodName: { margin:'0 0 5px 0', fontSize:'15px', fontWeight:'700', color:'#eee' },
-    desc: { fontSize:'11px', color:'#777', margin:'0 0 10px 0', lineHeight:1.4 },
-    priceRow: { marginTop:'auto', display:'flex', justifyContent:'space-between', alignItems:'center' },
-    price: { fontSize:'15px', fontWeight:'800', color:'white' },
-    addBtn: { background:'#1a1a1a', color:'#f97316', border:'1px solid #333', padding:'6px 12px', borderRadius:'8px', fontSize:'11px', fontWeight:'800', display:'flex', alignItems:'center', gap:'5px', cursor:'pointer' },
-    qtyControl: { background:'#f97316', color:'black', padding:'6px 10px', borderRadius:'8px', display:'flex', flexDirection:'column', alignItems:'center', lineHeight:1 },
-    vegDot: { color:'#22c55e', fontSize:'10px' },
-    nonVegDot: { color:'#ef4444', fontSize:'10px' },
-    floatingCart: { position:'fixed', bottom:'20px', left:'5%', width:'90%', background:'#f97316', color:'white', borderRadius:'16px', padding:'15px 20px', display:'flex', justifyContent:'space-between', alignItems:'center', boxShadow:'0 10px 30px rgba(249, 115, 22, 0.4)', zIndex:100, cursor:'pointer' }
-};
+const MenuContainer = styled.div`
+  min-height: 100vh;
+  padding: 20px;
+  background: #f8f9fa;
+  display: grid;
+  grid-template-columns: 1fr 350px;
+  gap: 30px;
+  
+  @media (max-width: 1024px) {
+    grid-template-columns: 1fr;
+  }
+`;
+
+const RestaurantHeader = styled.div`
+  grid-column: 1 / -1;
+  margin-bottom: 30px;
+`;
+
+const BackButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: none;
+  color: var(--gray-color);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 10px 0;
+  margin-bottom: 20px;
+  
+  &:hover {
+    color: var(--primary-color);
+  }
+`;
+
+const RestaurantInfo = styled.div`
+  display: flex;
+  gap: 30px;
+  background: white;
+  border-radius: var(--radius-lg);
+  padding: 30px;
+  box-shadow: var(--shadow);
+  
+  @media (max-width: 768px) {
+    flex-direction: column;
+  }
+`;
+
+const RestaurantImage = styled.img`
+  width: 300px;
+  height: 200px;
+  border-radius: var(--radius);
+  object-fit: cover;
+  
+  @media (max-width: 768px) {
+    width: 100%;
+    height: 250px;
+  }
+`;
+
+const RestaurantDetails = styled.div`
+  flex: 1;
+  
+  h1 {
+    margin-bottom: 15px;
+  }
+  
+  p {
+    color: var(--gray-color);
+    line-height: 1.6;
+  }
+`;
+
+const RestaurantMeta = styled.div`
+  display: flex;
+  gap: 20px;
+  margin-bottom: 15px;
+`;
+
+const CuisineBadge = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  background: rgba(78, 205, 196, 0.1);
+  color: var(--accent-color);
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 500;
+`;
+
+const Rating = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 600;
+`;
+
+const DeliveryTime = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--gray-color);
+`;
+
+const SearchFilterSection = styled.div`
+  grid-column: 1;
+  margin-bottom: 30px;
+`;
+
+const SearchBox = styled.div`
+  position: relative;
+  margin-bottom: 20px;
+`;
+
+const SearchIcon = styled(Search)`
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--gray-color);
+`;
+
+const SearchInput = styled.input`
+  width: 100%;
+  padding: 16px 16px 16px 48px;
+  border: 2px solid var(--light-gray);
+  border-radius: var(--radius);
+  font-size: 16px;
+  transition: border-color 0.3s ease;
+  
+  &:focus {
+    outline: none;
+    border-color: var(--primary-color);
+  }
+`;
+
+const CategoryFilter = styled.div`
+  background: white;
+  border-radius: var(--radius);
+  padding: 20px;
+  box-shadow: var(--shadow);
+`;
+
+const FilterLabel = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 15px;
+  font-weight: 500;
+  color: var(--dark-color);
+`;
+
+const CategoryScroll = styled.div`
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 10px;
+  
+  &::-webkit-scrollbar {
+    height: 4px;
+  }
+  
+  &::-webkit-scrollbar-track {
+    background: var(--light-gray);
+    border-radius: 2px;
+  }
+  
+  &::-webkit-scrollbar-thumb {
+    background: var(--primary-color);
+    border-radius: 2px;
+  }
+`;
+
+const CategoryButton = styled.button`
+  padding: 10px 20px;
+  background: ${props => props.active ? 'var(--primary-color)' : 'var(--light-gray)'};
+  color: ${props => props.active ? 'white' : 'var(--dark-color)'};
+  border: none;
+  border-radius: 20px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.3s ease;
+  
+  &:hover {
+    background: ${props => props.active ? '#E55A2E' : '#dde0e3'};
+  }
+`;
+
+const MenuSection = styled.div`
+  grid-column: 1;
+`;
+
+const SectionHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+`;
+
+const ItemCount = styled.div`
+  padding: 8px 16px;
+  background: var(--light-gray);
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 500;
+`;
+
+const MenuGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 25px;
+`;
+
+const MenuItemCard = styled.div`
+  background: white;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  position: relative;
+  
+  &:hover {
+    transform: translateY(-5px);
+    box-shadow: var(--shadow-lg);
+  }
+`;
+
+const ItemImage = styled.img`
+  width: 100%;
+  height: 200px;
+  object-fit: cover;
+`;
+
+const ItemBadges = styled.div`
+  position: absolute;
+  top: 15px;
+  left: 15px;
+  display: flex;
+  gap: 8px;
+`;
+
+const Badge = styled.span`
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  background: ${props => {
+    if (props.popular) return 'var(--warning-color)';
+    if (props.spicy) return 'var(--danger-color)';
+    if (props.vegetarian) return 'var(--success-color)';
+    return 'var(--gray-color)';
+  }};
+  color: white;
+`;
+
+const FavoriteButton = styled.button`
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  width: 40px;
+  height: 40px;
+  background: white;
+  border: none;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  transition: all 0.3s ease;
+  
+  &:hover {
+    transform: scale(1.1);
+    
+    svg {
+      color: var(--danger-color);
+    }
+  }
+  
+  svg {
+    color: ${props => props.active ? 'var(--danger-color)' : 'var(--gray-color)'};
+    transition: color 0.3s ease;
+  }
+`;
+
+const ItemInfo = styled.div`
+  padding: 20px;
+`;
+
+const ItemHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 10px;
+`;
+
+const ItemName = styled.h3`
+  font-size: 1.1rem;
+  margin: 0;
+`;
+
+const ItemPrice = styled.div`
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--primary-color);
+`;
+
+const ItemDescription = styled.p`
+  color: var(--gray-color);
+  font-size: 0.9rem;
+  margin-bottom: 20px;
+  line-height: 1.5;
+`;
+
+const ItemFooter = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+`;
+
+const CategoryTag = styled.span`
+  padding: 4px 12px;
+  background: var(--light-gray);
+  color: var(--gray-color);
+  border-radius: 12px;
+  font-size: 12px;
+`;
+
+const AddButton = styled.button`
+  padding: 10px 20px;
+  background: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: var(--radius);
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background-color 0.3s ease;
+  
+  &:hover {
+    background: #E55A2E;
+  }
+`;
+
+const CartSidebar = styled.div`
+  background: white;
+  border-radius: var(--radius-lg);
+  padding: 25px;
+  box-shadow: var(--shadow);
+  height: fit-content;
+  position: sticky;
+  top: 20px;
+  
+  @media (max-width: 1024px) {
+    position: static;
+    margin-top: 30px;
+  }
+`;
+
+const CartHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 25px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid var(--light-gray);
+  
+  h3 {
+    margin: 0;
+  }
+`;
+
+const CartCount = styled.div`
+  padding: 6px 12px;
+  background: var(--primary-color);
+  color: white;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+`;
+
+const EmptyCart = styled.div`
+  text-align: center;
+  padding: 40px 20px;
+  
+  svg {
+    margin-bottom: 15px;
+    color: var(--light-gray);
+  }
+  
+  p {
+    font-weight: 500;
+    margin-bottom: 5px;
+  }
+  
+  span {
+    color: var(--gray-color);
+    font-size: 14px;
+  }
+`;
+
+const CartItems = styled.div`
+  margin-bottom: 25px;
+  max-height: 300px;
+  overflow-y: auto;
+  
+  &::-webkit-scrollbar {
+    width: 4px;
+  }
+  
+  &::-webkit-scrollbar-track {
+    background: var(--light-gray);
+    border-radius: 2px;
+  }
+  
+  &::-webkit-scrollbar-thumb {
+    background: var(--primary-color);
+    border-radius: 2px;
+  }
+`;
+
+const CartItem = styled.div`
+  padding: 15px 0;
+  border-bottom: 1px solid var(--light-gray);
+  
+  &:last-child {
+    border-bottom: none;
+  }
+`;
+
+const CartItemInfo = styled.div`
+  margin-bottom: 10px;
+`;
+
+const CartItemName = styled.div`
+  font-weight: 500;
+  margin-bottom: 5px;
+`;
+
+const CartItemPrice = styled.div`
+  color: var(--primary-color);
+  font-weight: 600;
+`;
+
+const CartItemActions = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+`;
+
+const QuantityControls = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+`;
+
+const QuantityButton = styled.button`
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--light-gray);
+  background: white;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  
+  &:hover {
+    background: var(--light-gray);
+  }
+`;
+
+const Quantity = styled.span`
+  min-width: 20px;
+  text-align: center;
+  font-weight: 500;
+`;
+
+const RemoveButton = styled.button`
+  padding: 6px 12px;
+  background: transparent;
+  color: var(--danger-color);
+  border: 1px solid var(--danger-color);
+  border-radius: var(--radius);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  
+  &:hover {
+    background: var(--danger-color);
+    color: white;
+  }
+`;
+
+const CartSummary = styled.div`
+  margin-bottom: 25px;
+  padding: 20px;
+  background: var(--light-gray);
+  border-radius: var(--radius);
+`;
+
+const SummaryRow = styled.div`
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  color: var(--gray-color);
+  
+  &:last-child {
+    margin-bottom: 0;
+  }
+`;
+
+const SummaryTotal = styled.div`
+  display: flex;
+  justify-content: space-between;
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 2px solid var(--dark-color);
+  font-weight: 600;
+  font-size: 1.1rem;
+`;
+
+const CartActions = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+`;
+
+const ShareButton = styled.button`
+  padding: 12px;
+  background: transparent;
+  color: var(--primary-color);
+  border: 2px solid var(--primary-color);
+  border-radius: var(--radius);
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.3s ease;
+  
+  &:hover {
+    background: rgba(255, 107, 53, 0.1);
+  }
+`;
+
+const CheckoutButton = styled.button`
+  padding: 16px;
+  background: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: var(--radius);
+  font-weight: 600;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transition: background-color 0.3s ease;
+  
+  &:hover {
+    background: #E55A2E;
+  }
+`;
+
+const Loading = styled.div`
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  color: var(--gray-color);
+`;
 
 export default Menu;

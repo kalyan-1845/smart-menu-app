@@ -3,39 +3,66 @@
   <head>
     <meta charset="UTF-8" />
     
+    <!-- Viewport optimized for PWA -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    
+    <!-- App Theme -->
     <meta name="theme-color" content="#050505" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    
+    <!-- App Information -->
+    <meta name="application-name" content="BiteBox" />
+    <meta name="apple-mobile-web-app-title" content="BiteBox" />
     <meta name="description" content="Smart Restaurant Menu - Real-time Digital Ordering & Kitchen Management" />
-
+    
+    <!-- Open Graph / Social -->
+    <meta property="og:title" content="BiteBox | Smart Digital Menu" />
+    <meta property="og:description" content="Order food instantly from your phone. No waiting!" />
+    <meta property="og:image" content="/logo512.png" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://your-domain.com" />
+    
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="BiteBox | Smart Digital Menu" />
+    <meta name="twitter:description" content="Order food instantly from your phone. No waiting!" />
+    <meta name="twitter:image" content="/logo512.png" />
+    
+    <!-- Icons for all platforms -->
+    <link rel="icon" href="/favicon.ico" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="mask-icon" href="/safari-pinned-tab.svg" color="#f97316" />
+    
+    <!-- Manifest -->
+    <link rel="manifest" href="/manifest.json" crossorigin="use-credentials" />
+    
+    <!-- Preload critical resources -->
+    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&family=Poppins:wght@700;800&display=swap" as="style" />
     <link rel="preconnect" href="https://smart-menu-backend-5ge7.onrender.com" crossorigin />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-
-    <meta property="og:title" content="BiteBox | Smart Digital Menu" />
-    <meta property="og:description" content="Order food instantly from your phone. No waiting!" />
-    <meta property="og:image" content="/logo192.png" />
-    <meta property="og:type" content="website" />
-
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="BiteBox" />
     
-    <link rel="apple-touch-icon" href="/logo192.png" />
-    <link rel="manifest" href="/manifest.json" />
-    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
-
     <title>BiteBox | Smart Menu System</title>
 
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&family=Poppins:wght@700;800&display=swap" rel="stylesheet" />
-
-    <style>
+    <!-- Critical CSS -->
+    <style id="critical-css">
       /* --- GLOBAL BASE STYLES --- */
       :root {
         --bg-color: #050505;
+        --surface-color: #1a1a1a;
         --primary-orange: #f97316;
+        --primary-orange-light: #ffedd5;
+        --text-primary: #ffffff;
+        --text-secondary: #a1a1aa;
+        --border-color: #27272a;
         --safe-top: env(safe-area-inset-top);
         --safe-bottom: env(safe-area-inset-bottom);
+        --safe-left: env(safe-area-inset-left);
+        --safe-right: env(safe-area-inset-right);
       }
 
       * {
@@ -43,15 +70,25 @@
         margin: 0;
         padding: 0;
         -webkit-tap-highlight-color: transparent;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
       }
 
       html, body {
         height: 100%;
+        width: 100%;
         background-color: var(--bg-color);
-        color: #ffffff;
-        font-family: "Inter", sans-serif;
-        overscroll-behavior-y: none; /* Prevents "bounce" effect on iOS */
+        color: var(--text-primary);
+        font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+        overscroll-behavior-y: none;
         overflow-x: hidden;
+        touch-action: manipulation; /* Improves touch responsiveness */
+      }
+
+      /* Prevent text size adjustment on orientation change */
+      html {
+        -webkit-text-size-adjust: 100%;
+        text-size-adjust: 100%;
       }
 
       /* --- APP CONTAINER --- */
@@ -62,81 +99,467 @@
         flex-direction: column;
         padding-top: var(--safe-top);
         padding-bottom: var(--safe-bottom);
+        padding-left: var(--safe-left);
+        padding-right: var(--safe-right);
+        position: relative;
       }
 
-      /* --- 🌀 SPLASH SCREEN (Visible before React Loads) --- */
+      /* --- 🌀 ENHANCED SPLASH SCREEN --- */
       #root:empty {
         display: flex;
         flex-direction: column;
         justify-content: center;
         align-items: center;
         height: 100vh;
-        /* Matches your app background perfectly */
-        background: radial-gradient(circle at center, #1a100a 0%, #000000 100%);
+        background: 
+          radial-gradient(circle at 20% 30%, #2c1a0f 0%, transparent 50%),
+          radial-gradient(circle at 80% 70%, #1a100a 0%, transparent 50%),
+          #000000;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        z-index: 9999;
+        animation: fadeIn 0.3s ease-out;
       }
 
+      /* Loading spinner */
       #root:empty::before {
         content: "";
-        width: 50px;
-        height: 50px;
+        width: 60px;
+        height: 60px;
         border: 4px solid rgba(249, 115, 22, 0.1);
         border-top: 4px solid var(--primary-orange);
+        border-right: 4px solid transparent;
         border-radius: 50%;
-        animation: spin 0.8s linear infinite;
-        margin-bottom: 20px;
+        animation: spin 0.8s cubic-bezier(0.68, -0.55, 0.27, 1.55) infinite;
+        margin-bottom: 24px;
+        box-shadow: 0 0 20px rgba(249, 115, 22, 0.3);
       }
 
+      /* App name with gradient */
       #root:empty::after {
-        content: "BITEBOX SYSTEM";
-        font-size: 12px;
-        letter-spacing: 3px;
+        content: "BITEBOX";
+        font-size: 24px;
         font-weight: 900;
-        color: var(--primary-orange);
-        opacity: 0.9;
+        font-family: 'Poppins', sans-serif;
+        letter-spacing: 4px;
+        background: linear-gradient(90deg, #f97316, #fb923c, #fdba74);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        animation: shimmer 2s infinite ease-in-out;
         text-transform: uppercase;
-        animation: pulse 1.5s infinite ease-in-out;
+        margin-top: 16px;
       }
 
-      @keyframes spin { 100% { transform: rotate(360deg); } }
-      @keyframes pulse { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
+      /* Loading dots */
+      #root:empty + .loading-dots {
+        position: fixed;
+        bottom: 100px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        gap: 8px;
+      }
 
-      /* --- 🖨️ KITCHEN PRINTER (KOT) LOGIC --- */
+      #root:empty + .loading-dots::before,
+      #root:empty + .loading-dots::after {
+        content: "";
+        width: 8px;
+        height: 8px;
+        background: var(--primary-orange);
+        border-radius: 50%;
+        opacity: 0.6;
+        animation: bounce 1.4s infinite ease-in-out both;
+      }
+
+      #root:empty + .loading-dots::before {
+        animation-delay: -0.32s;
+      }
+
+      #root:empty + .loading-dots::after {
+        animation-delay: -0.16s;
+      }
+
+      /* --- ANIMATIONS --- */
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+
+      @keyframes pulse {
+        0%, 100% { opacity: 0.6; }
+        50% { opacity: 1; }
+      }
+
+      @keyframes shimmer {
+        0% { background-position: -200px 0; }
+        100% { background-position: 200px 0; }
+      }
+
+      @keyframes bounce {
+        0%, 80%, 100% { transform: scale(0); }
+        40% { transform: scale(1); }
+      }
+
+      @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+
+      /* --- 🖨️ ENHANCED KITCHEN PRINTER STYLES --- */
       @media print {
-        body * { visibility: hidden; }
-        #kot-receipt, #kot-receipt * { visibility: visible; }
+        /* Hide everything except KOT receipt */
+        body * {
+          visibility: hidden !important;
+          margin: 0 !important;
+          padding: 0 !important;
+        }
+
+        /* Show only KOT receipt */
+        #kot-receipt,
+        #kot-receipt * {
+          visibility: visible !important;
+        }
+
+        /* KOT receipt container */
         #kot-receipt {
-          position: absolute;
-          left: 0;
-          top: 0;
-          width: 80mm;
+          position: absolute !important;
+          left: 0 !important;
+          top: 0 !important;
+          width: 80mm !important;
+          max-width: 80mm !important;
+          min-width: 80mm !important;
           background: white !important;
           color: black !important;
-          font-family: 'Courier New', monospace;
-          padding: 5px;
-          font-size: 12px;
+          font-family: 'Courier New', Courier, monospace !important;
+          font-size: 12px !important;
+          line-height: 1.2 !important;
+          padding: 5mm !important;
+          margin: 0 !important;
+          border: none !important;
+          box-shadow: none !important;
         }
-        @page { margin: 0; }
+
+        /* Remove any unwanted spacing */
+        @page {
+          margin: 0 !important;
+          padding: 0 !important;
+          size: 80mm auto;
+        }
+
+        /* Prevent page breaks inside receipt */
+        #kot-receipt * {
+          page-break-inside: avoid !important;
+          page-break-after: avoid !important;
+          page-break-before: avoid !important;
+        }
+
+        /* Hide print button */
+        .no-print {
+          display: none !important;
+        }
+
+        /* QR Code scaling */
+        #kot-receipt img,
+        #kot-receipt svg {
+          max-width: 60mm !important;
+          height: auto !important;
+        }
+      }
+
+      /* --- PWA INSTALL PROMPT STYLES --- */
+      .pwa-install-prompt {
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: var(--surface-color);
+        border: 1px solid var(--border-color);
+        border-radius: 16px;
+        padding: 16px;
+        max-width: 400px;
+        width: calc(100% - 32px);
+        z-index: 10000;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        animation: slideUp 0.3s ease-out;
+        display: none;
+      }
+
+      @keyframes slideUp {
+        from {
+          transform: translate(-50%, 100%);
+          opacity: 0;
+        }
+        to {
+          transform: translate(-50%, 0);
+          opacity: 1;
+        }
+      }
+
+      /* --- OFFLINE INDICATOR --- */
+      .offline-indicator {
+        position: fixed;
+        top: calc(var(--safe-top) + 10px);
+        left: 50%;
+        transform: translateX(-50%);
+        background: #ef4444;
+        color: white;
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+        z-index: 10000;
+        display: none;
+        animation: fadeIn 0.3s ease-out;
+      }
+
+      /* --- SCROLLBAR STYLING --- */
+      ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+      }
+
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+
+      ::-webkit-scrollbar-thumb {
+        background: var(--primary-orange);
+        border-radius: 3px;
+      }
+
+      ::-webkit-scrollbar-thumb:hover {
+        background: #ea580c;
+      }
+
+      /* --- SELECTION STYLING --- */
+      ::selection {
+        background: var(--primary-orange);
+        color: white;
+      }
+
+      /* --- FOCUS VISIBLE (Accessibility) --- */
+      :focus-visible {
+        outline: 2px solid var(--primary-orange);
+        outline-offset: 2px;
+      }
+
+      /* --- RESPONSIVE UTILITIES --- */
+      @media (max-width: 640px) {
+        #root:empty::after {
+          font-size: 20px;
+          letter-spacing: 3px;
+        }
+        
+        #root:empty::before {
+          width: 50px;
+          height: 50px;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.01ms !important;
+        }
       }
     </style>
+
+    <!-- Deferred non-critical styles -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&family=Poppins:wght@700;800&display=swap" media="print" onload="this.media='all'" />
+    
+    <!-- Preload main script -->
+    <link rel="preload" as="script" href="/src/main.jsx" />
   </head>
 
   <body>
-    <noscript>You need to enable JavaScript to run this app.</noscript>
-    
+    <!-- Screen Reader Only Content -->
+    <div class="sr-only">
+      <h1>BiteBox Smart Restaurant Menu System</h1>
+      <p>Digital ordering and kitchen management platform for modern restaurants.</p>
+    </div>
+
+    <!-- Root element for React -->
     <div id="root"></div>
 
+    <!-- Loading dots (appended dynamically) -->
+    <div class="loading-dots"></div>
+
+    <!-- PWA Install Prompt -->
+    <div class="pwa-install-prompt" id="install-prompt">
+      <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+        <div style="width: 40px; height: 40px; background: var(--primary-orange); border-radius: 10px; display: flex; align-items: center; justify-content: center;">
+          <span style="color: white; font-weight: 900;">BB</span>
+        </div>
+        <div>
+          <p style="font-weight: 700; margin-bottom: 2px;">Install BiteBox</p>
+          <p style="font-size: 12px; color: var(--text-secondary);">Get faster access with our app</p>
+        </div>
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <button id="install-cancel" style="flex: 1; padding: 10px; background: transparent; border: 1px solid var(--border-color); border-radius: 10px; color: var(--text-secondary); font-weight: 600; cursor: pointer;">
+          Later
+        </button>
+        <button id="install-accept" style="flex: 1; padding: 10px; background: var(--primary-orange); border: none; border-radius: 10px; color: white; font-weight: 700; cursor: pointer;">
+          Install
+        </button>
+      </div>
+    </div>
+
+    <!-- Offline Indicator -->
+    <div class="offline-indicator" id="offline-indicator">
+      ⚠️ You are offline. Some features may be limited.
+    </div>
+
+    <!-- Main script -->
     <script type="module" src="/src/main.jsx"></script>
 
+    <!-- PWA and offline functionality -->
     <script>
-      // Service Worker for Offline Capabilities
-      if ("serviceWorker" in navigator) {
-        window.addEventListener("load", () => {
-          navigator.serviceWorker
-            .register("/sw.js")
-            .then((reg) => console.log("✅ Service Worker Registered"))
-            .catch((err) => console.log("⚠️ SW Error:", err));
+      // Enhanced Service Worker Registration
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js', {
+            scope: '/',
+            updateViaCache: 'none'
+          })
+          .then(registration => {
+            console.log('✅ Service Worker registered:', registration.scope);
+            
+            // Check for updates
+            registration.addEventListener('updatefound', () => {
+              const newWorker = registration.installing;
+              console.log('🔄 New service worker found:', newWorker.state);
+            });
+          })
+          .catch(error => {
+            console.warn('⚠️ Service Worker registration failed:', error);
+          });
         });
       }
+
+      // Online/Offline Detection
+      function updateOnlineStatus() {
+        const offlineIndicator = document.getElementById('offline-indicator');
+        if (!navigator.onLine) {
+          offlineIndicator.style.display = 'block';
+          // Dispatch custom event for React components
+          window.dispatchEvent(new Event('offline'));
+        } else {
+          offlineIndicator.style.display = 'none';
+          window.dispatchEvent(new Event('online'));
+        }
+      }
+
+      window.addEventListener('online', updateOnlineStatus);
+      window.addEventListener('offline', updateOnlineStatus);
+      updateOnlineStatus(); // Initial check
+
+      // PWA Install Prompt
+      let deferredPrompt;
+      const installPrompt = document.getElementById('install-prompt');
+      const installAccept = document.getElementById('install-accept');
+      const installCancel = document.getElementById('install-cancel');
+
+      window.addEventListener('beforeinstallprompt', (e) => {
+        // Prevent Chrome 67 and earlier from automatically showing the prompt
+        e.preventDefault();
+        deferredPrompt = e;
+        
+        // Show install prompt after 5 seconds
+        setTimeout(() => {
+          if (deferredPrompt) {
+            installPrompt.style.display = 'block';
+          }
+        }, 5000);
+      });
+
+      installAccept.addEventListener('click', async () => {
+        if (!deferredPrompt) return;
+        
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        console.log(`User ${outcome} the install prompt`);
+        
+        installPrompt.style.display = 'none';
+        deferredPrompt = null;
+      });
+
+      installCancel.addEventListener('click', () => {
+        installPrompt.style.display = 'none';
+        // Don't show again for 30 days
+        localStorage.setItem('installPromptDismissed', Date.now());
+      });
+
+      // Check if prompt was recently dismissed
+      const dismissedTime = localStorage.getItem('installPromptDismissed');
+      if (dismissedTime && (Date.now() - dismissedTime < 30 * 24 * 60 * 60 * 1000)) {
+        installPrompt.style.display = 'none';
+      }
+
+      // App Installed Event
+      window.addEventListener('appinstalled', () => {
+        console.log('🎉 BiteBox was successfully installed');
+        installPrompt.style.display = 'none';
+        deferredPrompt = null;
+        
+        // Track installation in analytics if needed
+        if (window.gtag) {
+          gtag('event', 'install');
+        }
+      });
+
+      // Prevent drag-and-drop file uploads (common in restaurant tablets)
+      document.addEventListener('dragover', (e) => e.preventDefault());
+      document.addEventListener('drop', (e) => e.preventDefault());
+
+      // Prevent pinch-to-zoom on iOS
+      document.addEventListener('touchmove', (e) => {
+        if (e.scale !== 1) e.preventDefault();
+      }, { passive: false });
+
+      // Screen orientation lock (portrait for best UX)
+      if (screen.orientation && screen.orientation.lock) {
+        screen.orientation.lock('portrait').catch(() => {
+          // Lock failed, but that's okay
+        });
+      }
+
+      // Performance monitoring
+      if ('performance' in window) {
+        window.addEventListener('load', () => {
+          setTimeout(() => {
+            const perfData = performance.getEntriesByType('navigation')[0];
+            if (perfData) {
+              console.log('📊 Performance:', {
+                domContentLoaded: (perfData.domContentLoadedEventEnd - perfData.domContentLoadedEventStart).toFixed(2) + 'ms',
+                load: (perfData.loadEventEnd - perfData.loadEventStart).toFixed(2) + 'ms',
+                dns: perfData.domainLookupEnd - perfData.domainLookupStart,
+                tcp: perfData.connectEnd - perfData.connectStart,
+                ttfb: perfData.responseStart - perfData.requestStart
+              });
+            }
+          }, 0);
+        });
+      }
+    </script>
+
+    <!-- Global error handler -->
+    <script>
+      window.addEventListener('error', (event) => {
+        console.error('Global error:', event.error);
+        // You could send this to your error tracking service
+        // Example: Sentry.captureException(event.error);
+      });
+
+      window.addEventListener('unhandledrejection', (event) => {
+        console.error('Unhandled promise rejection:', event.reason);
+      });
     </script>
   </body>
 </html>
