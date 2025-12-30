@@ -1,77 +1,52 @@
-// frontend/src/main.jsx
-import React from 'react';
-import ReactDOM from 'react-dom/client';
-import App from './App';
+import React from 'react'
+import ReactDOM from 'react-dom/client'
+import App from './App.jsx'
+import { Toaster } from 'react-hot-toast'; // For those pro notifications
 
-// Add basic global styles directly in JS
-const globalStyles = `
-  * {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-  }
-
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-      'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-      sans-serif;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    background-color: #f8f9fa;
-    color: #333;
-  }
-
-  #root {
-    min-height: 100vh;
-  }
-
-  :root {
-    --primary-color: #ff6b35;
-    --primary-dark: #e55a2e;
-    --secondary-color: #ffa600;
-    --accent-color: #4ecdc4;
-    --success-color: #06d6a0;
-    --warning-color: #ffd666;
-    --danger-color: #ef476f;
-    --dark-color: #292f36;
-    --gray-color: #6c757d;
-    --light-gray: #e9ecef;
-    --light-color: #f8f9fa;
-    --radius: 8px;
-    --shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  }
-
-  button {
-    font-family: inherit;
-    cursor: pointer;
-  }
-
-  a {
-    text-decoration: none;
-    color: inherit;
-  }
-
-  input, textarea, select {
-    font-family: inherit;
-  }
-`;
-
-// Inject styles into the document head
-const styleElement = document.createElement('style');
-styleElement.innerHTML = globalStyles;
-document.head.appendChild(styleElement);
-
-// Create root and render the app
-const rootElement = document.getElementById('root');
-
-if (!rootElement) {
-  throw new Error('Failed to find the root element');
+// --- 🛠️ SERVICE WORKER REGISTRATION ---
+// This tells the browser to use our background script for offline support
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .then(reg => console.log('✅ Service Worker Active:', reg.scope))
+      .catch(err => console.error('❌ Service Worker Failed:', err));
+  });
 }
 
-const root = ReactDOM.createRoot(rootElement);
-
-root.render(
+ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
+    {/* The Toaster handles all your "Success" and "Error" popups globally */}
+    <Toaster position="top-center" reverseOrder={false} />
     <App />
-  </React.StrictMode>
-);
+  </React.StrictMode>,
+)
+
+// --- SERVICE WORKER REGISTRATION ---
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker
+      .register("/sw.js")
+      .then((registration) => {
+        console.log("✅ SW Registered: ", registration.scope);
+        
+        // CHECK FOR UPDATES
+        registration.onupdatefound = () => {
+          const installingWorker = registration.installing;
+          installingWorker.onstatechange = () => {
+            if (installingWorker.state === "installed") {
+              if (navigator.serviceWorker.controller) {
+                console.log("🔄 New content is available; please refresh.");
+                // Optional: Force refresh
+                // window.location.reload(); 
+              } else {
+                console.log("✅ Content is cached for offline use.");
+              }
+            }
+          };
+        };
+      })
+      .catch((error) => {
+        console.log("❌ SW Registration Failed: ", error);
+      });
+  });
+}

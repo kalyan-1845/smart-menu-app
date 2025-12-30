@@ -1,13 +1,16 @@
-const express = require('express');
+import express from 'express';
+import { createCall, getCalls, resolveCall } from '../controllers/notificationController.js';
+
 const router = express.Router();
-const { auth } = require('../middleware/auth');
-const notificationController = require('../controllers/notificationController');
 
-// All routes require authentication
-router.use(auth);
+// ✅ Route 1: Matches frontend's Primary attempt: "/broadcast/notify"
+router.post('/notify', createCall);
 
-router.get('/', notificationController.getNotifications);
-router.post('/mark-read', notificationController.markAsRead);
-router.delete('/:id', notificationController.deleteNotification);
+// ✅ Route 2: Matches frontend's Fallback attempt: "/notification/send"
+router.post('/send', createCall);
 
-module.exports = router;
+// ✅ Standard CRUD routes for Dashboard
+router.get('/', getCalls);
+router.delete('/:id', resolveCall);
+
+export default router;

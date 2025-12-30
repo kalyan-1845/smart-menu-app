@@ -1,76 +1,55 @@
-const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
+import mongoose from 'mongoose';
+import bcrypt from 'bcryptjs';
 
 const ownerSchema = new mongoose.Schema({
-  email: {
-    type: String,
-    required: true,
-    unique: true,
-    lowercase: true,
-    trim: true
+  // --- 1. IDENTITY & LOGIN ---
+  username: { type: String, required: true, unique: true, index: true },
+  email: { type: String, required: true, unique: true, index: true },
+  password: { type: String, required: true },
+
+  // --- 2. SUPER ADMIN CONTROLS (🔥 NEW & CRITICAL) ---
+  // This lets the system know if this is YOU (superadmin) or a Client (admin)
+  role: { 
+    type: String, 
+    enum: ['admin', 'superadmin'], 
+    default: 'admin' 
   },
-  password: {
-    type: String,
-    required: true
-  },
-  name: {
-    type: String,
-    required: true
-  },
-  restaurantName: {
-    type: String,
-    required: true
-  },
-  restaurantType: {
-    type: String,
-    enum: ['fine-dining', 'casual', 'fast-food', 'cafe', 'bar'],
-    default: 'casual'
-  },
-  phone: {
-    type: String,
-    required: true
-  },
-  address: {
-    type: String,
-    required: true
-  },
-  subscription: {
-    type: String,
-    enum: ['free', 'pro', 'enterprise'],
-    default: 'free'
-  },
-  subscriptionExpiry: Date,
-  isVerified: {
-    type: Boolean,
-    default: false
-  },
-  role: {
-    type: String,
-    enum: ['owner', 'super-admin'],
-    default: 'owner'
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now
-  }
+  // This is the "Kill Switch" for the restaurant
+  isActive: { type: Boolean, default: true },
+
+  // --- 3. RESTAURANT BRANDING ---
+  restaurantName: { type: String, required: true },
+
+  // --- 4. SUBSCRIPTION & BILLING ---
+  trialEndsAt: { type: Date, required: true },
+  isPro: { type: Boolean, default: false },
+
+  // --- 5. STAFF ACCESS (Your Custom Logic) ---
+  waiterPassword: { type: String, default: "bitebox18" },
+  chefPassword: { type: String, default: "bitebox18" },
+
+  // --- 6. NOTIFICATIONS ---
+  pushSubscription: { type: String }
+
+}, { 
+  timestamps: true 
 });
 
-// Hash password before saving
-ownerSchema.pre('save', async function(next) {
+// --- PASSWORD ENCRYPTION ---
+ownerSchema.pre('save', async function (next) {
   if (!this.isModified('password')) return next();
-  
-  try {
-    const salt = await bcrypt.genSalt(10);
-    this.password = await bcrypt.hash(this.password, salt);
-    next();
-  } catch (error) {
-    next(error);
-  }
+  const salt = await bcrypt.genSalt(10);
+  this.password = await bcrypt.hash(this.password, salt);
+  next();
 });
 
-// Compare password method
-ownerSchema.methods.comparePassword = async function(candidatePassword) {
-  return await bcrypt.compare(candidatePassword, this.password);
+// --- PASSWORD VERIFICATION ---
+ownerSchema.methods.matchPassword = async function (enteredPassword) {
+  return await bcrypt.compare(enteredPassword, this.password);
 };
 
-module.exports = mongoose.model('Owner', ownerSchema);
+// ⚠️ IMPORTANT: We use 'User' as the model name internally to match your Super Admin logic, 
+// even though the file is Owner.js. This prevents "Missing Schema" errors.
+const Owner = mongoose.models.User || mongoose.model('User', ownerSchema);
+
+export default Owner;

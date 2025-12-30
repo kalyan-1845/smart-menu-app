@@ -1,118 +1,116 @@
-const express = require('express');
-const mongoose = require('mongoose');
-const cors = require('cors');
-const dotenv = require('dotenv');
-const http = require('http');
-const socketIo = require('socket.io');
-const helmet = require('helmet');
-const morgan = require('morgan');
-const rateLimit = require('express-rate-limit');
+import 'dotenv/config';
+import express from 'express';
+import cors from 'cors';
+import mongoose from 'mongoose';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
+import rateLimit from 'express-rate-limit';
+import https from "https"; 
+import compression from 'compression'; // ✅ 1. Speed Boost Import
 
-// Load environment variables
-dotenv.config();
+// --- IMPORT ROUTES ---
+import authRoutes from './routes/authRoutes.js'; 
+import dishRoutes from './routes/dishRoutes.js';
+import orderRoutes from './routes/orderRoutes.js';
+import superAdminRoutes from './routes/superAdminRoutes.js';
+import broadcastRoutes from './routes/broadcastRoutes.js';
+import supportRoutes from './routes/supportRoutes.js'; 
 
 const app = express();
-const server = http.createServer(app);
-const io = socketIo(server, {
-  cors: {
-    origin: ["http://localhost:3000", "http://localhost:5173"],
-    credentials: true
-  }
-});
+const httpServer = createServer(app);
 
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100 // limit each IP to 100 requests per windowMs
-});
+// ✅ 2. ACTIVATE COMPRESSION (Makes data 70% smaller/faster)
+app.use(compression());
 
-// Middleware
-app.use(helmet());
-app.use(morgan('dev'));
+// ============================================================
+// ☢️ NUCLEAR CORS FIX (ALLOWS EVERYONE)
+// ============================================================
 app.use(cors({
-  origin: ["http://localhost:3000", "http://localhost:5173"],
-  credentials: true
+    origin: true, // ✅ Allows any Netlify/Localhost link
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
 }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(limiter);
 
-// Database connection
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/bitebox', {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
+// --- MIDDLEWARE ---
+app.use(express.json({ limit: '10mb' })); 
+
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, 
+    max: 500, 
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+app.use(limiter); 
+
+// --- SOCKET.IO SETUP ---
+const io = new Server(httpServer, {
+    cors: {
+        origin: "*", // ✅ Allows sockets from anywhere
+        methods: ["GET", "POST", "PUT", "DELETE"],
+        credentials: true
+    }
 });
 
-const db = mongoose.connection;
-db.on('error', console.error.bind(console, 'MongoDB connection error:'));
-db.once('open', () => {
-  console.log('✅ Connected to MongoDB');
+// CRITICAL: Attach Socket to App
+app.set('socketio', io); 
+app.use((req, res, next) => {
+    req.io = io;
+    next();
 });
 
-// Socket.io connection
-io.on('connection', (socket) => {
-  console.log('🔌 New client connected:', socket.id);
-  
-  socket.on('join-kitchen', (chefId) => {
-    socket.join(`kitchen-${chefId}`);
-    console.log(`👨‍🍳 Chef ${chefId} joined kitchen`);
-  });
-  
-  socket.on('new-order', (orderData) => {
-    io.emit('order-update', orderData);
-  });
-  
-  socket.on('order-status-update', (updateData) => {
-    io.emit('status-update', updateData);
-  });
-  
-  socket.on('disconnect', () => {
-    console.log('🔌 Client disconnected:', socket.id);
-  });
-});
+// --- DATABASE ---
+mongoose.connect(process.env.MONGO_URI)
+    .then(() => console.log("✅ MongoDB Connected"))
+    .catch((err) => console.error("❌ MongoDB Error:", err));
 
-// Import routes
-const authRoutes = require('./routes/authRoutes');
-const orderRoutes = require('./routes/orderRoutes');
-const dishRoutes = require('./routes/dishRoutes');
-const broadcastRoutes = require('./routes/broadcastRoutes');
-const supportRoutes = require('./routes/supportRoutes');
-const superAdminRoutes = require('./routes/superAdminRoutes');
-
-// Use routes
+// --- ROUTES ---
 app.use('/api/auth', authRoutes);
-app.use('/api/orders', orderRoutes);
 app.use('/api/dishes', dishRoutes);
-app.use('/api/broadcasts', broadcastRoutes);
-app.use('/api/support', supportRoutes);
-app.use('/api/super-admin', superAdminRoutes);
+app.use('/api/orders', orderRoutes);
+app.use('/api/superadmin', superAdminRoutes);
+app.use('/api/broadcast', broadcastRoutes);
+app.use('/api/support', supportRoutes); 
 
-// Health check
-app.get('/api/health', (req, res) => {
-  res.status(200).json({ 
-    status: 'OK', 
-    timestamp: new Date(),
-    uptime: process.uptime()
-  });
+app.get('/', (req, res) => res.send('BiteBox Smart Menu API Active'));
+
+// --- SOCKET LOGIC ---
+io.on('connection', (socket) => {
+    // console.log(`🔌 Client Connected: ${socket.id}`); // Commented out for speed
+
+    socket.on('join-restaurant', (restaurantId) => {
+        socket.join(restaurantId);
+    });
+
+    socket.on('join-super-admin', () => {
+        socket.join('super-admin-room');
+    });
+
+    socket.on('disconnect', () => {
+        // console.log('❌ Client Disconnected');
+    });
 });
 
-// Error handling middleware
+// --- ERROR HANDLER ---
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(err.status || 500).json({
-    message: err.message || 'Something went wrong!',
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
-  });
+    const statusCode = res.statusCode === 200 ? 500 : res.statusCode;
+    res.status(statusCode).json({ message: err.message });
 });
 
-// 404 handler
-app.use('*', (req, res) => {
-  res.status(404).json({ message: 'Route not found' });
-});
+// ============================================================
+// ⏰ KEEP ALIVE (PREVENTS SERVER SLEEPING)
+// ============================================================
+const pingUrl = "https://smart-menu-backend-5ge7.onrender.com/"; 
+
+// Ping every 10 minutes (600,000 ms) to keep Render awake
+setInterval(() => {
+    https.get(pingUrl, (res) => {
+        console.log("⏰ Keep-Alive Ping sent.");
+    }).on("error", (e) => {
+        console.error("Ping failed:", e.message);
+    });
+}, 600000); 
 
 const PORT = process.env.PORT || 5000;
-
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
-  console.log(`📡 WebSocket running on ws://localhost:${PORT}`);
+httpServer.listen(PORT, () => {
+    console.log(`🚀 BiteBox Server running on port ${PORT}`);
 });

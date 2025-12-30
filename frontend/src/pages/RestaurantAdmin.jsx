@@ -1,1432 +1,347 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import styled from 'styled-components';
-import {
-  BarChart3,
-  Users,
-  Package,
-  DollarSign,
-  Clock,
-  TrendingUp,
-  AlertCircle,
-  Settings,
-  QrCode,
-  Plus,
-  Filter,
-  Search,
-  Edit,
-  Trash2,
-  Eye,
-  Download,
-  RefreshCw,
-  Bell,
-  LogOut,
-  Store
-} from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import toast from 'react-hot-toast';
+import React, { useEffect, useState } from "react";
+import axios from "axios";
+import { Link, useParams } from "react-router-dom";
+import io from "socket.io-client";
+import confetti from "canvas-confetti";
+import { 
+    FaPlus, FaTrash, FaUtensils, 
+    FaBell, FaCheckCircle, FaCircle, FaCrown, FaSignOutAlt, FaRocket, FaUnlock, FaStore, FaExternalLinkAlt, FaCopy, FaImage
+} from "react-icons/fa";
 
-const RestaurantAdmin = () => {
-  const navigate = useNavigate();
-  const [restaurant, setRestaurant] = useState(null);
-  const [stats, setStats] = useState({
-    totalOrders: 0,
-    todayOrders: 0,
-    totalRevenue: 0,
-    pendingOrders: 0
-  });
-  const [orders, setOrders] = useState([]);
-  const [menuItems, setMenuItems] = useState([]);
-  const [staff, setStaff] = useState([]);
-  const [activeTab, setActiveTab] = useState('overview');
-  const [timeRange, setTimeRange] = useState('today');
+// --- STYLES (Mobile Optimized & Beautiful) ---
+const styles = `
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;900&display=swap');
+.admin-container { min-height: 100vh; padding: 20px; background: radial-gradient(circle at top center, #1a0f0a 0%, #050505 60%); color: white; font-family: 'Inter', sans-serif; }
+.max-w-wrapper { max-width: 480px; margin: 0 auto; }
+.admin-header { margin-bottom: 30px; }
+.header-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
+.shop-title { font-size: 28px; font-weight: 900; margin: 0; letter-spacing: -1px; text-transform: uppercase; }
+.badge-pro { background: rgba(255, 153, 51, 0.15); color: #FF9933; border: 1px solid rgba(255, 153, 51, 0.3); padding: 4px 10px; border-radius: 20px; font-size: 10px; font-weight: 900; display: inline-flex; align-items: center; gap: 5px; }
+.btn-glass { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); color: white; padding: 10px 16px; border-radius: 12px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: 0.2s; }
+.btn-glass:hover { background: rgba(255, 255, 255, 0.1); }
+.btn-primary { background: linear-gradient(135deg, #FF8800 0%, #FF5500 100%); border: none; color: white; width: 100%; padding: 16px; border-radius: 16px; font-size: 14px; font-weight: 700; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; box-shadow: 0 4px 15px rgba(255, 85, 0, 0.4); transition: 0.2s; }
+.btn-primary:active { transform: scale(0.98); }
+.glass-card { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); backdrop-filter: blur(12px); border-radius: 24px; padding: 24px; margin-bottom: 24px; }
+.nav-tabs { display: flex; background: rgba(0,0,0,0.3); padding: 4px; border-radius: 16px; margin-bottom: 24px; }
+.tab-btn { flex: 1; padding: 12px; background: transparent; border: none; color: #888; font-size: 11px; font-weight: 900; cursor: pointer; border-radius: 12px; text-transform: uppercase; transition: 0.3s; }
+.tab-btn.active { background: rgba(255,255,255,0.1); color: #FF9933; }
+.input-dark { width: 100%; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); padding: 14px; border-radius: 12px; color: white; margin-bottom: 15px; outline: none; transition: 0.3s; }
+.input-dark:focus { border-color: #FF9933; background: rgba(0,0,0,0.6); }
+.dish-item { display: flex; justify-content: space-between; align-items: center; padding: 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+.dish-item:last-child { border-bottom: none; }
+.toast-container { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); width: 90%; max-width: 400px; z-index: 1000; display: flex; flex-direction: column; gap: 10px; }
+.toast-alert { background: #FF9933; color: black; padding: 15px; border-radius: 15px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5); animation: slideDown 0.3s ease-out; }
+@keyframes slideDown { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+.lock-container { min-height: 100vh; background: #050505; display: flex; align-items: center; justify-content: center; padding: 20px; }
+.lock-card { width: 100%; max-width: 350px; background: #111; padding: 40px; border-radius: 30px; border: 1px solid #222; text-align: center; }
+.menu-link-box { background: rgba(0,0,0,0.3); border: 1px dashed #333; padding: 15px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.link-text { color: #3b82f6; font-size: 12px; font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; display: block; text-decoration: none; }
+.action-btn { background: none; border: none; color: #888; cursor: pointer; padding: 5px; transition: 0.2s; }
+.action-btn:hover { color: white; }
+`;
 
-  useEffect(() => {
-    // Check if user is logged in as owner
-    const restaurantId = localStorage.getItem('restaurant_id');
-    if (!restaurantId) {
-      toast.error('Please login as restaurant owner');
-      navigate('/owner-login');
-      return;
-    }
-
-    // Load restaurant data
-    const mockRestaurant = {
-      id: restaurantId,
-      name: 'Spice Heaven',
-      address: '123 Main St, New York, NY',
-      phone: '+1 (555) 123-4567',
-      email: 'info@spiceheaven.com',
-      cuisine: 'Indian',
-      status: 'active',
-      openingHours: '09:00 AM - 11:00 PM',
-      rating: 4.5,
-      totalOrders: 1245
-    };
-
-    const mockStats = {
-      totalOrders: 1245,
-      todayOrders: 42,
-      totalRevenue: 24560.89,
-      pendingOrders: 8,
-      completedOrders: 38,
-      cancelledOrders: 4,
-      averageOrderValue: 42.50,
-      customerSatisfaction: 4.5
-    };
-
-    const mockOrders = [
-      { id: 'ORD001', customer: 'John Doe', items: 3, total: 45.99, status: 'pending', time: '10:30 AM', type: 'delivery' },
-      { id: 'ORD002', customer: 'Jane Smith', items: 2, total: 28.50, status: 'preparing', time: '10:45 AM', type: 'pickup' },
-      { id: 'ORD003', customer: 'Bob Johnson', items: 4, total: 67.25, status: 'ready', time: '11:00 AM', type: 'delivery' },
-      { id: 'ORD004', customer: 'Alice Brown', items: 1, total: 15.99, status: 'completed', time: '09:15 AM', type: 'pickup' },
-      { id: 'ORD005', customer: 'Charlie Wilson', items: 5, total: 89.75, status: 'cancelled', time: '09:45 AM', type: 'delivery' },
-      { id: 'ORD006', customer: 'David Lee', items: 2, total: 32.50, status: 'pending', time: '11:30 AM', type: 'pickup' }
+const SetupWizard = ({ dishesCount, pushEnabled }) => {
+    const steps = [
+        { id: 1, label: "Add 3 dishes", done: dishesCount >= 3, hint: "Go to Menu tab" },
+        { id: 2, label: "Enable Alerts", done: pushEnabled, hint: "Enable in Settings" }
     ];
+    const completed = steps.filter(s => s.done).length;
+    const percent = Math.round((completed / steps.length) * 100);
 
-    const mockMenuItems = [
-      { id: 1, name: 'Butter Chicken', category: 'Main Course', price: 16.99, status: 'available', sales: 245 },
-      { id: 2, name: 'Paneer Tikka', category: 'Appetizers', price: 14.99, status: 'available', sales: 189 },
-      { id: 3, name: 'Chicken Biryani', category: 'Main Course', price: 18.99, status: 'out_of_stock', sales: 312 },
-      { id: 4, name: 'Garlic Naan', category: 'Breads', price: 4.99, status: 'available', sales: 456 },
-      { id: 5, name: 'Mango Lassi', category: 'Beverages', price: 5.99, status: 'available', sales: 278 },
-      { id: 6, name: 'Samosa', category: 'Appetizers', price: 6.99, status: 'available', sales: 321 }
-    ];
+    useEffect(() => {
+        if (completed === 2) confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 }, colors: ['#FF9933', '#ffffff'] });
+    }, [completed]);
 
-    const mockStaff = [
-      { id: 1, name: 'John Chef', role: 'Chef', email: 'john@spiceheaven.com', phone: '+1 (555) 111-1111', status: 'active' },
-      { id: 2, name: 'Sarah Waitress', role: 'Waitress', email: 'sarah@spiceheaven.com', phone: '+1 (555) 222-2222', status: 'active' },
-      { id: 3, name: 'Mike Manager', role: 'Manager', email: 'mike@spiceheaven.com', phone: '+1 (555) 333-3333', status: 'inactive' },
-      { id: 4, name: 'Lisa Cashier', role: 'Cashier', email: 'lisa@spiceheaven.com', phone: '+1 (555) 444-4444', status: 'active' }
-    ];
-
-    setRestaurant(mockRestaurant);
-    setStats(mockStats);
-    setOrders(mockOrders);
-    setMenuItems(mockMenuItems);
-    setStaff(mockStaff);
-  }, [navigate]);
-
-  const salesData = [
-    { name: 'Mon', orders: 65, revenue: 850 },
-    { name: 'Tue', orders: 72, revenue: 920 },
-    { name: 'Wed', orders: 68, revenue: 890 },
-    { name: 'Thu', orders: 85, revenue: 1120 },
-    { name: 'Fri', orders: 92, revenue: 1350 },
-    { name: 'Sat', orders: 105, revenue: 1680 },
-    { name: 'Sun', orders: 78, revenue: 1020 }
-  ];
-
-  const categoryData = [
-    { name: 'Main Course', value: 45 },
-    { name: 'Appetizers', value: 25 },
-    { name: 'Beverages', value: 15 },
-    { name: 'Breads', value: 10 },
-    { name: 'Desserts', value: 5 }
-  ];
-
-  const COLORS = ['#FF6B35', '#4ECDC4', '#FFD166', '#06D6A0', '#EF476F'];
-
-  const handleOrderAction = (orderId, action) => {
-    switch(action) {
-      case 'view':
-        toast.success(`Viewing order ${orderId}`);
-        break;
-      case 'prepare':
-        toast.success(`Started preparing order ${orderId}`);
-        break;
-      case 'complete':
-        toast.success(`Order ${orderId} marked as complete`);
-        break;
-      case 'cancel':
-        toast.error(`Order ${orderId} cancelled`);
-        break;
-    }
-  };
-
-  const handleMenuItemAction = (itemId, action) => {
-    switch(action) {
-      case 'edit':
-        toast.success(`Editing menu item ${itemId}`);
-        break;
-      case 'toggle':
-        toast.success('Item status updated');
-        break;
-      case 'delete':
-        toast.error('Item deleted');
-        break;
-    }
-  };
-
-  const handleStaffAction = (staffId, action) => {
-    switch(action) {
-      case 'edit':
-        toast.success(`Editing staff ${staffId}`);
-        break;
-      case 'toggle':
-        toast.success('Staff status updated');
-        break;
-      case 'delete':
-        toast.error('Staff removed');
-        break;
-    }
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('restaurant_id');
-    toast.success('Logged out successfully');
-    navigate('/owner-login');
-  };
-
-  const renderTabContent = () => {
-    switch(activeTab) {
-      case 'overview':
-        return (
-          <OverviewTab>
-            {/* Stats Cards */}
-            <StatsGrid>
-              <StatCard>
-                <StatIcon>
-                  <Package size={24} />
-                </StatIcon>
-                <StatInfo>
-                  <StatValue>{stats.todayOrders}</StatValue>
-                  <StatLabel>Today's Orders</StatLabel>
-                  <StatTrend positive>
-                    <TrendingUp size={16} />
-                    <span>+12%</span>
-                  </StatTrend>
-                </StatInfo>
-              </StatCard>
-              
-              <StatCard>
-                <StatIcon>
-                  <DollarSign size={24} />
-                </StatIcon>
-                <StatInfo>
-                  <StatValue>${stats.totalRevenue.toLocaleString()}</StatValue>
-                  <StatLabel>Total Revenue</StatLabel>
-                  <StatTrend positive>
-                    <TrendingUp size={16} />
-                    <span>+8%</span>
-                  </StatTrend>
-                </StatInfo>
-              </StatCard>
-              
-              <StatCard>
-                <StatIcon>
-                  <Clock size={24} />
-                </StatIcon>
-                <StatInfo>
-                  <StatValue>{stats.pendingOrders}</StatValue>
-                  <StatLabel>Pending Orders</StatLabel>
-                  <StatTrend negative>
-                    <AlertCircle size={16} />
-                    <span>Needs attention</span>
-                  </StatTrend>
-                </StatInfo>
-              </StatCard>
-              
-              <StatCard>
-                <StatIcon>
-                  <Users size={24} />
-                </StatIcon>
-                <StatInfo>
-                  <StatValue>{stats.completedOrders || 38}</StatValue>
-                  <StatLabel>Completed Today</StatLabel>
-                  <StatTrend positive>
-                    <TrendingUp size={16} />
-                    <span>+5%</span>
-                  </StatTrend>
-                </StatInfo>
-              </StatCard>
-            </StatsGrid>
-
-            {/* Charts */}
-            <ChartsGrid>
-              <ChartCard>
-                <ChartHeader>
-                  <h3>Weekly Sales</h3>
-                  <TimeRangeSelector>
-                    <TimeRangeButton 
-                      active={timeRange === 'today'}
-                      onClick={() => setTimeRange('today')}
-                    >
-                      Today
-                    </TimeRangeButton>
-                    <TimeRangeButton 
-                      active={timeRange === 'week'}
-                      onClick={() => setTimeRange('week')}
-                    >
-                      Week
-                    </TimeRangeButton>
-                    <TimeRangeButton 
-                      active={timeRange === 'month'}
-                      onClick={() => setTimeRange('month')}
-                    >
-                      Month
-                    </TimeRangeButton>
-                  </TimeRangeSelector>
-                </ChartHeader>
-                <ChartContainer>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={salesData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e9ecef" />
-                      <XAxis dataKey="name" />
-                      <YAxis yAxisId="left" />
-                      <YAxis yAxisId="right" orientation="right" />
-                      <Tooltip />
-                      <Bar yAxisId="left" dataKey="orders" name="Orders" fill="#FF6B35" radius={[4, 4, 0, 0]} />
-                      <Bar yAxisId="right" dataKey="revenue" name="Revenue ($)" fill="#4ECDC4" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </ChartContainer>
-              </ChartCard>
-              
-              <ChartCard>
-                <ChartHeader>
-                  <h3>Sales by Category</h3>
-                </ChartHeader>
-                <ChartContainer>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <PieChart>
-                      <Pie
-                        data={categoryData}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                        outerRadius={80}
-                        fill="#8884d8"
-                        dataKey="value"
-                      >
-                        {categoryData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </ChartContainer>
-              </ChartCard>
-            </ChartsGrid>
-
-            {/* Recent Orders */}
-            <SectionCard>
-              <SectionHeader>
-                <h3>Recent Orders</h3>
-                <ViewAllLink>View All</ViewAllLink>
-              </SectionHeader>
-              <OrdersTable>
-                <thead>
-                  <tr>
-                    <th>Order ID</th>
-                    <th>Customer</th>
-                    <th>Items</th>
-                    <th>Total</th>
-                    <th>Status</th>
-                    <th>Type</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {orders.slice(0, 5).map(order => (
-                    <tr key={order.id}>
-                      <td>
-                        <OrderId>{order.id}</OrderId>
-                      </td>
-                      <td>{order.customer}</td>
-                      <td>{order.items}</td>
-                      <td>${order.total.toFixed(2)}</td>
-                      <td>
-                        <StatusBadge status={order.status}>
-                          {order.status}
-                        </StatusBadge>
-                      </td>
-                      <td>
-                        <TypeBadge type={order.type}>
-                          {order.type}
-                        </TypeBadge>
-                      </td>
-                      <td>
-                        <ActionButtons>
-                          <ActionButton onClick={() => handleOrderAction(order.id, 'view')}>
-                            <Eye size={16} />
-                          </ActionButton>
-                          {order.status === 'pending' && (
-                            <ActionButton onClick={() => handleOrderAction(order.id, 'prepare')}>
-                              <Package size={16} />
-                            </ActionButton>
-                          )}
-                          {order.status === 'ready' && (
-                            <ActionButton onClick={() => handleOrderAction(order.id, 'complete')}>
-                              <CheckCircle size={16} />
-                            </ActionButton>
-                          )}
-                        </ActionButtons>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </OrdersTable>
-            </SectionCard>
-          </OverviewTab>
-        );
-        
-      case 'orders':
-        return (
-          <OrdersTab>
-            <SectionHeader>
-              <h2>Order Management</h2>
-              <FilterBar>
-                <SearchBox>
-                  <Search size={20} />
-                  <input type="text" placeholder="Search orders..." />
-                </SearchBox>
-                <FilterButton>
-                  <Filter size={20} />
-                  Filter
-                </FilterButton>
-                <DownloadButton>
-                  <Download size={20} />
-                  Export
-                </DownloadButton>
-              </FilterBar>
-            </SectionHeader>
-            
-            <OrdersGrid>
-              {orders.map(order => (
-                <OrderCard key={order.id}>
-                  <OrderHeader>
-                    <OrderId>{order.id}</OrderId>
-                    <OrderTime>{order.time}</OrderTime>
-                  </OrderHeader>
-                  
-                  <OrderCustomer>
-                    <strong>{order.customer}</strong>
-                    <span>{order.items} items • ${order.total.toFixed(2)}</span>
-                  </OrderCustomer>
-                  
-                  <OrderStatusSection>
-                    <StatusBadge status={order.status}>
-                      {order.status}
-                    </StatusBadge>
-                    <TypeBadge type={order.type}>
-                      {order.type}
-                    </TypeBadge>
-                  </OrderStatusSection>
-                  
-                  <OrderActions>
-                    <OrderButton onClick={() => handleOrderAction(order.id, 'view')}>
-                      <Eye size={16} />
-                      View
-                    </OrderButton>
-                    {order.status === 'pending' && (
-                      <OrderButton primary onClick={() => handleOrderAction(order.id, 'prepare')}>
-                        <Package size={16} />
-                        Prepare
-                      </OrderButton>
-                    )}
-                    {order.status === 'preparing' && (
-                      <OrderButton primary onClick={() => handleOrderAction(order.id, 'complete')}>
-                        <CheckCircle size={16} />
-                        Ready
-                      </OrderButton>
-                    )}
-                    {order.status === 'ready' && (
-                      <OrderButton success onClick={() => handleOrderAction(order.id, 'complete')}>
-                        <CheckCircle size={16} />
-                        Complete
-                      </OrderButton>
-                    )}
-                    <OrderButton danger onClick={() => handleOrderAction(order.id, 'cancel')}>
-                      <Trash2 size={16} />
-                      Cancel
-                    </OrderButton>
-                  </OrderActions>
-                </OrderCard>
-              ))}
-            </OrdersGrid>
-          </OrdersTab>
-        );
-        
-      case 'menu':
-        return (
-          <MenuTab>
-            <SectionHeader>
-              <h2>Menu Management</h2>
-              <ActionBar>
-                <AddButton>
-                  <Plus size={20} />
-                  Add Item
-                </AddButton>
-                <SearchBox>
-                  <Search size={20} />
-                  <input type="text" placeholder="Search menu..." />
-                </SearchBox>
-              </ActionBar>
-            </SectionHeader>
-            
-            <MenuItemsTable>
-              <thead>
-                <tr>
-                  <th>Item</th>
-                  <th>Category</th>
-                  <th>Price</th>
-                  <th>Status</th>
-                  <th>Sales</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {menuItems.map(item => (
-                  <tr key={item.id}>
-                    <td>
-                      <MenuItem>
-                        <ItemName>{item.name}</ItemName>
-                      </MenuItem>
-                    </td>
-                    <td>
-                      <CategoryTag>{item.category}</CategoryTag>
-                    </td>
-                    <td>${item.price.toFixed(2)}</td>
-                    <td>
-                      <StatusBadge status={item.status}>
-                        {item.status.replace('_', ' ')}
-                      </StatusBadge>
-                    </td>
-                    <td>{item.sales}</td>
-                    <td>
-                      <ActionButtons>
-                        <ActionButton onClick={() => handleMenuItemAction(item.id, 'edit')}>
-                          <Edit size={16} />
-                        </ActionButton>
-                        <ActionButton onClick={() => handleMenuItemAction(item.id, 'toggle')}>
-                          <RefreshCw size={16} />
-                        </ActionButton>
-                        <ActionButton danger onClick={() => handleMenuItemAction(item.id, 'delete')}>
-                          <Trash2 size={16} />
-                        </ActionButton>
-                      </ActionButtons>
-                    </td>
-                  </tr>
+    return (
+        <div className="glass-card" style={{ borderColor: completed === 2 ? '#22c55e' : 'rgba(255,255,255,0.1)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '10px' }}>
+                <h2 style={{ fontSize: '14px', fontWeight: 900, textTransform: 'uppercase', margin: 0 }}><FaRocket color="#FF9933" /> Setup Progress</h2>
+                <span style={{ color: '#FF9933', fontWeight: 900, fontSize: '12px' }}>{percent}% READY</span>
+            </div>
+            <div style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '10px', marginBottom: '15px', overflow: 'hidden' }}>
+                <div style={{ width: `${percent}%`, height: '100%', background: '#FF9933', transition: 'width 0.5s ease' }}></div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                {steps.map(step => (
+                    <div key={step.id} style={{ display: 'flex', gap: '8px', opacity: step.done ? 0.4 : 1 }}>
+                        {step.done ? <FaCheckCircle color="#22c55e" /> : <FaCircle color="#333" />}
+                        <div>
+                            <p style={{ fontWeight: 900, fontSize: '10px', margin: 0, textTransform: 'uppercase' }}>{step.label}</p>
+                            {!step.done && <p style={{ fontSize: '9px', color: '#666', margin: 0 }}>{step.hint}</p>}
+                        </div>
+                    </div>
                 ))}
-              </tbody>
-            </MenuItemsTable>
-          </MenuTab>
-        );
-        
-      case 'staff':
-        return (
-          <StaffTab>
-            <SectionHeader>
-              <h2>Staff Management</h2>
-              <ActionBar>
-                <AddButton>
-                  <Plus size={20} />
-                  Add Staff
-                </AddButton>
-                <SearchBox>
-                  <Search size={20} />
-                  <input type="text" placeholder="Search staff..." />
-                </SearchBox>
-              </ActionBar>
-            </SectionHeader>
-            
-            <StaffGrid>
-              {staff.map(member => (
-                <StaffCard key={member.id}>
-                  <StaffAvatar>
-                    {member.name.charAt(0)}
-                  </StaffAvatar>
-                  <StaffInfo>
-                    <StaffName>{member.name}</StaffName>
-                    <StaffRole>{member.role}</StaffRole>
-                    <StaffContact>
-                      <span>{member.email}</span>
-                      <span>{member.phone}</span>
-                    </StaffContact>
-                  </StaffInfo>
-                  <StaffActions>
-                    <StatusBadge status={member.status}>
-                      {member.status}
-                    </StatusBadge>
-                    <ActionButtons>
-                      <ActionButton onClick={() => handleStaffAction(member.id, 'edit')}>
-                        <Edit size={16} />
-                      </ActionButton>
-                      <ActionButton onClick={() => handleStaffAction(member.id, 'toggle')}>
-                        <RefreshCw size={16} />
-                      </ActionButton>
-                      <ActionButton danger onClick={() => handleStaffAction(member.id, 'delete')}>
-                        <Trash2 size={16} />
-                      </ActionButton>
-                    </ActionButtons>
-                  </StaffActions>
-                </StaffCard>
-              ))}
-            </StaffGrid>
-          </StaffTab>
-        );
-        
-      default:
-        return null;
-    }
-  };
-
-  if (!restaurant) {
-    return <Loading>Loading restaurant dashboard...</Loading>;
-  }
-
-  return (
-    <AdminContainer>
-      {/* Sidebar */}
-      <Sidebar>
-        <RestaurantInfo>
-          <Store size={32} />
-          <RestaurantDetails>
-            <RestaurantName>{restaurant.name}</RestaurantName>
-            <RestaurantStatus active={restaurant.status === 'active'}>
-              {restaurant.status}
-            </RestaurantStatus>
-          </RestaurantDetails>
-        </RestaurantInfo>
-        
-        <NavMenu>
-          <NavItem active={activeTab === 'overview'} onClick={() => setActiveTab('overview')}>
-            <BarChart3 size={20} />
-            <span>Overview</span>
-          </NavItem>
-          <NavItem active={activeTab === 'orders'} onClick={() => setActiveTab('orders')}>
-            <Package size={20} />
-            <span>Orders</span>
-            <NotificationBadge>{stats.pendingOrders}</NotificationBadge>
-          </NavItem>
-          <NavItem active={activeTab === 'menu'} onClick={() => setActiveTab('menu')}>
-            <DollarSign size={20} />
-            <span>Menu</span>
-          </NavItem>
-          <NavItem active={activeTab === 'staff'} onClick={() => setActiveTab('staff')}>
-            <Users size={20} />
-            <span>Staff</span>
-          </NavItem>
-          <NavItem onClick={() => navigate('/qr-generator')}>
-            <QrCode size={20} />
-            <span>QR Codes</span>
-          </NavItem>
-          <NavItem>
-            <Settings size={20} />
-            <span>Settings</span>
-          </NavItem>
-        </NavMenu>
-        
-        <SidebarFooter>
-          <LogoutButton onClick={handleLogout}>
-            <LogOut size={20} />
-            <span>Logout</span>
-          </LogoutButton>
-        </SidebarFooter>
-      </Sidebar>
-
-      {/* Main Content */}
-      <MainContent>
-        <Header>
-          <HeaderTitle>
-            <h1>{restaurant.name} Dashboard</h1>
-            <HeaderSubtitle>Welcome back! Here's what's happening today.</HeaderSubtitle>
-          </HeaderTitle>
-          
-          <HeaderActions>
-            <NotificationButton>
-              <Bell size={20} />
-              <NotificationDot />
-            </NotificationButton>
-            <RefreshButton>
-              <RefreshCw size={20} />
-            </RefreshButton>
-          </HeaderActions>
-        </Header>
-
-        <ContentArea>
-          {renderTabContent()}
-        </ContentArea>
-
-        {/* Quick Stats Footer */}
-        <FooterStats>
-          <StatItem>
-            <span>Total Orders</span>
-            <strong>{stats.totalOrders}</strong>
-          </StatItem>
-          <StatItem>
-            <span>Today's Revenue</span>
-            <strong>${(stats.todayOrders * stats.averageOrderValue).toFixed(2)}</strong>
-          </StatItem>
-          <StatItem>
-            <span>Avg. Order Value</span>
-            <strong>${stats.averageOrderValue?.toFixed(2)}</strong>
-          </StatItem>
-          <StatItem>
-            <span>Satisfaction</span>
-            <strong>{stats.customerSatisfaction}/5</strong>
-          </StatItem>
-        </FooterStats>
-      </MainContent>
-    </AdminContainer>
-  );
+            </div>
+        </div>
+    );
 };
 
-const AdminContainer = styled.div`
-  min-height: 100vh;
-  display: flex;
-  background: #f8f9fa;
-`;
-
-const Sidebar = styled.div`
-  width: 250px;
-  background: var(--dark-color);
-  color: white;
-  display: flex;
-  flex-direction: column;
-  padding: 30px 20px;
-`;
-
-const RestaurantInfo = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 15px;
-  margin-bottom: 40px;
-  
-  svg {
-    color: var(--primary-color);
-  }
-`;
-
-const RestaurantDetails = styled.div`
-  flex: 1;
-`;
-
-const RestaurantName = styled.div`
-  font-weight: 600;
-  margin-bottom: 5px;
-  font-size: 1.1rem;
-`;
-
-const RestaurantStatus = styled.div`
-  display: inline-block;
-  padding: 4px 12px;
-  background: ${props => props.active ? 'rgba(6, 214, 160, 0.2)' : 'rgba(239, 71, 111, 0.2)'};
-  color: ${props => props.active ? 'var(--success-color)' : 'var(--danger-color)'};
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: 500;
-`;
-
-const NavMenu = styled.nav`
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  flex: 1;
-`;
-
-const NavItem = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 15px;
-  padding: 15px;
-  border-radius: var(--radius);
-  cursor: pointer;
-  transition: all 0.3s ease;
-  background: ${props => props.active ? 'rgba(255, 255, 255, 0.1)' : 'transparent'};
-  
-  &:hover {
-    background: rgba(255, 255, 255, 0.1);
-  }
-  
-  span {
-    flex: 1;
-  }
-`;
-
-const NotificationBadge = styled.div`
-  background: var(--primary-color);
-  color: white;
-  font-size: 12px;
-  padding: 2px 8px;
-  border-radius: 10px;
-  font-weight: 600;
-`;
-
-const SidebarFooter = styled.div`
-  padding-top: 20px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-`;
-
-const LogoutButton = styled.button`
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 12px;
-  background: rgba(239, 71, 111, 0.1);
-  color: var(--danger-color);
-  border: none;
-  border-radius: var(--radius);
-  cursor: pointer;
-  transition: all 0.3s ease;
-  
-  &:hover {
-    background: rgba(239, 71, 111, 0.2);
-  }
-`;
-
-const MainContent = styled.div`
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-`;
-
-const Header = styled.div`
-  background: white;
-  padding: 25px 30px;
-  border-bottom: 1px solid var(--light-gray);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-`;
-
-const HeaderTitle = styled.div`
-  h1 {
-    margin: 0 0 5px 0;
-    font-size: 1.5rem;
-  }
-`;
-
-const HeaderSubtitle = styled.div`
-  color: var(--gray-color);
-  font-size: 14px;
-`;
-
-const HeaderActions = styled.div`
-  display: flex;
-  gap: 15px;
-  align-items: center;
-`;
-
-const NotificationButton = styled.button`
-  position: relative;
-  width: 40px;
-  height: 40px;
-  background: var(--light-gray);
-  border: none;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  
-  &:hover {
-    background: #dde0e3;
-  }
-`;
-
-const NotificationDot = styled.div`
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 8px;
-  height: 8px;
-  background: var(--primary-color);
-  border-radius: 50%;
-`;
-
-const RefreshButton = styled.button`
-  width: 40px;
-  height: 40px;
-  background: var(--light-gray);
-  border: none;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  
-  &:hover {
-    background: #dde0e3;
-  }
-`;
-
-const ContentArea = styled.div`
-  flex: 1;
-  padding: 30px;
-  overflow-y: auto;
-`;
-
-const OverviewTab = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 30px;
-`;
-
-const StatsGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 20px;
-`;
-
-const StatCard = styled.div`
-  background: white;
-  border-radius: var(--radius);
-  padding: 25px;
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  box-shadow: var(--shadow);
-`;
-
-const StatIcon = styled.div`
-  width: 60px;
-  height: 60px;
-  background: var(--light-gray);
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--primary-color);
-`;
-
-const StatInfo = styled.div`
-  flex: 1;
-`;
-
-const StatValue = styled.div`
-  font-size: 1.8rem;
-  font-weight: 700;
-  margin-bottom: 5px;
-`;
-
-const StatLabel = styled.div`
-  color: var(--gray-color);
-  margin-bottom: 10px;
-`;
-
-const StatTrend = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 14px;
-  color: ${props => props.positive ? 'var(--success-color)' : props.negative ? 'var(--danger-color)' : 'var(--gray-color)'};
-  
-  svg {
-    stroke-width: 3;
-  }
-`;
-
-const ChartsGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-  gap: 20px;
-  
-  @media (max-width: 768px) {
-    grid-template-columns: 1fr;
-  }
-`;
-
-const ChartCard = styled.div`
-  background: white;
-  border-radius: var(--radius);
-  padding: 25px;
-  box-shadow: var(--shadow);
-`;
-
-const ChartHeader = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-  
-  h3 {
-    margin: 0;
-    font-size: 1.1rem;
-  }
-`;
-
-const TimeRangeSelector = styled.div`
-  display: flex;
-  gap: 10px;
-`;
-
-const TimeRangeButton = styled.button`
-  padding: 6px 12px;
-  background: ${props => props.active ? 'var(--primary-color)' : 'var(--light-gray)'};
-  color: ${props => props.active ? 'white' : 'var(--dark-color)'};
-  border: none;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  
-  &:hover {
-    background: ${props => props.active ? '#E55A2E' : '#dde0e3'};
-  }
-`;
-
-const ChartContainer = styled.div`
-  height: 300px;
-`;
-
-const SectionCard = styled.div`
-  background: white;
-  border-radius: var(--radius);
-  padding: 25px;
-  box-shadow: var(--shadow);
-`;
-
-const SectionHeader = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-  
-  h3 {
-    margin: 0;
-    font-size: 1.1rem;
-  }
-`;
-
-const ViewAllLink = styled.a`
-  color: var(--primary-color);
-  text-decoration: none;
-  font-size: 14px;
-  font-weight: 500;
-  
-  &:hover {
-    text-decoration: underline;
-  }
-`;
-
-const OrdersTable = styled.table`
-  width: 100%;
-  border-collapse: collapse;
-  
-  th {
-    text-align: left;
-    padding: 12px 16px;
-    border-bottom: 2px solid var(--light-gray);
-    color: var(--gray-color);
-    font-weight: 500;
-    font-size: 14px;
-  }
-  
-  td {
-    padding: 16px;
-    border-bottom: 1px solid var(--light-gray);
-  }
-  
-  tbody tr:hover {
-    background: #f8f9fa;
-  }
-`;
-
-const OrderId = styled.div`
-  font-family: monospace;
-  font-weight: 600;
-  color: var(--primary-color);
-`;
-
-const StatusBadge = styled.span`
-  display: inline-block;
-  padding: 4px 12px;
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: 500;
-  background: ${props => {
-    switch(props.status) {
-      case 'pending': return 'rgba(255, 214, 102, 0.2)';
-      case 'preparing': return 'rgba(78, 205, 196, 0.2)';
-      case 'ready': return 'rgba(6, 214, 160, 0.2)';
-      case 'completed': return 'rgba(6, 214, 160, 0.2)';
-      case 'cancelled': return 'rgba(239, 71, 111, 0.2)';
-      case 'available': return 'rgba(6, 214, 160, 0.2)';
-      case 'out_of_stock': return 'rgba(239, 71, 111, 0.2)';
-      case 'active': return 'rgba(6, 214, 160, 0.2)';
-      case 'inactive': return 'rgba(239, 71, 111, 0.2)';
-      default: return 'var(--light-gray)';
-    }
-  }};
-  color: ${props => {
-    switch(props.status) {
-      case 'pending': return 'var(--warning-color)';
-      case 'preparing': return 'var(--accent-color)';
-      case 'ready': return 'var(--success-color)';
-      case 'completed': return 'var(--success-color)';
-      case 'cancelled': return 'var(--danger-color)';
-      case 'available': return 'var(--success-color)';
-      case 'out_of_stock': return 'var(--danger-color)';
-      case 'active': return 'var(--success-color)';
-      case 'inactive': return 'var(--danger-color)';
-      default: return 'var(--gray-color)';
-    }
-  }};
-`;
-
-const TypeBadge = styled.span`
-  display: inline-block;
-  padding: 4px 12px;
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: 500;
-  background: ${props => props.type === 'delivery' ? 'rgba(255, 107, 53, 0.2)' : 'rgba(255, 166, 0, 0.2)'};
-  color: ${props => props.type === 'delivery' ? 'var(--primary-color)' : 'var(--secondary-color)'};
-`;
-
-const ActionButtons = styled.div`
-  display: flex;
-  gap: 8px;
-`;
-
-const ActionButton = styled.button`
-  width: 32px;
-  height: 32px;
-  border: ${props => props.danger ? '1px solid var(--danger-color)' : '1px solid var(--light-gray)'};
-  background: ${props => {
-    if (props.danger) return 'transparent';
-    if (props.primary) return 'var(--primary-color)';
-    if (props.success) return 'var(--success-color)';
-    return 'white';
-  }};
-  color: ${props => {
-    if (props.danger) return 'var(--danger-color)';
-    if (props.primary || props.success) return 'white';
-    return 'var(--dark-color)';
-  }};
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  
-  &:hover {
-    background: ${props => {
-      if (props.danger) return 'var(--danger-color)';
-      if (props.primary) return '#E55A2E';
-      if (props.success) return '#05C48F';
-      return 'var(--light-gray)';
-    }};
-    color: ${props => props.danger ? 'white' : props.color};
-  }
-`;
-
-const OrdersTab = styled.div``;
-
-const FilterBar = styled.div`
-  display: flex;
-  gap: 15px;
-`;
-
-const SearchBox = styled.div`
-  position: relative;
-  
-  svg {
-    position: absolute;
-    left: 12px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: var(--gray-color);
-  }
-  
-  input {
-    padding: 10px 12px 10px 40px;
-    border: 2px solid var(--light-gray);
-    border-radius: var(--radius);
-    font-size: 14px;
-    min-width: 200px;
+const RestaurantAdmin = () => {
+    const { id } = useParams(); // This grabs "kalyanresto1" from URL
+    const API_BASE = "https://smart-menu-backend-5ge7.onrender.com/api";
     
-    &:focus {
-      outline: none;
-      border-color: var(--primary-color);
-    }
-  }
-`;
+    // --- STATE ---
+    const [publicMenuUrl, setPublicMenuUrl] = useState(`${window.location.origin}/menu/${id}`);
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [password, setPassword] = useState("");
+    const [authLoading, setAuthLoading] = useState(false);
+    const [activeTab, setActiveTab] = useState("menu");
+    const [loading, setLoading] = useState(false);
+    const [restaurantName, setRestaurantName] = useState(id);
+    const [activeAlerts, setActiveAlerts] = useState([]);
+    const [broadcast, setBroadcast] = useState(null);
+    const [pushEnabled, setPushEnabled] = useState(Notification.permission === 'granted');
+    const [trialEndsAt, setTrialEndsAt] = useState(null);
+    const [isPro, setIsPro] = useState(false);
+    const [dishes, setDishes] = useState([]);
+    const [formData, setFormData] = useState({ name: "", price: "", category: "Starters", image: "" });
 
-const FilterButton = styled.button`
-  padding: 10px 20px;
-  background: white;
-  color: var(--dark-color);
-  border: 2px solid var(--light-gray);
-  border-radius: var(--radius);
-  font-weight: 500;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  
-  &:hover {
-    background: var(--light-gray);
-  }
-`;
+    // --- LOGIN HANDLER (FIXED TO UPDATE LINK) ---
+    const handleLogin = async (e) => {
+        e.preventDefault();
+        setAuthLoading(true);
+        try {
+            const res = await axios.post(`${API_BASE}/auth/login`, { username: id, password });
+            
+            // SAVE TOKEN
+            localStorage.setItem(`owner_token_${id}`, res.data.token);
+            localStorage.setItem(`owner_id_${id}`, res.data._id);
+            
+            // UPDATE STATE
+            setRestaurantName(res.data.restaurantName);
+            setIsPro(res.data.isPro);
+            setTrialEndsAt(res.data.trialEndsAt);
+            setIsAuthenticated(true);
+            
+            // ✅ IMPORTANT FIX: Update the link to use the REAL ID (e.g. 65a...), not the username
+            const correctLink = `${window.location.origin}/menu/${res.data._id}`;
+            setPublicMenuUrl(correctLink);
 
-const DownloadButton = styled.button`
-  padding: 10px 20px;
-  background: var(--primary-color);
-  color: white;
-  border: none;
-  border-radius: var(--radius);
-  font-weight: 500;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  
-  &:hover {
-    background: #E55A2E;
-  }
-`;
+            // Fetch dishes
+            fetchData(res.data.token, res.data._id);
+        } catch (err) { alert("❌ Invalid Password"); } finally { setAuthLoading(false); }
+    };
 
-const OrdersGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-  gap: 20px;
-  margin-top: 30px;
-`;
+    const fetchData = async (token, mongoId) => {
+        setLoading(true);
+        try {
+            const config = { headers: { Authorization: `Bearer ${token}` } };
+            const dishRes = await axios.get(`${API_BASE}/dishes?restaurantId=${mongoId}`, config);
+            setDishes(dishRes.data || []);
+        } catch (error) { console.error(error); } finally { setLoading(false); }
+    };
 
-const OrderCard = styled.div`
-  background: white;
-  border-radius: var(--radius);
-  padding: 20px;
-  box-shadow: var(--shadow);
-`;
+    // --- LIVE UPDATES ---
+    useEffect(() => {
+        if (isAuthenticated) {
+            const mongoId = localStorage.getItem(`owner_id_${id}`);
+            const socket = io("https://smart-menu-backend-5ge7.onrender.com");
+            socket.emit("join-restaurant", mongoId);
 
-const OrderHeader = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 15px;
-`;
+            socket.on("new-waiter-call", (data) => {
+                new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3").play().catch(() => {});
+                setActiveAlerts(prev => [...prev, data]);
+            });
 
-const OrderTime = styled.div`
-  color: var(--gray-color);
-  font-size: 14px;
-`;
+            socket.on('new-broadcast', (data) => {
+                setBroadcast(data);
+                new Audio("https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3").play().catch(() => {});
+            });
 
-const OrderCustomer = styled.div`
-  margin-bottom: 15px;
-  
-  strong {
-    display: block;
-    margin-bottom: 5px;
-  }
-  
-  span {
-    color: var(--gray-color);
-    font-size: 14px;
-  }
-`;
+            return () => socket.disconnect();
+        }
+    }, [isAuthenticated, id]);
 
-const OrderStatusSection = styled.div`
-  display: flex;
-  gap: 10px;
-  margin-bottom: 20px;
-`;
+    const requestNotificationPermission = async () => {
+        const permission = await Notification.requestPermission();
+        if (permission === 'granted') setPushEnabled(true);
+    };
 
-const OrderActions = styled.div`
-  display: flex;
-  gap: 10px;
-`;
+    const handleLogout = () => { 
+        setIsAuthenticated(false); 
+        setPassword(""); 
+        localStorage.removeItem(`owner_token_${id}`);
+    };
 
-const OrderButton = styled.button`
-  flex: 1;
-  padding: 10px;
-  background: ${props => {
-    if (props.primary) return 'var(--primary-color)';
-    if (props.success) return 'var(--success-color)';
-    if (props.danger) return 'transparent';
-    return 'white';
-  }};
-  color: ${props => {
-    if (props.primary || props.success) return 'white';
-    if (props.danger) return 'var(--danger-color)';
-    return 'var(--dark-color)';
-  }};
-  border: ${props => props.danger ? '1px solid var(--danger-color)' : 'none'};
-  border-radius: var(--radius);
-  font-weight: 500;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  
-  &:hover {
-    background: ${props => {
-      if (props.primary) return '#E55A2E';
-      if (props.success) return '#05C48F';
-      if (props.danger) return 'var(--danger-color)';
-      return 'var(--light-gray)';
-    }};
-    color: ${props => props.danger && 'white'};
-  }
-`;
+    const handleAddDish = async (e) => {
+        e.preventDefault();
+        const token = localStorage.getItem(`owner_token_${id}`);
+        const mongoId = localStorage.getItem(`owner_id_${id}`);
+        try {
+            await axios.post(`${API_BASE}/dishes`, { ...formData, owner: mongoId }, { headers: { Authorization: `Bearer ${token}` } });
+            setFormData({ name: "", price: "", category: "Starters", image: "" });
+            fetchData(token, mongoId);
+        } catch (e) { alert("Error saving dish."); }
+    };
 
-const MenuTab = styled.div``;
+    const handleDeleteDish = async (dishId) => {
+        if(!window.confirm("Delete this dish?")) return;
+        const token = localStorage.getItem(`owner_token_${id}`);
+        const mongoId = localStorage.getItem(`owner_id_${id}`);
+        try {
+            await axios.delete(`${API_BASE}/dishes/${dishId}`, { headers: { Authorization: `Bearer ${token}` } });
+            fetchData(token, mongoId);
+        } catch (error) { alert("Delete failed."); }
+    };
 
-const ActionBar = styled.div`
-  display: flex;
-  gap: 15px;
-`;
+    const calculateDaysLeft = (date) => {
+        if (!date) return 0;
+        const diff = new Date(date) - new Date();
+        return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+    };
 
-const AddButton = styled.button`
-  padding: 10px 20px;
-  background: var(--success-color);
-  color: white;
-  border: none;
-  border-radius: var(--radius);
-  font-weight: 500;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  
-  &:hover {
-    background: #05C48F;
-  }
-`;
+    const copyToClipboard = () => {
+        navigator.clipboard.writeText(publicMenuUrl);
+        alert("Link Copied! Use this link.");
+    };
 
-const MenuItemsTable = styled.table`
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 30px;
-  
-  th {
-    text-align: left;
-    padding: 12px 16px;
-    border-bottom: 2px solid var(--light-gray);
-    color: var(--gray-color);
-    font-weight: 500;
-    font-size: 14px;
-  }
-  
-  td {
-    padding: 16px;
-    border-bottom: 1px solid var(--light-gray);
-  }
-  
-  tbody tr:hover {
-    background: #f8f9fa;
-  }
-`;
+    if (!isAuthenticated) return (
+        <div className="admin-container">
+            <style>{styles}</style>
+            <div className="lock-container">
+                <div className="lock-card">
+                    <FaStore size={40} color="#f97316" style={{ marginBottom: '15px' }} />
+                    <h1 style={{ fontSize: '20px', fontWeight: '900' }}>{id.toUpperCase()} ADMIN</h1>
+                    <form onSubmit={handleLogin} style={{ marginTop: '20px' }}>
+                        <input 
+                            type="password" placeholder="Password" 
+                            value={password} onChange={e => setPassword(e.target.value)} 
+                            className="input-dark" style={{ textAlign: 'center' }} 
+                            autoComplete="current-password" 
+                        />
+                        <button type="submit" className="btn-primary" disabled={authLoading}>
+                            {authLoading ? "Unlocking..." : <><FaUnlock /> Access Control</>}
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    );
 
-const MenuItem = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 15px;
-`;
+    return (
+        <div className="admin-container">
+            <style>{styles}</style>
+            
+            <div className="toast-container">
+                {activeAlerts.map((alert, i) => (
+                    <div key={i} className="toast-alert">
+                        <div>
+                            <p style={{ fontSize: '10px', fontWeight: 900, margin: 0 }}>🛎️ TABLE {alert.tableNumber}</p>
+                            <p style={{ fontWeight: 900, fontSize: '16px', margin: 0 }}>{alert.type?.toUpperCase()}</p>
+                        </div>
+                        <button onClick={() => setActiveAlerts(prev => prev.filter((_, idx) => idx !== i))} style={{ background: 'black', color: 'white', padding: '5px 10px', borderRadius: '5px', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>DONE</button>
+                    </div>
+                ))}
+            </div>
 
-const ItemName = styled.div`
-  font-weight: 500;
-`;
+            <div className="max-w-wrapper">
+                {broadcast && (
+                    <div style={{ background: '#3b82f6', color: 'white', padding: '12px', textAlign: 'left', fontSize: '12px', borderRadius: '15px', marginBottom: '20px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                        <span>📢 <strong>{broadcast.title}</strong>: {broadcast.message}</span>
+                        <button onClick={() => setBroadcast(null)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontWeight:'bold' }}>✕</button>
+                    </div>
+                )}
 
-const CategoryTag = styled.span`
-  padding: 4px 12px;
-  background: var(--light-gray);
-  color: var(--gray-color);
-  border-radius: 12px;
-  font-size: 12px;
-`;
+                <header className="admin-header">
+                    <div className="header-top">
+                        <div>
+                            <h1 className="shop-title">{restaurantName}</h1>
+                            <div style={{ marginTop: '5px' }}>
+                                {isPro ? <span className="badge-pro"><FaCrown /> PRO PLAN</span> : 
+                                <span className="badge-pro" style={{ color: '#60a5fa', borderColor: '#60a5fa' }}>Trial: {calculateDaysLeft(trialEndsAt)} Days Left</span>}
+                            </div>
+                        </div>
+                        <button onClick={handleLogout} className="btn-glass" style={{ color: '#ef4444' }}><FaSignOutAlt /></button>
+                    </div>
 
-const StaffTab = styled.div``;
+                    <div className="menu-link-box">
+                        <div style={{display:'flex', alignItems:'center', gap:'10px', overflow:'hidden'}}>
+                            <div style={{background:'rgba(59,130,246,0.2)', padding:'8px', borderRadius:'8px', color:'#3b82f6'}}>
+                                <FaUtensils size={14} />
+                            </div>
+                            <div style={{overflow:'hidden'}}>
+                                <p style={{fontSize:'10px', color:'#888', margin:0, fontWeight:'bold'}}>CUSTOMER MENU LINK</p>
+                                {/* THIS IS THE FIXED LINK */}
+                                <a href={publicMenuUrl} target="_blank" rel="noreferrer" className="link-text">{publicMenuUrl}</a>
+                            </div>
+                        </div>
+                        <div style={{display:'flex', gap:'5px'}}>
+                            <button onClick={copyToClipboard} className="action-btn"><FaCopy /></button>
+                            <a href={publicMenuUrl} target="_blank" rel="noreferrer" className="action-btn"><FaExternalLinkAlt /></a>
+                        </div>
+                    </div>
 
-const StaffGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 20px;
-  margin-top: 30px;
-`;
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                        <Link to={`/${id}/chef`} target="_blank" style={{ flex: 1, textDecoration: 'none' }}>
+                            <button className="btn-glass" style={{ width: '100%', justifyContent: 'center' }}>
+                                <FaUtensils /> Chef KDS
+                            </button>
+                        </Link>
+                        <Link to={`/${id}/waiter`} target="_blank" style={{ flex: 1, textDecoration: 'none' }}>
+                            <button className="btn-glass" style={{ width: '100%', justifyContent: 'center' }}>
+                                <FaBell /> Waiter Desk
+                            </button>
+                        </Link>
+                    </div>
+                </header>
 
-const StaffCard = styled.div`
-  background: white;
-  border-radius: var(--radius);
-  padding: 20px;
-  box-shadow: var(--shadow);
-  display: flex;
-  align-items: center;
-  gap: 15px;
-`;
+                <SetupWizard dishesCount={dishes.length} pushEnabled={pushEnabled} />
 
-const StaffAvatar = styled.div`
-  width: 60px;
-  height: 60px;
-  background: var(--primary-color);
-  color: white;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.5rem;
-  font-weight: 600;
-`;
+                <nav className="nav-tabs">
+                    <button onClick={() => setActiveTab("menu")} className={`tab-btn ${activeTab === "menu" ? 'active' : ''}`}>Menu</button>
+                    <button onClick={() => setActiveTab("settings")} className={`tab-btn ${activeTab === "settings" ? 'active' : ''}`}>Setup</button>
+                </nav>
 
-const StaffInfo = styled.div`
-  flex: 1;
-`;
-
-const StaffName = styled.div`
-  font-weight: 600;
-  margin-bottom: 5px;
-`;
-
-const StaffRole = styled.div`
-  color: var(--primary-color);
-  font-weight: 500;
-  margin-bottom: 5px;
-`;
-
-const StaffContact = styled.div`
-  font-size: 12px;
-  color: var(--gray-color);
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-`;
-
-const StaffActions = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  align-items: flex-end;
-`;
-
-const FooterStats = styled.div`
-  background: white;
-  padding: 20px 30px;
-  border-top: 1px solid var(--light-gray);
-  display: flex;
-  justify-content: space-between;
-`;
-
-const StatItem = styled.div`
-  text-align: center;
-  
-  span {
-    display: block;
-    color: var(--gray-color);
-    font-size: 14px;
-    margin-bottom: 5px;
-  }
-  
-  strong {
-    font-size: 1.2rem;
-    font-weight: 600;
-    color: var(--dark-color);
-  }
-`;
-
-const Loading = styled.div`
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.2rem;
-  color: var(--gray-color);
-`;
+                {activeTab === "menu" ? (
+                    <div className="glass-card">
+                        <h2 style={{ fontSize: '14px', fontWeight: 900, marginBottom: '20px' }}><FaPlus /> ADD ITEM</h2>
+                        <form onSubmit={handleAddDish}>
+                            <input className="input-dark" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} placeholder="Dish Name" required />
+                            <input className="input-dark" value={formData.image} onChange={e => setFormData({ ...formData, image: e.target.value })} placeholder="Image URL (e.g. https://...)" />
+                            
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                                <input className="input-dark" type="number" value={formData.price} onChange={e => setFormData({ ...formData, price: e.target.value })} placeholder="Price ₹" required />
+                                <select className="input-dark" value={formData.category} onChange={e => setFormData({ ...formData, category: e.target.value })}>
+                                    <option>Starters</option><option>Main Course</option><option>Fast Food</option><option>Dessert</option><option>Beverages</option>
+                                </select>
+                            </div>
+                            <button type="submit" className="btn-primary">Save Dish</button>
+                        </form>
+                        <div style={{ marginTop: '30px' }}>
+                            {dishes.map(dish => (
+                                <div key={dish._id} className="dish-item">
+                                    <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+                                        <div style={{ width: '50px', height: '50px', borderRadius: '10px', background: '#222', overflow: 'hidden' }}>
+                                            {dish.image ? (
+                                                <img src={dish.image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                            ) : (
+                                                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                    <FaUtensils color="#333" />
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div>
+                                            <p style={{ fontWeight: 900, margin: 0, fontSize: '14px' }}>{dish.name}</p>
+                                            <p style={{ margin: 0, fontSize: '11px', color: '#FF9933', fontWeight: 900 }}>₹{dish.price} • {dish.category.toUpperCase()}</p>
+                                        </div>
+                                    </div>
+                                    <button onClick={() => handleDeleteDish(dish._id)} style={{ background: 'none', border: 'none', color: '#444', cursor: 'pointer' }}><FaTrash /></button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                ) : (
+                    <div className="glass-card">
+                        <h2 style={{ fontSize: '14px', fontWeight: 900, marginBottom: '10px' }}>Staff Alerts</h2>
+                        <p style={{ fontSize: '12px', color: '#888', marginBottom: '20px' }}>Enable notifications to receive Table Help requests on this device.</p>
+                        <button onClick={requestNotificationPermission} className="btn-primary" style={{ background: pushEnabled ? 'rgba(34, 197, 94, 0.1)' : null, color: pushEnabled ? '#22c55e' : 'white', border: pushEnabled ? '1px solid #22c55e' : 'none', boxShadow: 'none' }}>
+                            <FaBell /> {pushEnabled ? 'Alerts are ON' : 'Turn On Alerts'}
+                        </button>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
 
 export default RestaurantAdmin;

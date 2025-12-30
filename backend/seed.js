@@ -1,167 +1,73 @@
-const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
-const dotenv = require('dotenv');
+import mongoose from 'mongoose';
+import dotenv from 'dotenv';
+import Owner from './models/Owner.js';
+import Dish from './models/Dish.js';
 
 dotenv.config();
 
-const Owner = require('./models/Owner');
-const Dish = require('./models/Dish');
-const Order = require('./models/Order');
+const SEED_CONFIG = {
+  admin: {
+    restaurantName: "Smart Menu Demo",
+    username: "admin",
+    email: "admin@smartmenu.com",
+    password: "password123",
+    isPro: true,
+  },
+  dishes: [
+    {
+      name: "Masala Chai",
+      price: 20,
+      category: "Beverages", // Matches Menu.jsx
+      description: "Authentic Indian spiced tea with cardamom and ginger.",
+      image: "https://images.unsplash.com/photo-1561336313-0bd5e0b27ec8?w=500",
+    },
+    {
+      name: "Chicken Biryani",
+      price: 250,
+      category: "Main Course", // Matches Menu.jsx
+      description: "Aromatic basmati rice cooked with tender chicken and spices.",
+      image: "https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=500",
+    },
+    {
+      name: "Veg Burger",
+      price: 99,
+      category: "Fast Food", // Changed from "Snacks" to match Menu.jsx CATEGORIES
+      description: "Crispy veg patty with fresh lettuce and cheese.",
+      image: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=500",
+    }
+  ]
+};
 
-const sampleDishes = [
-  {
-    name: 'Butter Chicken',
-    description: 'Creamy tomato-based curry with tender chicken pieces',
-    price: 420,
-    category: 'main-course',
-    cuisine: 'Indian',
-    preparationTime: 25,
-    isVegetarian: false,
-    isSpicy: true,
-    isAvailable: true
-  },
-  {
-    name: 'Paneer Tikka',
-    description: 'Grilled cottage cheese cubes marinated in spices',
-    price: 320,
-    category: 'appetizer',
-    cuisine: 'Indian',
-    preparationTime: 15,
-    isVegetarian: true,
-    isSpicy: true,
-    isAvailable: true
-  },
-  {
-    name: 'Garlic Naan',
-    description: 'Soft leavened bread with garlic butter',
-    price: 60,
-    category: 'main-course',
-    cuisine: 'Indian',
-    preparationTime: 10,
-    isVegetarian: true,
-    isSpicy: false,
-    isAvailable: true
-  },
-  {
-    name: 'Mango Lassi',
-    description: 'Refreshing yogurt drink with mango pulp',
-    price: 120,
-    category: 'beverage',
-    cuisine: 'Indian',
-    preparationTime: 5,
-    isVegetarian: true,
-    isSpicy: false,
-    isAvailable: true
-  },
-  {
-    name: 'Chocolate Brownie',
-    description: 'Warm chocolate brownie with ice cream',
-    price: 180,
-    category: 'dessert',
-    cuisine: 'International',
-    preparationTime: 10,
-    isVegetarian: true,
-    isSpicy: false,
-    isAvailable: true
-  }
-];
-
-const sampleOrders = [
-  {
-    customerName: 'John Doe',
-    customerPhone: '9876543210',
-    tableNumber: 'Table 5',
-    orderType: 'dine-in',
-    items: [
-      { dishId: null, quantity: 2, price: 420, total: 840 },
-      { dishId: null, quantity: 3, price: 60, total: 180 }
-    ],
-    totalAmount: 1020,
-    finalAmount: 1020,
-    status: 'pending',
-    paymentStatus: 'pending',
-    paymentMethod: 'cash'
-  },
-  {
-    customerName: 'Jane Smith',
-    customerPhone: '9876543211',
-    orderType: 'delivery',
-    items: [
-      { dishId: null, quantity: 1, price: 320, total: 320 },
-      { dishId: null, quantity: 1, price: 420, total: 420 }
-    ],
-    totalAmount: 740,
-    finalAmount: 740,
-    status: 'preparing',
-    paymentStatus: 'paid',
-    paymentMethod: 'online'
-  }
-];
-
-async function seedDatabase() {
+const seedDatabase = async () => {
   try {
-    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/bitebox');
-    console.log('✅ Connected to MongoDB for seeding');
-    
-    // Clear existing data
-    await Owner.deleteMany({});
-    await Dish.deleteMany({});
-    await Order.deleteMany({});
-    console.log('🗑️  Cleared existing data');
-    
-    // Create super admin owner
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash('admin123', salt);
-    
-    const owner = new Owner({
-      email: 'admin@bitebox.com',
-      password: hashedPassword,
-      name: 'Admin User',
-      restaurantName: 'BiteBox HQ',
-      phone: '1234567890',
-      address: '123 Admin Street, City',
-      role: 'super-admin'
+    await mongoose.connect(process.env.MONGO_URI);
+    console.log("📡 Connected to MongoDB for seeding...");
+
+    await Owner.deleteMany({ username: SEED_CONFIG.admin.username });
+    const trialDate = new Date();
+    trialDate.setDate(trialDate.getDate() + 60);
+
+    const admin = await Owner.create({
+      ...SEED_CONFIG.admin,
+      trialEndsAt: trialDate,
+      status: "Active"
     });
-    
-    await owner.save();
-    console.log('👑 Created super admin');
-    
-    // Create sample dishes
-    for (let dish of sampleDishes) {
-      dish.restaurantId = owner._id;
-      const newDish = new Dish(dish);
-      await newDish.save();
-      // Update the dishId in sample orders
-      sampleDishes[sampleDishes.indexOf(dish)] = newDish;
-    }
-    console.log('🍽️  Created sample dishes');
-    
-    // Create sample orders
-    for (let order of sampleOrders) {
-      order.restaurantId = owner._id;
-      // Assign dish IDs to order items
-      order.items.forEach((item, index) => {
-        if (index < sampleDishes.length) {
-          item.dishId = sampleDishes[index]._id;
-        }
-      });
-      const newOrder = new Order(order);
-      await newOrder.save();
-    }
-    console.log('📋 Created sample orders');
-    
-    console.log('\n✅ Database seeded successfully!');
-    console.log('\n📋 Login Credentials:');
-    console.log('   Email: admin@bitebox.com');
-    console.log('   Password: admin123');
-    console.log('\n🚀 Server ready to run!');
-    
-    process.exit(0);
-    
+
+    const dishesWithID = SEED_CONFIG.dishes.map(dish => ({
+      ...dish,
+      owner: admin._id,
+      isAvailable: true
+    }));
+
+    await Dish.deleteMany({ owner: admin._id });
+    await Dish.insertMany(dishesWithID);
+
+    console.log(`✅ SEEDING COMPLETE. Login with: admin / password123`);
+    process.exit();
   } catch (error) {
-    console.error('❌ Seeding error:', error);
+    console.error(`❌ Seeding Failed: ${error.message}`);
     process.exit(1);
   }
-}
+};
 
 seedDatabase();

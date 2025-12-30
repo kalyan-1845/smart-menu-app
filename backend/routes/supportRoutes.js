@@ -1,15 +1,16 @@
-const express = require('express');
+import express from 'express';
+import { createTicket, getAllTickets, replyToTicket } from '../controllers/supportController.js';
+import { protect } from '../middleware/authMiddleware.js';
+
 const router = express.Router();
-const { auth } = require('../middleware/auth');
-const supportController = require('../controllers/supportController');
 
-// All routes require authentication
-router.use(auth);
+// Super Admin Route: Get all tickets
+router.get('/all', protect, getAllTickets);
 
-router.post('/', supportController.createTicket);
-router.get('/', supportController.getTickets);
-router.get('/:id', supportController.getTicket);
-router.post('/:id/message', supportController.addMessage);
-router.patch('/:id/status', supportController.updateTicketStatus);
+// Owner Route: Create a new ticket
+router.post('/create', protect, createTicket);
 
-module.exports = router;
+// Shared Route: Reply to a ticket
+router.post('/reply/:id', protect, replyToTicket);
+
+export default router;

@@ -1,11 +1,11 @@
 import jsPDF from "jspdf";
 
 export const generateCustomerReceipt = (order, restaurant) => {
-    // 1. Setup 80mm Thermal Receipt Size (Standard size)
+    // 1. Setup 80mm Thermal Receipt Size
     const doc = new jsPDF({
         orientation: "portrait",
         unit: "mm",
-        format: [80, 240] // Slightly longer to fit long orders
+        format: [80, 220] 
     });
 
     const centerX = 40; 
@@ -29,13 +29,9 @@ export const generateCustomerReceipt = (order, restaurant) => {
     doc.setFontSize(10);
     doc.text(`Order: #${order._id.slice(-6).toUpperCase()}`, 5, y);
     y += 5;
-    
-    // 🚨 FIX: Changed from tableNum to tableNumber
-    doc.text(`Table: ${order.tableNumber || "Takeaway"}`, 5, y);
+    doc.text(`Table: ${order.tableNum}`, 5, y);
     y += 5;
-    
-    const dateStr = order.createdAt ? new Date(order.createdAt).toLocaleDateString() : new Date().toLocaleDateString();
-    doc.text(`Date: ${dateStr}`, 5, y);
+    doc.text(`Date: ${new Date(order.createdAt).toLocaleDateString()}`, 5, y);
     y += 5;
     
     doc.text("------------------------------------------", centerX, y, { align: "center" });
@@ -50,11 +46,11 @@ export const generateCustomerReceipt = (order, restaurant) => {
 
     order.items.forEach((item) => {
         const name = `${item.quantity} x ${item.name}`;
-        const price = `Rs.${item.price * item.quantity}`;
+        const price = `₹${item.price * item.quantity}`;
         
-        // Handle long names (Wrap text or cut it)
-        if (name.length > 22) {
-            doc.text(name.substring(0, 22) + "...", 5, y);
+        // Handle long names
+        if (name.length > 25) {
+            doc.text(name.substring(0, 25) + "...", 5, y);
         } else {
             doc.text(name, 5, y);
         }
@@ -77,7 +73,7 @@ export const generateCustomerReceipt = (order, restaurant) => {
     // --- PAYMENT STATUS ---
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
-    const statusText = order.paymentMethod === "Cash" ? "Pay Cash at Counter" : "Paid Online";
+    const statusText = order.paymentMethod === "Cash" ? "Payment Due (Cash)" : "Paid Online";
     doc.text(`Status: ${statusText}`, centerX, y, { align: "center" });
     y += 10;
 

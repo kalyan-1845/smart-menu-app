@@ -1,461 +1,116 @@
-// frontend/src/pages/SetupWizard.jsx
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowRight, Check, Coffee, Utensils, Users, Settings } from 'lucide-react';
-import toast from 'react-hot-toast';
+import React, { useEffect } from "react";
+import confetti from "canvas-confetti";
+import { 
+    FaCheckCircle, FaCircle, FaUtensils, 
+    FaBell, FaRocket 
+} from "react-icons/fa";
 
-const SetupWizard = () => {
-  const navigate = useNavigate();
-  const [step, setStep] = useState(1);
-  const [restaurantInfo, setRestaurantInfo] = useState({
-    name: '',
-    type: '',
-    address: '',
-    phone: '',
-    email: '',
-    cuisine: '',
-    tables: 10,
-    openingTime: '09:00',
-    closingTime: '22:00',
-  });
+const SetupWizard = ({ dishesCount, pushEnabled }) => {
+    // 1. Define the v2.8 steps (Removed UPI)
+    const steps = [
+        { 
+            id: 1, 
+            label: "Add your first 3 dishes", 
+            done: dishesCount >= 3, 
+            icon: <FaUtensils />, 
+            hint: "Go to the 'Menu' tab to add your food items." 
+        },
+        { 
+            id: 2, 
+            label: "Enable Live Alerts", 
+            done: pushEnabled, 
+            icon: <FaBell />, 
+            hint: "Enable notifications in Settings to hear order alerts." 
+        }
+    ];
 
-  const steps = [
-    { id: 1, title: 'Basic Info', icon: <Coffee size={20} /> },
-    { id: 2, title: 'Restaurant Details', icon: <Utensils size={20} /> },
-    { id: 3, title: 'Staff Setup', icon: <Users size={20} /> },
-    { id: 4, title: 'Menu Setup', icon: <Settings size={20} /> },
-  ];
+    // 2. Calculate progress
+    const completedCount = steps.filter(s => s.done).length;
+    const progressPercent = Math.round((completedCount / steps.length) * 100);
 
-  const handleNext = () => {
-    if (step < steps.length) {
-      setStep(step + 1);
-    } else {
-      toast.success('Restaurant setup completed!');
-      navigate('/admin');
+    // 3. Trigger Confetti when 100% complete
+    useEffect(() => {
+        if (completedCount === steps.length) {
+            confetti({
+                particleCount: 150,
+                spread: 70,
+                origin: { y: 0.6 },
+                colors: ['#FF9933', '#ffffff', '#00ff00']
+            });
+        }
+    }, [completedCount, steps.length]);
+
+    // 4. Success Banner
+    if (completedCount === steps.length) {
+        return (
+            <div className="bg-green-500/10 border-2 border-green-500/20 p-8 rounded-[40px] mb-10 flex items-center justify-between shadow-2xl animate-in zoom-in duration-500">
+                <div>
+                    <h2 className="text-2xl font-black text-green-500 uppercase tracking-tighter">System Live! 🎉</h2>
+                    <p className="text-sm text-gray-400 font-bold uppercase mt-1">Orders and notifications are fully operational.</p>
+                </div>
+                <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center shadow-lg shadow-green-500/20">
+                    <FaCheckCircle className="text-white text-3xl" />
+                </div>
+            </div>
+        );
     }
-  };
 
-  const handlePrev = () => {
-    if (step > 1) {
-      setStep(step - 1);
-    }
-  };
+    return (
+        <div className="bg-[#111] border border-gray-800 rounded-[45px] p-10 mb-10 shadow-2xl relative overflow-hidden">
+            {/* Background Glow */}
+            <div className="absolute -top-24 -right-24 w-64 h-64 bg-[#FF9933]/5 blur-[100px] rounded-full"></div>
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setRestaurantInfo(prev => ({ ...prev, [name]: value }));
-  };
+            <div className="flex justify-between items-end mb-8">
+                <div>
+                    <h2 className="text-2xl font-black text-white uppercase tracking-tighter flex items-center gap-3">
+                        <FaRocket className="text-[#FF9933]" /> Setup Progress
+                    </h2>
+                    <p className="text-gray-500 text-[10px] font-black tracking-[4px] mt-2">Complete these steps to go live</p>
+                </div>
+                <div className="text-right">
+                    <span className="text-4xl font-black text-[#FF9933]">{progressPercent}%</span>
+                    <p className="text-[10px] font-black text-gray-600 uppercase">Ready</p>
+                </div>
+            </div>
 
-  const renderStep = () => {
-    switch(step) {
-      case 1:
-        return (
-          <StepContent>
-            <StepTitle>Basic Restaurant Information</StepTitle>
-            <FormGroup>
-              <Label>Restaurant Name</Label>
-              <Input 
-                type="text" 
-                name="name"
-                value={restaurantInfo.name}
-                onChange={handleChange}
-                placeholder="Enter restaurant name"
-              />
-            </FormGroup>
-            <FormGroup>
-              <Label>Restaurant Type</Label>
-              <Select 
-                name="type"
-                value={restaurantInfo.type}
-                onChange={handleChange}
-              >
-                <option value="">Select type</option>
-                <option value="fine-dining">Fine Dining</option>
-                <option value="casual">Casual Dining</option>
-                <option value="fast-food">Fast Food</option>
-                <option value="cafe">Cafe</option>
-                <option value="bar">Bar & Grill</option>
-              </Select>
-            </FormGroup>
-            <FormGroup>
-              <Label>Cuisine</Label>
-              <Input 
-                type="text" 
-                name="cuisine"
-                value={restaurantInfo.cuisine}
-                onChange={handleChange}
-                placeholder="e.g., Italian, Indian, Chinese"
-              />
-            </FormGroup>
-          </StepContent>
-        );
-      
-      case 2:
-        return (
-          <StepContent>
-            <StepTitle>Contact & Location</StepTitle>
-            <FormGroup>
-              <Label>Address</Label>
-              <Input 
-                type="text" 
-                name="address"
-                value={restaurantInfo.address}
-                onChange={handleChange}
-                placeholder="Full address"
-              />
-            </FormGroup>
-            <FormGroup>
-              <Label>Phone Number</Label>
-              <Input 
-                type="tel" 
-                name="phone"
-                value={restaurantInfo.phone}
-                onChange={handleChange}
-                placeholder="Contact number"
-              />
-            </FormGroup>
-            <FormGroup>
-              <Label>Email</Label>
-              <Input 
-                type="email" 
-                name="email"
-                value={restaurantInfo.email}
-                onChange={handleChange}
-                placeholder="Business email"
-              />
-            </FormGroup>
-            <FormGroup>
-              <Label>Number of Tables</Label>
-              <Input 
-                type="number" 
-                name="tables"
-                value={restaurantInfo.tables}
-                onChange={handleChange}
-                min="1"
-                max="100"
-              />
-            </FormGroup>
-          </StepContent>
-        );
-      
-      case 3:
-        return (
-          <StepContent>
-            <StepTitle>Operating Hours</StepTitle>
-            <TimeContainer>
-              <FormGroup>
-                <Label>Opening Time</Label>
-                <Input 
-                  type="time" 
-                  name="openingTime"
-                  value={restaurantInfo.openingTime}
-                  onChange={handleChange}
-                />
-              </FormGroup>
-              <FormGroup>
-                <Label>Closing Time</Label>
-                <Input 
-                  type="time" 
-                  name="closingTime"
-                  value={restaurantInfo.closingTime}
-                  onChange={handleChange}
-                />
-              </FormGroup>
-            </TimeContainer>
-            <InfoBox>
-              <p>You can modify these settings later from the admin panel.</p>
-            </InfoBox>
-          </StepContent>
-        );
-      
-      case 4:
-        return (
-          <StepContent>
-            <StepTitle>Complete Setup</StepTitle>
-            <Summary>
-              <SummaryItem>
-                <strong>Restaurant Name:</strong> {restaurantInfo.name}
-              </SummaryItem>
-              <SummaryItem>
-                <strong>Type:</strong> {restaurantInfo.type}
-              </SummaryItem>
-              <SummaryItem>
-                <strong>Cuisine:</strong> {restaurantInfo.cuisine}
-              </SummaryItem>
-              <SummaryItem>
-                <strong>Tables:</strong> {restaurantInfo.tables}
-              </SummaryItem>
-              <SummaryItem>
-                <strong>Hours:</strong> {restaurantInfo.openingTime} - {restaurantInfo.closingTime}
-              </SummaryItem>
-            </Summary>
-            <InfoBox success>
-              <Check size={20} />
-              <div>
-                <h4>Ready to Go!</h4>
-                <p>Your restaurant profile is complete. You can now start adding menu items and staff members.</p>
-              </div>
-            </InfoBox>
-          </StepContent>
-        );
-      
-      default:
-        return null;
-    }
-  };
+            {/* Progress Bar */}
+            <div className="w-full bg-gray-900 h-2 rounded-full mb-10 overflow-hidden border border-gray-800">
+                <div 
+                    className="bg-[#FF9933] h-full transition-all duration-1000 ease-out shadow-[0_0_20px_rgba(255,153,51,0.4)]" 
+                    style={{ width: `${progressPercent}%` }}
+                ></div>
+            </div>
 
-  return (
-    <Container>
-      <WizardCard>
-        <Header>
-          <Title>Restaurant Setup Wizard</Title>
-          <Subtitle>Configure your restaurant in a few simple steps</Subtitle>
-        </Header>
-        
-        <Progress>
-          {steps.map((s) => (
-            <Step key={s.id} active={s.id <= step}>
-              <StepIcon>{s.id < step ? <Check size={16} /> : s.icon}</StepIcon>
-              <StepTitleSmall>{s.title}</StepTitleSmall>
-            </Step>
-          ))}
-        </Progress>
-        
-        {renderStep()}
-        
-        <Actions>
-          <Button secondary onClick={handlePrev} disabled={step === 1}>
-            Previous
-          </Button>
-          <Button onClick={handleNext}>
-            {step === steps.length ? 'Finish Setup' : 'Next Step'}
-            <ArrowRight size={18} />
-          </Button>
-        </Actions>
-        
-        <SkipLink onClick={() => navigate('/admin')}>
-          Skip setup for now
-        </SkipLink>
-      </WizardCard>
-    </Container>
-  );
+            {/* Steps Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {steps.map((step) => (
+                    <div 
+                        key={step.id} 
+                        className={`p-6 rounded-[30px] border transition-all duration-500 ${
+                            step.done 
+                            ? 'bg-green-500/5 border-green-500/10 opacity-60' 
+                            : 'bg-white/5 border-white/5 hover:border-[#FF9933]/30'
+                        }`}
+                    >
+                        <div className="flex justify-between items-start mb-4">
+                            <div className={`text-2xl ${step.done ? 'text-green-500' : 'text-gray-600'}`}>
+                                {step.icon}
+                            </div>
+                            {step.done ? (
+                                <FaCheckCircle className="text-green-500 text-xl" />
+                            ) : (
+                                <FaCircle className="text-gray-800 text-xl" />
+                            )}
+                        </div>
+                        <p className={`font-black text-xs uppercase tracking-tight ${step.done ? 'text-gray-500' : 'text-white'}`}>
+                            {step.label}
+                        </p>
+                        {!step.done && <p className="text-[9px] text-gray-500 mt-2 font-bold leading-relaxed">{step.hint}</p>}
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
 };
-
-// Styled Components
-const Container = styled.div`
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-  padding: 20px;
-`;
-
-const WizardCard = styled.div`
-  background: white;
-  border-radius: 20px;
-  padding: 40px;
-  width: 100%;
-  max-width: 600px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-`;
-
-const Header = styled.div`
-  text-align: center;
-  margin-bottom: 40px;
-`;
-
-const Title = styled.h1`
-  color: var(--dark-color);
-  margin-bottom: 10px;
-`;
-
-const Subtitle = styled.p`
-  color: var(--gray-color);
-`;
-
-const Progress = styled.div`
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 40px;
-  position: relative;
-  
-  &::before {
-    content: '';
-    position: absolute;
-    top: 20px;
-    left: 0;
-    right: 0;
-    height: 2px;
-    background: var(--light-gray);
-    z-index: 1;
-  }
-`;
-
-const Step = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  position: relative;
-  z-index: 2;
-  flex: 1;
-`;
-
-const StepIcon = styled.div`
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: ${props => props.active ? 'var(--primary-color)' : 'var(--light-gray)'};
-  color: ${props => props.active ? 'white' : 'var(--gray-color)'};
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 10px;
-  border: 3px solid white;
-`;
-
-const StepTitleSmall = styled.span`
-  font-size: 12px;
-  font-weight: 500;
-  color: ${props => props.active ? 'var(--primary-color)' : 'var(--gray-color)'};
-`;
-
-const StepContent = styled.div`
-  margin-bottom: 40px;
-`;
-
-const StepTitle = styled.h2`
-  margin-bottom: 25px;
-  color: var(--dark-color);
-`;
-
-const FormGroup = styled.div`
-  margin-bottom: 20px;
-`;
-
-const Label = styled.label`
-  display: block;
-  margin-bottom: 8px;
-  font-weight: 500;
-  color: var(--dark-color);
-`;
-
-const Input = styled.input`
-  width: 100%;
-  padding: 12px 16px;
-  border: 2px solid var(--light-gray);
-  border-radius: var(--radius);
-  font-size: 16px;
-  transition: border-color 0.3s ease;
-  
-  &:focus {
-    border-color: var(--primary-color);
-    outline: none;
-  }
-`;
-
-const Select = styled.select`
-  width: 100%;
-  padding: 12px 16px;
-  border: 2px solid var(--light-gray);
-  border-radius: var(--radius);
-  font-size: 16px;
-  background: white;
-  cursor: pointer;
-  
-  &:focus {
-    border-color: var(--primary-color);
-    outline: none;
-  }
-`;
-
-const TimeContainer = styled.div`
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
-`;
-
-const InfoBox = styled.div`
-  padding: 20px;
-  background: ${props => props.success ? 'rgba(6, 214, 160, 0.1)' : 'rgba(255, 214, 102, 0.1)'};
-  border-radius: var(--radius);
-  border-left: 4px solid ${props => props.success ? 'var(--success-color)' : 'var(--warning-color)'};
-  display: flex;
-  gap: 15px;
-  align-items: flex-start;
-  
-  h4 {
-    margin: 0 0 5px 0;
-  }
-  
-  p {
-    margin: 0;
-    font-size: 14px;
-  }
-`;
-
-const Summary = styled.div`
-  background: var(--light-gray);
-  border-radius: var(--radius);
-  padding: 20px;
-  margin-bottom: 25px;
-`;
-
-const SummaryItem = styled.div`
-  padding: 10px 0;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-  
-  &:last-child {
-    border-bottom: none;
-  }
-`;
-
-const Actions = styled.div`
-  display: flex;
-  justify-content: space-between;
-  gap: 15px;
-  margin-bottom: 25px;
-`;
-
-const Button = styled.button`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 14px 30px;
-  background: ${props => props.secondary ? 'transparent' : 'var(--primary-color)'};
-  color: ${props => props.secondary ? 'var(--dark-color)' : 'white'};
-  border: ${props => props.secondary ? '2px solid var(--light-gray)' : 'none'};
-  border-radius: var(--radius);
-  font-size: 16px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  
-  &:hover:not(:disabled) {
-    background: ${props => props.secondary ? 'var(--light-gray)' : 'var(--primary-dark)'};
-  }
-  
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-`;
-
-const SkipLink = styled.button`
-  display: block;
-  width: 100%;
-  text-align: center;
-  background: transparent;
-  border: none;
-  color: var(--gray-color);
-  font-size: 14px;
-  cursor: pointer;
-  transition: color 0.3s ease;
-  
-  &:hover {
-    color: var(--primary-color);
-  }
-`;
 
 export default SetupWizard;

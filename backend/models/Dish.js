@@ -1,53 +1,77 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
+/**
+ * Dish Model (Simplified v2.8)
+ * Represents a menu item with manual availability.
+ */
 const dishSchema = new mongoose.Schema({
-  name: {
-    type: String,
-    required: true
+  // The display name of the food item
+  name: { 
+    type: String, 
+    required: true, 
+    trim: true 
   },
-  description: String,
-  price: {
-    type: Number,
-    required: true,
-    min: 0
+  
+  // Pricing for the Dine-In MVP
+  price: { 
+    type: Number, 
+    required: true 
   },
-  category: {
-    type: String,
-    required: true,
-    enum: ['appetizer', 'main-course', 'dessert', 'beverage', 'special']
+  
+  // Categorization (e.g., Starters, Main Course) for the menu scroller
+  category: { 
+    type: String, 
+    required: true, 
+    index: true 
   },
-  cuisine: String,
-  preparationTime: {
-    type: Number,
-    required: true,
-    min: 1
+  
+  // Optional image URL for the dish
+  image: { 
+    type: String 
   },
-  isVegetarian: {
-    type: Boolean,
-    default: false
+  
+  // Short detail about the ingredients or taste
+  description: { 
+    type: String 
   },
-  isSpicy: {
-    type: Boolean,
-    default: false
+
+  /**
+   * 🔴 AVAILABILITY TOGGLE
+   * Critical Feature: Used by the Chef Dashboard to manually mark items 
+   * as "Sold Out" in real-time if the kitchen runs out of ingredients.
+   */
+  isAvailable: { 
+    type: Boolean, 
+    default: true 
   },
-  isAvailable: {
-    type: Boolean,
-    default: true
-  },
-  image: String,
-  restaurantId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Owner',
-    required: true
-  },
-  popularity: {
-    type: Number,
-    default: 0
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now
+
+  /**
+   * 🛠️ SPECIFICATIONS / CUSTOMIZATIONS
+   * Allows customers to see specific options (e.g., "Extra Spicy", "No Onion").
+   */
+  specifications: [
+    {
+      label: { type: String }, 
+      isAdded: { type: Boolean, default: false } 
+    }
+  ],
+
+  /**
+   * 🔒 OWNER LINK
+   * Multi-tenant security ensures that dishes only appear for the correct restaurant.
+   */
+  owner: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'Owner', 
+    required: true 
   }
+}, { 
+  // Automatically tracks when dishes are added or edited
+  timestamps: true 
 });
 
-module.exports = mongoose.model('Dish', dishSchema);
+/**
+ * 🏗️ EXPORT MODEL
+ * Uses the existence check to prevent compilation errors during server restarts.
+ */
+export default mongoose.models.Dish || mongoose.model('Dish', dishSchema);

@@ -1,1025 +1,238 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import styled from 'styled-components';
-import {
-  ArrowLeft,
-  ShoppingCart,
-  Trash2,
-  Plus,
-  Minus,
-  CreditCard,
-  MapPin,
-  Clock,
-  Shield,
-  CheckCircle,
-  Tag
-} from 'lucide-react';
-import toast from 'react-hot-toast';
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import axios from "axios";
+import { 
+    FaArrowLeft, FaTrash, FaMobileAlt, FaMoneyBillWave, 
+    FaMapMarkerAlt, FaCommentDots, FaLock, FaSpinner, FaExclamationTriangle 
+} from "react-icons/fa";
 
-const Cart = () => {
-  const navigate = useNavigate();
-  const [cart, setCart] = useState([]);
-  const [restaurant, setRestaurant] = useState(null);
-  const [deliveryInfo, setDeliveryInfo] = useState({
-    name: '',
-    phone: '',
-    address: '',
-    instructions: ''
-  });
-  const [paymentMethod, setPaymentMethod] = useState('card');
-  const [discountCode, setDiscountCode] = useState('');
-  const [discountApplied, setDiscountApplied] = useState(false);
+const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, tableNum, setTableNum }) => {
+    const navigate = useNavigate();
 
-  useEffect(() => {
-    // Load cart from localStorage
-    const savedCart = JSON.parse(localStorage.getItem('current_cart')) || [];
-    const restaurantId = localStorage.getItem('current_restaurant');
-    
-    if (savedCart.length === 0) {
-      toast.error('Your cart is empty');
-      navigate('/');
-      return;
-    }
+    // --- STATE ---
+    const [customerName, setCustomerName] = useState("");
+    const [chefNote, setChefNote] = useState(""); 
+    const [showTableModal, setShowTableModal] = useState(!tableNum);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [realRestaurantId, setRealRestaurantId] = useState(null);
+    const [errorMsg, setErrorMsg] = useState("");
 
-    // Mock restaurant data
-    const mockRestaurant = {
-      id: restaurantId,
-      name: 'Spice Heaven',
-      deliveryTime: '30-40 min',
-      minimumOrder: 15.00
+    const tableOptions = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, "Takeaway"];
+    const totalPrice = cart.reduce((total, item) => total + (item.price * item.quantity), 0);
+
+    // --- 1. AUTO-FIX RESTAURANT ID ---
+    useEffect(() => {
+        const resolveId = async () => {
+            const storedId = restaurantId || localStorage.getItem("activeResId");
+            if (!storedId) return;
+
+            // Check if it looks like a valid ID (24 chars, no spaces)
+            if (storedId.length === 24 && !storedId.includes(" ")) {
+                setRealRestaurantId(storedId);
+                return;
+            }
+
+            // If it's a username (e.g. "deccanfresh"), convert it to ID
+            try {
+                const res = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/auth/restaurant/${storedId}`);
+                if (res.data?._id) {
+                    setRealRestaurantId(res.data._id);
+                    // Update local storage so we don't ask again
+                    localStorage.setItem("activeResId", res.data._id);
+                }
+            } catch (err) {
+                console.error("ID Fix Failed:", err);
+                setErrorMsg("Restaurant System Offline. Please Scan QR Again.");
+            }
+        };
+        resolveId();
+    }, [restaurantId]);
+
+    // --- 2. SUBMIT ORDER (Safe Mode) ---
+    const submitOrder = async (paymentType) => {
+        // Validation
+        if (!customerName.trim()) { alert("Please enter your name!"); return; }
+        if (!tableNum) { setShowTableModal(true); return; }
+        if (cart.length === 0) { alert("Cart is empty!"); return; }
+        if (!realRestaurantId) { alert("❌ System Error: Please re-scan the QR code."); return; }
+
+        setIsSubmitting(true);
+        setErrorMsg("");
+
+        // 🛡️ DATA SANITIZATION (The Fix for 400 Errors)
+        const cleanItems = cart.map(item => ({
+            dishId: item._id || item.id, // Handle both ID formats
+            name: item.name,
+            quantity: Number(item.quantity),
+            price: Number(item.price)
+        })).filter(item => item.dishId); // Remove items with no ID
+
+        if (cleanItems.length === 0) {
+            alert("❌ Error: Your cart contains invalid items. Please clear cart and add again.");
+            setIsSubmitting(false);
+            return;
+        }
+
+        const orderPayload = {
+            customerName: customerName,
+            tableNum: tableNum.toString(),
+            items: cleanItems,
+            note: chefNote, 
+            totalAmount: totalPrice,
+            paymentMethod: paymentType === "ONLINE" ? "Online" : "Cash", 
+            paymentStatus: "Pending",
+            restaurantId: realRestaurantId, 
+            status: "Pending"
+        };
+
+        try {
+            const res = await axios.post("https://smart-menu-backend-5ge7.onrender.com/api/orders", orderPayload);
+            
+            // Success!
+            const history = JSON.parse(localStorage.getItem("smartMenu_History") || "[]");
+            localStorage.setItem("smartMenu_History", JSON.stringify([res.data._id, ...history]));
+            
+            clearCart(); 
+            navigate(`/track/${res.data._id}`);
+
+        } catch (error) {
+            console.error("Submission Error:", error);
+            // Show the EXACT error from the server so we know what's wrong
+            const serverMessage = error.response?.data?.message || error.message;
+            setErrorMsg(`Order Failed: ${serverMessage}`);
+            setIsSubmitting(false);
+        }
     };
 
-    setCart(savedCart);
-    setRestaurant(mockRestaurant);
-
-    // Load saved delivery info
-    const savedInfo = JSON.parse(localStorage.getItem('delivery_info')) || {};
-    setDeliveryInfo(prev => ({ ...prev, ...savedInfo }));
-  }, [navigate]);
-
-  const updateQuantity = (itemId, newQuantity) => {
-    if (newQuantity < 1) {
-      removeItem(itemId);
-      return;
-    }
-    
-    const updatedCart = cart.map(item =>
-      item.id === itemId ? { ...item, quantity: newQuantity } : item
-    );
-    
-    setCart(updatedCart);
-    localStorage.setItem('current_cart', JSON.stringify(updatedCart));
-  };
-
-  const removeItem = (itemId) => {
-    const updatedCart = cart.filter(item => item.id !== itemId);
-    setCart(updatedCart);
-    localStorage.setItem('current_cart', JSON.stringify(updatedCart));
-    toast.success('Item removed from cart');
-    
-    if (updatedCart.length === 0) {
-      navigate('/');
-    }
-  };
-
-  const getSubtotal = () => {
-    return cart.reduce((total, item) => total + (item.price * item.quantity), 0);
-  };
-
-  const getTax = () => {
-    return getSubtotal() * 0.085; // 8.5% tax
-  };
-
-  const getDeliveryFee = () => {
-    return getSubtotal() >= 15.00 ? 0 : 2.99;
-  };
-
-  const getDiscount = () => {
-    if (discountApplied && discountCode.toLowerCase() === 'save10') {
-      return getSubtotal() * 0.10;
-    }
-    return 0;
-  };
-
-  const getTotal = () => {
-    return getSubtotal() + getTax() + getDeliveryFee() - getDiscount();
-  };
-
-  const applyDiscount = () => {
-    if (discountCode.toLowerCase() === 'save10') {
-      setDiscountApplied(true);
-      toast.success('10% discount applied!');
-    } else {
-      toast.error('Invalid discount code');
-    }
-  };
-
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setDeliveryInfo(prev => ({
-      ...prev,
-      [name]: value
-    }));
-    
-    // Save to localStorage
-    localStorage.setItem('delivery_info', JSON.stringify({
-      ...deliveryInfo,
-      [name]: value
-    }));
-  };
-
-  const validateForm = () => {
-    if (!deliveryInfo.name.trim()) {
-      toast.error('Please enter your name');
-      return false;
-    }
-    if (!deliveryInfo.phone.trim()) {
-      toast.error('Please enter your phone number');
-      return false;
-    }
-    if (!deliveryInfo.address.trim()) {
-      toast.error('Please enter your delivery address');
-      return false;
-    }
-    if (getSubtotal() < (restaurant?.minimumOrder || 15.00)) {
-      toast.error(`Minimum order amount is $${restaurant?.minimumOrder}`);
-      return false;
-    }
-    return true;
-  };
-
-  const handlePlaceOrder = () => {
-    if (!validateForm()) return;
-
-    // Generate order ID
-    const orderId = 'ORD' + Date.now().toString().slice(-8);
-    
-    // Save order to localStorage
-    const order = {
-      id: orderId,
-      restaurant: restaurant,
-      items: cart,
-      deliveryInfo,
-      paymentMethod,
-      subtotal: getSubtotal(),
-      tax: getTax(),
-      deliveryFee: getDeliveryFee(),
-      discount: getDiscount(),
-      total: getTotal(),
-      timestamp: new Date().toISOString(),
-      status: 'confirmed'
-    };
-    
-    localStorage.setItem('current_order', JSON.stringify(order));
-    
-    // Clear cart
-    localStorage.removeItem('current_cart');
-    
-    // Navigate to success page
-    navigate(`/order-success/${orderId}`);
-  };
-
-  if (!restaurant) {
-    return <Loading>Loading cart...</Loading>;
-  }
-
-  return (
-    <CartContainer>
-      <CartHeader>
-        <BackButton onClick={() => navigate(-1)}>
-          <ArrowLeft size={20} />
-          Back to Menu
-        </BackButton>
-        <HeaderTitle>
-          <ShoppingCart size={32} />
-          <h1>Checkout</h1>
-        </HeaderTitle>
-      </CartHeader>
-
-      <CartContent>
-        {/* Left Column - Order Details & Delivery */}
-        <LeftColumn>
-          {/* Order Summary */}
-          <SectionCard>
-            <SectionTitle>
-              <h2>Your Order</h2>
-              <RestaurantInfo>
-                <span>{restaurant.name}</span>
-                <DeliveryTime>
-                  <Clock size={16} />
-                  {restaurant.deliveryTime}
-                </DeliveryTime>
-              </RestaurantInfo>
-            </SectionTitle>
-            
-            <OrderItems>
-              {cart.map(item => (
-                <OrderItem key={item.id}>
-                  <ItemDetails>
-                    <ItemName>{item.name}</ItemName>
-                    <ItemPrice>${(item.price * item.quantity).toFixed(2)}</ItemPrice>
-                  </ItemDetails>
-                  
-                  <ItemControls>
-                    <QuantityControls>
-                      <QuantityButton onClick={() => updateQuantity(item.id, item.quantity - 1)}>
-                        <Minus size={16} />
-                      </QuantityButton>
-                      <Quantity>{item.quantity}</Quantity>
-                      <QuantityButton onClick={() => updateQuantity(item.id, item.quantity + 1)}>
-                        <Plus size={16} />
-                      </QuantityButton>
-                    </QuantityControls>
-                    
-                    <RemoveButton onClick={() => removeItem(item.id)}>
-                      <Trash2 size={18} />
-                    </RemoveButton>
-                  </ItemControls>
-                </OrderItem>
-              ))}
-            </OrderItems>
-          </SectionCard>
-
-          {/* Delivery Information */}
-          <SectionCard>
-            <SectionTitle>
-              <MapPin size={24} />
-              <h2>Delivery Information</h2>
-            </SectionTitle>
-            
-            <FormGrid>
-              <FormGroup>
-                <FormLabel>Full Name *</FormLabel>
-                <FormControl
-                  type="text"
-                  name="name"
-                  value={deliveryInfo.name}
-                  onChange={handleInputChange}
-                  placeholder="Enter your full name"
-                  required
-                />
-              </FormGroup>
-              
-              <FormGroup>
-                <FormLabel>Phone Number *</FormLabel>
-                <FormControl
-                  type="tel"
-                  name="phone"
-                  value={deliveryInfo.phone}
-                  onChange={handleInputChange}
-                  placeholder="+1 (555) 123-4567"
-                  required
-                />
-              </FormGroup>
-              
-              <FormGroup fullWidth>
-                <FormLabel>Delivery Address *</FormLabel>
-                <FormControl
-                  type="text"
-                  name="address"
-                  value={deliveryInfo.address}
-                  onChange={handleInputChange}
-                  placeholder="Enter complete delivery address"
-                  required
-                />
-              </FormGroup>
-              
-              <FormGroup fullWidth>
-                <FormLabel>Delivery Instructions (Optional)</FormLabel>
-                <TextArea
-                  name="instructions"
-                  value={deliveryInfo.instructions}
-                  onChange={handleInputChange}
-                  placeholder="Gate code, floor, special instructions..."
-                  rows={3}
-                />
-              </FormGroup>
-            </FormGrid>
-          </SectionCard>
-
-          {/* Payment Method */}
-          <SectionCard>
-            <SectionTitle>
-              <CreditCard size={24} />
-              <h2>Payment Method</h2>
-            </SectionTitle>
-            
-            <PaymentOptions>
-              <PaymentOption
-                active={paymentMethod === 'card'}
-                onClick={() => setPaymentMethod('card')}
-              >
-                <RadioButton active={paymentMethod === 'card'} />
-                <PaymentInfo>
-                  <PaymentTitle>Credit/Debit Card</PaymentTitle>
-                  <PaymentDescription>Pay with your card securely</PaymentDescription>
-                </PaymentInfo>
-                <CardIcons>💳 🏦</CardIcons>
-              </PaymentOption>
-              
-              <PaymentOption
-                active={paymentMethod === 'cash'}
-                onClick={() => setPaymentMethod('cash')}
-              >
-                <RadioButton active={paymentMethod === 'cash'} />
-                <PaymentInfo>
-                  <PaymentTitle>Cash on Delivery</PaymentTitle>
-                  <PaymentDescription>Pay with cash when order arrives</PaymentDescription>
-                </PaymentInfo>
-                <CashIcon>💵</CashIcon>
-              </PaymentOption>
-              
-              <PaymentOption
-                active={paymentMethod === 'digital'}
-                onClick={() => setPaymentMethod('digital')}
-              >
-                <RadioButton active={paymentMethod === 'digital'} />
-                <PaymentInfo>
-                  <PaymentTitle>Digital Wallet</PaymentTitle>
-                  <PaymentDescription>Apple Pay, Google Pay, etc.</PaymentDescription>
-                </PaymentInfo>
-                <WalletIcons>📱 💰</WalletIcons>
-              </PaymentOption>
-            </PaymentOptions>
-          </SectionCard>
-        </LeftColumn>
-
-        {/* Right Column - Order Summary */}
-        <RightColumn>
-          <SummaryCard>
-            <SummaryHeader>
-              <h2>Order Summary</h2>
-            </SummaryHeader>
-            
-            <SummaryDetails>
-              <SummaryRow>
-                <span>Subtotal ({cart.length} items)</span>
-                <span>${getSubtotal().toFixed(2)}</span>
-              </SummaryRow>
-              
-              <SummaryRow>
-                <span>Tax (8.5%)</span>
-                <span>${getTax().toFixed(2)}</span>
-              </SummaryRow>
-              
-              <SummaryRow>
-                <span>Delivery Fee</span>
-                <span>
-                  {getDeliveryFee() === 0 ? (
-                    <FreeDelivery>Free</FreeDelivery>
-                  ) : (
-                    `$${getDeliveryFee().toFixed(2)}`
-                  )}
-                </span>
-              </SummaryRow>
-              
-              {discountApplied && (
-                <SummaryRow discount>
-                  <span>Discount (SAVE10)</span>
-                  <span>-${getDiscount().toFixed(2)}</span>
-                </SummaryRow>
-              )}
-              
-              <SummaryTotal>
-                <span>Total</span>
-                <span>${getTotal().toFixed(2)}</span>
-              </SummaryTotal>
-            </SummaryDetails>
-            
-            {/* Discount Code */}
-            <DiscountSection>
-              <DiscountInput>
-                <Tag size={20} />
-                <input
-                  type="text"
-                  placeholder="Enter discount code"
-                  value={discountCode}
-                  onChange={(e) => setDiscountCode(e.target.value)}
-                  disabled={discountApplied}
-                />
-                <DiscountButton
-                  onClick={applyDiscount}
-                  disabled={discountApplied}
-                >
-                  {discountApplied ? 'Applied' : 'Apply'}
-                </DiscountButton>
-              </DiscountInput>
-              {!discountApplied && (
-                <DiscountHint>Try "SAVE10" for 10% off</DiscountHint>
-              )}
-            </DiscountSection>
-            
-            {/* Order Minimum */}
-            {getSubtotal() < restaurant.minimumOrder && (
-              <MinimumOrderWarning>
-                <span>Minimum order: ${restaurant.minimumOrder}</span>
-                <span>Add ${(restaurant.minimumOrder - getSubtotal()).toFixed(2)} more</span>
-              </MinimumOrderWarning>
+    return (
+        <div style={styles.container}>
+            {/* ERROR BANNER */}
+            {errorMsg && (
+                <div style={styles.errorBanner}>
+                    <FaExclamationTriangle /> {errorMsg}
+                </div>
             )}
-            
-            {/* Security Badge */}
-            <SecurityBadge>
-              <Shield size={20} />
-              <span>Secure checkout • Your data is protected</span>
-            </SecurityBadge>
-            
-            {/* Place Order Button */}
-            <PlaceOrderButton
-              onClick={handlePlaceOrder}
-              disabled={getSubtotal() < restaurant.minimumOrder}
-            >
-              <CheckCircle size={24} />
-              Place Order
-              <span>${getTotal().toFixed(2)}</span>
-            </PlaceOrderButton>
-            
-            <TermsAgreement>
-              By placing your order, you agree to our{' '}
-              <Link to="/terms">Terms of Service</Link> and{' '}
-              <Link to="/privacy">Privacy Policy</Link>
-            </TermsAgreement>
-          </SummaryCard>
-          
-          {/* Estimated Delivery */}
-          <DeliveryEstimate>
-            <Clock size={20} />
-            <div>
-              <h4>Estimated Delivery Time</h4>
-              <p>{restaurant.deliveryTime}</p>
+
+            {/* LOADING OVERLAY */}
+            {isSubmitting && (
+                <div style={styles.loadingOverlay}>
+                    <FaSpinner className="spin" size={40} color="#f97316" />
+                    <p style={{ marginTop: '15px', fontWeight: 'bold' }}>Sending Order...</p>
+                </div>
+            )}
+
+            {/* TABLE MODAL */}
+            {showTableModal && (
+                <div style={styles.modalOverlay}>
+                    <div style={styles.modalCard}>
+                        <div style={styles.iconCircle}><FaMapMarkerAlt /></div>
+                        <h2 style={{ textAlign: 'center', margin: '0 0 10px 0' }}>Select Table</h2>
+                        <div style={styles.tableGrid}>
+                            {tableOptions.map((opt) => (
+                                <button key={opt} onClick={() => { setTableNum(opt); setShowTableModal(false); }} 
+                                    style={{ ...styles.tableBtn, background: tableNum === opt ? '#f97316' : '#1a1a1a', borderColor: tableNum === opt ? '#f97316' : '#333' }}>
+                                    {opt}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* HEADER */}
+            <div style={styles.header}>
+                <button onClick={() => navigate(-1)} style={styles.backBtn}><FaArrowLeft /></button>
+                <h1 style={{ fontSize: '20px', fontWeight: '800', letterSpacing: '-0.5px' }}>Your Bag</h1>
             </div>
-          </DeliveryEstimate>
-          
-          {/* Support */}
-          <SupportCard>
-            <h4>Need Help?</h4>
-            <p>Contact our support team for any questions about your order.</p>
-            <SupportLink href="tel:+15551234567">
-              📞 +1 (555) 123-4567
-            </SupportLink>
-          </SupportCard>
-        </RightColumn>
-      </CartContent>
-    </CartContainer>
-  );
+
+            {/* INFO CARD */}
+            <div style={styles.card}>
+                <div onClick={() => setShowTableModal(true)} style={styles.rowBetween}>
+                    <div>
+                        <p style={styles.label}>DELIVER TO</p>
+                        <div style={{ color: '#f97316', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <FaMapMarkerAlt size={14}/> {tableNum ? `Table ${tableNum}` : "Choose Table"}
+                        </div>
+                    </div>
+                    <span style={styles.editBtn}>CHANGE</span>
+                </div>
+                <div style={{ width: '100%', height: '1px', background: '#222', margin: '15px 0' }}></div>
+                <div>
+                    <p style={styles.label}>GUEST NAME</p>
+                    <input type="text" placeholder="Enter your name..." value={customerName} onChange={(e) => setCustomerName(e.target.value)} style={styles.input} />
+                </div>
+            </div>
+
+            {/* CART ITEMS */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', paddingBottom: '20px' }}>
+                {cart.map((item) => (
+                    <div key={item._id || item.id} style={styles.itemCard}>
+                        <img src={item.image || "https://via.placeholder.com/60"} alt="" style={styles.itemImage} />
+                        <div style={{ flex: 1 }}>
+                            <h4 style={{ margin: '0 0 4px 0', fontSize: '15px', fontWeight: '600' }}>{item.name}</h4>
+                            <p style={{ margin: 0, color: '#888', fontSize: '12px' }}>₹{item.price} x {item.quantity}</p>
+                        </div>
+                        <div style={styles.qtyWrapper}>
+                            <button onClick={() => updateQuantity(item._id || item.id, item.quantity - 1)} style={styles.qtyBtn}>-</button>
+                            <span style={{ fontSize: '14px', fontWeight: 'bold' }}>{item.quantity}</span>
+                            <button onClick={() => updateQuantity(item._id || item.id, item.quantity + 1)} style={{...styles.qtyBtn, color: '#f97316'}}>+</button>
+                        </div>
+                        <button onClick={() => removeFromCart(item._id || item.id)} style={styles.deleteBtn}><FaTrash size={14}/></button>
+                    </div>
+                ))}
+            </div>
+
+            {/* CHEF NOTE */}
+            <p style={styles.label}><FaCommentDots /> KITCHEN NOTE</p>
+            <textarea placeholder="Allergies? Spice level?" value={chefNote} onChange={(e) => setChefNote(e.target.value)} style={styles.textArea} />
+
+            {/* FOOTER */}
+            <div style={styles.footer}>
+                <div style={styles.rowBetween}>
+                    <span style={{ color: '#888', fontWeight: '600' }}>Total to Pay</span>
+                    <span style={{ fontSize: '22px', fontWeight: '900', color: 'white' }}>₹{totalPrice}</span>
+                </div>
+                
+                <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
+                    <button onClick={() => submitOrder("CASH")} style={{ ...styles.payBtn, background: '#1a1a1a', border: '1px solid #333', color: '#f97316' }}>
+                        <FaMoneyBillWave size={18} /> Pay Cash
+                    </button>
+                    <button onClick={() => submitOrder("ONLINE")} style={{ ...styles.payBtn, background: '#f97316', color: '#000' }}>
+                        <FaMobileAlt size={18} /> Pay Online
+                    </button>
+                </div>
+                <p style={styles.secureMsg}><FaLock size={10}/> Order sent directly to Waiter</p>
+            </div>
+            <style>{`.spin { animation: spin 1s linear infinite; } @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+        </div>
+    );
 };
 
-const CartContainer = styled.div`
-  min-height: 100vh;
-  padding: 20px;
-  background: #f8f9fa;
-`;
-
-const CartHeader = styled.div`
-  max-width: 1200px;
-  margin: 0 auto 30px;
-`;
-
-const BackButton = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  background: transparent;
-  border: none;
-  color: var(--gray-color);
-  font-size: 16px;
-  cursor: pointer;
-  padding: 10px 0;
-  margin-bottom: 20px;
-  
-  &:hover {
-    color: var(--primary-color);
-  }
-`;
-
-const HeaderTitle = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 15px;
-  
-  h1 {
-    margin: 0;
-  }
-  
-  svg {
-    color: var(--primary-color);
-  }
-`;
-
-const CartContent = styled.div`
-  max-width: 1200px;
-  margin: 0 auto;
-  display: grid;
-  grid-template-columns: 1fr 400px;
-  gap: 30px;
-  
-  @media (max-width: 1024px) {
-    grid-template-columns: 1fr;
-  }
-`;
-
-const LeftColumn = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 25px;
-`;
-
-const RightColumn = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 25px;
-`;
-
-const SectionCard = styled.div`
-  background: white;
-  border-radius: var(--radius-lg);
-  padding: 30px;
-  box-shadow: var(--shadow);
-`;
-
-const SectionTitle = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 15px;
-  margin-bottom: 25px;
-  padding-bottom: 15px;
-  border-bottom: 1px solid var(--light-gray);
-  
-  h2 {
-    margin: 0;
-    font-size: 1.3rem;
-  }
-  
-  svg {
-    color: var(--primary-color);
-  }
-`;
-
-const RestaurantInfo = styled.div`
-  margin-left: auto;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 5px;
-  
-  span:first-child {
-    font-weight: 600;
-    color: var(--dark-color);
-  }
-`;
-
-const DeliveryTime = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  color: var(--gray-color);
-  font-size: 14px;
-`;
-
-const OrderItems = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-`;
-
-const OrderItem = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding-bottom: 20px;
-  border-bottom: 1px solid var(--light-gray);
-  
-  &:last-child {
-    border-bottom: none;
-    padding-bottom: 0;
-  }
-`;
-
-const ItemDetails = styled.div`
-  flex: 1;
-`;
-
-const ItemName = styled.div`
-  font-weight: 500;
-  margin-bottom: 5px;
-`;
-
-const ItemPrice = styled.div`
-  color: var(--primary-color);
-  font-weight: 600;
-`;
-
-const ItemControls = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 20px;
-`;
-
-const QuantityControls = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 10px;
-`;
-
-const QuantityButton = styled.button`
-  width: 32px;
-  height: 32px;
-  border: 1px solid var(--light-gray);
-  background: white;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  
-  &:hover {
-    background: var(--light-gray);
-  }
-`;
-
-const Quantity = styled.span`
-  min-width: 24px;
-  text-align: center;
-  font-weight: 500;
-`;
-
-const RemoveButton = styled.button`
-  width: 40px;
-  height: 40px;
-  border: 1px solid var(--danger-color);
-  background: transparent;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  color: var(--danger-color);
-  transition: all 0.3s ease;
-  
-  &:hover {
-    background: var(--danger-color);
-    color: white;
-  }
-`;
-
-const FormGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 20px;
-  
-  @media (max-width: 768px) {
-    grid-template-columns: 1fr;
-  }
-`;
-
-const FormGroup = styled.div`
-  grid-column: ${props => props.fullWidth ? '1 / -1' : 'auto'};
-`;
-
-const FormLabel = styled.label`
-  display: block;
-  margin-bottom: 8px;
-  font-weight: 500;
-  color: var(--dark-color);
-`;
-
-const FormControl = styled.input`
-  width: 100%;
-  padding: 12px 16px;
-  border: 2px solid var(--light-gray);
-  border-radius: var(--radius);
-  font-size: 16px;
-  transition: border-color 0.3s ease;
-  
-  &:focus {
-    outline: none;
-    border-color: var(--primary-color);
-  }
-`;
-
-const TextArea = styled.textarea`
-  width: 100%;
-  padding: 12px 16px;
-  border: 2px solid var(--light-gray);
-  border-radius: var(--radius);
-  font-size: 16px;
-  transition: border-color 0.3s ease;
-  resize: vertical;
-  
-  &:focus {
-    outline: none;
-    border-color: var(--primary-color);
-  }
-`;
-
-const PaymentOptions = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-`;
-
-const PaymentOption = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 15px;
-  padding: 20px;
-  border: 2px solid ${props => props.active ? 'var(--primary-color)' : 'var(--light-gray)'};
-  border-radius: var(--radius);
-  cursor: pointer;
-  background: ${props => props.active ? 'rgba(255, 107, 53, 0.05)' : 'white'};
-  transition: all 0.3s ease;
-  
-  &:hover {
-    border-color: var(--primary-color);
-  }
-`;
-
-const RadioButton = styled.div`
-  width: 20px;
-  height: 20px;
-  border: 2px solid ${props => props.active ? 'var(--primary-color)' : 'var(--gray-color)'};
-  border-radius: 50%;
-  position: relative;
-  
-  &::after {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 10px;
-    height: 10px;
-    background: var(--primary-color);
-    border-radius: 50%;
-    opacity: ${props => props.active ? 1 : 0};
-  }
-`;
-
-const PaymentInfo = styled.div`
-  flex: 1;
-`;
-
-const PaymentTitle = styled.div`
-  font-weight: 600;
-  margin-bottom: 5px;
-`;
-
-const PaymentDescription = styled.div`
-  font-size: 14px;
-  color: var(--gray-color);
-`;
-
-const CardIcons = styled.div`
-  font-size: 20px;
-`;
-
-const CashIcon = styled.div`
-  font-size: 24px;
-`;
-
-const WalletIcons = styled.div`
-  font-size: 20px;
-`;
-
-const SummaryCard = styled.div`
-  background: white;
-  border-radius: var(--radius-lg);
-  padding: 30px;
-  box-shadow: var(--shadow);
-  position: sticky;
-  top: 20px;
-`;
-
-const SummaryHeader = styled.div`
-  margin-bottom: 25px;
-  
-  h2 {
-    margin: 0;
-    font-size: 1.3rem;
-  }
-`;
-
-const SummaryDetails = styled.div`
-  margin-bottom: 25px;
-`;
-
-const SummaryRow = styled.div`
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 12px;
-  color: ${props => props.discount ? 'var(--success-color)' : 'var(--gray-color)'};
-  font-weight: ${props => props.discount ? '600' : '400'};
-`;
-
-const FreeDelivery = styled.span`
-  color: var(--success-color);
-  font-weight: 600;
-`;
-
-const SummaryTotal = styled.div`
-  display: flex;
-  justify-content: space-between;
-  margin-top: 20px;
-  padding-top: 20px;
-  border-top: 2px solid var(--dark-color);
-  font-size: 1.2rem;
-  font-weight: 700;
-`;
-
-const DiscountSection = styled.div`
-  margin-bottom: 20px;
-`;
-
-const DiscountInput = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 16px;
-  border: 2px solid var(--light-gray);
-  border-radius: var(--radius);
-  margin-bottom: 8px;
-  
-  svg {
-    color: var(--gray-color);
-  }
-  
-  input {
-    flex: 1;
-    border: none;
-    outline: none;
-    font-size: 16px;
-    
-    &:disabled {
-      background: transparent;
-      color: var(--success-color);
-    }
-  }
-`;
-
-const DiscountButton = styled.button`
-  padding: 8px 20px;
-  background: ${props => props.disabled ? 'var(--success-color)' : 'var(--primary-color)'};
-  color: white;
-  border: none;
-  border-radius: var(--radius);
-  font-weight: 600;
-  cursor: ${props => props.disabled ? 'default' : 'pointer'};
-  transition: background-color 0.3s ease;
-  
-  &:hover:not(:disabled) {
-    background: #E55A2E;
-  }
-`;
-
-const DiscountHint = styled.div`
-  font-size: 12px;
-  color: var(--gray-color);
-  text-align: center;
-`;
-
-const MinimumOrderWarning = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 15px;
-  background: rgba(255, 214, 102, 0.2);
-  border: 1px solid var(--warning-color);
-  border-radius: var(--radius);
-  margin-bottom: 20px;
-  font-size: 14px;
-  
-  span:first-child {
-    color: var(--dark-color);
-  }
-  
-  span:last-child {
-    color: var(--primary-color);
-    font-weight: 600;
-  }
-`;
-
-const SecurityBadge = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 15px;
-  background: var(--light-gray);
-  border-radius: var(--radius);
-  margin-bottom: 25px;
-  font-size: 14px;
-  color: var(--gray-color);
-  
-  svg {
-    color: var(--success-color);
-  }
-`;
-
-const PlaceOrderButton = styled.button`
-  width: 100%;
-  padding: 20px;
-  background: ${props => props.disabled ? 'var(--light-gray)' : 'var(--primary-color)'};
-  color: ${props => props.disabled ? 'var(--gray-color)' : 'white'};
-  border: none;
-  border-radius: var(--radius);
-  font-size: 18px;
-  font-weight: 600;
-  cursor: ${props => props.disabled ? 'not-allowed' : 'pointer'};
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 15px;
-  transition: background-color 0.3s ease;
-  
-  &:hover:not(:disabled) {
-    background: #E55A2E;
-  }
-  
-  span {
-    margin-left: auto;
-    font-size: 1.2rem;
-  }
-`;
-
-const TermsAgreement = styled.div`
-  margin-top: 20px;
-  text-align: center;
-  font-size: 12px;
-  color: var(--gray-color);
-  
-  a {
-    color: var(--primary-color);
-    text-decoration: none;
-    
-    &:hover {
-      text-decoration: underline;
-    }
-  }
-`;
-
-const DeliveryEstimate = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 15px;
-  padding: 20px;
-  background: white;
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  
-  svg {
-    color: var(--primary-color);
-  }
-  
-  h4 {
-    margin: 0 0 5px 0;
-    font-size: 1rem;
-  }
-  
-  p {
-    margin: 0;
-    color: var(--gray-color);
-    font-size: 14px;
-  }
-`;
-
-const SupportCard = styled.div`
-  padding: 20px;
-  background: white;
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  
-  h4 {
-    margin: 0 0 10px 0;
-    font-size: 1rem;
-  }
-  
-  p {
-    margin: 0 0 15px 0;
-    color: var(--gray-color);
-    font-size: 14px;
-    line-height: 1.5;
-  }
-`;
-
-const SupportLink = styled.a`
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  color: var(--primary-color);
-  text-decoration: none;
-  font-weight: 500;
-  
-  &:hover {
-    text-decoration: underline;
-  }
-`;
-
-const Loading = styled.div`
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.2rem;
-  color: var(--gray-color);
-`;
+const styles = {
+    container: { minHeight: '100vh', background: '#000', color: 'white', padding: '20px', paddingBottom: '200px', fontFamily: 'Inter, sans-serif' },
+    errorBanner: { background: '#dc2626', color: 'white', padding: '15px', borderRadius: '10px', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', fontWeight: 'bold' },
+    loadingOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.9)', zIndex: 2000, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' },
+    modalOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.95)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' },
+    modalCard: { background: '#111', width: '100%', maxWidth: '350px', borderRadius: '24px', padding: '30px', border: '1px solid #222' },
+    iconCircle: { width: '50px', height: '50px', borderRadius: '50%', background: 'rgba(249, 115, 22, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 15px', color: '#f97316' },
+    tableGrid: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' },
+    tableBtn: { padding: '12px', borderRadius: '12px', border: '1px solid #333', color: 'white', fontWeight: 'bold', fontSize: '14px' },
+    header: { display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '25px' },
+    backBtn: { background: '#111', border: 'none', color: 'white', width: '40px', height: '40px', borderRadius: '12px', cursor: 'pointer' },
+    card: { background: '#111', padding: '20px', borderRadius: '20px', marginBottom: '20px', border: '1px solid #1a1a1a' },
+    rowBetween: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+    label: { color: '#666', fontSize: '10px', fontWeight: '800', letterSpacing: '1px', marginBottom: '8px' },
+    editBtn: { color: '#f97316', fontSize: '11px', fontWeight: '800', cursor: 'pointer' },
+    input: { width: '100%', padding: '12px 0', background: 'transparent', border: 'none', borderBottom: '1px solid #333', color: 'white', fontWeight: '600', fontSize: '16px', outline: 'none' },
+    itemCard: { background: '#111', padding: '12px', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '15px', border: '1px solid #1a1a1a' },
+    itemImage: { width: '50px', height: '50px', borderRadius: '10px', objectFit: 'cover' },
+    qtyWrapper: { display: 'flex', alignItems: 'center', gap: '12px', background: '#000', padding: '6px 12px', borderRadius: '10px' },
+    qtyBtn: { background: 'none', border: 'none', color: '#fff', fontWeight: 'bold', cursor: 'pointer' },
+    deleteBtn: { background: 'rgba(255,255,255,0.05)', border: 'none', color: '#666', width: '30px', height: '30px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+    textArea: { width: '100%', padding: '15px', background: '#111', border: '1px solid #222', borderRadius: '15px', color: 'white', minHeight: '80px', marginTop: '5px', fontSize: '14px' },
+    footer: { position: 'fixed', bottom: 0, left: 0, width: '100%', padding: '25px', background: 'rgba(0,0,0,0.95)', borderTop: '1px solid #222', zIndex: 100, backdropFilter: 'blur(10px)' },
+    payBtn: { flex: 1, padding: '16px', borderRadius: '14px', fontWeight: '800', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', fontSize: '14px', cursor: 'pointer', transition: 'transform 0.1s' },
+    secureMsg: { textAlign: 'center', fontSize: '10px', color: '#444', marginTop: '15px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px' }
+};
 
 export default Cart;
