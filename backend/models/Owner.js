@@ -46,7 +46,7 @@ const ownerSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    //enum: ['owner', 'super-admin'],
+    enum: ['owner', 'super-admin'],
     default: 'owner'
   },
   createdAt: {
