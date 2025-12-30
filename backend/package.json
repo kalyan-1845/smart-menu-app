@@ -1,7 +1,7 @@
 {
   "name": "bitebox-backend",
   "version": "1.0.0",
-  "description": "BiteBox Restaurant Management System Backend",
+  "description": "BiteBox Restaurant Management Backend",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -20,7 +20,9 @@
     "multer": "^1.4.5-lts.1",
     "express-rate-limit": "^6.10.0",
     "helmet": "^7.0.0",
-    "morgan": "^1.10.0"
+    "morgan": "^1.10.0",
+    "node-cron": "^3.0.3",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
