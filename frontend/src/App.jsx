@@ -16,8 +16,8 @@ import WaiterDashboard from "./pages/WaiterDashboard.jsx";
 
 // --- AUTH PAGES (Usually in root, but check if they are in pages) ---
 // If these are also in the 'pages' folder, add '/pages/' before the name
-import OwnerLogin from "./OwnerLogin.jsx"; 
-import Register from "./Register.jsx";
+import OwnerLogin from "./pages/OwnerLogin.jsx"; 
+import Register from "./pages/Register.jsx";
 
 // --- GLOBAL STYLES ---
 const GlobalStyles = () => (

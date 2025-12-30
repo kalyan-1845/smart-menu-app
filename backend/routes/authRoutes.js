@@ -16,6 +16,46 @@ const generateToken = (id) => {
 // --- 1. OWNER AUTHENTICATION (Restaurant Admin) ---
 
 /**
+ * @route   POST /api/auth/register
+ * @desc    Register a new Restaurant Owner
+ * @access  Public
+ */
+router.post('/register', async (req, res) => {
+    const { username, password, restaurantName, chefPassword, waiterPassword } = req.body;
+
+    try {
+        // Check if user already exists
+        const userExists = await Owner.findOne({ username });
+
+        if (userExists) {
+            return res.status(400).json({ message: 'Username already exists' });
+        }
+
+        // Create new Owner
+        const owner = await Owner.create({
+            username,
+            password,
+            restaurantName,
+            chefPassword, // Ensure your Schema has these fields if you want to save them
+            waiterPassword
+        });
+
+        if (owner) {
+            res.status(201).json({
+                _id: owner._id,
+                username: owner.username,
+                restaurantName: owner.restaurantName,
+                token: generateToken(owner._id),
+            });
+        } else {
+            res.status(400).json({ message: 'Invalid user data' });
+        }
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+/**
  * @route   POST /api/auth/login
  * @desc    Login for Restaurant Owners
  * @access  Public
