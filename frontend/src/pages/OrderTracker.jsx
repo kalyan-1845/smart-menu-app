@@ -9,24 +9,19 @@ import {
     FaShieldAlt, FaWallet
 } from "react-icons/fa";
 
-// 🔗 SMART API CONNECTION
-const SERVER_URL = window.location.hostname === "localhost" || window.location.hostname.startsWith("192.168")
-    ? "http://localhost:5000" 
-    : "https://smart-menu-backend-5ge7.onrender.com";
-
+const SERVER_URL = "https://smart-menu-backend-5ge7.onrender.com";
 const API_BASE = `${SERVER_URL}/api`;
 
 const OrderTracker = () => {
-    const { id } = useParams();
+    const { id } = useParams(); // Unique Mongo ID from URL
     const navigate = useNavigate();
     
     const [order, setOrder] = useState(null);
     const [restaurant, setRestaurant] = useState(null);
     const [callStatus, setCallStatus] = useState("Call Waiter"); 
     const [isCalling, setIsCalling] = useState(false);
-    const [hasDownloaded, setHasDownloaded] = useState(false); // Prevents duplicate downloads
+    const [hasDownloaded, setHasDownloaded] = useState(false);
 
-    // Logic to determine progress bar step
     const getStepIndex = (status) => {
         if (!status) return 0;
         const s = status.toLowerCase();
@@ -37,14 +32,13 @@ const OrderTracker = () => {
         return 0;
     };
 
-    // 1. FETCH DATA & SOCKET SYNC
     useEffect(() => {
         const fetchOrderData = async () => {
             try {
+                // Fetch specific order by ID
                 const res = await axios.get(`${API_BASE}/orders/${id}`); 
                 setOrder(res.data);
                 
-                // Fetch restaurant branding info if not already loaded
                 if(res.data.restaurantId && !restaurant) {
                     const resInfo = await axios.get(`${API_BASE}/auth/restaurant/${res.data.restaurantId}`);
                     setRestaurant(resInfo.data);
@@ -66,7 +60,6 @@ const OrderTracker = () => {
         };
     }, [id]);
 
-    // 2. ✅ AUTO DOWNLOAD RECEIPT WHEN SERVED
     useEffect(() => {
         if (order && order.status === "Served" && !hasDownloaded && restaurant) {
             generateCustomerReceipt(order, restaurant);
@@ -77,7 +70,6 @@ const OrderTracker = () => {
     const currentStep = order ? getStepIndex(order.status) : 0;
     const isServed = currentStep === 3; 
 
-    // 3. CALL WAITER LOGIC
     const handleCallWaiter = async () => {
         setIsCalling(true);
         setCallStatus("Calling...");
@@ -88,10 +80,7 @@ const OrderTracker = () => {
                 type: "help"
             });
             setCallStatus("Waiter Coming!");
-            setTimeout(() => { 
-                setCallStatus("Call Waiter"); 
-                setIsCalling(false); 
-            }, 5000);
+            setTimeout(() => { setCallStatus("Call Waiter"); setIsCalling(false); }, 5000);
         } catch (e) {
             setCallStatus("Try Again");
             setIsCalling(false);
@@ -102,16 +91,14 @@ const OrderTracker = () => {
 
     return (
         <div style={styles.container}>
-            {/* --- HEADER --- */}
             <div style={styles.header}>
                 <button onClick={() => navigate(-1)} style={styles.backBtn}><FaArrowLeft /></button>
                 <div>
                     <h1 style={styles.title}>Track Order</h1>
-                    <p style={styles.sub}>Order #{order._id.slice(-4).toUpperCase()}</p>
+                    <p style={styles.sub}>Order #{id.slice(-4).toUpperCase()}</p>
                 </div>
             </div>
 
-            {/* --- PROGRESS STATUS CARD --- */}
             <div style={styles.statusCard}>
                 <h2 style={styles.statusTitle}>
                     {currentStep === 0 ? "Order Sent" : 
@@ -122,7 +109,6 @@ const OrderTracker = () => {
                 <div style={styles.statusBarContainer}>
                     <div style={styles.lineBase}></div>
                     <div style={{...styles.lineFill, width: `${currentStep * 33}%`}}></div>
-
                     <div style={styles.stepWrapper}>
                         <StepIcon icon={<FaCheck/>} label="Sent" active={currentStep >= 0} />
                         <StepIcon icon={<FaUtensils/>} label="Cooking" active={currentStep >= 1} />
@@ -132,123 +118,60 @@ const OrderTracker = () => {
                 </div>
             </div>
 
-            {/* --- ENHANCED DIGITAL RECEIPT CARD --- */}
             <div style={styles.receiptCard}>
                 <div style={styles.receiptHeader}>
                     <div style={{display:'flex', alignItems:'center', gap:'8px'}}>
-                        <FaReceipt color="#f97316" /> <span style={{letterSpacing:'1px', fontWeight: 'bold'}}>ORDER SUMMARY</span>
+                        <FaReceipt color="#f97316" /> <span style={{letterSpacing:'1px', fontWeight:'900'}}>ORDER SUMMARY</span>
                     </div>
                     <span style={{fontSize:'10px', color:'#444', fontWeight: 'bold'}}>BITEBOX SECURE</span>
                 </div>
-
                 <div style={styles.itemList}>
                     {order.items.map((item, i) => (
                         <div key={i} style={styles.itemRow}>
-                            <div style={styles.itemLeft}>
-                                <span style={styles.qtyBox}>{item.quantity}x</span>
-                                <span style={styles.itemName}>{item.name}</span>
-                            </div>
+                            <div style={styles.itemLeft}><span style={styles.qtyBox}>{item.quantity}x</span><span style={styles.itemName}>{item.name}</span></div>
                             <span style={styles.itemPrice}>₹{item.price * item.quantity}</span>
                         </div>
                     ))}
                 </div>
-
                 <div style={styles.divider}></div>
+                <div style={styles.totalRow}><span>Grand Total</span><span style={styles.totalPrice}>₹{order.totalAmount}</span></div>
 
-                <div style={styles.totalRow}>
-                    <span style={{color:'#888', fontSize:'14px'}}>Total Amount</span>
-                    <span style={styles.totalPrice}>₹{order.totalAmount}</span>
-                </div>
-
-                {/* DYNAMIC PAYMENT STATUS UI */}
                 <div style={{
-                    marginTop: '20px',
-                    padding: '15px',
-                    borderRadius: '16px',
+                    marginTop: '20px', padding: '15px', borderRadius: '16px',
                     background: order.paymentMethod === "Online" ? 'rgba(34, 197, 94, 0.1)' : 'rgba(249, 115, 22, 0.1)',
                     border: order.paymentMethod === "Online" ? '1px solid rgba(34, 197, 94, 0.2)' : '1px solid rgba(249, 115, 22, 0.2)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px'
+                    display: 'flex', alignItems: 'center', gap: '12px'
                 }}>
                     <div style={{
-                        width: '40px',
-                        height: '40px',
-                        borderRadius: '12px',
+                        width: '40px', height: '40px', borderRadius: '12px',
                         background: order.paymentMethod === "Online" ? '#22c55e' : '#f97316',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: 'white'
-                    }}>
-                        {order.paymentMethod === "Online" ? <FaShieldAlt /> : <FaWallet />}
-                    </div>
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white'
+                    }}>{order.paymentMethod === "Online" ? <FaShieldAlt /> : <FaWallet />}</div>
                     <div>
-                        <p style={{margin:0, fontSize:'10px', fontWeight:'900', color:'#555', letterSpacing:'1px'}}>PAYMENT METHOD</p>
-                        <p style={{
-                            margin:0, 
-                            fontSize:'14px', 
-                            fontWeight:'900', 
-                            color: order.paymentMethod === "Online" ? '#22c55e' : '#f97316'
-                        }}>
-                            {order.paymentMethod === "Online" ? "PAID VIA ONLINE" : "CASH AT COUNTER"}
-                        </p>
+                        <p style={{margin:0, fontSize:'10px', fontWeight:'900', color:'#555'}}>PAYMENT METHOD</p>
+                        <p style={{ margin:0, fontSize:'14px', fontWeight:'900', color: order.paymentMethod === "Online" ? '#22c55e' : '#f97316' }}>{order.paymentMethod === "Online" ? "PAID VIA ONLINE" : "CASH AT COUNTER"}</p>
                     </div>
                 </div>
-
-                {/* BRAND FOOTER */}
-                <div style={{marginTop: '20px', textAlign: 'center', opacity: 0.3}}>
-                    <p style={{fontSize: '9px', fontWeight: 'bold', letterSpacing: '2px', margin: 0}}>
-                        POWERED BY <span style={{color: '#f97316'}}>BITEBOX</span>
-                    </p>
-                </div>
             </div>
 
-            {/* --- ACTION FOOTER --- */}
             <div style={styles.footer}>
-                <button onClick={handleCallWaiter} disabled={isCalling} style={styles.outlineBtn}>
-                    <FaPhoneAlt /> {callStatus}
-                </button>
-                
-                {/* LOCKED DOWNLOAD BUTTON */}
-                <button 
-                    onClick={() => { if(isServed) generateCustomerReceipt(order, restaurant); }} 
-                    disabled={!isServed} 
-                    style={{
-                        ...styles.solidBtn, 
-                        background: isServed ? '#f97316' : '#333', 
-                        color: isServed ? 'white' : '#666', 
-                        cursor: isServed ? 'pointer' : 'not-allowed',
-                        boxShadow: isServed ? '0 10px 20px rgba(249, 115, 22, 0.3)' : 'none'
-                    }}
-                >
-                    {isServed ? <><FaDownload /> Download Bill</> : <><FaLock /> Wait for Bill</>}
-                </button>
+                <button onClick={handleCallWaiter} disabled={isCalling} style={styles.outlineBtn}><FaPhoneAlt /> {callStatus}</button>
+                <button onClick={() => { if(isServed) generateCustomerReceipt(order, restaurant); }} disabled={!isServed} 
+                    style={{...styles.solidBtn, background: isServed ? '#f97316' : '#333', color: isServed ? 'white' : '#666', cursor: isServed ? 'pointer' : 'not-allowed', boxShadow: isServed ? '0 10px 20px rgba(249, 115, 22, 0.3)' : 'none'}}
+                >{isServed ? <><FaDownload /> Download Bill</> : <><FaLock /> Wait for Bill</>}</button>
             </div>
-
             <style>{`.spin { animation: spin 1s linear infinite; } @keyframes spin { 100% { transform: rotate(360deg); } }`}</style>
         </div>
     );
 };
 
-// --- SUB-COMPONENT: STEP ICON ---
 const StepIcon = ({ icon, label, active }) => (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 2, width: '40px' }}>
-        <div style={{
-            width: '35px', height: '35px', borderRadius: '50%',
-            background: active ? '#f97316' : '#222',
-            border: '3px solid #050505',
-            color: active ? 'white' : '#555',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            transition: '0.3s all ease'
-        }}>
-            {icon}
-        </div>
+        <div style={{ width: '35px', height: '35px', borderRadius: '50%', background: active ? '#f97316' : '#222', border: '3px solid #050505', color: active ? 'white' : '#555', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: '0.3s' }}>{icon}</div>
         <span style={{ fontSize: '9px', marginTop: '5px', fontWeight: 'bold', color: active ? 'white' : '#444' }}>{label}</span>
     </div>
 );
 
-// --- CSS-IN-JS STYLES ---
 const styles = {
     container: { minHeight: "100vh", background: "#050505", color: "white", padding: "20px", paddingBottom: "120px", fontFamily: "sans-serif" },
     center: { height: "100vh", display: 'flex', justifyContent: 'center', alignItems: 'center' },

@@ -5,7 +5,6 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-d
 import LandingPage from "./pages/LandingPage"; 
 import Menu from "./pages/Menu"; 
 import Cart from "./pages/Cart";
-import OrderSuccess from "./pages/OrderSuccess";
 import OrderTracker from "./pages/OrderTracker";
 import OwnerLogin from "./pages/OwnerLogin"; 
 import Register from "./pages/Register"; 
