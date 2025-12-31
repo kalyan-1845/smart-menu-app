@@ -68,6 +68,7 @@ router.post('/login', async (req, res) => {
 });
 
 // --- ✅ FIXED: VERIFY ROLE (Chef AND Waiter Support) ---
+// This prevents the 404 error by defining the endpoint the frontend is looking for
 router.post('/verify-role', async (req, res) => {
     try {
         const { role, username, password, token } = req.body;
@@ -109,19 +110,33 @@ router.post('/verify-role', async (req, res) => {
     }
 });
 
-// --- ✅ PUBLIC RESTAURANT LOOKUP (Critical for Waiter/Menu) ---
-// This handles BOTH "ID" (System) and "Username" (URL) lookups
+// Also support GET for verify-role if your frontend uses GET
+router.get('/verify-role', async (req, res) => {
+    try {
+        const token = req.headers.authorization?.split(" ")[1];
+        if (!token) return res.status(401).json({ message: "No token" });
+
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret');
+        const user = await Owner.findById(decoded.id).select("-password");
+
+        if (!user) return res.status(404).json({ message: "User not found" });
+
+        res.json({ success: true, role: "owner", _id: user._id, restaurantName: user.restaurantName });
+    } catch (error) {
+        res.status(401).json({ message: "Invalid Token" });
+    }
+});
+
+// --- ✅ PUBLIC RESTAURANT LOOKUP ---
 router.get('/restaurant/:id', async (req, res) => {
     try {
         const { id } = req.params;
         let owner;
 
-        // 1. Try finding by Mongo ID
         if (mongoose.Types.ObjectId.isValid(id)) {
             owner = await Owner.findById(id).select('username restaurantName email isPro upiId');
         } 
         
-        // 2. If not found or not ID, try finding by Username (For Waiter/Menu URLs)
         if (!owner) {
             owner = await Owner.findOne({ username: id }).select('username restaurantName email isPro upiId');
         }

@@ -90,8 +90,10 @@ mongoose.connect(process.env.MONGO_URI)
     .catch((err) => console.error("❌ MongoDB Error:", err));
 
 // --- ROUTES ---
+// authRoutes contains the /verify-role logic we added
 app.use('/api/auth', authRoutes);
 app.use('/api/dishes', dishRoutes);
+// orderRoutes contains the /inbox and /mark-downloaded logic
 app.use('/api/orders', orderRoutes);
 app.use('/api/superadmin', superAdminRoutes);
 app.use('/api/broadcast', broadcastRoutes);
@@ -110,6 +112,8 @@ app.use((err, req, res, next) => {
 
 // --- SOCKETS ---
 io.on('connection', (socket) => {
+    // Allows Owner/Admin to listen for new orders
+    socket.on('join-restaurant', (restaurantId) => socket.join(restaurantId));
     socket.on('join-owner-room', (ownerId) => socket.join(ownerId));
     socket.on("resolve-call", (data) => io.emit("call-resolved", data));
 });
