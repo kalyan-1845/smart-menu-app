@@ -271,13 +271,7 @@ const RestaurantAdmin = () => {
                 </header>
 
                 <SetupWizard dishesCount={dishes.length} pushEnabled={pushEnabled} />
-                 // Inside SuperAdmin.jsx return statement
-<div style={styles.mainContent}>
-    <SalesSummary restaurants={restaurants} />
-    
-    {/* Search Bar and Client List follow below */}
-    <div style={styles.searchWrapper}> ... </div>
-</div>
+
                 <nav className="nav-tabs">
                     <button onClick={() => setActiveTab("menu")} className={`tab-btn ${activeTab === "menu" ? 'active' : ''}`}>Menu</button>
                     <button onClick={() => setActiveTab("inbox")} className={`tab-btn ${activeTab === "inbox" ? 'active' : ''}`}>
