@@ -25,31 +25,25 @@ const allowedOrigins = [
 ];
 
 // ============================================================
-// ☢️ NUCLEAR CORS FIX (LAYER 1: MANUAL HEADERS)
+// ☢️ NUCLEAR CORS FIX (LAYER 1: MANUAL HEADERS) - RETAINED
 // ============================================================
 app.use((req, res, next) => {
     const origin = req.headers.origin;
-    
-    // Allow requests from our allowed origins
     if (allowedOrigins.includes(origin)) {
         res.setHeader("Access-Control-Allow-Origin", origin);
     }
-
-    // Set standard headers
     res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
     res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, Origin, X-Requested-With, Accept");
     res.header("Access-Control-Allow-Credentials", "true");
 
-    // Handle Preflight (OPTIONS) immediately
     if (req.method === "OPTIONS") {
         return res.status(200).end();
     }
-
     next();
 });
 
 // ============================================================
-// 🛡️ STANDARD CORS (LAYER 2: LIBRARY BACKUP)
+// 🛡️ STANDARD CORS (LAYER 2: LIBRARY BACKUP) - RETAINED
 // ============================================================
 app.use(cors({
     origin: allowedOrigins,
@@ -60,10 +54,10 @@ app.use(cors({
 // --- MIDDLEWARE ---
 app.use(express.json({ limit: '10mb' })); 
 
-// Rate Limiter
+// Rate Limiter - Optimized for 1000 users
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, 
-    max: 300, 
+    max: 1000, // Increased to support high traffic
     standardHeaders: true,
     legacyHeaders: false,
 });
@@ -90,10 +84,8 @@ mongoose.connect(process.env.MONGO_URI)
     .catch((err) => console.error("❌ MongoDB Error:", err));
 
 // --- ROUTES ---
-// authRoutes contains the /verify-role logic we added
 app.use('/api/auth', authRoutes);
 app.use('/api/dishes', dishRoutes);
-// orderRoutes contains the /inbox and /mark-downloaded logic
 app.use('/api/orders', orderRoutes);
 app.use('/api/superadmin', superAdminRoutes);
 app.use('/api/broadcast', broadcastRoutes);
@@ -110,15 +102,27 @@ app.use((err, req, res, next) => {
     });
 });
 
-// --- SOCKETS ---
+// --- SOCKETS (Isolated Room Logic for 1000 Users) ---
 io.on('connection', (socket) => {
-    // Allows Owner/Admin to listen for new orders
-    socket.on('join-restaurant', (restaurantId) => socket.join(restaurantId));
+    // Allows Owner/Admin to listen for new orders in their specific shop
+    socket.on('join-restaurant', (restaurantId) => {
+        socket.join(restaurantId);
+        console.log(`User joined Shop Room: ${restaurantId}`);
+    });
+
     socket.on('join-owner-room', (ownerId) => socket.join(ownerId));
-    socket.on("resolve-call", (data) => io.emit("call-resolved", data));
+
+    // Handle resolve-call events for specific shops
+    socket.on("resolve-call", (data) => {
+        if(data.restaurantId) {
+            io.to(data.restaurantId).emit("call-resolved", data);
+        } else {
+            io.emit("call-resolved", data);
+        }
+    });
 });
 
-// --- SELF PING (Keep Alive) ---
+// --- SELF PING (Keep Alive) - RETAINED ---
 const pingUrl = "https://smart-menu-backend-5ge7.onrender.com/"; 
 setInterval(() => {
     https.get(pingUrl, (res) => {

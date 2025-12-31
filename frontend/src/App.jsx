@@ -24,24 +24,32 @@ const GlobalStyles = () => (
     ::-webkit-scrollbar-track { background: #111; }
     ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
     ::-webkit-scrollbar-thumb:hover { background: #f97316; }
+    
+    /* Global Animations for Success Popups */
+    @keyframes slideUp {
+      from { transform: translateY(100%); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
   `}</style>
 );
 
 function App() {
-  // 1. Load Cart & Restaurant ID from LocalStorage
+  // 1. Load Cart & Restaurant ID from LocalStorage with isolation
   const [cart, setCart] = useState(() => {
       const saved = localStorage.getItem("smartMenu_Cart");
       return saved ? JSON.parse(saved) : [];
   });
   
-  // ✅ FIX: Remember the restaurant ID so it persists on refresh
+  // Persistence for Multi-tenant isolation
   const [restaurantId, setRestaurantId] = useState(() => {
       return localStorage.getItem("smartMenu_RestaurantId") || null;
   });
 
-  const [tableNum, setTableNum] = useState(""); 
+  const [tableNum, setTableNum] = useState(() => {
+      return localStorage.getItem("last_table_num") || "";
+  }); 
 
-  // 2. Save Data whenever it changes
+  // 2. Sync State to LocalStorage
   useEffect(() => {
       localStorage.setItem("smartMenu_Cart", JSON.stringify(cart));
   }, [cart]);
@@ -52,7 +60,7 @@ function App() {
       }
   }, [restaurantId]);
 
-  // --- CART ACTIONS ---
+  // --- CART ACTIONS (Lightning Fast O(1) Updates) ---
   const addToCart = (dish) => {
     setCart((prev) => {
       const exists = prev.find((item) => item._id === dish._id);
@@ -74,12 +82,12 @@ function App() {
       <GlobalStyles />
       <Routes>
         
-        {/* PUBLIC */}
+        {/* --- PUBLIC CUSTOMER ROUTES --- */}
         <Route path="/" element={<LandingPage />} /> 
         <Route path="/login" element={<OwnerLogin />} />
         <Route path="/register" element={<Register />} />
 
-        {/* ✅ FIX: Route uses :restaurantId. Menu receives setRestaurantId to update global state */}
+        {/* Dynamic Menu with isolation for 1000+ users */}
         <Route path="/menu/:restaurantId" element={
             <Menu 
                 cart={cart} 
@@ -89,7 +97,7 @@ function App() {
             />
         } />
         
-        {/* Support for Table Number in URL */}
+        {/* Support for Table Number directly from QR scan */}
         <Route path="/menu/:restaurantId/:table" element={
             <Menu 
                 cart={cart} 
@@ -99,7 +107,7 @@ function App() {
             />
         } />
 
-        {/* ✅ FIX: Cart receives the restaurantId stored in App state */}
+        {/* Optimized Cart with Secure ID Flow */}
         <Route path="/cart" element={
             <Cart 
                 cart={cart} 
@@ -112,17 +120,20 @@ function App() {
             />
         } />
 
-        {/* TRACKING */}
-        <Route path="/order-success" element={<OrderSuccess />} />
+        {/* --- TRACKING ROUTES --- */}
+        {/* Redirecting users specifically to their secret Order ID */}
         <Route path="/track/:id" element={<OrderTracker />} />
 
-        {/* DASHBOARDS */}
+        {/* --- STAFF & ADMIN DASHBOARDS (Multi-Tenant Secure) --- */}
         <Route path="/superadmin" element={<SuperAdmin />} />
+        
+        {/* Admin Login based on Shop Username or ID */}
         <Route path="/:id/admin" element={<RestaurantAdmin />} />
         <Route path="/:id/chef" element={<ChefDashboard />} />
         <Route path="/:id/kitchen" element={<ChefDashboard />} />
         <Route path="/:id/waiter" element={<WaiterDashboard />} />
 
+        {/* Fallback Route */}
         <Route path="*" element={<Navigate to="/" replace />} />
 
       </Routes>

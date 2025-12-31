@@ -18,7 +18,7 @@ router.post('/', async (req, res) => {
         if (!finalRestaurantId) return res.status(400).json({ message: "Restaurant ID is required" });
         if (!finalTableNum) return res.status(400).json({ message: "Table Number is required" });
 
-        // Fix: Convert Username to ID if necessary
+        // Fix: Convert Username to ID if necessary for multi-tenant support
         if (!mongoose.Types.ObjectId.isValid(finalRestaurantId)) {
             const restaurantOwner = await Owner.findOne({ username: finalRestaurantId });
             if (!restaurantOwner) return res.status(404).json({ message: "Restaurant not found." });
@@ -32,11 +32,13 @@ router.post('/', async (req, res) => {
             items, 
             totalAmount, 
             paymentMethod,
-            status: finalStatus
+            status: finalStatus,
+            isDownloaded: false // Default to false so it shows in Admin Inbox
         });
 
         const savedOrder = await newOrder.save();
 
+        // Socket emit to specific restaurant room
         if (req.io) {
             req.io.to(finalRestaurantId.toString()).emit('new-order', savedOrder);
         }
@@ -51,6 +53,10 @@ router.post('/', async (req, res) => {
 // --- 2. GET SINGLE ORDER (CRITICAL FOR TRACKER) ---
 router.get('/:id', async (req, res) => {
     try {
+        // Validation check for Mongo ID to prevent crash
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+            return res.status(400).json({ message: "Invalid Order ID format" });
+        }
         const order = await Order.findById(req.params.id);
         if (!order) return res.status(404).json({ message: "Order not found" });
         res.json(order);
@@ -59,7 +65,7 @@ router.get('/:id', async (req, res) => {
     }
 });
 
-// --- 3. GET ALL ORDERS (CHEF) ---
+// --- 3. GET ALL ORDERS (CHEF VIEW) ---
 router.get('/', async (req, res) => {
     try {
         const { restaurantId } = req.query;
@@ -71,7 +77,7 @@ router.get('/', async (req, res) => {
     }
 });
 
-// --- 4. UPDATE STATUS (CHEF BUTTONS) ---
+// --- 4. UPDATE STATUS (CHEF ACTIONS) ---
 router.put('/:id', async (req, res) => {
     try {
         const order = await Order.findByIdAndUpdate(
@@ -80,9 +86,9 @@ router.put('/:id', async (req, res) => {
             { new: true }
         );
         if (req.io && order) {
-             // Emit to Restaurant Room (Chef) AND Order Room (Tracker)
+             // Emit to Restaurant Room (Chef/Waiter) AND Order Room (Customer Tracker)
              req.io.to(order.restaurantId.toString()).emit('order-updated', order);
-             req.io.emit('order-updated', order); // Broadcast to be safe for tracker
+             req.io.emit('order-updated', order); 
         }
         res.json(order);
     } catch (error) {
@@ -95,21 +101,24 @@ router.post('/call-waiter', async (req, res) => {
     try {
         const { restaurantId, tableNumber, type } = req.body; 
         const newCall = await Call.create({ restaurantId, tableNumber, type: type || 'help' });
-        if (req.io) req.io.emit('new-waiter-call', newCall);
+        
+        if (req.io) {
+            // Target only the specific restaurant staff
+            req.io.to(restaurantId.toString()).emit('new-waiter-call', newCall);
+        }
+        
         res.status(201).json(newCall);
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
 });
-// ... existing imports ...
 
-// --- NEW ROUTE: GET INBOX (Only non-downloaded orders) ---
+// --- 6. GET INBOX (Only non-downloaded orders for Admin) ---
 router.get('/inbox', async (req, res) => {
     try {
         const { restaurantId } = req.query;
         if (!restaurantId) return res.status(400).json({ message: "Restaurant ID required" });
 
-        // Fetch orders that are NOT downloaded yet
         const orders = await Order.find({ 
             restaurantId, 
             isDownloaded: false 
@@ -121,12 +130,12 @@ router.get('/inbox', async (req, res) => {
     }
 });
 
-// --- NEW ROUTE: CLEAR INBOX (Mark as downloaded) ---
+// --- 7. CLEAR INBOX (Mark as downloaded) ---
 router.put('/mark-downloaded', async (req, res) => {
     try {
         const { restaurantId } = req.body;
+        if (!restaurantId) return res.status(400).json({ message: "Restaurant ID required" });
         
-        // Update all orders for this restaurant to isDownloaded: true
         await Order.updateMany(
             { restaurantId, isDownloaded: false },
             { $set: { isDownloaded: true } }
@@ -137,7 +146,5 @@ router.put('/mark-downloaded', async (req, res) => {
         res.status(500).json({ error: "Failed to clear inbox" });
     }
 });
-
-// ... your existing routes (GET /:id, GET /, etc.) ...
 
 export default router;
