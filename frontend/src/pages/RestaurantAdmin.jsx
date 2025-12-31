@@ -7,7 +7,7 @@ import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import { 
     FaPlus, FaTrash, FaUtensils, 
-    FaBell, FaCheckCircle, FaCircle, FaCrown, FaSignOutAlt, FaRocket, FaUnlock, FaStore, FaExternalLinkAlt, FaCopy, FaImage, FaInbox, FaDownload
+    FaBell, FaCheckCircle, FaCircle, FaCrown, FaSignOutAlt, FaRocket, FaUnlock, FaStore, FaExternalLinkAlt, FaCopy, FaImage, FaInbox, FaDownload, FaQrcode
 } from "react-icons/fa";
 
 // --- STYLES (Mobile Optimized & Beautiful) ---
@@ -92,6 +92,40 @@ const RestaurantAdmin = () => {
     const [dishes, setDishes] = useState([]);
     const [inboxOrders, setInboxOrders] = useState([]);
     const [formData, setFormData] = useState({ name: "", price: "", category: "Starters", image: "" });
+
+    // --- NEW STATE FOR QR GENERATOR ---
+    const [qrRange, setQrRange] = useState({ start: 1, end: 5 });
+
+    const generatePrintableQRs = () => {
+        const printWindow = window.open('', '_blank');
+        const qrCodesHtml = [];
+
+        for (let i = qrRange.start; i <= qrRange.end; i++) {
+            const url = `${window.location.origin}/menu/${id}/${i}`;
+            const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(url)}`;
+            
+            qrCodesHtml.push(`
+                <div style="display:inline-block; margin:20px; padding:20px; border:2px dashed #ccc; text-align:center; font-family:sans-serif; border-radius:15px; width:220px;">
+                    <h2 style="margin:0 0 10px 0; color:#FF9933; font-size:18px;">${restaurantName.toUpperCase()}</h2>
+                    <img src="${qrSrc}" width="180" height="180" style="display:block; margin:0 auto;" />
+                    <p style="margin:10px 0 0 0; font-weight:bold; font-size:20px;">TABLE ${i}</p>
+                    <p style="font-size:10px; color:#666; margin-top:5px;">Scan to Order via BiteBox</p>
+                </div>
+            `);
+        }
+
+        printWindow.document.write(`
+            <html>
+                <head><title>Print Table QRs - ${restaurantName}</title></head>
+                <body onload="window.print()">
+                    <div style="text-align:center; padding:20px;">
+                        ${qrCodesHtml.join('')}
+                    </div>
+                </body>
+            </html>
+        `);
+        printWindow.document.close();
+    };
 
     const fetchInbox = async () => {
         const mongoId = localStorage.getItem(`owner_id_${id}`);
@@ -181,8 +215,8 @@ const RestaurantAdmin = () => {
     if (!isAuthenticated) return (
         <div className="admin-container">
             <style>{styles}</style>
-            <div className="lock-container">
-                <div className="lock-card">
+            <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div className="glass-card" style={{ textAlign: 'center', width: '320px' }}>
                     <FaStore size={40} color="#f97316" style={{ marginBottom: '15px' }} />
                     <h1 style={{ fontSize: '20px', fontWeight: '900' }}>{id.toUpperCase()} ADMIN</h1>
                     <form onSubmit={handleLogin} style={{ marginTop: '20px' }}>
@@ -213,7 +247,6 @@ const RestaurantAdmin = () => {
                 <header className="admin-header">
                     <div className="header-top">
                         <div>
-                            {/* RESTAURANT NAME HEADER - RESTORED */}
                             <h1 className="shop-title">{restaurantName}</h1>
                             <div style={{ marginTop: '5px' }}>
                                 {isPro ? <span className="badge-pro"><FaCrown /> PRO PLAN</span> : 
@@ -299,10 +332,37 @@ const RestaurantAdmin = () => {
                 )}
 
                 {activeTab === "settings" && (
-                    <div className="glass-card">
-                        <h2 style={{ fontSize: '14px', fontWeight: 900, marginBottom: '10px' }}>Staff Alerts</h2>
-                        <button onClick={() => Notification.requestPermission()} className="btn-primary">Enable Push Alerts</button>
-                    </div>
+                    <>
+                        {/* BULK QR GENERATOR SECTION */}
+                        <div className="glass-card">
+                            <h2 style={{ fontSize: '14px', fontWeight: 900, marginBottom: '20px' }}>
+                                <FaQrcode color="#FF9933" /> Bulk QR Generator
+                            </h2>
+                            <p style={{ fontSize: '11px', color: '#888', marginBottom: '15px' }}>
+                                Create unique QRs for each table. These links auto-detect the table number.
+                            </p>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '20px' }}>
+                                <div>
+                                    <label style={{ fontSize: '10px', color: '#666', fontWeight: 900, display: 'block', marginBottom: '5px' }}>START TABLE</label>
+                                    <input type="number" className="input-dark" value={qrRange.start} 
+                                        onChange={e => setQrRange({...qrRange, start: parseInt(e.target.value) || 1})} />
+                                </div>
+                                <div>
+                                    <label style={{ fontSize: '10px', color: '#666', fontWeight: 900, display: 'block', marginBottom: '5px' }}>END TABLE</label>
+                                    <input type="number" className="input-dark" value={qrRange.end} 
+                                        onChange={e => setQrRange({...qrRange, end: parseInt(e.target.value) || 1})} />
+                                </div>
+                            </div>
+                            <button onClick={generatePrintableQRs} className="btn-primary">
+                                <FaDownload /> Generate & Print QRs
+                            </button>
+                        </div>
+
+                        <div className="glass-card">
+                            <h2 style={{ fontSize: '14px', fontWeight: 900, marginBottom: '10px' }}>Staff Alerts</h2>
+                            <button onClick={() => Notification.requestPermission()} className="btn-primary">Enable Push Alerts</button>
+                        </div>
+                    </>
                 )}
             </div>
         </div>
