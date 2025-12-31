@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import io from "socket.io-client"; 
-import { FaArrowLeft, FaTrash, FaMobileAlt, FaMoneyBillWave, FaCircle } from "react-icons/fa";
+import { FaArrowLeft, FaTrash, FaMobileAlt, FaMoneyBillWave, FaCircle, FaCheckCircle } from "react-icons/fa";
 
 // 🔗 SMART API CONNECTION
 const SERVER_URL = window.location.hostname === "localhost" || window.location.hostname.startsWith("192.168")
@@ -11,7 +11,7 @@ const SERVER_URL = window.location.hostname === "localhost" || window.location.h
 
 const API_BASE = `${SERVER_URL}/api`;
 
-// --- GLOW ANIMATIONS (Retained) ---
+// --- GLOW ANIMATIONS ---
 const glowStyles = `
 @keyframes pulseGlow {
   0% { box-shadow: 0 0 5px rgba(249, 115, 22, 0.4), 0 0 10px rgba(249, 115, 22, 0.2); }
@@ -25,6 +25,10 @@ const glowStyles = `
   border-color: #f97316 !important;
   box-shadow: 0 0 15px rgba(249, 115, 22, 0.3);
 }
+@keyframes fadeInScale {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}
 `;
 
 const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, tableNum, setTableNum }) => {
@@ -35,9 +39,9 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
     const [restaurant, setRestaurant] = useState(null);
     const [showTableModal, setShowTableModal] = useState(!tableNum);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [showSuccessPopup, setShowSuccessPopup] = useState(false); // Success popup state
     
-    // --- FALLBACK LOGIC TO PREVENT VALIDATION ERRORS ---
-    // If props are undefined, we check if they were saved in localStorage during the Menu session
+    // --- SECURE FALLBACK LOGIC ---
     const finalRestaurantId = restaurantId || localStorage.getItem("last_restaurant_id");
     const finalTableNum = tableNum || localStorage.getItem("last_table_num");
 
@@ -62,18 +66,16 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
 
     // --- ORDER SUCCESS REDIRECT LOGIC ---
     const processOrder = async (paymentMethod) => {
-        // Validation Fixes (Using final variables)
         if (!customerName.trim()) { alert("Please enter your name!"); return; }
         if (!finalTableNum) { setShowTableModal(true); return; }
         if (cart.length === 0) { alert("Your cart is empty!"); return; }
         if (!finalRestaurantId) { 
-            alert("System Error: Restaurant ID missing. Please go back to menu and re-add items."); 
+            alert("System Error: Restaurant ID missing. Please reload from the menu."); 
             return; 
         }
 
         setIsSubmitting(true);
 
-        // ✅ Payload matching your Backend Schema + Inbox Flag
         const orderData = {
             customerName: customerName,
             tableNum: finalTableNum.toString(), 
@@ -84,32 +86,31 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
             })),
             totalAmount: totalPrice,
             paymentMethod: paymentMethod === "ONLINE" ? "Online" : "Cash",
-            restaurantId: finalRestaurantId,
+            restaurantId: finalRestaurantId, // SECURE: Uses specific restaurant ID
             status: "Pending",
-            isDownloaded: false // 📥 This marks it for the Admin Inbox
+            isDownloaded: false 
         };
 
         try {
-            // 1. Save to Database
             const response = await axios.post(`${API_BASE}/orders`, orderData);
             
-            // 2. Socket Notification to Owner
             const socket = io(SERVER_URL);
             socket.emit("new-order", response.data); 
             
-            // 3. Store History
             const history = JSON.parse(localStorage.getItem("smartMenu_History") || "[]");
             localStorage.setItem("smartMenu_History", JSON.stringify([response.data._id, ...history]));
             
-            // 4. Clear Cart
-            clearCart(); 
-
-            // 5. REDIRECT TO TRACKER (As requested)
-            navigate(`/track/${response.data._id}`);
+            // SHOW SUCCESS POPUP BEFORE REDIRECT
+            setShowSuccessPopup(true);
+            
+            setTimeout(() => {
+                clearCart(); 
+                navigate(`/track/${response.data._id}`); // SECURE REDIRECT
+            }, 2000);
 
         } catch (error) {
             console.error("Submission error:", error);
-            alert(`Order Failed: ${error.response?.data?.message || "Check your network"}`);
+            alert(`Order Failed: ${error.response?.data?.message || "Network Error"}`);
             setIsSubmitting(false);
         }
     };
@@ -123,8 +124,19 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
         }}>
             <style>{glowStyles}</style>
             
-            {/* GLOWING BACKGROUND EFFECT */}
+            {/* GLOWING BACKGROUND */}
             <div style={{ position: 'fixed', top: '-10%', left: '50%', transform: 'translateX(-50%)', width: '300px', height: '300px', background: 'rgba(249, 115, 22, 0.15)', filter: 'blur(100px)', zIndex: 0 }}></div>
+
+            {/* ORDER SUCCESS POPUP */}
+            {showSuccessPopup && (
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.9)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+                    <div style={{ background: '#111', padding: '40px', borderRadius: '30px', textAlign: 'center', border: '1px solid #22c55e', animation: 'fadeInScale 0.4s ease-out' }}>
+                        <FaCheckCircle size={60} color="#22c55e" style={{ marginBottom: '20px' }} />
+                        <h2 style={{ margin: 0, fontSize: '24px', fontWeight: '900' }}>Order Placed!</h2>
+                        <p style={{ color: '#888', marginTop: '10px' }}>Redirecting to tracker...</p>
+                    </div>
+                </div>
+            )}
 
             {/* TABLE SELECTION MODAL */}
             {showTableModal && (
@@ -135,7 +147,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                             {tableOptions.map((opt) => (
                                 <button key={opt} onClick={() => { 
                                     setTableNum(opt); 
-                                    localStorage.setItem("last_table_num", opt); // Persistence fix
+                                    localStorage.setItem("last_table_num", opt); 
                                     setShowTableModal(false); 
                                 }} 
                                     style={{ padding: '15px', borderRadius: '16px', border: '1px solid #333', background: finalTableNum === opt ? '#f97316' : '#1a1a1a', color: 'white', fontWeight: 'bold', boxShadow: finalTableNum === opt ? '0 0 15px rgba(249, 115, 22, 0.5)' : 'none', transition: '0.3s' }}>
@@ -153,7 +165,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                 <h1 style={{ fontSize: '24px', fontWeight: '900', margin: 0, letterSpacing: '-1px' }}>Review Order</h1>
             </div>
 
-            {/* INFO CARD (Glow Border) */}
+            {/* INFO CARD */}
             <div style={{ background: 'rgba(255,255,255,0.03)', padding: '24px', borderRadius: '28px', marginBottom: '20px', border: '1px solid rgba(255,255,255,0.08)', backdropFilter: 'blur(10px)' }}>
                 <div onClick={() => setShowTableModal(true)} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px', cursor: 'pointer', alignItems: 'center' }}>
                     <div>
@@ -174,7 +186,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                 </div>
             </div>
 
-            {/* CART LIST */}
+            {/* CART ITEMS LIST */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 {cart.map((item) => (
                     <div key={item._id} style={{ background: 'rgba(255,255,255,0.02)', padding: '16px', borderRadius: '24px', border: '1px solid rgba(255,255,255,0.05)', transition: '0.3s' }}>
@@ -196,7 +208,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                 ))}
             </div>
 
-            {/* STICKY FOOTER (Glowing Buttons) */}
+            {/* FOOTER */}
             <div style={{ 
                 position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', 
                 width: '100%', maxWidth: '600px', 
