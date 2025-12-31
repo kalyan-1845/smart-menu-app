@@ -7,10 +7,10 @@ import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import { 
     FaPlus, FaTrash, FaUtensils, 
-    FaBell, FaCheckCircle, FaCircle, FaCrown, FaSignOutAlt, FaRocket, FaUnlock, FaStore, FaExternalLinkAlt, FaCopy, FaImage, FaInbox, FaDownload, FaQrcode
+    FaBell, FaCheckCircle, FaCircle, FaCrown, FaSignOutAlt, FaRocket, FaStore, FaExternalLinkAlt, FaCopy, FaInbox, FaDownload, FaQrcode
 } from "react-icons/fa";
 
-// --- STYLES (Mobile Optimized & Beautiful) ---
+// --- STYLES (Retained exactly) ---
 const styles = `
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;900&display=swap');
 .admin-container { min-height: 100vh; padding: 20px; background: radial-gradient(circle at top center, #1a0f0a 0%, #050505 60%); color: white; font-family: 'Inter', sans-serif; }
@@ -85,47 +85,13 @@ const RestaurantAdmin = () => {
     const [activeTab, setActiveTab] = useState("menu");
     const [restaurantName, setRestaurantName] = useState(id);
     const [activeAlerts, setActiveAlerts] = useState([]);
-    const [broadcast, setBroadcast] = useState(null);
     const [pushEnabled, setPushEnabled] = useState(Notification.permission === 'granted');
-    const [trialEndsAt, setTrialEndsAt] = useState(null);
     const [isPro, setIsPro] = useState(false);
     const [dishes, setDishes] = useState([]);
     const [inboxOrders, setInboxOrders] = useState([]);
+    const [ownerEmail, setOwnerEmail] = useState("");
     const [formData, setFormData] = useState({ name: "", price: "", category: "Starters", image: "" });
-
-    // --- NEW STATE FOR QR GENERATOR ---
     const [qrRange, setQrRange] = useState({ start: 1, end: 5 });
-
-    const generatePrintableQRs = () => {
-        const printWindow = window.open('', '_blank');
-        const qrCodesHtml = [];
-
-        for (let i = qrRange.start; i <= qrRange.end; i++) {
-            const url = `${window.location.origin}/menu/${id}/${i}`;
-            const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(url)}`;
-            
-            qrCodesHtml.push(`
-                <div style="display:inline-block; margin:20px; padding:20px; border:2px dashed #ccc; text-align:center; font-family:sans-serif; border-radius:15px; width:220px;">
-                    <h2 style="margin:0 0 10px 0; color:#FF9933; font-size:18px;">${restaurantName.toUpperCase()}</h2>
-                    <img src="${qrSrc}" width="180" height="180" style="display:block; margin:0 auto;" />
-                    <p style="margin:10px 0 0 0; font-weight:bold; font-size:20px;">TABLE ${i}</p>
-                    <p style="font-size:10px; color:#666; margin-top:5px;">Scan to Order via BiteBox</p>
-                </div>
-            `);
-        }
-
-        printWindow.document.write(`
-            <html>
-                <head><title>Print Table QRs - ${restaurantName}</title></head>
-                <body onload="window.print()">
-                    <div style="text-align:center; padding:20px;">
-                        ${qrCodesHtml.join('')}
-                    </div>
-                </body>
-            </html>
-        `);
-        printWindow.document.close();
-    };
 
     const fetchInbox = async () => {
         const mongoId = localStorage.getItem(`owner_id_${id}`);
@@ -134,26 +100,6 @@ const RestaurantAdmin = () => {
             const res = await axios.get(`${API_BASE}/orders/inbox?restaurantId=${mongoId}`);
             setInboxOrders(res.data);
         } catch (err) { console.error("Inbox Error", err); }
-    };
-
-    const handleDownloadAndClear = async () => {
-        if (inboxOrders.length === 0) return alert("Inbox is empty!");
-        const mongoId = localStorage.getItem(`owner_id_${id}`);
-        const doc = new jsPDF();
-        doc.text(`Receipt Summary - ${restaurantName}`, 14, 15);
-        doc.setFontSize(10);
-        doc.text(`Total Orders: ${inboxOrders.length}`, 14, 22);
-        const tableData = inboxOrders.map((order, i) => [
-            i + 1, order.tableNum, order.items.map(item => `${item.name} x${item.quantity}`).join(", "),
-            `Rs.${order.totalAmount}`, new Date(order.createdAt).toLocaleTimeString()
-        ]);
-        doc.autoTable({ startY: 30, head: [['#', 'Table', 'Items', 'Total', 'Time']], body: tableData });
-        doc.save(`Receipts_${Date.now()}.pdf`);
-        try {
-            await axios.put(`${API_BASE}/orders/mark-downloaded`, { restaurantId: mongoId });
-            setInboxOrders([]);
-            alert("Inbox Cleared!");
-        } catch (err) { alert("Error clearing database."); }
     };
 
     const handleLogin = async (e) => {
@@ -165,7 +111,7 @@ const RestaurantAdmin = () => {
             localStorage.setItem(`owner_id_${id}`, res.data._id);
             setRestaurantName(res.data.restaurantName);
             setIsPro(res.data.isPro);
-            setTrialEndsAt(res.data.trialEndsAt);
+            setOwnerEmail(res.data.email || "");
             setIsAuthenticated(true);
             fetchData(res.data.token, res.data._id);
             fetchInbox();
@@ -185,17 +131,58 @@ const RestaurantAdmin = () => {
             const mongoId = localStorage.getItem(`owner_id_${id}`);
             const socket = io("https://smart-menu-backend-5ge7.onrender.com");
             socket.emit("join-restaurant", mongoId);
+            
             socket.on("new-order", () => fetchInbox());
+            
             socket.on("new-waiter-call", (data) => {
                 new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3").play().catch(() => {});
                 setActiveAlerts(prev => [...prev, data]);
             });
+
             const interval = setInterval(fetchInbox, 10000);
             return () => { socket.disconnect(); clearInterval(interval); };
         }
     }, [isAuthenticated, id]);
 
+    const handleDownloadAndClear = async () => {
+        if (inboxOrders.length === 0) return alert("Inbox is empty!");
+        const mongoId = localStorage.getItem(`owner_id_${id}`);
+        const doc = new jsPDF();
+        doc.text(`Receipt Summary - ${restaurantName}`, 14, 15);
+        const tableData = inboxOrders.map((order, i) => [
+            i + 1, order.tableNum, order.items.map(item => `${item.name} x${item.quantity}`).join(", "),
+            `Rs.${order.totalAmount}`, new Date(order.createdAt).toLocaleTimeString()
+        ]);
+        doc.autoTable({ startY: 30, head: [['#', 'Table', 'Items', 'Total', 'Time']], body: tableData });
+        doc.save(`Receipts_${Date.now()}.pdf`);
+        try {
+            await axios.put(`${API_BASE}/orders/mark-downloaded`, { restaurantId: mongoId });
+            setInboxOrders([]);
+            alert("Inbox Cleared!");
+        } catch (err) { alert("Error clearing database."); }
+    };
+
+    const generatePrintableQRs = () => {
+        const printWindow = window.open('', '_blank');
+        const qrCodesHtml = [];
+        for (let i = qrRange.start; i <= qrRange.end; i++) {
+            const url = `${window.location.origin}/menu/${id}/${i}`;
+            const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(url)}`;
+            qrCodesHtml.push(`
+                <div style="display:inline-block; margin:20px; padding:20px; border:2px dashed #ccc; text-align:center; font-family:sans-serif; border-radius:15px; width:220px;">
+                    <h2 style="margin:0 0 10px 0; color:#FF9933; font-size:18px;">${restaurantName.toUpperCase()}</h2>
+                    <img src="${qrSrc}" width="180" height="180" />
+                    <p style="margin:10px 0 0 0; font-weight:bold; font-size:20px;">TABLE ${i}</p>
+                </div>
+            `);
+        }
+        printWindow.document.write(`<html><body>${qrCodesHtml.join('')}</body></html>`);
+        printWindow.document.close();
+        printWindow.print();
+    };
+
     const handleLogout = () => { setIsAuthenticated(false); localStorage.removeItem(`owner_token_${id}`); };
+    
     const handleAddDish = async (e) => {
         e.preventDefault();
         const token = localStorage.getItem(`owner_token_${id}`);
@@ -204,6 +191,7 @@ const RestaurantAdmin = () => {
         setFormData({ name: "", price: "", category: "Starters", image: "" });
         fetchData(token, mongoId);
     };
+
     const handleDeleteDish = async (dishId) => {
         if(!window.confirm("Delete?")) return;
         const token = localStorage.getItem(`owner_token_${id}`);
@@ -249,8 +237,7 @@ const RestaurantAdmin = () => {
                         <div>
                             <h1 className="shop-title">{restaurantName}</h1>
                             <div style={{ marginTop: '5px' }}>
-                                {isPro ? <span className="badge-pro"><FaCrown /> PRO PLAN</span> : 
-                                <span className="badge-pro" style={{ color: '#60a5fa', borderColor: '#60a5fa' }}>Trial Plan</span>}
+                                {isPro ? <span className="badge-pro"><FaCrown /> PRO PLAN</span> : <span className="badge-pro" style={{ color: '#60a5fa', borderColor: '#60a5fa' }}>Trial Plan</span>}
                             </div>
                         </div>
                         <button onClick={handleLogout} className="btn-glass" style={{ color: '#ef4444' }}><FaSignOutAlt /></button>
@@ -333,29 +320,46 @@ const RestaurantAdmin = () => {
 
                 {activeTab === "settings" && (
                     <>
-                        {/* BULK QR GENERATOR SECTION */}
                         <div className="glass-card">
                             <h2 style={{ fontSize: '14px', fontWeight: 900, marginBottom: '20px' }}>
                                 <FaQrcode color="#FF9933" /> Bulk QR Generator
                             </h2>
-                            <p style={{ fontSize: '11px', color: '#888', marginBottom: '15px' }}>
-                                Create unique QRs for each table. These links auto-detect the table number.
-                            </p>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '20px' }}>
                                 <div>
                                     <label style={{ fontSize: '10px', color: '#666', fontWeight: 900, display: 'block', marginBottom: '5px' }}>START TABLE</label>
-                                    <input type="number" className="input-dark" value={qrRange.start} 
-                                        onChange={e => setQrRange({...qrRange, start: parseInt(e.target.value) || 1})} />
+                                    <input type="number" className="input-dark" value={qrRange.start} onChange={e => setQrRange({...qrRange, start: parseInt(e.target.value) || 1})} />
                                 </div>
                                 <div>
                                     <label style={{ fontSize: '10px', color: '#666', fontWeight: 900, display: 'block', marginBottom: '5px' }}>END TABLE</label>
-                                    <input type="number" className="input-dark" value={qrRange.end} 
-                                        onChange={e => setQrRange({...qrRange, end: parseInt(e.target.value) || 1})} />
+                                    <input type="number" className="input-dark" value={qrRange.end} onChange={e => setQrRange({...qrRange, end: parseInt(e.target.value) || 1})} />
                                 </div>
                             </div>
-                            <button onClick={generatePrintableQRs} className="btn-primary">
-                                <FaDownload /> Generate & Print QRs
-                            </button>
+                            <button onClick={generatePrintableQRs} className="btn-primary"><FaDownload /> Generate & Print QRs</button>
+                        </div>
+
+                        <div className="glass-card">
+                            <h2 style={{ fontSize: '14px', fontWeight: 900, marginBottom: '10px' }}>
+                                <FaBell color="#FF9933" /> Nightly Reports
+                            </h2>
+                            <p style={{ fontSize: '11px', color: '#888', marginBottom: '15px' }}>
+                                Enter your email to receive a sales summary every night at 11:59 PM.
+                            </p>
+                            <input 
+                                className="input-dark" 
+                                placeholder="your@email.com" 
+                                defaultValue={ownerEmail}
+                                onBlur={async (e) => {
+                                    const email = e.target.value;
+                                    if(email) {
+                                        try {
+                                            await axios.put(`${API_BASE}/auth/update-email`, { restaurantId: id, email });
+                                            alert("Email updated! You will now receive nightly reports.");
+                                        } catch (err) {
+                                            alert("Error updating email.");
+                                        }
+                                    }
+                                }}
+                            />
                         </div>
 
                         <div className="glass-card">
