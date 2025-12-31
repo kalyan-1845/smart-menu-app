@@ -6,7 +6,6 @@ const Register = () => {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     username: "",
-    email: "", // ✅ ADDED: Email field to prevent 500 Error
     password: "",
     restaurantName: "",
     address: "",
@@ -25,15 +24,10 @@ const Register = () => {
     setError("");
 
     try {
-      // ✅ Using the dynamic URL based on where the app is running
-      // If you are on localhost, ensure your api.js/axios config points to localhost:5000
-      // If you are on Netlify, this points to Render.
-      const API_URL = "https://smart-menu-backend-5ge7.onrender.com/api/auth/register";
-      
-      await axios.post(API_URL, formData);
-      
+      // Sends data to your existing backend auth route
+      await axios.post("https://smart-menu-backend-5ge7.onrender.com/api/auth/register", formData);
       alert("Registration Successful! Please Login.");
-      navigate("/login"); // Redirects to login after success
+      navigate("/login");
     } catch (err) {
       console.error(err);
       setError(err.response?.data?.message || "Registration failed. Try again.");
@@ -51,14 +45,12 @@ const Register = () => {
         {error && <div style={styles.error}>{error}</div>}
 
         <form onSubmit={handleRegister} style={styles.form}>
-          
-          {/* USERNAME */}
           <div style={styles.inputGroup}>
-            <label style={styles.label}>Owner Username</label>
+            <label style={styles.label}>Owner Name</label>
             <input
               type="text"
               name="username"
-              placeholder="e.g. kalyanresto"
+              placeholder="e.g. Kalyan Reddy"
               value={formData.username}
               onChange={handleChange}
               required
@@ -66,21 +58,6 @@ const Register = () => {
             />
           </div>
 
-          {/* EMAIL (Crucial for DB Validation) */}
-          <div style={styles.inputGroup}>
-            <label style={styles.label}>Email Address</label>
-            <input
-              type="email"
-              name="email"
-              placeholder="e.g. kalyan@example.com"
-              value={formData.email}
-              onChange={handleChange}
-              required
-              style={styles.input}
-            />
-          </div>
-
-          {/* RESTAURANT NAME */}
           <div style={styles.inputGroup}>
             <label style={styles.label}>Restaurant Name</label>
             <input
@@ -94,7 +71,6 @@ const Register = () => {
             />
           </div>
 
-          {/* PASSWORD */}
           <div style={styles.inputGroup}>
             <label style={styles.label}>Password</label>
             <input
@@ -108,7 +84,6 @@ const Register = () => {
             />
           </div>
 
-          {/* ADDRESS */}
           <div style={styles.inputGroup}>
             <label style={styles.label}>Address (Optional)</label>
             <input
