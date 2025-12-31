@@ -12,11 +12,10 @@ const generateToken = (id) => {
 // --- 1. OWNER AUTHENTICATION ---
 
 router.post('/register', async (req, res) => {
-    // 1. Get email from body (Frontend must send this!)
     const { username, email, password, restaurantName, chefPassword, waiterPassword } = req.body;
 
     try {
-        // 2. Check if user exists (by username OR email)
+        // Check if user exists
         const userExists = await Owner.findOne({ 
             $or: [{ username }, { email }] 
         });
@@ -25,18 +24,20 @@ router.post('/register', async (req, res) => {
             return res.status(400).json({ message: 'Username or Email already exists' });
         }
 
-        // 3. 🗓️ AUTO-CALCULATE TRIAL END DATE (60 Days from now)
+        // 🗓️ FIX 1: AUTO-CALCULATE TRIAL END DATE (60 Days from now)
         const trialEndDate = new Date();
         trialEndDate.setDate(trialEndDate.getDate() + 60);
 
-        // 4. Create Owner with ALL required fields
+        // 🛡️ FIX 2: HANDLE MISSING EMAIL
+        // If frontend doesn't send email, generate a fake one: username@bitebox.com
+        const finalEmail = email || `${username.replace(/\s+/g, '').toLowerCase()}@bitebox.com`;
+
         const owner = await Owner.create({
             username,
-            // 🛡️ Fallback: If frontend doesn't send email, make a fake one to prevent crash
-            email: email || `${username.replace(/\s+/g, '').toLowerCase()}@bitebox.com`, 
+            email: finalEmail,       // ✅ Satisfies "email required"
             password,
             restaurantName,
-            trialEndsAt: trialEndDate, // ✅ FIXED: Added required field
+            trialEndsAt: trialEndDate, // ✅ Satisfies "trialEndsAt required"
             chefPassword: chefPassword || "bitebox18", 
             waiterPassword: waiterPassword || "bitebox18"
         });
@@ -52,14 +53,13 @@ router.post('/register', async (req, res) => {
             res.status(400).json({ message: 'Invalid user data' });
         }
     } catch (error) {
-        console.error("Register Error:", error); // Log error to console for debugging
+        console.error("Register Error:", error);
         res.status(500).json({ message: error.message });
     }
 });
 
-// ... (Keep your login and other routes below this line unchanged)
-// IF YOU NEED THE FULL FILE REPASTED, LET ME KNOW.
-// But mostly just the 'register' route needed fixing.
+// ... (Keep the rest of your routes: login, verify-role, profile, restaurants) ...
+// The rest of the file does not need changes.
 
 router.post('/login', async (req, res) => {
     const { username, password } = req.body;
@@ -82,26 +82,16 @@ router.post('/login', async (req, res) => {
 
 router.post('/verify-role', async (req, res) => {
     const { username, password, role } = req.body;
-
     try {
         const owner = await Owner.findOne({ username });
-        if (!owner) {
-            return res.status(404).json({ success: false, message: "Restaurant not found" });
-        }
+        if (!owner) return res.status(404).json({ success: false, message: "Restaurant not found" });
 
         let isMatch = false;
-        if (role === 'chef') {
-            isMatch = owner.chefPassword === password;
-        } else if (role === 'waiter') {
-            isMatch = owner.waiterPassword === password;
-        }
+        if (role === 'chef') isMatch = owner.chefPassword === password;
+        else if (role === 'waiter') isMatch = owner.waiterPassword === password;
 
         if (isMatch) {
-            res.json({
-                success: true,
-                restaurantId: owner._id,
-                restaurantName: owner.restaurantName
-            });
+            res.json({ success: true, restaurantId: owner._id, restaurantName: owner.restaurantName });
         } else {
             res.status(401).json({ success: false, message: `Invalid ${role} password` });
         }
@@ -113,11 +103,8 @@ router.post('/verify-role', async (req, res) => {
 router.get('/profile', protect, async (req, res) => {
     try {
         const owner = await Owner.findById(req.user._id).select('-password');
-        if (owner) {
-            res.json(owner);
-        } else {
-            res.status(404).json({ message: 'Owner not found' });
-        }
+        if (owner) res.json(owner);
+        else res.status(404).json({ message: 'Owner not found' });
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
