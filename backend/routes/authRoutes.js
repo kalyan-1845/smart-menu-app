@@ -5,38 +5,38 @@ import { protect } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-/**
- * 🛠️ HELPER: Generate JWT Token
- * Used to keep users logged into their respective dashboards.
- */
 const generateToken = (id) => {
     return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '30d' });
 };
 
-// --- 1. OWNER AUTHENTICATION (Restaurant Admin) ---
+// --- 1. OWNER AUTHENTICATION ---
 
-/**
- * @route   POST /api/auth/register
- * @desc    Register a new Restaurant Owner
- * @access  Public
- */
 router.post('/register', async (req, res) => {
-    const { username, password, restaurantName, chefPassword, waiterPassword } = req.body;
+    // 1. Get email from body (Frontend must send this!)
+    const { username, email, password, restaurantName, chefPassword, waiterPassword } = req.body;
 
     try {
-        // Check if user already exists
-        const userExists = await Owner.findOne({ username });
+        // 2. Check if user exists (by username OR email)
+        const userExists = await Owner.findOne({ 
+            $or: [{ username }, { email }] 
+        });
 
         if (userExists) {
-            return res.status(400).json({ message: 'Username already exists' });
+            return res.status(400).json({ message: 'Username or Email already exists' });
         }
 
-        // Create new Owner
+        // 3. 🗓️ AUTO-CALCULATE TRIAL END DATE (60 Days from now)
+        const trialEndDate = new Date();
+        trialEndDate.setDate(trialEndDate.getDate() + 60);
+
+        // 4. Create Owner with ALL required fields
         const owner = await Owner.create({
             username,
+            email: email || `${username}@example.com`, // Fallback if frontend forgets email
             password,
             restaurantName,
-            chefPassword, // Ensure your Schema has these fields if you want to save them
+            trialEndsAt: trialEndDate, // ✅ FIXED: Added required field
+            chefPassword, 
             waiterPassword
         });
 
@@ -51,15 +51,11 @@ router.post('/register', async (req, res) => {
             res.status(400).json({ message: 'Invalid user data' });
         }
     } catch (error) {
+        console.error("Register Error:", error); // Log error to console for debugging
         res.status(500).json({ message: error.message });
     }
 });
 
-/**
- * @route   POST /api/auth/login
- * @desc    Login for Restaurant Owners
- * @access  Public
- */
 router.post('/login', async (req, res) => {
     const { username, password } = req.body;
     try {
@@ -79,15 +75,8 @@ router.post('/login', async (req, res) => {
     }
 });
 
-// --- 2. STAFF ROLE VERIFICATION (Chef & Waiter) ---
+// --- 2. STAFF ROLE VERIFICATION ---
 
-/**
- * @route   POST /api/auth/verify-role
- * @desc    Verify passwords for Chef or Waiter dashboards
- * @access  Public
- * @context This allows the Chef/Waiter to login using the restaurant username 
- * and the specific staff password set by the owner.
- */
 router.post('/verify-role', async (req, res) => {
     const { username, password, role } = req.body;
 
@@ -98,7 +87,6 @@ router.post('/verify-role', async (req, res) => {
         }
 
         let isMatch = false;
-        // Logic to check role-specific passwords stored in the Owner model
         if (role === 'chef') {
             isMatch = owner.chefPassword === password;
         } else if (role === 'waiter') {
@@ -121,11 +109,6 @@ router.post('/verify-role', async (req, res) => {
 
 // --- 3. OWNER PROFILE ---
 
-/**
- * @route   GET /api/auth/profile
- * @desc    Get logged-in owner details
- * @access  Protected
- */
 router.get('/profile', protect, async (req, res) => {
     try {
         const owner = await Owner.findById(req.user._id).select('-password');
@@ -139,11 +122,6 @@ router.get('/profile', protect, async (req, res) => {
     }
 });
 
-/**
- * @route   GET /api/auth/restaurants
- * @desc    Fetch all registered restaurants (Used by Super Admin)
- * @access  Public (Can be protected if needed)
- */
 router.get('/restaurants', async (req, res) => {
     try {
         const owners = await Owner.find({}).select('-password');
