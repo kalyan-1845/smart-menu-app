@@ -1,136 +1,117 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-import { 
-    FaArrowLeft, FaTrash, FaMobileAlt, FaMoneyBillWave, 
-    FaMapMarkerAlt, FaCommentDots, FaLock, FaSpinner, FaExclamationTriangle 
-} from "react-icons/fa";
+import { FaArrowLeft, FaTrash, FaMobileAlt, FaMoneyBillWave } from "react-icons/fa";
 
 const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, tableNum, setTableNum }) => {
     const navigate = useNavigate();
 
     // --- STATE ---
     const [customerName, setCustomerName] = useState("");
-    const [chefNote, setChefNote] = useState(""); 
+    const [restaurant, setRestaurant] = useState(null);
     const [showTableModal, setShowTableModal] = useState(!tableNum);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [realRestaurantId, setRealRestaurantId] = useState(null);
-    const [errorMsg, setErrorMsg] = useState("");
-
+    
+    const [selectedSpecs, setSelectedSpecs] = useState({});
     const tableOptions = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, "Takeaway"];
     const totalPrice = cart.reduce((total, item) => total + (item.price * item.quantity), 0);
 
-    // --- 1. AUTO-FIX RESTAURANT ID ---
+    // --- 1. FETCH RESTAURANT DETAILS ---
     useEffect(() => {
-        const resolveId = async () => {
-            const storedId = restaurantId || localStorage.getItem("activeResId");
-            if (!storedId) return;
-
-            // Check if it looks like a valid ID (24 chars, no spaces)
-            if (storedId.length === 24 && !storedId.includes(" ")) {
-                setRealRestaurantId(storedId);
-                return;
-            }
-
-            // If it's a username (e.g. "deccanfresh"), convert it to ID
-            try {
-                const res = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/auth/restaurant/${storedId}`);
-                if (res.data?._id) {
-                    setRealRestaurantId(res.data._id);
-                    // Update local storage so we don't ask again
-                    localStorage.setItem("activeResId", res.data._id);
+        const fetchRestaurant = async () => {
+            if (restaurantId) {
+                try {
+                    const res = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/auth/restaurant/${restaurantId}`);
+                    setRestaurant(res.data);
+                } catch (err) {
+                    console.error("Error fetching restaurant details:", err);
                 }
-            } catch (err) {
-                console.error("ID Fix Failed:", err);
-                setErrorMsg("Restaurant System Offline. Please Scan QR Again.");
             }
         };
-        resolveId();
+        fetchRestaurant();
     }, [restaurantId]);
 
-    // --- 2. SUBMIT ORDER (Safe Mode) ---
-    const submitOrder = async (paymentType) => {
+    // --- 2. SUBMIT ORDER FUNCTION ---
+    const processOrder = async (paymentMethod) => {
         // Validation
         if (!customerName.trim()) { alert("Please enter your name!"); return; }
         if (!tableNum) { setShowTableModal(true); return; }
-        if (cart.length === 0) { alert("Cart is empty!"); return; }
-        if (!realRestaurantId) { alert("❌ System Error: Please re-scan the QR code."); return; }
+        if (cart.length === 0) { alert("Your cart is empty!"); return; }
 
         setIsSubmitting(true);
-        setErrorMsg("");
 
-        // 🛡️ DATA SANITIZATION (The Fix for 400 Errors)
-        const cleanItems = cart.map(item => ({
-            dishId: item._id || item.id, // Handle both ID formats
-            name: item.name,
-            quantity: Number(item.quantity),
-            price: Number(item.price)
-        })).filter(item => item.dishId); // Remove items with no ID
-
-        if (cleanItems.length === 0) {
-            alert("❌ Error: Your cart contains invalid items. Please clear cart and add again.");
-            setIsSubmitting(false);
-            return;
-        }
-
-        const orderPayload = {
+        // Prepare Order Data
+        const orderData = {
             customerName: customerName,
-            tableNum: tableNum.toString(),
-            items: cleanItems,
-            note: chefNote, 
+            tableNumber: tableNum.toString(),
+            items: cart.map(item => ({
+                name: item.name,
+                quantity: item.quantity,
+                price: item.price,
+                customizations: selectedSpecs[item._id] || [] 
+            })),
             totalAmount: totalPrice,
-            paymentMethod: paymentType === "ONLINE" ? "Online" : "Cash", 
-            paymentStatus: "Pending",
-            restaurantId: realRestaurantId, 
-            status: "Pending"
+            // Map frontend selection to backend enum
+            paymentMethod: paymentMethod === "ONLINE" ? "UPI_ONLINE" : "CASH", 
+            transactionId: paymentMethod === "ONLINE" ? "AUTO_REDIRECT" : "PAY_AT_COUNTER", 
+            owner: restaurantId,
+            status: "PLACED"
         };
 
         try {
-            const res = await axios.post("https://smart-menu-backend-5ge7.onrender.com/api/orders", orderPayload);
+            // 1. Send Order to Backend
+            const response = await axios.post("https://smart-menu-backend-5ge7.onrender.com/api/orders", orderData);
             
-            // Success!
+            // 2. Save to Local History
             const history = JSON.parse(localStorage.getItem("smartMenu_History") || "[]");
-            localStorage.setItem("smartMenu_History", JSON.stringify([res.data._id, ...history]));
+            localStorage.setItem("smartMenu_History", JSON.stringify([response.data._id, ...history]));
             
             clearCart(); 
-            navigate(`/track/${res.data._id}`);
+
+            // 3. Handle Redirections based on Method
+            if (paymentMethod === "ONLINE" && restaurant?.upiId) {
+                // Construct UPI Link
+                const cleanName = restaurant.username.replace(/\s/g, '');
+                const upiLink = `upi://pay?pa=${restaurant.upiId}&pn=${cleanName}&am=${totalPrice}&cu=INR`;
+                
+                // Open Payment App (Waiter will bring QR if this fails or user prefers)
+                window.location.href = upiLink;
+
+                // Move to Tracker after a short delay
+                setTimeout(() => {
+                    navigate(`/track/${response.data._id}`);
+                }, 1000);
+            } else {
+                // Cash -> Go straight to tracker
+                navigate(`/track/${response.data._id}`);
+            }
 
         } catch (error) {
-            console.error("Submission Error:", error);
-            // Show the EXACT error from the server so we know what's wrong
-            const serverMessage = error.response?.data?.message || error.message;
-            setErrorMsg(`Order Failed: ${serverMessage}`);
+            console.error("Submission error:", error);
+            alert(`Order Failed: ${error.response?.data?.message || error.message}`);
             setIsSubmitting(false);
         }
     };
 
+    // --- RENDER ---
     return (
-        <div style={styles.container}>
-            {/* ERROR BANNER */}
-            {errorMsg && (
-                <div style={styles.errorBanner}>
-                    <FaExclamationTriangle /> {errorMsg}
-                </div>
-            )}
-
-            {/* LOADING OVERLAY */}
-            {isSubmitting && (
-                <div style={styles.loadingOverlay}>
-                    <FaSpinner className="spin" size={40} color="#f97316" />
-                    <p style={{ marginTop: '15px', fontWeight: 'bold' }}>Sending Order...</p>
-                </div>
-            )}
-
-            {/* TABLE MODAL */}
+        <div style={{ 
+            minHeight: '100vh', background: '#050505', color: 'white', 
+            padding: '15px', paddingBottom: '140px', // Extra padding for the fixed footer
+            width: '100%', maxWidth: '600px', margin: '0 auto', 
+            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+            overflowX: 'hidden', boxSizing: 'border-box'
+        }}>
+            
+            {/* 1. TABLE MODAL */}
             {showTableModal && (
-                <div style={styles.modalOverlay}>
-                    <div style={styles.modalCard}>
-                        <div style={styles.iconCircle}><FaMapMarkerAlt /></div>
-                        <h2 style={{ textAlign: 'center', margin: '0 0 10px 0' }}>Select Table</h2>
-                        <div style={styles.tableGrid}>
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.95)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+                    <div style={{ background: '#111', width: '100%', maxWidth: '400px', borderRadius: '32px', padding: '30px', border: '1px solid #222' }}>
+                        <h2 style={{ textAlign: 'center', marginBottom: '8px' }}>Select Table</h2>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginTop: '20px' }}>
                             {tableOptions.map((opt) => (
                                 <button key={opt} onClick={() => { setTableNum(opt); setShowTableModal(false); }} 
-                                    style={{ ...styles.tableBtn, background: tableNum === opt ? '#f97316' : '#1a1a1a', borderColor: tableNum === opt ? '#f97316' : '#333' }}>
+                                    style={{ padding: '15px', borderRadius: '16px', border: '1px solid #333', background: tableNum === opt ? '#f97316' : '#1a1a1a', color: 'white', fontWeight: 'bold' }}>
                                     {opt}
                                 </button>
                             ))}
@@ -139,100 +120,110 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                 </div>
             )}
 
-            {/* HEADER */}
-            <div style={styles.header}>
-                <button onClick={() => navigate(-1)} style={styles.backBtn}><FaArrowLeft /></button>
-                <h1 style={{ fontSize: '20px', fontWeight: '800', letterSpacing: '-0.5px' }}>Your Bag</h1>
+            {/* 2. HEADER */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '20px' }}>
+                <button onClick={() => navigate(-1)} style={{ border: 'none', color: 'white', background: '#1a1a1a', width: '40px', height: '40px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><FaArrowLeft /></button>
+                <h1 style={{ fontSize: '20px', fontWeight: '900', margin: 0 }}>Review Order</h1>
             </div>
 
-            {/* INFO CARD */}
-            <div style={styles.card}>
-                <div onClick={() => setShowTableModal(true)} style={styles.rowBetween}>
+            {/* 3. INFO CARD */}
+            <div style={{ background: '#111', padding: '20px', borderRadius: '24px', marginBottom: '15px', border: '1px solid #1a1a1a' }}>
+                <div onClick={() => setShowTableModal(true)} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px', cursor: 'pointer', alignItems: 'center' }}>
                     <div>
-                        <p style={styles.label}>DELIVER TO</p>
-                        <div style={{ color: '#f97316', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <FaMapMarkerAlt size={14}/> {tableNum ? `Table ${tableNum}` : "Choose Table"}
+                        <p style={{ color: '#555', fontSize: '10px', fontWeight: '900', letterSpacing: '1px', marginBottom: '4px' }}>DELIVERING TO</p>
+                        <div style={{ margin: 0, color: '#f97316', fontSize: '18px', fontWeight: 'bold' }}>
+                            {tableNum ? `Table ${tableNum}` : "Select Table"}
                         </div>
                     </div>
-                    <span style={styles.editBtn}>CHANGE</span>
-                </div>
-                <div style={{ width: '100%', height: '1px', background: '#222', margin: '15px 0' }}></div>
-                <div>
-                    <p style={styles.label}>GUEST NAME</p>
-                    <input type="text" placeholder="Enter your name..." value={customerName} onChange={(e) => setCustomerName(e.target.value)} style={styles.input} />
-                </div>
-            </div>
-
-            {/* CART ITEMS */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', paddingBottom: '20px' }}>
-                {cart.map((item) => (
-                    <div key={item._id || item.id} style={styles.itemCard}>
-                        <img src={item.image || "https://via.placeholder.com/60"} alt="" style={styles.itemImage} />
-                        <div style={{ flex: 1 }}>
-                            <h4 style={{ margin: '0 0 4px 0', fontSize: '15px', fontWeight: '600' }}>{item.name}</h4>
-                            <p style={{ margin: 0, color: '#888', fontSize: '12px' }}>₹{item.price} x {item.quantity}</p>
-                        </div>
-                        <div style={styles.qtyWrapper}>
-                            <button onClick={() => updateQuantity(item._id || item.id, item.quantity - 1)} style={styles.qtyBtn}>-</button>
-                            <span style={{ fontSize: '14px', fontWeight: 'bold' }}>{item.quantity}</span>
-                            <button onClick={() => updateQuantity(item._id || item.id, item.quantity + 1)} style={{...styles.qtyBtn, color: '#f97316'}}>+</button>
-                        </div>
-                        <button onClick={() => removeFromCart(item._id || item.id)} style={styles.deleteBtn}><FaTrash size={14}/></button>
-                    </div>
-                ))}
-            </div>
-
-            {/* CHEF NOTE */}
-            <p style={styles.label}><FaCommentDots /> KITCHEN NOTE</p>
-            <textarea placeholder="Allergies? Spice level?" value={chefNote} onChange={(e) => setChefNote(e.target.value)} style={styles.textArea} />
-
-            {/* FOOTER */}
-            <div style={styles.footer}>
-                <div style={styles.rowBetween}>
-                    <span style={{ color: '#888', fontWeight: '600' }}>Total to Pay</span>
-                    <span style={{ fontSize: '22px', fontWeight: '900', color: 'white' }}>₹{totalPrice}</span>
+                    <span style={{ color: '#888', fontSize: '11px', fontWeight: 'bold', background: '#222', padding: '6px 12px', borderRadius: '8px' }}>Change</span>
                 </div>
                 
-                <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
-                    <button onClick={() => submitOrder("CASH")} style={{ ...styles.payBtn, background: '#1a1a1a', border: '1px solid #333', color: '#f97316' }}>
-                        <FaMoneyBillWave size={18} /> Pay Cash
+                <div style={{ borderTop: '1px solid #222', paddingTop: '15px' }}>
+                    <p style={{ color: '#555', fontSize: '10px', fontWeight: '900', letterSpacing: '1px', marginBottom: '8px' }}>YOUR NAME</p>
+                    <input type="text" placeholder="e.g., John Doe" value={customerName} onChange={(e) => setCustomerName(e.target.value)}
+                        style={{ width: '100%', padding: '12px', background: '#080808', border: '1px solid #222', borderRadius: '12px', color: 'white', outline: 'none', fontWeight: 'bold', fontSize: '16px' }} />
+                </div>
+            </div>
+
+            {/* 4. CART LIST */}
+            {cart.length === 0 ? (
+                <div style={{textAlign: 'center', padding: '40px', color: '#444'}}>
+                    <p>Your cart is empty.</p>
+                </div>
+            ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {cart.map((item) => (
+                        <div key={item._id} style={{ background: '#111', padding: '12px', borderRadius: '20px', border: '1px solid #1a1a1a' }}>
+                            <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                                {item.image ? (
+                                    <img src={item.image} alt="" style={{ width: '50px', height: '50px', borderRadius: '12px', objectFit: 'cover' }} />
+                                ) : (
+                                    <div style={{width: '50px', height: '50px', borderRadius: '12px', background: '#222'}}></div>
+                                )}
+                                <div style={{ flex: 1 }}>
+                                    <h4 style={{ margin: 0, fontSize: '14px', fontWeight: '600' }}>{item.name}</h4>
+                                    <p style={{ margin: '2px 0 0 0', color: '#f97316', fontWeight: '800', fontSize: '13px' }}>₹{item.price * item.quantity}</p>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#080808', padding: '5px 10px', borderRadius: '10px' }}>
+                                    <button onClick={() => updateQuantity(item._id, item.quantity - 1)} style={{ background: 'none', border: 'none', color: '#555', fontSize: '16px', cursor: 'pointer' }}>-</button>
+                                    <span style={{ fontSize: '12px', fontWeight: '900' }}>{item.quantity}</span>
+                                    <button onClick={() => updateQuantity(item._id, item.quantity + 1)} style={{ background: 'none', border: 'none', color: '#f97316', fontSize: '16px', cursor: 'pointer' }}>+</button>
+                                </div>
+                                <button onClick={() => removeFromCart(item._id)} style={{background: 'none', border: 'none', color: '#333', cursor: 'pointer', padding: '5px'}}>
+                                    <FaTrash size={12}/>
+                                </button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {/* 5. SIMPLIFIED FOOTER (Pay Online & Cash) */}
+            <div style={{ 
+                position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', 
+                width: '100%', maxWidth: '600px', 
+                padding: '20px 30px', // Increased side padding to make buttons "not width of mobile"
+                background: 'rgba(5, 5, 5, 0.98)', backdropFilter: 'blur(15px)', 
+                borderTop: '1px solid #222', 
+                display: 'flex', flexDirection: 'column', gap: '12px'
+            }}>
+                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                    <span style={{ color: '#888', fontWeight: 'bold', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>TOTAL TO PAY</span>
+                    <span style={{ fontSize: '24px', fontWeight: '900', color: 'white' }}>₹{totalPrice}</span>
+                </div>
+
+                <div style={{ display: 'flex', gap: '12px' }}>
+                    {/* PAY ONLINE BUTTON */}
+                    <button 
+                        onClick={() => processOrder("ONLINE")} 
+                        disabled={isSubmitting}
+                        style={{ 
+                            flex: 1, height: '50px', borderRadius: '12px', border: '1px solid #333', 
+                            background: '#1a1a1a', color: '#f97316', fontSize: '13px', fontWeight: 'bold', 
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                            cursor: isSubmitting ? 'not-allowed' : 'pointer'
+                        }}
+                    >
+                        <FaMobileAlt size={16} /> Pay Online
                     </button>
-                    <button onClick={() => submitOrder("ONLINE")} style={{ ...styles.payBtn, background: '#f97316', color: '#000' }}>
-                        <FaMobileAlt size={18} /> Pay Online
+
+                    {/* CASH ON COUNTER BUTTON */}
+                    <button 
+                        onClick={() => processOrder("CASH")} 
+                        disabled={isSubmitting}
+                        style={{ 
+                            flex: 1, height: '50px', borderRadius: '12px', border: 'none', 
+                            background: '#f97316', color: 'white', fontSize: '13px', fontWeight: 'bold', 
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                            cursor: isSubmitting ? 'not-allowed' : 'pointer'
+                        }}
+                    >
+                        <FaMoneyBillWave size={16} /> Cash on Counter
                     </button>
                 </div>
-                <p style={styles.secureMsg}><FaLock size={10}/> Order sent directly to Waiter</p>
             </div>
-            <style>{`.spin { animation: spin 1s linear infinite; } @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
         </div>
     );
-};
-
-const styles = {
-    container: { minHeight: '100vh', background: '#000', color: 'white', padding: '20px', paddingBottom: '200px', fontFamily: 'Inter, sans-serif' },
-    errorBanner: { background: '#dc2626', color: 'white', padding: '15px', borderRadius: '10px', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', fontWeight: 'bold' },
-    loadingOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.9)', zIndex: 2000, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' },
-    modalOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.95)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' },
-    modalCard: { background: '#111', width: '100%', maxWidth: '350px', borderRadius: '24px', padding: '30px', border: '1px solid #222' },
-    iconCircle: { width: '50px', height: '50px', borderRadius: '50%', background: 'rgba(249, 115, 22, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 15px', color: '#f97316' },
-    tableGrid: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' },
-    tableBtn: { padding: '12px', borderRadius: '12px', border: '1px solid #333', color: 'white', fontWeight: 'bold', fontSize: '14px' },
-    header: { display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '25px' },
-    backBtn: { background: '#111', border: 'none', color: 'white', width: '40px', height: '40px', borderRadius: '12px', cursor: 'pointer' },
-    card: { background: '#111', padding: '20px', borderRadius: '20px', marginBottom: '20px', border: '1px solid #1a1a1a' },
-    rowBetween: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-    label: { color: '#666', fontSize: '10px', fontWeight: '800', letterSpacing: '1px', marginBottom: '8px' },
-    editBtn: { color: '#f97316', fontSize: '11px', fontWeight: '800', cursor: 'pointer' },
-    input: { width: '100%', padding: '12px 0', background: 'transparent', border: 'none', borderBottom: '1px solid #333', color: 'white', fontWeight: '600', fontSize: '16px', outline: 'none' },
-    itemCard: { background: '#111', padding: '12px', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '15px', border: '1px solid #1a1a1a' },
-    itemImage: { width: '50px', height: '50px', borderRadius: '10px', objectFit: 'cover' },
-    qtyWrapper: { display: 'flex', alignItems: 'center', gap: '12px', background: '#000', padding: '6px 12px', borderRadius: '10px' },
-    qtyBtn: { background: 'none', border: 'none', color: '#fff', fontWeight: 'bold', cursor: 'pointer' },
-    deleteBtn: { background: 'rgba(255,255,255,0.05)', border: 'none', color: '#666', width: '30px', height: '30px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' },
-    textArea: { width: '100%', padding: '15px', background: '#111', border: '1px solid #222', borderRadius: '15px', color: 'white', minHeight: '80px', marginTop: '5px', fontSize: '14px' },
-    footer: { position: 'fixed', bottom: 0, left: 0, width: '100%', padding: '25px', background: 'rgba(0,0,0,0.95)', borderTop: '1px solid #222', zIndex: 100, backdropFilter: 'blur(10px)' },
-    payBtn: { flex: 1, padding: '16px', borderRadius: '14px', fontWeight: '800', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', fontSize: '14px', cursor: 'pointer', transition: 'transform 0.1s' },
-    secureMsg: { textAlign: 'center', fontSize: '10px', color: '#444', marginTop: '15px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px' }
 };
 
 export default Cart;
