@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import io from "socket.io-client"; 
-import { FaArrowLeft, FaTrash, FaMobileAlt, FaMoneyBillWave } from "react-icons/fa";
+import { FaArrowLeft, FaTrash, FaMobileAlt, FaMoneyBillWave, FaCircle } from "react-icons/fa";
 
 // 🔗 SMART API CONNECTION
 const SERVER_URL = window.location.hostname === "localhost" || window.location.hostname.startsWith("192.168")
@@ -10,6 +10,22 @@ const SERVER_URL = window.location.hostname === "localhost" || window.location.h
     : "https://smart-menu-backend-5ge7.onrender.com";
 
 const API_BASE = `${SERVER_URL}/api`;
+
+// --- NEW GLOW ANIMATIONS ---
+const glowStyles = `
+@keyframes pulseGlow {
+  0% { box-shadow: 0 0 5px rgba(249, 115, 22, 0.4), 0 0 10px rgba(249, 115, 22, 0.2); }
+  50% { box-shadow: 0 0 20px rgba(249, 115, 22, 0.8), 0 0 30px rgba(249, 115, 22, 0.4); }
+  100% { box-shadow: 0 0 5px rgba(249, 115, 22, 0.4), 0 0 10px rgba(249, 115, 22, 0.2); }
+}
+.glow-button {
+  animation: pulseGlow 2s infinite ease-in-out;
+}
+.glass-input:focus {
+  border-color: #f97316 !important;
+  box-shadow: 0 0 15px rgba(249, 115, 22, 0.3);
+}
+`;
 
 const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, tableNum, setTableNum }) => {
     const navigate = useNavigate();
@@ -24,7 +40,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
     const tableOptions = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, "Takeaway"];
     const totalPrice = cart.reduce((total, item) => total + (item.price * item.quantity), 0);
 
-    // --- 1. FETCH RESTAURANT DETAILS ---
+    // --- FETCH RESTAURANT DETAILS ---
     useEffect(() => {
         const fetchRestaurant = async () => {
             if (restaurantId) {
@@ -39,16 +55,17 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
         fetchRestaurant();
     }, [restaurantId]);
 
-    // --- 2. UNIFIED ORDER FUNCTION ---
+    // --- ORDER SUCCESS REDIRECT LOGIC ---
     const processOrder = async (paymentMethod) => {
-        // Validation
+        // Validation Fixes
         if (!customerName.trim()) { alert("Please enter your name!"); return; }
         if (!tableNum) { setShowTableModal(true); return; }
         if (cart.length === 0) { alert("Your cart is empty!"); return; }
+        if (!restaurantId) { alert("System Error: Restaurant ID missing. Please reload."); return; }
 
         setIsSubmitting(true);
 
-        // ✅ Payload matching your Backend Schema EXACTLY
+        // ✅ Payload matching your Backend Schema + Inbox Flag
         const orderData = {
             customerName: customerName,
             tableNum: tableNum.toString(), 
@@ -58,55 +75,58 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                 price: item.price
             })),
             totalAmount: totalPrice,
-            // Even if "Online" is clicked, we treat it as a placed order that goes to tracker
             paymentMethod: paymentMethod === "ONLINE" ? "Online" : "Cash",
             restaurantId: restaurantId,
-            status: "Pending" 
+            status: "Pending",
+            isDownloaded: false // 📥 This marks it for the Admin Inbox
         };
 
         try {
-            // 1. Send to Backend
+            // 1. Save to Database
             const response = await axios.post(`${API_BASE}/orders`, orderData);
             
-            // 2. Notify Owner (Ding!)
+            // 2. Socket Notification to Owner
             const socket = io(SERVER_URL);
             socket.emit("new-order", response.data); 
             
-            // 3. Save History & Clear Cart
+            // 3. Store History
             const history = JSON.parse(localStorage.getItem("smartMenu_History") || "[]");
             localStorage.setItem("smartMenu_History", JSON.stringify([response.data._id, ...history]));
+            
+            // 4. Clear Cart
             clearCart(); 
 
-            // 4. INSTANT REDIRECT (Logic you requested)
-            // Whether they clicked Cash or Online, we send them to Tracker.
-            // If Online, we could open UPI here, but to "work fast" as requested, we redirect immediately.
+            // 5. REDIRECT TO TRACKER (As requested)
             navigate(`/track/${response.data._id}`);
 
         } catch (error) {
             console.error("Submission error:", error);
-            alert(`Order Failed: ${error.response?.data?.message || error.message}`);
+            alert(`Order Failed: ${error.response?.data?.message || "Check your network"}`);
             setIsSubmitting(false);
         }
     };
 
-    // --- RENDER ---
     return (
         <div style={{ 
             minHeight: '100vh', background: '#050505', color: 'white', 
-            padding: '15px', paddingBottom: '140px', 
+            padding: '15px', paddingBottom: '160px', 
             width: '100%', maxWidth: '600px', margin: '0 auto', 
-            fontFamily: 'sans-serif', overflowX: 'hidden', boxSizing: 'border-box'
+            fontFamily: "'Inter', sans-serif", overflowX: 'hidden', boxSizing: 'border-box'
         }}>
+            <style>{glowStyles}</style>
             
-            {/* 1. TABLE MODAL */}
+            {/* GLOWING BACKGROUND EFFECT */}
+            <div style={{ position: 'fixed', top: '-10%', left: '50%', transform: 'translateX(-50%)', width: '300px', height: '300px', background: 'rgba(249, 115, 22, 0.15)', filter: 'blur(100px)', zIndex: 0 }}></div>
+
+            {/* TABLE SELECTION MODAL */}
             {showTableModal && (
-                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.95)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-                    <div style={{ background: '#111', width: '100%', maxWidth: '400px', borderRadius: '32px', padding: '30px', border: '1px solid #222' }}>
-                        <h2 style={{ textAlign: 'center', marginBottom: '8px' }}>Select Table</h2>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginTop: '20px' }}>
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.9)', backdropFilter: 'blur(10px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+                    <div style={{ background: '#111', width: '100%', maxWidth: '400px', borderRadius: '32px', padding: '30px', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 0 30px rgba(249, 115, 22, 0.2)' }}>
+                        <h2 style={{ textAlign: 'center', marginBottom: '20px', fontWeight: '900' }}>Select Table</h2>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
                             {tableOptions.map((opt) => (
                                 <button key={opt} onClick={() => { setTableNum(opt); setShowTableModal(false); }} 
-                                    style={{ padding: '15px', borderRadius: '16px', border: '1px solid #333', background: tableNum === opt ? '#f97316' : '#1a1a1a', color: 'white', fontWeight: 'bold' }}>
+                                    style={{ padding: '15px', borderRadius: '16px', border: '1px solid #333', background: tableNum === opt ? '#f97316' : '#1a1a1a', color: 'white', fontWeight: 'bold', boxShadow: tableNum === opt ? '0 0 15px rgba(249, 115, 22, 0.5)' : 'none', transition: '0.3s' }}>
                                     {opt}
                                 </button>
                             ))}
@@ -115,80 +135,78 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                 </div>
             )}
 
-            {/* 2. HEADER */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '20px' }}>
-                <button onClick={() => navigate(-1)} style={{ border: 'none', color: 'white', background: '#1a1a1a', width: '40px', height: '40px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><FaArrowLeft /></button>
-                <h1 style={{ fontSize: '20px', fontWeight: '900', margin: 0 }}>Review Order</h1>
+            {/* HEADER */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '30px', position: 'relative', zIndex: 1 }}>
+                <button onClick={() => navigate(-1)} style={{ border: 'none', color: 'white', background: 'rgba(255,255,255,0.05)', width: '45px', height: '45px', borderRadius: '15px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', border: '1px solid rgba(255,255,255,0.1)' }}><FaArrowLeft /></button>
+                <h1 style={{ fontSize: '24px', fontWeight: '900', margin: 0, letterSpacing: '-1px' }}>Review Order</h1>
             </div>
 
-            {/* 3. INFO CARD */}
-            <div style={{ background: '#111', padding: '20px', borderRadius: '24px', marginBottom: '15px', border: '1px solid #1a1a1a' }}>
-                <div onClick={() => setShowTableModal(true)} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px', cursor: 'pointer', alignItems: 'center' }}>
+            {/* INFO CARD (Glow Border) */}
+            <div style={{ background: 'rgba(255,255,255,0.03)', padding: '24px', borderRadius: '28px', marginBottom: '20px', border: '1px solid rgba(255,255,255,0.08)', backdropFilter: 'blur(10px)' }}>
+                <div onClick={() => setShowTableModal(true)} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px', cursor: 'pointer', alignItems: 'center' }}>
                     <div>
-                        <p style={{ color: '#555', fontSize: '10px', fontWeight: '900', letterSpacing: '1px', marginBottom: '4px' }}>DELIVERING TO</p>
-                        <div style={{ margin: 0, color: '#f97316', fontSize: '18px', fontWeight: 'bold' }}>
+                        <p style={{ color: '#888', fontSize: '10px', fontWeight: '900', letterSpacing: '1px', marginBottom: '6px' }}>DELIVERING TO</p>
+                        <div style={{ margin: 0, color: '#f97316', fontSize: '20px', fontWeight: '900', textShadow: '0 0 10px rgba(249, 115, 22, 0.3)' }}>
                             {tableNum ? `Table ${tableNum}` : "Select Table"}
                         </div>
                     </div>
-                    <span style={{ color: '#888', fontSize: '11px', fontWeight: 'bold', background: '#222', padding: '6px 12px', borderRadius: '8px' }}>Change</span>
+                    <span style={{ color: 'white', fontSize: '11px', fontWeight: 'bold', background: 'rgba(249, 115, 22, 0.2)', padding: '8px 16px', borderRadius: '12px', border: '1px solid rgba(249, 115, 22, 0.3)', transition: '0.3s' }}>Change</span>
                 </div>
                 
-                <div style={{ borderTop: '1px solid #222', paddingTop: '15px' }}>
-                    <p style={{ color: '#555', fontSize: '10px', fontWeight: '900', letterSpacing: '1px', marginBottom: '8px' }}>YOUR NAME</p>
-                    <input type="text" placeholder="e.g., John Doe" value={customerName} onChange={(e) => setCustomerName(e.target.value)}
-                        style={{ width: '100%', padding: '12px', background: '#080808', border: '1px solid #222', borderRadius: '12px', color: 'white', outline: 'none', fontWeight: 'bold', fontSize: '16px' }} />
+                <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '20px' }}>
+                    <p style={{ color: '#888', fontSize: '10px', fontWeight: '900', letterSpacing: '1px', marginBottom: '10px' }}>YOUR NAME</p>
+                    <input type="text" placeholder="Enter name for order" value={customerName} onChange={(e) => setCustomerName(e.target.value)}
+                        className="glass-input"
+                        style={{ width: '100%', padding: '16px', background: '#080808', border: '1px solid #222', borderRadius: '16px', color: 'white', outline: 'none', fontWeight: '600', fontSize: '16px', transition: '0.3s' }} 
+                    />
                 </div>
             </div>
 
-            {/* 4. CART LIST */}
-            {cart.length === 0 ? (
-                <div style={{textAlign: 'center', padding: '40px', color: '#444'}}>
-                    <p>Your cart is empty.</p>
-                </div>
-            ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    {cart.map((item) => (
-                        <div key={item._id} style={{ background: '#111', padding: '12px', borderRadius: '20px', border: '1px solid #1a1a1a' }}>
-                            <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                                <div style={{ flex: 1 }}>
-                                    <h4 style={{ margin: 0, fontSize: '14px', fontWeight: '600' }}>{item.name}</h4>
-                                    <p style={{ margin: '2px 0 0 0', color: '#f97316', fontWeight: '800', fontSize: '13px' }}>₹{item.price * item.quantity}</p>
-                                </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#080808', padding: '5px 10px', borderRadius: '10px' }}>
-                                    <button onClick={() => updateQuantity(item._id, item.quantity - 1)} style={{ background: 'none', border: 'none', color: '#555', fontSize: '16px', cursor: 'pointer' }}>-</button>
-                                    <span style={{ fontSize: '12px', fontWeight: '900' }}>{item.quantity}</span>
-                                    <button onClick={() => updateQuantity(item._id, item.quantity + 1)} style={{ background: 'none', border: 'none', color: '#f97316', fontSize: '16px', cursor: 'pointer' }}>+</button>
-                                </div>
-                                <button onClick={() => removeFromCart(item._id)} style={{background: 'none', border: 'none', color: '#333', cursor: 'pointer', padding: '5px'}}>
-                                    <FaTrash size={12}/>
-                                </button>
+            {/* CART LIST */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {cart.map((item) => (
+                    <div key={item._id} style={{ background: 'rgba(255,255,255,0.02)', padding: '16px', borderRadius: '24px', border: '1px solid rgba(255,255,255,0.05)', transition: '0.3s' }}>
+                        <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+                            <div style={{ flex: 1 }}>
+                                <h4 style={{ margin: 0, fontSize: '15px', fontWeight: '700' }}>{item.name}</h4>
+                                <p style={{ margin: '4px 0 0 0', color: '#f97316', fontWeight: '900', fontSize: '14px' }}>₹{item.price * item.quantity}</p>
                             </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', background: '#000', padding: '6px 14px', borderRadius: '14px', border: '1px solid #111' }}>
+                                <button onClick={() => updateQuantity(item._id, item.quantity - 1)} style={{ background: 'none', border: 'none', color: '#555', fontSize: '18px', cursor: 'pointer' }}>-</button>
+                                <span style={{ fontSize: '14px', fontWeight: '900' }}>{item.quantity}</span>
+                                <button onClick={() => updateQuantity(item._id, item.quantity + 1)} style={{ background: 'none', border: 'none', color: '#f97316', fontSize: '18px', cursor: 'pointer' }}>+</button>
+                            </div>
+                            <button onClick={() => removeFromCart(item._id)} style={{background: 'rgba(239, 68, 68, 0.1)', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '10px', borderRadius: '12px', transition: '0.3s'}}>
+                                <FaTrash size={14}/>
+                            </button>
                         </div>
-                    ))}
-                </div>
-            )}
+                    </div>
+                ))}
+            </div>
 
-            {/* 5. FOOTER (Kept original two buttons as requested) */}
+            {/* STICKY FOOTER (Glowing Buttons) */}
             <div style={{ 
                 position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', 
                 width: '100%', maxWidth: '600px', 
-                padding: '20px 30px', background: 'rgba(5, 5, 5, 0.98)', backdropFilter: 'blur(15px)', 
-                borderTop: '1px solid #222', display: 'flex', flexDirection: 'column', gap: '12px'
+                padding: '25px 25px 40px 25px', background: 'rgba(5, 5, 5, 0.85)', backdropFilter: 'blur(25px)', 
+                borderTop: '1px solid rgba(255,255,255,0.1)', display: 'flex', flexDirection: 'column', gap: '15px', zIndex: 100
             }}>
                 <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
-                    <span style={{ color: '#888', fontWeight: 'bold', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>TOTAL TO PAY</span>
-                    <span style={{ fontSize: '24px', fontWeight: '900', color: 'white' }}>₹{totalPrice}</span>
+                    <span style={{ color: '#aaa', fontWeight: '900', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>GRAND TOTAL</span>
+                    <span style={{ fontSize: '28px', fontWeight: '900', color: 'white', textShadow: '0 0 15px rgba(255,255,255,0.3)' }}>₹{totalPrice}</span>
                 </div>
 
                 <div style={{ display: 'flex', gap: '12px' }}>
                     <button onClick={() => processOrder("ONLINE")} disabled={isSubmitting}
-                        style={{ flex: 1, height: '50px', borderRadius: '12px', border: '1px solid #333', background: '#1a1a1a', color: '#f97316', fontSize: '13px', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: isSubmitting ? 'not-allowed' : 'pointer' }}>
-                        <FaMobileAlt size={16} /> Pay Online
+                        style={{ flex: 1, height: '58px', borderRadius: '18px', border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.05)', color: 'white', fontSize: '14px', fontWeight: '800', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: isSubmitting ? 'not-allowed' : 'pointer', transition: '0.3s' }}>
+                        <FaMobileAlt size={16} color="#f97316" /> Pay Online
                     </button>
 
-                    <button onClick={() => processOrder("CASH")} disabled={isSubmitting}
-                        style={{ flex: 1, height: '50px', borderRadius: '12px', border: 'none', background: '#f97316', color: 'white', fontSize: '13px', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: isSubmitting ? 'not-allowed' : 'pointer' }}>
-                        <FaMoneyBillWave size={16} /> Cash on Counter
+                    <button 
+                        className="glow-button"
+                        onClick={() => processOrder("CASH")} disabled={isSubmitting}
+                        style={{ flex: 1.2, height: '58px', borderRadius: '18px', border: 'none', background: '#f97316', color: 'white', fontSize: '14px', fontWeight: '900', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', cursor: isSubmitting ? 'not-allowed' : 'pointer', transition: '0.3s' }}>
+                        <FaMoneyBillWave size={18} /> ORDER NOW
                     </button>
                 </div>
             </div>
