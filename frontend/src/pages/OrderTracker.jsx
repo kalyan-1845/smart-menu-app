@@ -13,7 +13,7 @@ const SERVER_URL = "https://smart-menu-backend-5ge7.onrender.com";
 const API_BASE = `${SERVER_URL}/api`;
 
 const OrderTracker = () => {
-    const { id } = useParams(); // Unique Mongo ID from URL
+    const { id } = useParams(); 
     const navigate = useNavigate();
     
     const [order, setOrder] = useState(null);
@@ -35,7 +35,6 @@ const OrderTracker = () => {
     useEffect(() => {
         const fetchOrderData = async () => {
             try {
-                // Fetch specific order by ID
                 const res = await axios.get(`${API_BASE}/orders/${id}`); 
                 setOrder(res.data);
                 
@@ -48,12 +47,22 @@ const OrderTracker = () => {
 
         fetchOrderData();
         
+        // --- 🔒 EXTRA PART: PRIVATE ROOM JOIN ---
         const socket = io(SERVER_URL);
+        
+        // Join a private room specifically for this Order ID
+        socket.emit('join-restaurant', id); 
+
         socket.on("order-updated", (updatedOrder) => {
-            if (updatedOrder._id === id) setOrder(updatedOrder);
+            // Only update if the ID matches to prevent cross-customer data leakage
+            if (updatedOrder._id === id) {
+                setOrder(updatedOrder);
+            }
         });
 
-        const interval = setInterval(fetchOrderData, 3000);
+        // Backup polling for unstable mobile networks
+        const interval = setInterval(fetchOrderData, 5000);
+
         return () => { 
             socket.disconnect(); 
             clearInterval(interval); 

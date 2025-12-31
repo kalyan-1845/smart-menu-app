@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import axios from "axios";
-import { FaSearch, FaPlus, FaMinus, FaStar, FaArrowRight } from "react-icons/fa";
+import { FaSearch, FaPlus, FaMinus, FaStar, FaUtensils, FaArrowRight } from "react-icons/fa";
 
 const API_BASE = "https://smart-menu-backend-5ge7.onrender.com/api";
 
@@ -20,14 +20,14 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, clearCart }) => {
     useEffect(() => {
         const sid = sessionStorage.getItem("customer_sid");
         if (!sid) {
-            // New Session = New User. We MUST wipe the cart to prevent seeing old data.
+            // New Session = New Customer. Clear the shared cart globally.
             const newSid = window.crypto?.randomUUID?.() || Math.random().toString(36).substring(2);
             sessionStorage.setItem("customer_sid", newSid);
             if (clearCart) clearCart(); 
         }
     }, [clearCart]); 
 
-    // --- 2. RESTAURANT DATA SYNC ---
+    // --- 2. DATA PERSISTENCE ---
     useEffect(() => {
         if (currentRestId) {
             localStorage.setItem("last_restaurant_id", currentRestId);
@@ -48,7 +48,7 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, clearCart }) => {
         fetchMenu();
     }, [currentRestId]);
 
-    // --- 3. MATH & QUANTITY HELPERS ---
+    // --- 3. MATH & UI HELPERS ---
     const totalQty = useMemo(() => cart.reduce((acc, i) => acc + i.quantity, 0), [cart]);
     const totalPrice = useMemo(() => cart.reduce((acc, i) => acc + (i.price * i.quantity), 0), [cart]);
     const categories = useMemo(() => ["All", ...new Set(dishes.map(d => d.category))], [dishes]);
@@ -58,18 +58,24 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, clearCart }) => {
         return item ? item.quantity : 0;
     };
 
-    // ✅ FIXED: Explicitly passes the direction (+1 or -1) to the global state
+    // ✅ FIXED: Explicitly passes direction (+1/-1) to prevent buttons acting the same
     const updateQty = (dish, change) => {
         addToCart({ ...dish, quantity: change });
     };
 
-    if (loading) return <div style={styles.center}><div className="spinner"></div></div>;
+    if (loading) return <div style={styles.center}><div className="spinner"></div><style>{styles.spinnerCss}</style></div>;
 
     return (
         <div style={styles.container}>
-            {/* HERO / SEARCH */}
+            {/* HERO / SEARCH ARRANGEMENT */}
             <div style={styles.hero}>
-                <h1 style={styles.restName}>{currentRestId?.toUpperCase()}</h1>
+                <div style={styles.heroContent}>
+                    <div>
+                        <h1 style={styles.restName}>{currentRestId?.toUpperCase()}</h1>
+                        <p style={styles.restSub}>Premium Mobile Dining</p>
+                    </div>
+                    <div style={styles.ratingBadge}><FaStar color="#fbbf24" /> 4.8</div>
+                </div>
                 <div style={styles.searchContainer}>
                     <FaSearch style={styles.searchIcon} />
                     <input 
@@ -80,7 +86,7 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, clearCart }) => {
                 </div>
             </div>
 
-            {/* STICKY CATEGORY BAR */}
+            {/* STICKY CATEGORY NAV */}
             <div style={styles.stickyNav}>
                 <div style={styles.catScroll}>
                     {categories.map(cat => (
@@ -93,7 +99,7 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, clearCart }) => {
                 </div>
             </div>
 
-            {/* MENU ITEMS GRID */}
+            {/* DISH GRID */}
             <div style={styles.grid}>
                 {dishes.filter(d => (activeCategory === "All" || d.category === activeCategory) && d.name.toLowerCase().includes(searchTerm.toLowerCase())).map(dish => {
                     const qty = getQty(dish._id);
@@ -101,7 +107,7 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, clearCart }) => {
                         <div key={dish._id} style={styles.card}>
                             <div style={styles.imgWrapper}>
                                 <img src={dish.image || "https://placehold.co/400x300/222/orange?text=Food"} style={styles.img} alt={dish.name} />
-                                {dish.isAvailable === false && <div style={styles.soldOut}>UNAVAILABLE</div>}
+                                {dish.isAvailable === false && <div style={styles.soldOut}>OUT OF STOCK</div>}
                             </div>
                             <div style={styles.info}>
                                 <div style={styles.row}>
@@ -109,14 +115,18 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, clearCart }) => {
                                     <span style={styles.price}>₹{dish.price}</span>
                                 </div>
                                 <div style={styles.actionRow}>
-                                    {qty > 0 ? (
-                                        <div style={styles.counter}>
-                                            <button onClick={() => updateQty(dish, -1)} style={styles.countBtn}><FaMinus size={10}/></button>
-                                            <span style={styles.qtyNum}>{qty}</span>
-                                            <button onClick={() => updateQty(dish, 1)} style={styles.countBtn}><FaPlus size={10}/></button>
-                                        </div>
+                                    {dish.isAvailable !== false ? (
+                                        qty > 0 ? (
+                                            <div style={styles.counter}>
+                                                <button onClick={() => updateQty(dish, -1)} style={styles.countBtn}><FaMinus size={10}/></button>
+                                                <span style={styles.qtyNum}>{qty}</span>
+                                                <button onClick={() => updateQty(dish, 1)} style={styles.countBtn}><FaPlus size={10}/></button>
+                                            </div>
+                                        ) : (
+                                            <button onClick={() => updateQty(dish, 1)} style={styles.addBtn}>ADD</button>
+                                        )
                                     ) : (
-                                        <button onClick={() => updateQty(dish, 1)} style={styles.addBtn}>ADD</button>
+                                        <button disabled style={styles.disabledBtn}>Unavailable</button>
                                     )}
                                 </div>
                             </div>
@@ -125,30 +135,34 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, clearCart }) => {
                 })}
             </div>
 
-            {/* 🛒 CENTERED FLOATING CART (NO TEXT) */}
+            {/* 🛒 CENTERED FLOATING CART (NO "VIEW CART" TEXT) */}
             {totalQty > 0 && (
                 <div style={styles.floatBarContainer}>
-                    <button onClick={() => navigate('/cart')} style={styles.floatBar}>
+                    <Link to="/cart" style={styles.floatBar}>
                         <div style={styles.floatData}>
-                            <span style={styles.floatQty}>{totalQty} ITEMS</span>
+                            <span style={styles.floatQty}>{totalQty} {totalQty === 1 ? 'ITEM' : 'ITEMS'}</span>
                             <span style={styles.floatPrice}>₹{totalPrice}</span>
                         </div>
                         <div style={styles.cartCircle}>
                             <FaArrowRight color="white" />
                         </div>
-                    </button>
+                    </Link>
                 </div>
             )}
-            <style>{`.spinner { width:40px; height:40px; border:4px solid #333; border-top:4px solid #f97316; border-radius:50%; animation: spin 1s linear infinite; } @keyframes spin { 100% { transform: rotate(360deg); } }`}</style>
+            <style>{styles.spinnerCss}</style>
         </div>
     );
 };
 
 const styles = {
-    container: { minHeight: "100vh", background: "#050505", color: "white", paddingBottom: "120px", fontFamily: 'Inter, sans-serif' },
+    container: { minHeight: "100vh", background: "#050505", color: "white", paddingBottom: "130px", fontFamily: 'Inter, sans-serif' },
     center: { height: "100vh", display: "flex", justifyContent: "center", alignItems: "center", background: '#050505' },
+    spinnerCss: `.spinner { width:40px; height:40px; border:4px solid #333; border-top:4px solid #f97316; border-radius:50%; animation: spin 1s linear infinite; } @keyframes spin { 100% { transform: rotate(360deg); } }`,
     hero: { padding: "30px 20px 10px", background: "#0a0a0a", borderBottom: '1px solid #1a1a1a' },
+    heroContent: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" },
     restName: { fontSize: "24px", fontWeight: "900", margin: "0 0 15px 0", letterSpacing: '-1px' },
+    restSub: { fontSize: "12px", color: "#666" },
+    ratingBadge: { background: "#fbbf24", color: "#000", padding: "4px 8px", borderRadius: "6px", fontSize: "11px", fontWeight: "900", display: "flex", alignItems: "center", gap: "4px" },
     searchContainer: { position: "relative", marginBottom: '10px' },
     searchIcon: { position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "#444" },
     searchInput: { width: "100%", padding: "12px 12px 12px 40px", borderRadius: "12px", background: "#111", border: "1px solid #222", color: "white", outline: "none", boxSizing: "border-box" },
@@ -157,20 +171,20 @@ const styles = {
     catBtn: { padding: "8px 20px", borderRadius: "20px", fontSize: "12px", fontWeight: "bold", border: "none", color: 'white', whiteSpace: 'nowrap' },
     grid: { padding: "15px", display: "flex", flexDirection: "column", gap: "12px" },
     card: { background: "#0a0a0a", borderRadius: "18px", border: "1px solid #111", display: "flex", height: "110px", overflow: "hidden" },
-    imgWrapper: { width: "110px", height: "100%" },
+    imgWrapper: { width: "110px", height: "100%", position: "relative" },
     img: { width: "100%", height: "100%", objectFit: "cover" },
     soldOut: { position: "absolute", inset: 0, background: "rgba(0,0,0,0.8)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "900", fontSize: "9px" },
     info: { flex: 1, padding: "15px", display: "flex", flexDirection: "column", justifyContent: "space-between" },
-    row: { display: "flex", justifyContent: "space-between" },
+    row: { display: "flex", justifyContent: "space-between", alignItems: "center" },
     dishTitle: { fontSize: "15px", fontWeight: "800" },
     price: { color: "#f97316", fontWeight: "900" },
     actionRow: { display: "flex", justifyContent: "flex-end" },
-    addBtn: { background: "#fff", color: "#000", border: "none", padding: "6px 20px", borderRadius: "8px", fontWeight: "900", fontSize: "11px" },
+    addBtn: { background: "#fff", color: "#000", border: "none", padding: "6px 20px", borderRadius: "8px", fontWeight: "900", fontSize: "11px", cursor: 'pointer' },
     counter: { display: "flex", alignItems: "center", gap: "15px", background: "#1a1a1a", padding: "5px 12px", borderRadius: "10px", border: '1px solid #222' },
     countBtn: { background: "none", border: "none", color: "#f97316", cursor: "pointer", display: 'flex', alignItems: 'center' },
     qtyNum: { fontWeight: "900", fontSize: '14px' },
     floatBarContainer: { position: "fixed", bottom: "30px", left: "50%", transform: "translateX(-50%)", width: "90%", maxWidth: "420px", zIndex: 1000 },
-    floatBar: { width: "100%", background: "#22c55e", border: "none", borderRadius: "25px", padding: "15px 25px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 10px 40px rgba(34, 197, 94, 0.4)", cursor: 'pointer' },
+    floatBar: { width: "100%", background: "#22c55e", border: "none", borderRadius: "25px", padding: "15px 25px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 10px 40px rgba(34, 197, 94, 0.4)", textDecoration: 'none' },
     floatData: { display: "flex", flexDirection: "column", textAlign: "left" },
     floatQty: { fontSize: "10px", fontWeight: "900", color: "#052e16", letterSpacing: '1px' },
     floatPrice: { fontSize: "20px", fontWeight: "900", color: 'white' },

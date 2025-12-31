@@ -38,7 +38,7 @@ router.post('/', async (req, res) => {
 
         const savedOrder = await newOrder.save();
 
-        // Socket emit to specific restaurant room
+        // Socket emit to specific restaurant room for real-time staff alerts
         if (req.io) {
             req.io.to(finalRestaurantId.toString()).emit('new-order', savedOrder);
         }
@@ -50,10 +50,10 @@ router.post('/', async (req, res) => {
     }
 });
 
-// --- 2. GET SINGLE ORDER (CRITICAL FOR TRACKER) ---
+// --- 2. GET SINGLE ORDER (CRITICAL FOR CUSTOMER TRACKER) ---
 router.get('/:id', async (req, res) => {
     try {
-        // Validation check for Mongo ID to prevent crash
+        // Validation check for Mongo ID format
         if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
             return res.status(400).json({ message: "Invalid Order ID format" });
         }
@@ -65,11 +65,12 @@ router.get('/:id', async (req, res) => {
     }
 });
 
-// --- 3. GET ALL ORDERS (CHEF VIEW) ---
+// --- 3. GET ALL ORDERS (CHEF/WAITER VIEW) ---
 router.get('/', async (req, res) => {
     try {
         const { restaurantId } = req.query;
         if (!restaurantId) return res.status(400).json({ message: "Restaurant ID required" });
+        
         const orders = await Order.find({ restaurantId }).sort({ createdAt: -1 });
         res.json(orders);
     } catch (error) {
@@ -85,8 +86,9 @@ router.put('/:id', async (req, res) => {
             { status: req.body.status }, 
             { new: true }
         );
+        
         if (req.io && order) {
-             // Emit to Restaurant Room (Chef/Waiter) AND Order Room (Customer Tracker)
+             // Notify both the Restaurant Staff and the Customer Tracker
              req.io.to(order.restaurantId.toString()).emit('order-updated', order);
              req.io.emit('order-updated', order); 
         }
@@ -103,7 +105,7 @@ router.post('/call-waiter', async (req, res) => {
         const newCall = await Call.create({ restaurantId, tableNumber, type: type || 'help' });
         
         if (req.io) {
-            // Target only the specific restaurant staff
+            // Target only the specific restaurant staff room
             req.io.to(restaurantId.toString()).emit('new-waiter-call', newCall);
         }
         
@@ -113,7 +115,7 @@ router.post('/call-waiter', async (req, res) => {
     }
 });
 
-// --- 6. GET INBOX (Only non-downloaded orders for Admin) ---
+// --- 6. GET INBOX (Only non-downloaded orders for Admin/PDF generation) ---
 router.get('/inbox', async (req, res) => {
     try {
         const { restaurantId } = req.query;
@@ -130,7 +132,7 @@ router.get('/inbox', async (req, res) => {
     }
 });
 
-// --- 7. CLEAR INBOX (Mark as downloaded) ---
+// --- 7. CLEAR INBOX (Mark as downloaded after PDF export) ---
 router.put('/mark-downloaded', async (req, res) => {
     try {
         const { restaurantId } = req.body;
