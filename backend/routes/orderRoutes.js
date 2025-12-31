@@ -131,7 +131,12 @@ router.get('/inbox', async (req, res) => {
         res.status(500).json({ message: error.message });
     }
 });
-
+// Inside your Order Status Update Route
+if (req.body.status === "Served") {
+    await Owner.findByIdAndUpdate(order.restaurantId, {
+        $inc: { totalRevenue: order.totalAmount }
+    });
+}
 // --- 7. CLEAR INBOX (Mark as downloaded after PDF export) ---
 router.put('/mark-downloaded', async (req, res) => {
     try {
