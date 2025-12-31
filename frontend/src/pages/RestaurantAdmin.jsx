@@ -17,7 +17,7 @@ const styles = `
 .max-w-wrapper { max-width: 480px; margin: 0 auto; }
 .admin-header { margin-bottom: 30px; }
 .header-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
-.shop-title { font-size: 28px; font-weight: 900; margin: 0; letter-spacing: -1px; text-transform: uppercase; }
+.shop-title { font-size: 28px; font-weight: 900; margin: 0; letter-spacing: -1px; text-transform: uppercase; color: white; }
 .badge-pro { background: rgba(255, 153, 51, 0.15); color: #FF9933; border: 1px solid rgba(255, 153, 51, 0.3); padding: 4px 10px; border-radius: 20px; font-size: 10px; font-weight: 900; display: inline-flex; align-items: center; gap: 5px; }
 .btn-glass { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); color: white; padding: 10px 16px; border-radius: 12px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: 0.2s; }
 .btn-glass:hover { background: rgba(255, 255, 255, 0.1); }
@@ -30,14 +30,14 @@ const styles = `
 .input-dark { width: 100%; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); padding: 14px; border-radius: 12px; color: white; margin-bottom: 15px; outline: none; transition: 0.3s; }
 .input-dark:focus { border-color: #FF9933; background: rgba(0,0,0,0.6); }
 .dish-item { display: flex; justify-content: space-between; align-items: center; padding: 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
-.inbox-card { background: rgba(255,255,255,0.05); padding: 15px; border-radius: 15px; margin-bottom: 10px; border-left: 4px solid #FF9933; }
+.inbox-card { background: rgba(255, 255, 255, 0.05); padding: 15px; border-radius: 15px; margin-bottom: 10px; border-left: 4px solid #FF9933; }
 .toast-container { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); width: 90%; max-width: 400px; z-index: 1000; display: flex; flex-direction: column; gap: 10px; }
 .toast-alert { background: #FF9933; color: black; padding: 15px; border-radius: 15px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
 .menu-link-box { background: rgba(0,0,0,0.3); border: 1px dashed #333; padding: 15px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 .link-text { color: #3b82f6; font-size: 12px; font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; display: block; text-decoration: none; }
+.action-btn { background: none; border: none; color: #888; cursor: pointer; padding: 5px; transition: 0.2s; }
 `;
 
-// --- SETUP WIZARD COMPONENT (RETAINED) ---
 const SetupWizard = ({ dishesCount, pushEnabled }) => {
     const steps = [
         { id: 1, label: "Add 3 dishes", done: dishesCount >= 3, hint: "Go to Menu tab" },
@@ -52,7 +52,7 @@ const SetupWizard = ({ dishesCount, pushEnabled }) => {
 
     return (
         <div className="glass-card" style={{ borderColor: completed === 2 ? '#22c55e' : 'rgba(255,255,255,0.1)' }}>
-            <div style={{ display: 'flex', justifyBetween: 'space-between', alignItems: 'flex-end', marginBottom: '10px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '10px' }}>
                 <h2 style={{ fontSize: '14px', fontWeight: 900, textTransform: 'uppercase', margin: 0 }}><FaRocket color="#FF9933" /> Setup Progress</h2>
                 <span style={{ color: '#FF9933', fontWeight: 900, fontSize: '12px' }}>{percent}% READY</span>
             </div>
@@ -90,47 +90,33 @@ const RestaurantAdmin = () => {
     const [trialEndsAt, setTrialEndsAt] = useState(null);
     const [isPro, setIsPro] = useState(false);
     const [dishes, setDishes] = useState([]);
-    const [inboxOrders, setInboxOrders] = useState([]); // --- NEW INBOX STATE ---
+    const [inboxOrders, setInboxOrders] = useState([]);
     const [formData, setFormData] = useState({ name: "", price: "", category: "Starters", image: "" });
 
-    // --- FETCH INBOX (NEW) ---
     const fetchInbox = async () => {
         const mongoId = localStorage.getItem(`owner_id_${id}`);
         if (!mongoId) return;
         try {
-            const res = await axios.get(`${API_BASE}/orders/inbox/${mongoId}`);
+            const res = await axios.get(`${API_BASE}/orders/inbox?restaurantId=${mongoId}`);
             setInboxOrders(res.data);
         } catch (err) { console.error("Inbox Error", err); }
     };
 
-    // --- PDF & CLEAR LOGIC (NEW) ---
     const handleDownloadAndClear = async () => {
         if (inboxOrders.length === 0) return alert("Inbox is empty!");
         const mongoId = localStorage.getItem(`owner_id_${id}`);
-
         const doc = new jsPDF();
         doc.text(`Receipt Summary - ${restaurantName}`, 14, 15);
         doc.setFontSize(10);
         doc.text(`Total Orders: ${inboxOrders.length}`, 14, 22);
-
         const tableData = inboxOrders.map((order, i) => [
-            i + 1,
-            order.tableNum,
-            order.items.map(item => `${item.name} x${item.quantity}`).join(", "),
-            `Rs.${order.totalAmount}`,
-            new Date(order.createdAt).toLocaleTimeString()
+            i + 1, order.tableNum, order.items.map(item => `${item.name} x${item.quantity}`).join(", "),
+            `Rs.${order.totalAmount}`, new Date(order.createdAt).toLocaleTimeString()
         ]);
-
-        doc.autoTable({
-            startY: 30,
-            head: [['#', 'Table', 'Items', 'Total', 'Time']],
-            body: tableData,
-        });
-
+        doc.autoTable({ startY: 30, head: [['#', 'Table', 'Items', 'Total', 'Time']], body: tableData });
         doc.save(`Receipts_${Date.now()}.pdf`);
-
         try {
-            await axios.put(`${API_BASE}/orders/clear-inbox/${mongoId}`);
+            await axios.put(`${API_BASE}/orders/mark-downloaded`, { restaurantId: mongoId });
             setInboxOrders([]);
             alert("Inbox Cleared!");
         } catch (err) { alert("Error clearing database."); }
@@ -165,32 +151,25 @@ const RestaurantAdmin = () => {
             const mongoId = localStorage.getItem(`owner_id_${id}`);
             const socket = io("https://smart-menu-backend-5ge7.onrender.com");
             socket.emit("join-restaurant", mongoId);
-
             socket.on("new-order", () => fetchInbox());
             socket.on("new-waiter-call", (data) => {
                 new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3").play().catch(() => {});
                 setActiveAlerts(prev => [...prev, data]);
             });
-            socket.on('new-broadcast', (data) => { setBroadcast(data); });
-
             const interval = setInterval(fetchInbox, 10000);
             return () => { socket.disconnect(); clearInterval(interval); };
         }
     }, [isAuthenticated, id]);
 
     const handleLogout = () => { setIsAuthenticated(false); localStorage.removeItem(`owner_token_${id}`); };
-
     const handleAddDish = async (e) => {
         e.preventDefault();
         const token = localStorage.getItem(`owner_token_${id}`);
         const mongoId = localStorage.getItem(`owner_id_${id}`);
-        try {
-            await axios.post(`${API_BASE}/dishes`, { ...formData, owner: mongoId }, { headers: { Authorization: `Bearer ${token}` } });
-            setFormData({ name: "", price: "", category: "Starters", image: "" });
-            fetchData(token, mongoId);
-        } catch (e) { alert("Error saving dish."); }
+        await axios.post(`${API_BASE}/dishes`, { ...formData, owner: mongoId }, { headers: { Authorization: `Bearer ${token}` } });
+        setFormData({ name: "", price: "", category: "Starters", image: "" });
+        fetchData(token, mongoId);
     };
-
     const handleDeleteDish = async (dishId) => {
         if(!window.confirm("Delete?")) return;
         const token = localStorage.getItem(`owner_token_${id}`);
@@ -199,15 +178,13 @@ const RestaurantAdmin = () => {
         fetchData(token, mongoId);
     };
 
-    const copyToClipboard = () => { navigator.clipboard.writeText(publicMenuUrl); alert("Copied!"); };
-
     if (!isAuthenticated) return (
         <div className="admin-container">
             <style>{styles}</style>
             <div className="lock-container">
                 <div className="lock-card">
                     <FaStore size={40} color="#f97316" style={{ marginBottom: '15px' }} />
-                    <h1 style={{ fontSize: '20px', fontWeight: '900' }}>ADMIN LOGIN</h1>
+                    <h1 style={{ fontSize: '20px', fontWeight: '900' }}>{id.toUpperCase()} ADMIN</h1>
                     <form onSubmit={handleLogin} style={{ marginTop: '20px' }}>
                         <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} className="input-dark" style={{ textAlign: 'center' }} />
                         <button type="submit" className="btn-primary" disabled={authLoading}>{authLoading ? "Unlocking..." : "Access Control"}</button>
@@ -220,7 +197,6 @@ const RestaurantAdmin = () => {
     return (
         <div className="admin-container">
             <style>{styles}</style>
-            
             <div className="toast-container">
                 {activeAlerts.map((alert, i) => (
                     <div key={i} className="toast-alert">
@@ -236,15 +212,22 @@ const RestaurantAdmin = () => {
             <div className="max-w-wrapper">
                 <header className="admin-header">
                     <div className="header-top">
-                        <h1 className="shop-title">{restaurantName}</h1>
+                        <div>
+                            {/* RESTAURANT NAME HEADER - RESTORED */}
+                            <h1 className="shop-title">{restaurantName}</h1>
+                            <div style={{ marginTop: '5px' }}>
+                                {isPro ? <span className="badge-pro"><FaCrown /> PRO PLAN</span> : 
+                                <span className="badge-pro" style={{ color: '#60a5fa', borderColor: '#60a5fa' }}>Trial Plan</span>}
+                            </div>
+                        </div>
                         <button onClick={handleLogout} className="btn-glass" style={{ color: '#ef4444' }}><FaSignOutAlt /></button>
                     </div>
 
                     <div className="menu-link-box">
-                        <a href={publicMenuUrl} target="_blank" className="link-text">{publicMenuUrl}</a>
+                        <a href={publicMenuUrl} target="_blank" rel="noreferrer" className="link-text">{publicMenuUrl}</a>
                         <div style={{display:'flex', gap:'5px'}}>
-                            <button onClick={copyToClipboard} className="action-btn"><FaCopy /></button>
-                            <a href={publicMenuUrl} target="_blank" className="action-btn"><FaExternalLinkAlt /></a>
+                            <button onClick={() => { navigator.clipboard.writeText(publicMenuUrl); alert("Copied!"); }} className="action-btn"><FaCopy /></button>
+                            <a href={publicMenuUrl} target="_blank" rel="noreferrer" className="action-btn"><FaExternalLinkAlt /></a>
                         </div>
                     </div>
 
@@ -259,7 +242,7 @@ const RestaurantAdmin = () => {
                 <nav className="nav-tabs">
                     <button onClick={() => setActiveTab("menu")} className={`tab-btn ${activeTab === "menu" ? 'active' : ''}`}>Menu</button>
                     <button onClick={() => setActiveTab("inbox")} className={`tab-btn ${activeTab === "inbox" ? 'active' : ''}`}>
-                        Inbox {inboxOrders.length > 0 && <span style={{background:'#FF9933', color:'black', padding:'2px 6px', borderRadius:'10px'}}>{inboxOrders.length}</span>}
+                        Inbox {inboxOrders.length > 0 && <span style={{background:'#FF9933', color:'black', padding:'2px 6px', borderRadius:'10px', marginLeft:'5px'}}>{inboxOrders.length}</span>}
                     </button>
                     <button onClick={() => setActiveTab("settings")} className={`tab-btn ${activeTab === "settings" ? 'active' : ''}`}>Setup</button>
                 </nav>
@@ -287,7 +270,7 @@ const RestaurantAdmin = () => {
                         <h2 style={{ fontSize: '14px', fontWeight: 900, marginBottom: '20px' }}><FaPlus /> ADD ITEM</h2>
                         <form onSubmit={handleAddDish}>
                             <input className="input-dark" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} placeholder="Dish Name" required />
-                            <input className="input-dark" value={formData.image} onChange={e => setFormData({ ...formData, image: e.target.value })} placeholder="Image URL" />
+                            <input className="input-dark" value={formData.image} onChange={e => setFormData({ ...formData, image: e.target.value })} placeholder="Image URL (Glow Active)" />
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
                                 <input className="input-dark" type="number" value={formData.price} onChange={e => setFormData({ ...formData, price: e.target.value })} placeholder="Price ₹" required />
                                 <select className="input-dark" value={formData.category} onChange={e => setFormData({ ...formData, category: e.target.value })}>
@@ -308,7 +291,7 @@ const RestaurantAdmin = () => {
                                             <p style={{ margin: 0, fontSize: '11px', color: '#FF9933', fontWeight: 900 }}>₹{dish.price} • {dish.category.toUpperCase()}</p>
                                         </div>
                                     </div>
-                                    <button onClick={() => handleDeleteDish(dish._id)} style={{ background: 'none', border: 'none', color: '#444' }}><FaTrash /></button>
+                                    <button onClick={() => handleDeleteDish(dish._id)} className="action-btn"><FaTrash /></button>
                                 </div>
                             ))}
                         </div>

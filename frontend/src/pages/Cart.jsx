@@ -11,7 +11,7 @@ const SERVER_URL = window.location.hostname === "localhost" || window.location.h
 
 const API_BASE = `${SERVER_URL}/api`;
 
-// --- NEW GLOW ANIMATIONS ---
+// --- GLOW ANIMATIONS (Retained) ---
 const glowStyles = `
 @keyframes pulseGlow {
   0% { box-shadow: 0 0 5px rgba(249, 115, 22, 0.4), 0 0 10px rgba(249, 115, 22, 0.2); }
@@ -36,6 +36,11 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
     const [showTableModal, setShowTableModal] = useState(!tableNum);
     const [isSubmitting, setIsSubmitting] = useState(false);
     
+    // --- FALLBACK LOGIC TO PREVENT VALIDATION ERRORS ---
+    // If props are undefined, we check if they were saved in localStorage during the Menu session
+    const finalRestaurantId = restaurantId || localStorage.getItem("last_restaurant_id");
+    const finalTableNum = tableNum || localStorage.getItem("last_table_num");
+
     // Table Options
     const tableOptions = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, "Takeaway"];
     const totalPrice = cart.reduce((total, item) => total + (item.price * item.quantity), 0);
@@ -43,9 +48,9 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
     // --- FETCH RESTAURANT DETAILS ---
     useEffect(() => {
         const fetchRestaurant = async () => {
-            if (restaurantId) {
+            if (finalRestaurantId) {
                 try {
-                    const res = await axios.get(`${API_BASE}/auth/restaurant/${restaurantId}`);
+                    const res = await axios.get(`${API_BASE}/auth/restaurant/${finalRestaurantId}`);
                     setRestaurant(res.data);
                 } catch (err) {
                     console.error("Error fetching restaurant details:", err);
@@ -53,22 +58,25 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
             }
         };
         fetchRestaurant();
-    }, [restaurantId]);
+    }, [finalRestaurantId]);
 
     // --- ORDER SUCCESS REDIRECT LOGIC ---
     const processOrder = async (paymentMethod) => {
-        // Validation Fixes
+        // Validation Fixes (Using final variables)
         if (!customerName.trim()) { alert("Please enter your name!"); return; }
-        if (!tableNum) { setShowTableModal(true); return; }
+        if (!finalTableNum) { setShowTableModal(true); return; }
         if (cart.length === 0) { alert("Your cart is empty!"); return; }
-        if (!restaurantId) { alert("System Error: Restaurant ID missing. Please reload."); return; }
+        if (!finalRestaurantId) { 
+            alert("System Error: Restaurant ID missing. Please go back to menu and re-add items."); 
+            return; 
+        }
 
         setIsSubmitting(true);
 
         // ✅ Payload matching your Backend Schema + Inbox Flag
         const orderData = {
             customerName: customerName,
-            tableNum: tableNum.toString(), 
+            tableNum: finalTableNum.toString(), 
             items: cart.map(item => ({
                 name: item.name,
                 quantity: item.quantity,
@@ -76,7 +84,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
             })),
             totalAmount: totalPrice,
             paymentMethod: paymentMethod === "ONLINE" ? "Online" : "Cash",
-            restaurantId: restaurantId,
+            restaurantId: finalRestaurantId,
             status: "Pending",
             isDownloaded: false // 📥 This marks it for the Admin Inbox
         };
@@ -125,8 +133,12 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                         <h2 style={{ textAlign: 'center', marginBottom: '20px', fontWeight: '900' }}>Select Table</h2>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
                             {tableOptions.map((opt) => (
-                                <button key={opt} onClick={() => { setTableNum(opt); setShowTableModal(false); }} 
-                                    style={{ padding: '15px', borderRadius: '16px', border: '1px solid #333', background: tableNum === opt ? '#f97316' : '#1a1a1a', color: 'white', fontWeight: 'bold', boxShadow: tableNum === opt ? '0 0 15px rgba(249, 115, 22, 0.5)' : 'none', transition: '0.3s' }}>
+                                <button key={opt} onClick={() => { 
+                                    setTableNum(opt); 
+                                    localStorage.setItem("last_table_num", opt); // Persistence fix
+                                    setShowTableModal(false); 
+                                }} 
+                                    style={{ padding: '15px', borderRadius: '16px', border: '1px solid #333', background: finalTableNum === opt ? '#f97316' : '#1a1a1a', color: 'white', fontWeight: 'bold', boxShadow: finalTableNum === opt ? '0 0 15px rgba(249, 115, 22, 0.5)' : 'none', transition: '0.3s' }}>
                                     {opt}
                                 </button>
                             ))}
@@ -147,7 +159,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                     <div>
                         <p style={{ color: '#888', fontSize: '10px', fontWeight: '900', letterSpacing: '1px', marginBottom: '6px' }}>DELIVERING TO</p>
                         <div style={{ margin: 0, color: '#f97316', fontSize: '20px', fontWeight: '900', textShadow: '0 0 10px rgba(249, 115, 22, 0.3)' }}>
-                            {tableNum ? `Table ${tableNum}` : "Select Table"}
+                            {finalTableNum ? `Table ${finalTableNum}` : "Select Table"}
                         </div>
                     </div>
                     <span style={{ color: 'white', fontSize: '11px', fontWeight: 'bold', background: 'rgba(249, 115, 22, 0.2)', padding: '8px 16px', borderRadius: '12px', border: '1px solid rgba(249, 115, 22, 0.3)', transition: '0.3s' }}>Change</span>
