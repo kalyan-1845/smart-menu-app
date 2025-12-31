@@ -8,12 +8,24 @@ import Cart from "./pages/Cart";
 import OrderTracker from "./pages/OrderTracker";
 import OwnerLogin from "./pages/OwnerLogin"; 
 import Register from "./pages/Register"; 
+import SuperLogin from "./pages/SuperLogin"; // Added for CEO Access
 
 // --- STAFF PANELS ---
 import SuperAdmin from "./pages/SuperAdmin";
 import RestaurantAdmin from "./pages/RestaurantAdmin";
 import ChefDashboard from "./pages/ChefDashboard"; 
 import WaiterDashboard from "./pages/WaiterDashboard";
+
+// ==========================================
+// 🛡️ THE ROUTE GUARD (CEO Access Control)
+// ==========================================
+const ProtectedSuperAdmin = ({ children }) => {
+  const isAuthenticated = localStorage.getItem("superAdminAuth") === "true";
+  if (!isAuthenticated) {
+    return <Navigate to="/super-login" replace />;
+  }
+  return children;
+};
 
 const GlobalStyles = () => (
   <style>{`
@@ -25,7 +37,6 @@ const GlobalStyles = () => (
     ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
     ::-webkit-scrollbar-thumb:hover { background: #f97316; }
     
-    /* Global Animations for Success Popups */
     @keyframes slideUp {
       from { transform: translateY(100%); opacity: 0; }
       to { transform: translateY(0); opacity: 1; }
@@ -40,7 +51,6 @@ function App() {
       return saved ? JSON.parse(saved) : [];
   });
   
-  // Persistence for Multi-tenant isolation
   const [restaurantId, setRestaurantId] = useState(() => {
       return localStorage.getItem("smartMenu_RestaurantId") || null;
   });
@@ -60,7 +70,7 @@ function App() {
       }
   }, [restaurantId]);
 
-  // --- CART ACTIONS (Lightning Fast O(1) Updates) ---
+  // --- CART ACTIONS ---
   const addToCart = (dish) => {
     setCart((prev) => {
       const exists = prev.find((item) => item._id === dish._id);
@@ -87,7 +97,6 @@ function App() {
         <Route path="/login" element={<OwnerLogin />} />
         <Route path="/register" element={<Register />} />
 
-        {/* Dynamic Menu with isolation for 1000+ users */}
         <Route path="/menu/:restaurantId" element={
             <Menu 
                 cart={cart} 
@@ -97,7 +106,6 @@ function App() {
             />
         } />
         
-        {/* Support for Table Number directly from QR scan */}
         <Route path="/menu/:restaurantId/:table" element={
             <Menu 
                 cart={cart} 
@@ -107,7 +115,6 @@ function App() {
             />
         } />
 
-        {/* Optimized Cart with Secure ID Flow */}
         <Route path="/cart" element={
             <Cart 
                 cart={cart} 
@@ -120,22 +127,26 @@ function App() {
             />
         } />
 
-        {/* --- TRACKING ROUTES --- */}
-        {/* Redirecting users specifically to their secret Order ID */}
         <Route path="/track/:id" element={<OrderTracker />} />
 
-        {/* --- STAFF & ADMIN DASHBOARDS (Multi-Tenant Secure) --- */}
-        <Route path="/superadmin" element={<SuperAdmin />} />
+        {/* --- 🔐 PROTECTED CEO / SUPER ADMIN AREA --- */}
+        <Route path="/super-login" element={<SuperLogin />} />
+        <Route 
+          path="/superadmin" 
+          element={
+            <ProtectedSuperAdmin>
+              <SuperAdmin />
+            </ProtectedSuperAdmin>
+          } 
+        />
         
-        {/* Admin Login based on Shop Username or ID */}
+        {/* --- STAFF DASHBOARDS --- */}
         <Route path="/:id/admin" element={<RestaurantAdmin />} />
         <Route path="/:id/chef" element={<ChefDashboard />} />
         <Route path="/:id/kitchen" element={<ChefDashboard />} />
         <Route path="/:id/waiter" element={<WaiterDashboard />} />
 
-        {/* Fallback Route */}
         <Route path="*" element={<Navigate to="/" replace />} />
-
       </Routes>
     </Router>
   );

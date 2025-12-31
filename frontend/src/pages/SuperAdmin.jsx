@@ -6,7 +6,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import io from "socket.io-client";
-import SalesSummary from "../components/SalesSummary"; // Ensure path is correct
+import SalesSummary from "../components/SalesSummary"; 
 
 const API_URL = "https://smart-menu-backend-5ge7.onrender.com"; 
 
@@ -21,33 +21,17 @@ const SuperAdmin = () => {
     // 🔊 AUDIO REF (Notification for new platform activity)
     const alertSound = useRef(new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"));
     
-    // --- 1. SECURE AUTHENTICATION ---
-    useEffect(() => {
-        const checkAuth = () => {
-            const isSuperAdmin = sessionStorage.getItem("isSuperAdmin");
-            if (!isSuperAdmin) {
-                const user = prompt("Super Admin Username:");
-                const pass = prompt("Super Admin Password:");
-                if (user === "srinivas" && pass === "srividya") {
-                    sessionStorage.setItem("isSuperAdmin", "true");
-                    loadDashboardData();
-                } else {
-                    alert("Access Denied");
-                    navigate("/");
-                }
-            } else {
-                loadDashboardData();
-            }
-        };
-        checkAuth();
-    }, [navigate]);
-
+    // --- 1. DATA LOADING ---
     const loadDashboardData = async () => {
         setLoading(true);
         await Promise.all([fetchRestaurants(), fetchGlobalStats()]);
         setLoading(false);
         setIsLive(true);
     };
+
+    useEffect(() => {
+        loadDashboardData();
+    }, []);
 
     // --- 2. DATA FETCHING ---
     const fetchRestaurants = async () => {
@@ -75,15 +59,14 @@ const SuperAdmin = () => {
         if (!title || !message) return;
 
         try {
-            // Using the token stored during session/login
             const token = localStorage.getItem('admin_token'); 
-            await axios.post(`${API_BASE}/api/broadcast/send`, 
+            await axios.post(`${API_URL}/api/broadcast/send`, 
                 { title, message, type: 'ALERT' },
                 { headers: { Authorization: `Bearer ${token}` }}
             );
             alert("🚀 Broadcast Blasted to All Staff Panels!");
         } catch (e) {
-            alert("Broadcast failed. Check master admin permissions.");
+            alert("Broadcast failed. Master admin permission required.");
         }
     };
 
@@ -95,7 +78,7 @@ const SuperAdmin = () => {
             socket.on("new-order", () => {
                 alertSound.current.play().catch(() => {}); 
                 fetchGlobalStats(); 
-                fetchRestaurants(); // Refresh revenue numbers in chart
+                fetchRestaurants(); // Refresh revenue numbers
             });
 
             return () => socket.disconnect();
@@ -131,7 +114,7 @@ const SuperAdmin = () => {
                     <button onClick={sendBroadcast} style={styles.broadcastBtn}>
                         <FaBroadcastTower /> Broadcast
                     </button>
-                    <button onClick={() => { sessionStorage.clear(); navigate("/"); }} style={styles.logoutBtn}>
+                    <button onClick={() => { localStorage.clear(); sessionStorage.clear(); navigate("/super-login"); }} style={styles.logoutBtn}>
                         <FaSignOutAlt /> Logout
                     </button>
                 </div>

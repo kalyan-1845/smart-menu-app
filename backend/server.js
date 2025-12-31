@@ -24,9 +24,7 @@ const allowedOrigins = [
     "https://694915c413d9f40008f38924--smartmenuss.netlify.app"
 ];
 
-// ============================================================
-// ☢️ NUCLEAR CORS FIX (LAYER 1: MANUAL HEADERS) - RETAINED
-// ============================================================
+// ☢️ NUCLEAR CORS FIX (LAYER 1: MANUAL HEADERS)
 app.use((req, res, next) => {
     const origin = req.headers.origin;
     if (allowedOrigins.includes(origin)) {
@@ -35,46 +33,24 @@ app.use((req, res, next) => {
     res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
     res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, Origin, X-Requested-With, Accept");
     res.header("Access-Control-Allow-Credentials", "true");
-
-    if (req.method === "OPTIONS") {
-        return res.status(200).end();
-    }
+    if (req.method === "OPTIONS") return res.status(200).end();
     next();
 });
 
-// ============================================================
-// 🛡️ STANDARD CORS (LAYER 2: LIBRARY BACKUP) - RETAINED
-// ============================================================
-app.use(cors({
-    origin: allowedOrigins,
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
-}));
-
+// 🛡️ STANDARD CORS (LAYER 2: LIBRARY BACKUP)
+app.use(cors({ origin: allowedOrigins, credentials: true, methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"] }));
 app.use(express.json({ limit: '10mb' })); 
 
 // Rate Limiter - Optimized for 1000+ simultaneous users
-const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, 
-    max: 1000, // Increased to support high traffic without blocking users
-    standardHeaders: true,
-    legacyHeaders: false,
-});
+const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 1000, standardHeaders: true, legacyHeaders: false });
 app.use(limiter); 
 
 // Socket.io Setup
 const io = new Server(httpServer, {
-    cors: {
-        origin: allowedOrigins,
-        methods: ["GET", "POST", "PUT", "DELETE"],
-        credentials: true
-    }
+    cors: { origin: allowedOrigins, methods: ["GET", "POST", "PUT", "DELETE"], credentials: true }
 });
 
-app.use((req, res, next) => {
-    req.io = io;
-    next();
-});
+app.use((req, res, next) => { req.io = io; next(); });
 
 // --- DATABASE ---
 mongoose.connect(process.env.MONGO_URI)
@@ -102,19 +78,15 @@ app.use((err, req, res, next) => {
 
 // --- SOCKETS: FIXED FOR SAAS ISOLATION ---
 io.on('connection', (socket) => {
-    // Users and Admins join a private "Room" based on their Restaurant ID
     socket.on('join-restaurant', (restaurantId) => {
         socket.join(restaurantId);
-        console.log(`User joined private room for restaurant: ${restaurantId}`);
+        console.log(`User joined private room: ${restaurantId}`);
     });
 
     socket.on('join-owner-room', (ownerId) => socket.join(ownerId));
 
-    // Waiter Call Isolation: Only broadcast to the specific restaurant room
     socket.on("call-waiter", (data) => {
-        if(data.restaurantId) {
-            io.to(data.restaurantId).emit("new-waiter-call", data);
-        }
+        if(data.restaurantId) io.to(data.restaurantId).emit("new-waiter-call", data);
     });
 
     socket.on("resolve-call", (data) => {
@@ -126,15 +98,11 @@ io.on('connection', (socket) => {
     });
 });
 
-// --- SELF PING (Keep Alive) - RETAINED ---
+// --- SELF PING (Keep Alive) ---
 const pingUrl = "https://smart-menu-backend-5ge7.onrender.com/"; 
 setInterval(() => {
-    https.get(pingUrl, (res) => {
-        // Keep alive ping
-    }).on("error", (e) => {});
+    https.get(pingUrl, (res) => {}).on("error", (e) => {});
 }, 840000); 
 
 const PORT = process.env.PORT || 5000;
-httpServer.listen(PORT, () => {
-    console.log(`🚀 Server running on port ${PORT}`);
-});
+httpServer.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
