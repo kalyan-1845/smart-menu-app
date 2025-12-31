@@ -101,5 +101,43 @@ router.post('/call-waiter', async (req, res) => {
         res.status(500).json({ message: error.message });
     }
 });
+// ... existing imports ...
+
+// --- NEW ROUTE: GET INBOX (Only non-downloaded orders) ---
+router.get('/inbox', async (req, res) => {
+    try {
+        const { restaurantId } = req.query;
+        if (!restaurantId) return res.status(400).json({ message: "Restaurant ID required" });
+
+        // Fetch orders that are NOT downloaded yet
+        const orders = await Order.find({ 
+            restaurantId, 
+            isDownloaded: false 
+        }).sort({ createdAt: -1 });
+
+        res.json(orders);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+// --- NEW ROUTE: CLEAR INBOX (Mark as downloaded) ---
+router.put('/mark-downloaded', async (req, res) => {
+    try {
+        const { restaurantId } = req.body;
+        
+        // Update all orders for this restaurant to isDownloaded: true
+        await Order.updateMany(
+            { restaurantId, isDownloaded: false },
+            { $set: { isDownloaded: true } }
+        );
+
+        res.status(200).json({ message: "Inbox cleared successfully" });
+    } catch (error) {
+        res.status(500).json({ error: "Failed to clear inbox" });
+    }
+});
+
+// ... your existing routes (GET /:id, GET /, etc.) ...
 
 export default router;

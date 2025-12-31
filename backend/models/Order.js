@@ -43,7 +43,15 @@ const orderSchema = new mongoose.Schema({
   customerName: { 
     type: String, 
     default: "Guest" 
+  },
+
+  // --- NEW FIELD FOR INBOX FEATURE ---
+  // Tracks if the receipt has been downloaded by the admin
+  isDownloaded: { 
+    type: Boolean, 
+    default: false 
   }
+
 }, { 
   // Automatically tracks 'createdAt' (Order Time) and 'updatedAt'
   timestamps: true 

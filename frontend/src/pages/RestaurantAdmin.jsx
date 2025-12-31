@@ -3,9 +3,11 @@ import axios from "axios";
 import { Link, useParams } from "react-router-dom";
 import io from "socket.io-client";
 import confetti from "canvas-confetti";
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 import { 
     FaPlus, FaTrash, FaUtensils, 
-    FaBell, FaCheckCircle, FaCircle, FaCrown, FaSignOutAlt, FaRocket, FaUnlock, FaStore, FaExternalLinkAlt, FaCopy, FaImage
+    FaBell, FaCheckCircle, FaCircle, FaCrown, FaSignOutAlt, FaRocket, FaUnlock, FaStore, FaExternalLinkAlt, FaCopy, FaImage, FaInbox, FaDownload
 } from "react-icons/fa";
 
 // --- STYLES (Mobile Optimized & Beautiful) ---
@@ -28,19 +30,14 @@ const styles = `
 .input-dark { width: 100%; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); padding: 14px; border-radius: 12px; color: white; margin-bottom: 15px; outline: none; transition: 0.3s; }
 .input-dark:focus { border-color: #FF9933; background: rgba(0,0,0,0.6); }
 .dish-item { display: flex; justify-content: space-between; align-items: center; padding: 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
-.dish-item:last-child { border-bottom: none; }
+.inbox-card { background: rgba(255,255,255,0.05); padding: 15px; border-radius: 15px; margin-bottom: 10px; border-left: 4px solid #FF9933; }
 .toast-container { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); width: 90%; max-width: 400px; z-index: 1000; display: flex; flex-direction: column; gap: 10px; }
-.toast-alert { background: #FF9933; color: black; padding: 15px; border-radius: 15px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5); animation: slideDown 0.3s ease-out; }
-@keyframes slideDown { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-.lock-container { min-height: 100vh; background: #050505; display: flex; align-items: center; justify-content: center; padding: 20px; }
-.lock-card { width: 100%; max-width: 350px; background: #111; padding: 40px; border-radius: 30px; border: 1px solid #222; text-align: center; }
+.toast-alert { background: #FF9933; color: black; padding: 15px; border-radius: 15px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
 .menu-link-box { background: rgba(0,0,0,0.3); border: 1px dashed #333; padding: 15px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 .link-text { color: #3b82f6; font-size: 12px; font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; display: block; text-decoration: none; }
-.action-btn { background: none; border: none; color: #888; cursor: pointer; padding: 5px; transition: 0.2s; }
-.action-btn:hover { color: white; }
 `;
 
-// --- SETUP WIZARD COMPONENT ---
+// --- SETUP WIZARD COMPONENT (RETAINED) ---
 const SetupWizard = ({ dishesCount, pushEnabled }) => {
     const steps = [
         { id: 1, label: "Add 3 dishes", done: dishesCount >= 3, hint: "Go to Menu tab" },
@@ -55,7 +52,7 @@ const SetupWizard = ({ dishesCount, pushEnabled }) => {
 
     return (
         <div className="glass-card" style={{ borderColor: completed === 2 ? '#22c55e' : 'rgba(255,255,255,0.1)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '10px' }}>
+            <div style={{ display: 'flex', justifyBetween: 'space-between', alignItems: 'flex-end', marginBottom: '10px' }}>
                 <h2 style={{ fontSize: '14px', fontWeight: 900, textTransform: 'uppercase', margin: 0 }}><FaRocket color="#FF9933" /> Setup Progress</h2>
                 <span style={{ color: '#FF9933', fontWeight: 900, fontSize: '12px' }}>{percent}% READY</span>
             </div>
@@ -86,7 +83,6 @@ const RestaurantAdmin = () => {
     const [password, setPassword] = useState("");
     const [authLoading, setAuthLoading] = useState(false);
     const [activeTab, setActiveTab] = useState("menu");
-    const [loading, setLoading] = useState(false);
     const [restaurantName, setRestaurantName] = useState(id);
     const [activeAlerts, setActiveAlerts] = useState([]);
     const [broadcast, setBroadcast] = useState(null);
@@ -94,10 +90,52 @@ const RestaurantAdmin = () => {
     const [trialEndsAt, setTrialEndsAt] = useState(null);
     const [isPro, setIsPro] = useState(false);
     const [dishes, setDishes] = useState([]);
-    // UPDATED FORM DATA: added image field
+    const [inboxOrders, setInboxOrders] = useState([]); // --- NEW INBOX STATE ---
     const [formData, setFormData] = useState({ name: "", price: "", category: "Starters", image: "" });
 
-    // --- LOGIN HANDLER ---
+    // --- FETCH INBOX (NEW) ---
+    const fetchInbox = async () => {
+        const mongoId = localStorage.getItem(`owner_id_${id}`);
+        if (!mongoId) return;
+        try {
+            const res = await axios.get(`${API_BASE}/orders/inbox/${mongoId}`);
+            setInboxOrders(res.data);
+        } catch (err) { console.error("Inbox Error", err); }
+    };
+
+    // --- PDF & CLEAR LOGIC (NEW) ---
+    const handleDownloadAndClear = async () => {
+        if (inboxOrders.length === 0) return alert("Inbox is empty!");
+        const mongoId = localStorage.getItem(`owner_id_${id}`);
+
+        const doc = new jsPDF();
+        doc.text(`Receipt Summary - ${restaurantName}`, 14, 15);
+        doc.setFontSize(10);
+        doc.text(`Total Orders: ${inboxOrders.length}`, 14, 22);
+
+        const tableData = inboxOrders.map((order, i) => [
+            i + 1,
+            order.tableNum,
+            order.items.map(item => `${item.name} x${item.quantity}`).join(", "),
+            `Rs.${order.totalAmount}`,
+            new Date(order.createdAt).toLocaleTimeString()
+        ]);
+
+        doc.autoTable({
+            startY: 30,
+            head: [['#', 'Table', 'Items', 'Total', 'Time']],
+            body: tableData,
+        });
+
+        doc.save(`Receipts_${Date.now()}.pdf`);
+
+        try {
+            await axios.put(`${API_BASE}/orders/clear-inbox/${mongoId}`);
+            setInboxOrders([]);
+            alert("Inbox Cleared!");
+        } catch (err) { alert("Error clearing database."); }
+    };
+
     const handleLogin = async (e) => {
         e.preventDefault();
         setAuthLoading(true);
@@ -110,56 +148,43 @@ const RestaurantAdmin = () => {
             setTrialEndsAt(res.data.trialEndsAt);
             setIsAuthenticated(true);
             fetchData(res.data.token, res.data._id);
+            fetchInbox();
         } catch (err) { alert("❌ Invalid Password"); } finally { setAuthLoading(false); }
     };
 
     const fetchData = async (token, mongoId) => {
-        setLoading(true);
         try {
             const config = { headers: { Authorization: `Bearer ${token}` } };
             const dishRes = await axios.get(`${API_BASE}/dishes?restaurantId=${mongoId}`, config);
             setDishes(dishRes.data || []);
-        } catch (error) { console.error(error); } finally { setLoading(false); }
+        } catch (error) { console.error(error); }
     };
 
-    // --- LIVE UPDATES (SOCKET.IO) ---
     useEffect(() => {
         if (isAuthenticated) {
             const mongoId = localStorage.getItem(`owner_id_${id}`);
             const socket = io("https://smart-menu-backend-5ge7.onrender.com");
             socket.emit("join-restaurant", mongoId);
 
+            socket.on("new-order", () => fetchInbox());
             socket.on("new-waiter-call", (data) => {
                 new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3").play().catch(() => {});
                 setActiveAlerts(prev => [...prev, data]);
             });
+            socket.on('new-broadcast', (data) => { setBroadcast(data); });
 
-            socket.on('new-broadcast', (data) => {
-                setBroadcast(data);
-                new Audio("https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3").play().catch(() => {});
-            });
-
-            return () => socket.disconnect();
+            const interval = setInterval(fetchInbox, 10000);
+            return () => { socket.disconnect(); clearInterval(interval); };
         }
     }, [isAuthenticated, id]);
 
-    const requestNotificationPermission = async () => {
-        const permission = await Notification.requestPermission();
-        if (permission === 'granted') setPushEnabled(true);
-    };
-
-    const handleLogout = () => { 
-        setIsAuthenticated(false); 
-        setPassword(""); 
-        localStorage.removeItem(`owner_token_${id}`);
-    };
+    const handleLogout = () => { setIsAuthenticated(false); localStorage.removeItem(`owner_token_${id}`); };
 
     const handleAddDish = async (e) => {
         e.preventDefault();
         const token = localStorage.getItem(`owner_token_${id}`);
         const mongoId = localStorage.getItem(`owner_id_${id}`);
         try {
-            // POST data including image URL
             await axios.post(`${API_BASE}/dishes`, { ...formData, owner: mongoId }, { headers: { Authorization: `Bearer ${token}` } });
             setFormData({ name: "", price: "", category: "Starters", image: "" });
             fetchData(token, mongoId);
@@ -167,25 +192,14 @@ const RestaurantAdmin = () => {
     };
 
     const handleDeleteDish = async (dishId) => {
-        if(!window.confirm("Delete this dish?")) return;
+        if(!window.confirm("Delete?")) return;
         const token = localStorage.getItem(`owner_token_${id}`);
         const mongoId = localStorage.getItem(`owner_id_${id}`);
-        try {
-            await axios.delete(`${API_BASE}/dishes/${dishId}`, { headers: { Authorization: `Bearer ${token}` } });
-            fetchData(token, mongoId);
-        } catch (error) { alert("Delete failed."); }
+        await axios.delete(`${API_BASE}/dishes/${dishId}`, { headers: { Authorization: `Bearer ${token}` } });
+        fetchData(token, mongoId);
     };
 
-    const calculateDaysLeft = (date) => {
-        if (!date) return 0;
-        const diff = new Date(date) - new Date();
-        return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
-    };
-
-    const copyToClipboard = () => {
-        navigator.clipboard.writeText(publicMenuUrl);
-        alert("Menu Link Copied!");
-    };
+    const copyToClipboard = () => { navigator.clipboard.writeText(publicMenuUrl); alert("Copied!"); };
 
     if (!isAuthenticated) return (
         <div className="admin-container">
@@ -193,17 +207,10 @@ const RestaurantAdmin = () => {
             <div className="lock-container">
                 <div className="lock-card">
                     <FaStore size={40} color="#f97316" style={{ marginBottom: '15px' }} />
-                    <h1 style={{ fontSize: '20px', fontWeight: '900' }}>{id.toUpperCase()} ADMIN</h1>
+                    <h1 style={{ fontSize: '20px', fontWeight: '900' }}>ADMIN LOGIN</h1>
                     <form onSubmit={handleLogin} style={{ marginTop: '20px' }}>
-                        <input 
-                            type="password" placeholder="Password" 
-                            value={password} onChange={e => setPassword(e.target.value)} 
-                            className="input-dark" style={{ textAlign: 'center' }} 
-                            autoComplete="current-password" 
-                        />
-                        <button type="submit" className="btn-primary" disabled={authLoading}>
-                            {authLoading ? "Unlocking..." : <><FaUnlock /> Access Control</>}
-                        </button>
+                        <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} className="input-dark" style={{ textAlign: 'center' }} />
+                        <button type="submit" className="btn-primary" disabled={authLoading}>{authLoading ? "Unlocking..." : "Access Control"}</button>
                     </form>
                 </div>
             </div>
@@ -218,61 +225,32 @@ const RestaurantAdmin = () => {
                 {activeAlerts.map((alert, i) => (
                     <div key={i} className="toast-alert">
                         <div>
-                            <p style={{ fontSize: '10px', fontWeight: 900, margin: 0 }}>🛎️ TABLE {alert.tableNumber}</p>
-                            <p style={{ fontWeight: 900, fontSize: '16px', margin: 0 }}>{alert.type?.toUpperCase()}</p>
+                            <p style={{ fontSize: '10px', fontWeight: 900 }}>🛎️ TABLE {alert.tableNumber}</p>
+                            <p style={{ fontWeight: 900, fontSize: '16px' }}>{alert.type?.toUpperCase()}</p>
                         </div>
-                        <button onClick={() => setActiveAlerts(prev => prev.filter((_, idx) => idx !== i))} style={{ background: 'black', color: 'white', padding: '5px 10px', borderRadius: '5px', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>DONE</button>
+                        <button onClick={() => setActiveAlerts(prev => prev.filter((_, idx) => idx !== i))} style={{ background: 'black', color: 'white', padding: '5px 10px', border: 'none', borderRadius: '5px' }}>DONE</button>
                     </div>
                 ))}
             </div>
 
             <div className="max-w-wrapper">
-                {broadcast && (
-                    <div style={{ background: '#3b82f6', color: 'white', padding: '12px', textAlign: 'left', fontSize: '12px', borderRadius: '15px', marginBottom: '20px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                        <span>📢 <strong>{broadcast.title}</strong>: {broadcast.message}</span>
-                        <button onClick={() => setBroadcast(null)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontWeight:'bold' }}>✕</button>
-                    </div>
-                )}
-
                 <header className="admin-header">
                     <div className="header-top">
-                        <div>
-                            <h1 className="shop-title">{restaurantName}</h1>
-                            <div style={{ marginTop: '5px' }}>
-                                {isPro ? <span className="badge-pro"><FaCrown /> PRO PLAN</span> : 
-                                <span className="badge-pro" style={{ color: '#60a5fa', borderColor: '#60a5fa' }}>Trial: {calculateDaysLeft(trialEndsAt)} Days Left</span>}
-                            </div>
-                        </div>
+                        <h1 className="shop-title">{restaurantName}</h1>
                         <button onClick={handleLogout} className="btn-glass" style={{ color: '#ef4444' }}><FaSignOutAlt /></button>
                     </div>
 
                     <div className="menu-link-box">
-                        <div style={{display:'flex', alignItems:'center', gap:'10px', overflow:'hidden'}}>
-                            <div style={{background:'rgba(59,130,246,0.2)', padding:'8px', borderRadius:'8px', color:'#3b82f6'}}>
-                                <FaUtensils size={14} />
-                            </div>
-                            <div style={{overflow:'hidden'}}>
-                                <p style={{fontSize:'10px', color:'#888', margin:0, fontWeight:'bold'}}>CUSTOMER MENU LINK</p>
-                                <a href={publicMenuUrl} target="_blank" rel="noreferrer" className="link-text">{publicMenuUrl}</a>
-                            </div>
-                        </div>
+                        <a href={publicMenuUrl} target="_blank" className="link-text">{publicMenuUrl}</a>
                         <div style={{display:'flex', gap:'5px'}}>
                             <button onClick={copyToClipboard} className="action-btn"><FaCopy /></button>
-                            <a href={publicMenuUrl} target="_blank" rel="noreferrer" className="action-btn"><FaExternalLinkAlt /></a>
+                            <a href={publicMenuUrl} target="_blank" className="action-btn"><FaExternalLinkAlt /></a>
                         </div>
                     </div>
 
                     <div style={{ display: 'flex', gap: '10px' }}>
-                        <Link to={`/${id}/chef`} target="_blank" style={{ flex: 1, textDecoration: 'none' }}>
-                            <button className="btn-glass" style={{ width: '100%', justifyContent: 'center' }}>
-                                <FaUtensils /> Chef KDS
-                            </button>
-                        </Link>
-                        <Link to={`/${id}/waiter`} target="_blank" style={{ flex: 1, textDecoration: 'none' }}>
-                            <button className="btn-glass" style={{ width: '100%', justifyContent: 'center' }}>
-                                <FaBell /> Waiter Desk
-                            </button>
-                        </Link>
+                        <Link to={`/${id}/chef`} target="_blank" style={{flex:1}}><button className="btn-glass" style={{width:'100%'}}><FaUtensils /> Chef</button></Link>
+                        <Link to={`/${id}/waiter`} target="_blank" style={{flex:1}}><button className="btn-glass" style={{width:'100%'}}><FaBell /> Waiter</button></Link>
                     </div>
                 </header>
 
@@ -280,23 +258,36 @@ const RestaurantAdmin = () => {
 
                 <nav className="nav-tabs">
                     <button onClick={() => setActiveTab("menu")} className={`tab-btn ${activeTab === "menu" ? 'active' : ''}`}>Menu</button>
+                    <button onClick={() => setActiveTab("inbox")} className={`tab-btn ${activeTab === "inbox" ? 'active' : ''}`}>
+                        Inbox {inboxOrders.length > 0 && <span style={{background:'#FF9933', color:'black', padding:'2px 6px', borderRadius:'10px'}}>{inboxOrders.length}</span>}
+                    </button>
                     <button onClick={() => setActiveTab("settings")} className={`tab-btn ${activeTab === "settings" ? 'active' : ''}`}>Setup</button>
                 </nav>
 
-                {activeTab === "menu" ? (
+                {activeTab === "inbox" && (
+                    <div className="glass-card">
+                        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'20px'}}>
+                            <h2 style={{fontSize:'14px', fontWeight:900}}><FaInbox color="#FF9933"/> NEW ORDERS</h2>
+                            <button onClick={handleDownloadAndClear} className="btn-glass" style={{background:'#FF9933', color:'black', border:'none'}}><FaDownload /> PDF & Clear</button>
+                        </div>
+                        {inboxOrders.length === 0 ? <p style={{textAlign:'center', padding:'20px'}}>Inbox Empty</p> : 
+                            inboxOrders.map(order => (
+                                <div key={order._id} className="inbox-card">
+                                    <p style={{fontWeight:900, color:'#FF9933', margin:0}}>TABLE {order.tableNum}</p>
+                                    <p style={{fontSize:'12px', margin:'5px 0'}}>{order.items.map(i => `${i.name} x${i.quantity}`).join(", ")}</p>
+                                    <p style={{fontSize:'11px', fontWeight:900}}>Total: Rs.{order.totalAmount}</p>
+                                </div>
+                            ))
+                        }
+                    </div>
+                )}
+
+                {activeTab === "menu" && (
                     <div className="glass-card">
                         <h2 style={{ fontSize: '14px', fontWeight: 900, marginBottom: '20px' }}><FaPlus /> ADD ITEM</h2>
                         <form onSubmit={handleAddDish}>
                             <input className="input-dark" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} placeholder="Dish Name" required />
-                            
-                            {/* ADDED: IMAGE URL INPUT FIELD AS REQUESTED */}
-                            <input 
-                                className="input-dark" 
-                                value={formData.image} 
-                                onChange={e => setFormData({ ...formData, image: e.target.value })} 
-                                placeholder="Image URL (e.g. https://...)" 
-                            />
-                            
+                            <input className="input-dark" value={formData.image} onChange={e => setFormData({ ...formData, image: e.target.value })} placeholder="Image URL" />
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
                                 <input className="input-dark" type="number" value={formData.price} onChange={e => setFormData({ ...formData, price: e.target.value })} placeholder="Price ₹" required />
                                 <select className="input-dark" value={formData.category} onChange={e => setFormData({ ...formData, category: e.target.value })}>
@@ -309,35 +300,25 @@ const RestaurantAdmin = () => {
                             {dishes.map(dish => (
                                 <div key={dish._id} className="dish-item">
                                     <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
-                                        
-                                        {/* ADDED: DISH IMAGE PREVIEW IN THE LIST */}
                                         <div style={{ width: '50px', height: '50px', borderRadius: '10px', background: '#222', overflow: 'hidden' }}>
-                                            {dish.image ? (
-                                                <img src={dish.image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                            ) : (
-                                                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                    <FaUtensils color="#333" />
-                                                </div>
-                                            )}
+                                            {dish.image ? <img src={dish.image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <FaUtensils color="#333" />}
                                         </div>
-                                        
                                         <div>
                                             <p style={{ fontWeight: 900, margin: 0, fontSize: '14px' }}>{dish.name}</p>
                                             <p style={{ margin: 0, fontSize: '11px', color: '#FF9933', fontWeight: 900 }}>₹{dish.price} • {dish.category.toUpperCase()}</p>
                                         </div>
                                     </div>
-                                    <button onClick={() => handleDeleteDish(dish._id)} style={{ background: 'none', border: 'none', color: '#444', cursor: 'pointer' }}><FaTrash /></button>
+                                    <button onClick={() => handleDeleteDish(dish._id)} style={{ background: 'none', border: 'none', color: '#444' }}><FaTrash /></button>
                                 </div>
                             ))}
                         </div>
                     </div>
-                ) : (
+                )}
+
+                {activeTab === "settings" && (
                     <div className="glass-card">
                         <h2 style={{ fontSize: '14px', fontWeight: 900, marginBottom: '10px' }}>Staff Alerts</h2>
-                        <p style={{ fontSize: '12px', color: '#888', marginBottom: '20px' }}>Enable notifications to receive Table Help requests on this device.</p>
-                        <button onClick={requestNotificationPermission} className="btn-primary" style={{ background: pushEnabled ? 'rgba(34, 197, 94, 0.1)' : null, color: pushEnabled ? '#22c55e' : 'white', border: pushEnabled ? '1px solid #22c55e' : 'none', boxShadow: 'none' }}>
-                            <FaBell /> {pushEnabled ? 'Alerts are ON' : 'Turn On Alerts'}
-                        </button>
+                        <button onClick={() => Notification.requestPermission()} className="btn-primary">Enable Push Alerts</button>
                     </div>
                 )}
             </div>
