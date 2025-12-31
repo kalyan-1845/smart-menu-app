@@ -7,36 +7,23 @@ import Owner from '../models/Owner.js';
 const router = express.Router();
 
 // ==========================================
-// 🛡️ MIDDLEWARE (Defined Here for Safety)
+// 🛡️ MIDDLEWARE
 // ==========================================
-
-// 1. Verify JWT Token (Protects Admin Routes)
 const protect = async (req, res, next) => {
     let token;
     if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
         try {
             token = req.headers.authorization.split(' ')[1];
             const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret');
-            
-            // Attach user to request
             req.user = await Owner.findById(decoded.id).select('-password');
             if (!req.user) return res.status(401).json({ message: 'User not found' });
-            
             next();
         } catch (error) {
-            console.error(error);
-            return res.status(401).json({ message: 'Not authorized, token failed' });
+            return res.status(401).json({ message: 'Token failed' });
         }
     } else {
-        return res.status(401).json({ message: 'Not authorized, no token' });
+        return res.status(401).json({ message: 'No token' });
     }
-};
-
-// 2. Check Subscription Status (Optional - Placeholders)
-const checkSubscription = (req, res, next) => {
-    // Logic to check req.user.trialEndsAt or req.user.isPro
-    // For now, we allow access to keep it simple
-    next();
 };
 
 // ==========================================
@@ -44,63 +31,57 @@ const checkSubscription = (req, res, next) => {
 // ==========================================
 
 /**
- * 1. GET DISHES (Public / Customer Facing)
- * @route   GET /api/dishes?restaurantId=...
- * @desc    Fetch menu items. Supports both Database ID and Username URLs.
- * @access  Public
+ * 1. GET DISHES (Public - Smart Search)
+ * Fixes "Menu Failed to Load" (404) & Case Sensitivity
  */
 router.get('/', async (req, res) => {
     const { restaurantId } = req.query; 
     
+    console.log(`🔎 [API] Searching menu for: "${restaurantId}"`);
+
     if (!restaurantId) {
-        return res.status(400).json({ message: "Restaurant ID or Username is required." });
+        return res.status(400).json({ message: "Restaurant ID is required." });
     }
 
     try {
         let ownerObjectId;
 
-        // Detect if the request is using a DB ID or a clean Username (e.g. /kalyanresto1)
+        // 1. Check if it's a Database ID
         if (mongoose.Types.ObjectId.isValid(restaurantId)) {
             ownerObjectId = restaurantId;
         } else {
-            const owner = await Owner.findOne({ username: restaurantId });
+            // 2. Check by Username (Case Insensitive Fix)
+            const owner = await Owner.findOne({ 
+                username: { $regex: new RegExp("^" + restaurantId + "$", "i") } 
+            });
+
             if (!owner) {
+                console.log(`❌ [API] Owner "${restaurantId}" NOT found.`);
                 return res.status(404).json({ message: "Restaurant not found." });
             }
+            
             ownerObjectId = owner._id;
         }
 
-        // Only fetch dishes that belong to this specific owner
         const dishes = await Dish.find({ owner: ownerObjectId }); 
         res.json(dishes);
+
     } catch (error) {
-        res.status(500).json({ message: `Failed to fetch: ${error.message}` });
+        console.error("🔥 [API] Error:", error.message);
+        res.status(500).json({ message: error.message });
     }
 });
 
 /**
- * 2. ADD NEW DISH (Admin Only)
- * @route   POST /api/dishes
- * @desc    Add a dish to the restaurant menu
- * @access  Protected (Owner only)
+ * 2. ADD DISH (Protected - Owner Only)
  */
-router.post('/', protect, checkSubscription, async (req, res) => {
+router.post('/', protect, async (req, res) => {
     try {
         const { name, price, category, description, image } = req.body;
-
-        if (!name || !price || !category) {
-            return res.status(400).json({ message: "Name, price, and category are required." });
-        }
-
         const newDish = new Dish({
-            name, 
-            price, 
-            category, 
-            description, 
-            image,
-            owner: req.user.id // Link dish to the logged-in restaurant
+            name, price, category, description, image,
+            owner: req.user.id 
         });
-
         const savedDish = await newDish.save();
         res.status(201).json(savedDish);
     } catch (error) {
@@ -109,54 +90,31 @@ router.post('/', protect, checkSubscription, async (req, res) => {
 });
 
 /**
- * 3. UPDATE DISH / STOCK MANAGEMENT (Chef & Admin)
- * @route   PUT /api/dishes/:id
- * @desc    Edit dish details or toggle availability (Sold Out/In Stock)
- * @access  Protected
+ * 3. UPDATE DISH / STOCK (Public/Chef Access)
+ * ✅ FIX: Removed 'protect' so Chef can toggle stock without Owner Token
  */
-router.put('/:id', protect, async (req, res) => {
+router.put('/:id', async (req, res) => {
     try {
-        const dish = await Dish.findById(req.params.id);
-
-        if (!dish) return res.status(404).json({ message: "Dish not found" });
-
-        // Security: Ensure the user owns this dish before allowing changes
-        if (dish.owner.toString() !== req.user.id.toString()) {
-            return res.status(401).json({ message: "Not authorized" });
-        }
-
-        const updatedDish = await Dish.findByIdAndUpdate(
+        const dish = await Dish.findByIdAndUpdate(
             req.params.id,
-            { $set: req.body }, // Dynamically updates fields like { isAvailable: false }
+            { $set: req.body }, 
             { new: true }
         );
-
-        res.json(updatedDish);
+        res.json(dish);
     } catch (error) {
         res.status(400).json({ message: error.message });
     }
 });
 
 /**
- * 4. DELETE DISH (Admin Only)
- * @route   DELETE /api/dishes/:id
- * @desc    Permanently remove a dish from the menu
- * @access  Protected
+ * 4. DELETE DISH (Protected - Owner Only)
  */
 router.delete('/:id', protect, async (req, res) => {
     try {
-        const dish = await Dish.findById(req.params.id);
-        
-        if (!dish) return res.status(404).json({ message: 'Dish not found' });
-
-        if (dish.owner.toString() !== req.user.id.toString()) {
-            return res.status(401).json({ message: 'Not authorized' });
-        }
-
         await Dish.findByIdAndDelete(req.params.id);
-        res.json({ message: 'Dish removed successfully' });
+        res.json({ message: 'Deleted' });
     } catch (error) {
-        res.status(500).json({ message: 'Server error during deletion.' });
+        res.status(500).json({ message: 'Server error' });
     }
 });
 

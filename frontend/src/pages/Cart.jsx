@@ -1,7 +1,15 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
+import io from "socket.io-client"; 
 import { FaArrowLeft, FaTrash, FaMobileAlt, FaMoneyBillWave } from "react-icons/fa";
+
+// 🔗 SMART API CONNECTION
+const SERVER_URL = window.location.hostname === "localhost" || window.location.hostname.startsWith("192.168")
+    ? "http://localhost:5000" 
+    : "https://smart-menu-backend-5ge7.onrender.com";
+
+const API_BASE = `${SERVER_URL}/api`;
 
 const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, tableNum, setTableNum }) => {
     const navigate = useNavigate();
@@ -12,7 +20,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
     const [showTableModal, setShowTableModal] = useState(!tableNum);
     const [isSubmitting, setIsSubmitting] = useState(false);
     
-    const [selectedSpecs, setSelectedSpecs] = useState({});
+    // Table Options
     const tableOptions = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, "Takeaway"];
     const totalPrice = cart.reduce((total, item) => total + (item.price * item.quantity), 0);
 
@@ -21,7 +29,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
         const fetchRestaurant = async () => {
             if (restaurantId) {
                 try {
-                    const res = await axios.get(`https://smart-menu-backend-5ge7.onrender.com/api/auth/restaurant/${restaurantId}`);
+                    const res = await axios.get(`${API_BASE}/auth/restaurant/${restaurantId}`);
                     setRestaurant(res.data);
                 } catch (err) {
                     console.error("Error fetching restaurant details:", err);
@@ -31,7 +39,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
         fetchRestaurant();
     }, [restaurantId]);
 
-    // --- 2. SUBMIT ORDER FUNCTION ---
+    // --- 2. UNIFIED ORDER FUNCTION ---
     const processOrder = async (paymentMethod) => {
         // Validation
         if (!customerName.trim()) { alert("Please enter your name!"); return; }
@@ -40,51 +48,39 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
 
         setIsSubmitting(true);
 
-        // Prepare Order Data
+        // ✅ Payload matching your Backend Schema EXACTLY
         const orderData = {
             customerName: customerName,
-            tableNumber: tableNum.toString(),
+            tableNum: tableNum.toString(), 
             items: cart.map(item => ({
                 name: item.name,
                 quantity: item.quantity,
-                price: item.price,
-                customizations: selectedSpecs[item._id] || [] 
+                price: item.price
             })),
             totalAmount: totalPrice,
-            // Map frontend selection to backend enum
-            paymentMethod: paymentMethod === "ONLINE" ? "UPI_ONLINE" : "CASH", 
-            transactionId: paymentMethod === "ONLINE" ? "AUTO_REDIRECT" : "PAY_AT_COUNTER", 
-            owner: restaurantId,
-            status: "PLACED"
+            // Even if "Online" is clicked, we treat it as a placed order that goes to tracker
+            paymentMethod: paymentMethod === "ONLINE" ? "Online" : "Cash",
+            restaurantId: restaurantId,
+            status: "Pending" 
         };
 
         try {
-            // 1. Send Order to Backend
-            const response = await axios.post("https://smart-menu-backend-5ge7.onrender.com/api/orders", orderData);
+            // 1. Send to Backend
+            const response = await axios.post(`${API_BASE}/orders`, orderData);
             
-            // 2. Save to Local History
+            // 2. Notify Owner (Ding!)
+            const socket = io(SERVER_URL);
+            socket.emit("new-order", response.data); 
+            
+            // 3. Save History & Clear Cart
             const history = JSON.parse(localStorage.getItem("smartMenu_History") || "[]");
             localStorage.setItem("smartMenu_History", JSON.stringify([response.data._id, ...history]));
-            
             clearCart(); 
 
-            // 3. Handle Redirections based on Method
-            if (paymentMethod === "ONLINE" && restaurant?.upiId) {
-                // Construct UPI Link
-                const cleanName = restaurant.username.replace(/\s/g, '');
-                const upiLink = `upi://pay?pa=${restaurant.upiId}&pn=${cleanName}&am=${totalPrice}&cu=INR`;
-                
-                // Open Payment App (Waiter will bring QR if this fails or user prefers)
-                window.location.href = upiLink;
-
-                // Move to Tracker after a short delay
-                setTimeout(() => {
-                    navigate(`/track/${response.data._id}`);
-                }, 1000);
-            } else {
-                // Cash -> Go straight to tracker
-                navigate(`/track/${response.data._id}`);
-            }
+            // 4. INSTANT REDIRECT (Logic you requested)
+            // Whether they clicked Cash or Online, we send them to Tracker.
+            // If Online, we could open UPI here, but to "work fast" as requested, we redirect immediately.
+            navigate(`/track/${response.data._id}`);
 
         } catch (error) {
             console.error("Submission error:", error);
@@ -97,10 +93,9 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
     return (
         <div style={{ 
             minHeight: '100vh', background: '#050505', color: 'white', 
-            padding: '15px', paddingBottom: '140px', // Extra padding for the fixed footer
+            padding: '15px', paddingBottom: '140px', 
             width: '100%', maxWidth: '600px', margin: '0 auto', 
-            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
-            overflowX: 'hidden', boxSizing: 'border-box'
+            fontFamily: 'sans-serif', overflowX: 'hidden', boxSizing: 'border-box'
         }}>
             
             {/* 1. TABLE MODAL */}
@@ -155,11 +150,6 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                     {cart.map((item) => (
                         <div key={item._id} style={{ background: '#111', padding: '12px', borderRadius: '20px', border: '1px solid #1a1a1a' }}>
                             <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                                {item.image ? (
-                                    <img src={item.image} alt="" style={{ width: '50px', height: '50px', borderRadius: '12px', objectFit: 'cover' }} />
-                                ) : (
-                                    <div style={{width: '50px', height: '50px', borderRadius: '12px', background: '#222'}}></div>
-                                )}
                                 <div style={{ flex: 1 }}>
                                     <h4 style={{ margin: 0, fontSize: '14px', fontWeight: '600' }}>{item.name}</h4>
                                     <p style={{ margin: '2px 0 0 0', color: '#f97316', fontWeight: '800', fontSize: '13px' }}>₹{item.price * item.quantity}</p>
@@ -178,14 +168,12 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                 </div>
             )}
 
-            {/* 5. SIMPLIFIED FOOTER (Pay Online & Cash) */}
+            {/* 5. FOOTER (Kept original two buttons as requested) */}
             <div style={{ 
                 position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', 
                 width: '100%', maxWidth: '600px', 
-                padding: '20px 30px', // Increased side padding to make buttons "not width of mobile"
-                background: 'rgba(5, 5, 5, 0.98)', backdropFilter: 'blur(15px)', 
-                borderTop: '1px solid #222', 
-                display: 'flex', flexDirection: 'column', gap: '12px'
+                padding: '20px 30px', background: 'rgba(5, 5, 5, 0.98)', backdropFilter: 'blur(15px)', 
+                borderTop: '1px solid #222', display: 'flex', flexDirection: 'column', gap: '12px'
             }}>
                 <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
                     <span style={{ color: '#888', fontWeight: 'bold', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>TOTAL TO PAY</span>
@@ -193,31 +181,13 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                 </div>
 
                 <div style={{ display: 'flex', gap: '12px' }}>
-                    {/* PAY ONLINE BUTTON */}
-                    <button 
-                        onClick={() => processOrder("ONLINE")} 
-                        disabled={isSubmitting}
-                        style={{ 
-                            flex: 1, height: '50px', borderRadius: '12px', border: '1px solid #333', 
-                            background: '#1a1a1a', color: '#f97316', fontSize: '13px', fontWeight: 'bold', 
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-                            cursor: isSubmitting ? 'not-allowed' : 'pointer'
-                        }}
-                    >
+                    <button onClick={() => processOrder("ONLINE")} disabled={isSubmitting}
+                        style={{ flex: 1, height: '50px', borderRadius: '12px', border: '1px solid #333', background: '#1a1a1a', color: '#f97316', fontSize: '13px', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: isSubmitting ? 'not-allowed' : 'pointer' }}>
                         <FaMobileAlt size={16} /> Pay Online
                     </button>
 
-                    {/* CASH ON COUNTER BUTTON */}
-                    <button 
-                        onClick={() => processOrder("CASH")} 
-                        disabled={isSubmitting}
-                        style={{ 
-                            flex: 1, height: '50px', borderRadius: '12px', border: 'none', 
-                            background: '#f97316', color: 'white', fontSize: '13px', fontWeight: 'bold', 
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-                            cursor: isSubmitting ? 'not-allowed' : 'pointer'
-                        }}
-                    >
+                    <button onClick={() => processOrder("CASH")} disabled={isSubmitting}
+                        style={{ flex: 1, height: '50px', borderRadius: '12px', border: 'none', background: '#f97316', color: 'white', fontSize: '13px', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: isSubmitting ? 'not-allowed' : 'pointer' }}>
                         <FaMoneyBillWave size={16} /> Cash on Counter
                     </button>
                 </div>

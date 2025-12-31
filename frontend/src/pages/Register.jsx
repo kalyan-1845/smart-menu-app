@@ -1,19 +1,36 @@
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import axios from "axios";
+import { FaStore, FaUser, FaLock, FaArrowRight } from "react-icons/fa";
+
+// --- STYLES ---
+const styles = {
+  container: { minHeight: "100vh", background: "#050505", display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", fontFamily: "sans-serif" },
+  card: { width: "100%", maxWidth: "400px", background: "linear-gradient(180deg, #1e1e1e 0%, #0a0a0a 100%)", padding: "40px 30px", borderRadius: "24px", border: "1px solid #333", position: "relative" },
+  header: { textAlign: "center", marginBottom: "30px" },
+  title: { color: "white", fontSize: "28px", fontWeight: "800", margin: "0 0 10px 0" },
+  sub: { color: "#888", fontSize: "14px", margin: 0 },
+  inputGroup: { marginBottom: "20px" },
+  label: { display: "block", color: "#aaa", fontSize: "12px", textTransform: "uppercase", fontWeight: "bold", marginBottom: "8px" },
+  wrapper: { position: "relative" },
+  icon: { position: "absolute", left: "15px", top: "14px", color: "#666" },
+  input: { width: "100%", padding: "14px 14px 14px 45px", background: "#0f0f0f", border: "1px solid #333", borderRadius: "12px", color: "white", outline: "none", fontSize: "15px", boxSizing: "border-box" },
+  btn: { width: "100%", padding: "16px", background: "linear-gradient(135deg, #22c55e 0%, #16a34a 100%)", border: "none", borderRadius: "12px", color: "white", fontWeight: "bold", fontSize: "16px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", marginTop: "10px" },
+  error: { background: "rgba(239, 68, 68, 0.1)", border: "1px solid rgba(239, 68, 68, 0.2)", color: "#ef4444", padding: "12px", borderRadius: "10px", fontSize: "13px", textAlign: "center", marginBottom: "20px" },
+  footer: { marginTop: "20px", textAlign: "center", fontSize: "13px", color: "#666" },
+  link: { color: "#22c55e", textDecoration: "none", fontWeight: "bold" }
+};
 
 const Register = () => {
   const navigate = useNavigate();
-  const [formData, setFormData] = useState({
-    username: "",
-    email: "", // ✅ ADDED: Email field to prevent 500 Error
-    password: "",
-    restaurantName: "",
-    address: "",
-    phone: ""
-  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  
+  const [formData, setFormData] = useState({
+    restaurantName: "",
+    username: "", 
+    password: ""
+  });
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -24,19 +41,47 @@ const Register = () => {
     setLoading(true);
     setError("");
 
+    if (formData.username.includes(" ")) {
+      setError("Username cannot contain spaces.");
+      setLoading(false);
+      return;
+    }
+
     try {
-      // ✅ Using the dynamic URL based on where the app is running
-      // If you are on localhost, ensure your api.js/axios config points to localhost:5000
-      // If you are on Netlify, this points to Render.
-      const API_URL = "https://smart-menu-backend-5ge7.onrender.com/api/auth/register";
+      // 1. Calculate Free Access Date (100 Years)
+      const freeAccessDate = new Date();
+      freeAccessDate.setFullYear(freeAccessDate.getFullYear() + 100); 
+
+      // 2. Auto-Generate Dummy Email
+      const autoEmail = `${formData.username}@smartmenu.local`;
+
+      const payload = {
+        ...formData,
+        email: autoEmail, 
+        trialEndsAt: freeAccessDate.toISOString() 
+      };
+
+      console.log("Sending to Localhost:", payload); 
+
+      // ✅ FIX: POINT TO LOCALHOST (Not Render)
+      const res = await axios.post("http://localhost:5000/api/auth/register", payload);
       
-      await axios.post(API_URL, formData);
-      
-      alert("Registration Successful! Please Login.");
-      navigate("/login"); // Redirects to login after success
+      console.log("Success:", res.data);
+      alert("Registration Successful!");
+      navigate("/login");
+
     } catch (err) {
-      console.error(err);
-      setError(err.response?.data?.message || "Registration failed. Try again.");
+      console.error("Registration Error:", err);
+      if (err.response && err.response.data) {
+        const msg = err.response.data.message || JSON.stringify(err.response.data);
+        if (msg.includes("duplicate") || msg.includes("already registered")) {
+            setError("That Username is already taken. Please try a new one.");
+        } else {
+            setError(msg);
+        }
+      } else {
+        setError("Network Error. Is your backend running on port 5000?");
+      }
     } finally {
       setLoading(false);
     }
@@ -45,187 +90,74 @@ const Register = () => {
   return (
     <div style={styles.container}>
       <div style={styles.card}>
-        <h1 style={styles.title}>Partner Registration</h1>
-        <p style={styles.subtitle}>Join Smart Menu & Digitize Your Restaurant</p>
+        <div style={styles.header}>
+          <h1 style={styles.title}>Join Smart Menu</h1>
+          <p style={styles.sub}>Create your Free Forever account</p>
+        </div>
 
         {error && <div style={styles.error}>{error}</div>}
 
-        <form onSubmit={handleRegister} style={styles.form}>
-          
-          {/* USERNAME */}
-          <div style={styles.inputGroup}>
-            <label style={styles.label}>Owner Username</label>
-            <input
-              type="text"
-              name="username"
-              placeholder="e.g. kalyanresto"
-              value={formData.username}
-              onChange={handleChange}
-              required
-              style={styles.input}
-            />
-          </div>
-
-          {/* EMAIL (Crucial for DB Validation) */}
-          <div style={styles.inputGroup}>
-            <label style={styles.label}>Email Address</label>
-            <input
-              type="email"
-              name="email"
-              placeholder="e.g. kalyan@example.com"
-              value={formData.email}
-              onChange={handleChange}
-              required
-              style={styles.input}
-            />
-          </div>
-
-          {/* RESTAURANT NAME */}
+        <form onSubmit={handleRegister}>
+          {/* Restaurant Name */}
           <div style={styles.inputGroup}>
             <label style={styles.label}>Restaurant Name</label>
-            <input
-              type="text"
-              name="restaurantName"
-              placeholder="e.g. Spicy Kitchen"
-              value={formData.restaurantName}
-              onChange={handleChange}
-              required
-              style={styles.input}
-            />
+            <div style={styles.wrapper}>
+              <FaStore style={styles.icon} />
+              <input 
+                style={styles.input} 
+                name="restaurantName"
+                placeholder="e.g. BSR Biryani Point" 
+                value={formData.restaurantName}
+                onChange={handleChange}
+                required
+              />
+            </div>
           </div>
 
-          {/* PASSWORD */}
+          {/* Username */}
+          <div style={styles.inputGroup}>
+            <label style={styles.label}>Unique ID (Username)</label>
+            <div style={styles.wrapper}>
+              <FaUser style={styles.icon} />
+              <input 
+                style={styles.input} 
+                name="username"
+                placeholder="e.g. bsr (No Spaces)" 
+                value={formData.username}
+                onChange={handleChange}
+                required
+              />
+            </div>
+          </div>
+
+          {/* Password */}
           <div style={styles.inputGroup}>
             <label style={styles.label}>Password</label>
-            <input
-              type="password"
-              name="password"
-              placeholder="Create a strong password"
-              value={formData.password}
-              onChange={handleChange}
-              required
-              style={styles.input}
-            />
+            <div style={styles.wrapper}>
+              <FaLock style={styles.icon} />
+              <input 
+                style={styles.input} 
+                type="password"
+                name="password"
+                placeholder="••••••••" 
+                value={formData.password}
+                onChange={handleChange}
+                required
+              />
+            </div>
           </div>
 
-          {/* ADDRESS */}
-          <div style={styles.inputGroup}>
-            <label style={styles.label}>Address (Optional)</label>
-            <input
-              type="text"
-              name="address"
-              placeholder="City, Area"
-              value={formData.address}
-              onChange={handleChange}
-              style={styles.input}
-            />
-          </div>
-
-          <button type="submit" disabled={loading} style={styles.button}>
-            {loading ? "Creating Account..." : "Register Restaurant"}
+          <button type="submit" style={styles.btn} disabled={loading}>
+            {loading ? "Creating Account..." : <>Get Free Access <FaArrowRight /></>}
           </button>
         </form>
 
-        <p style={styles.footerText}>
-          Already have an account? <Link to="/login" style={styles.link}>Login here</Link>
-        </p>
+        <div style={styles.footer}>
+          Already have an account? <Link to="/login" style={styles.link}>Login Here</Link>
+        </div>
       </div>
     </div>
   );
-};
-
-// --- STYLES (Dark Theme) ---
-const styles = {
-  container: {
-    minHeight: "100vh",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#050505",
-    padding: "20px",
-    fontFamily: "'Inter', sans-serif"
-  },
-  card: {
-    backgroundColor: "#111",
-    padding: "40px",
-    borderRadius: "20px",
-    width: "100%",
-    maxWidth: "450px",
-    border: "1px solid #222",
-    boxShadow: "0 10px 40px rgba(0,0,0,0.5)"
-  },
-  title: {
-    color: "white",
-    fontSize: "28px",
-    fontWeight: "bold",
-    marginBottom: "10px",
-    textAlign: "center"
-  },
-  subtitle: {
-    color: "#888",
-    fontSize: "14px",
-    marginBottom: "30px",
-    textAlign: "center"
-  },
-  error: {
-    backgroundColor: "rgba(239, 68, 68, 0.1)",
-    color: "#ef4444",
-    padding: "10px",
-    borderRadius: "8px",
-    marginBottom: "20px",
-    fontSize: "14px",
-    textAlign: "center"
-  },
-  form: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "20px"
-  },
-  inputGroup: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "8px"
-  },
-  label: {
-    color: "#ccc",
-    fontSize: "12px",
-    fontWeight: "bold",
-    textTransform: "uppercase",
-    letterSpacing: "0.5px"
-  },
-  input: {
-    padding: "15px",
-    backgroundColor: "#050505",
-    border: "1px solid #333",
-    borderRadius: "10px",
-    color: "white",
-    fontSize: "16px",
-    outline: "none",
-    transition: "border-color 0.2s"
-  },
-  button: {
-    padding: "18px",
-    backgroundColor: "#f97316",
-    color: "white",
-    border: "none",
-    borderRadius: "12px",
-    fontSize: "16px",
-    fontWeight: "bold",
-    cursor: "pointer",
-    marginTop: "10px",
-    transition: "background 0.2s"
-  },
-  footerText: {
-    color: "#666",
-    textAlign: "center",
-    marginTop: "25px",
-    fontSize: "14px"
-  },
-  link: {
-    color: "#f97316",
-    textDecoration: "none",
-    fontWeight: "bold"
-  }
 };
 
 export default Register;

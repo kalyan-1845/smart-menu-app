@@ -2,398 +2,215 @@ import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import io from "socket.io-client";
-// Corrected import path to match your folder structure
 import { generateCustomerReceipt } from "../utils/ReceiptGenerator";
 import { 
-    FaCheck, FaUtensils, FaClock, FaConciergeBell, 
-    FaArrowLeft, FaPhoneAlt, FaMoneyBillWave, FaCheckCircle, 
-    FaSpinner, FaExclamationCircle, FaReceipt, FaDownload
+    FaCheck, FaUtensils, FaConciergeBell, FaFlagCheckered,
+    FaArrowLeft, FaPhoneAlt, FaDownload, FaSpinner, FaReceipt, FaLock
 } from "react-icons/fa";
 
-// --- MOBILE-FIRST PREMIUM STYLES ---
-const styles = `
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;900&display=swap');
+const SERVER_URL = window.location.hostname === "localhost" || window.location.hostname.startsWith("192.168")
+    ? "http://localhost:5000" 
+    : "https://smart-menu-backend-5ge7.onrender.com";
 
-.tracker-container {
-    background-color: #050505;
-    min-height: 100vh;
-    font-family: 'Inter', sans-serif;
-    color: white;
-    padding: 20px;
-    padding-bottom: 120px;
-    max-width: 600px;
-    margin: 0 auto;
-    position: relative;
-    background-image: radial-gradient(circle at top right, #1a100a 0%, #050505 40%);
-}
-
-.loading-screen {
-    background: #050505;
-    height: 100vh;
-    color: #f97316;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 15px;
-}
-
-@keyframes pulse-orange {
-    0% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.4); }
-    70% { box-shadow: 0 0 0 10px rgba(249, 115, 22, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0); }
-}
-.pulse-active { animation: pulse-orange 2s infinite; }
-
-@keyframes spin { 100% { transform: rotate(360deg); } }
-.spin { animation: spin 1s linear infinite; }
-
-.nav-header { display: flex; align-items: center; gap: 15px; margin-bottom: 25px; padding-top: 10px; }
-.back-btn { background: rgba(255,255,255,0.1); border: none; color: white; width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; cursor: pointer; backdrop-filter: blur(10px); }
-.order-title { font-size: 20px; font-weight: 900; margin: 0; }
-.order-id { font-size: 11px; color: #888; font-weight: 700; margin-top: 2px; }
-
-.status-card {
-    background: #111;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 24px;
-    padding: 30px 20px;
-    margin-bottom: 25px;
-    text-align: center;
-    position: relative;
-    overflow: hidden;
-}
-.status-label { font-size: 11px; text-transform: uppercase; letter-spacing: 2px; color: #888; font-weight: 800; margin-bottom: 5px; }
-.status-value { font-size: 28px; font-weight: 900; color: white; margin-bottom: 5px; }
-.status-sub { color: #f97316; font-size: 13px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 6px; }
-
-.stepper-wrapper {
-    position: relative;
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin: 0 10px 30px 10px;
-}
-.progress-bg { position: absolute; top: 15px; left: 0; width: 100%; height: 4px; background: #222; z-index: 0; border-radius: 10px; }
-.progress-fill { position: absolute; top: 15px; left: 0; height: 4px; background: #f97316; z-index: 0; transition: width 0.5s ease; border-radius: 10px; }
-
-.step-item { z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; width: 50px; }
-.step-icon {
-    width: 34px; height: 34px;
-    border-radius: 50%;
-    background: #111;
-    border: 2px solid #333;
-    color: #555;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 12px;
-    transition: all 0.3s;
-}
-.step-icon.active { border-color: #f97316; color: white; background: #f97316; }
-.step-label { font-size: 10px; font-weight: 700; color: #555; text-align: center; transition: color 0.3s; }
-.step-label.active { color: white; }
-
-.receipt-card {
-    background: #111;
-    border-radius: 20px;
-    padding: 20px;
-    border: 1px solid #222;
-}
-.receipt-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px dashed #333; padding-bottom: 15px; }
-
-.receipt-download-box {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background: rgba(249, 115, 22, 0.05);
-    border: 1px solid rgba(249, 115, 22, 0.2);
-    padding: 12px 15px;
-    border-radius: 15px;
-    margin-bottom: 15px;
-}
-.download-text { font-size: 13px; font-weight: 700; color: #f97316; }
-.btn-download-mini {
-    background: #f97316;
-    color: white;
-    border: none;
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-}
-
-.item-row { display: flex; justify-content: space-between; margin-bottom: 12px; font-size: 14px; }
-.item-qty { color: #f97316; font-weight: 800; margin-right: 8px; }
-.item-name { color: #ddd; font-weight: 500; }
-.item-price { color: white; font-weight: 700; }
-
-.note-box {
-    background: rgba(249, 115, 22, 0.1);
-    border: 1px solid rgba(249, 115, 22, 0.2);
-    padding: 10px;
-    border-radius: 10px;
-    margin-top: 15px;
-    font-size: 12px;
-    color: #f97316;
-    display: flex; gap: 8px;
-}
-
-.total-row { display: flex; justify-content: space-between; margin-top: 20px; padding-top: 15px; border-top: 1px solid #222; align-items: center; }
-.total-label { font-size: 12px; font-weight: 800; color: #888; text-transform: uppercase; }
-.total-amount { font-size: 20px; font-weight: 900; color: white; }
-
-.sticky-footer {
-    position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
-    width: 100%; max-width: 600px;
-    background: rgba(5,5,5,0.95);
-    backdrop-filter: blur(10px);
-    padding: 20px;
-    border-top: 1px solid #222;
-    display: flex; gap: 12px;
-    z-index: 100;
-}
-
-.btn-call {
-    flex: 1;
-    background: #1a1a1a;
-    color: white;
-    border: 1px solid #333;
-    height: 50px;
-    border-radius: 14px;
-    font-weight: 700;
-    font-size: 13px;
-    display: flex; align-items: center; justify-content: center; gap: 8px;
-    cursor: pointer;
-}
-.btn-status {
-    flex: 1;
-    background: #f97316;
-    color: white;
-    border: none;
-    height: 50px;
-    border-radius: 14px;
-    font-weight: 800;
-    font-size: 13px;
-    display: flex; align-items: center; justify-content: center; gap: 8px;
-    box-shadow: 0 4px 15px rgba(249, 115, 22, 0.3);
-}
-`;
+const API_BASE = `${SERVER_URL}/api`;
 
 const OrderTracker = () => {
     const { id } = useParams();
     const navigate = useNavigate();
-    const API_BASE = "https://smart-menu-backend-5ge7.onrender.com/api";
     
     const [order, setOrder] = useState(null);
     const [restaurant, setRestaurant] = useState(null);
     const [callStatus, setCallStatus] = useState("Call Waiter"); 
     const [isCalling, setIsCalling] = useState(false);
+    const [hasDownloaded, setHasDownloaded] = useState(false); // Prevents duplicate downloads
+
+    const getStepIndex = (status) => {
+        if (!status) return 0;
+        const s = status.toLowerCase();
+        if (s.includes('place') || s.includes('pend') || s.includes('new')) return 0;
+        if (s.includes('cook') || s.includes('prepar')) return 1;
+        if (s.includes('ready')) return 2;
+        if (s.includes('serv') || s.includes('complet') || s.includes('paid')) return 3;
+        return 0;
+    };
 
     useEffect(() => {
         const fetchOrderData = async () => {
             try {
-                // Fetch specific order
-                const res = await axios.get(`${API_BASE}/orders/track/${id}`);
+                const res = await axios.get(`${API_BASE}/orders/${id}`); 
                 setOrder(res.data);
                 
-                // Fetch restaurant branding for the PDF generator
-                const resInfo = await axios.get(`${API_BASE}/auth/restaurant/${res.data.owner}`);
-                setRestaurant(resInfo.data);
-            } catch (e) { 
-                console.error("Fetch Error:", e);
-            }
+                if(res.data.restaurantId && !restaurant) {
+                    const resInfo = await axios.get(`${API_BASE}/auth/restaurant/${res.data.restaurantId}`);
+                    setRestaurant(resInfo.data);
+                }
+            } catch (e) { console.error(e); }
         };
 
         fetchOrderData();
         
-        // --- REAL-TIME UPDATES VIA SOCKET ---
-        const socket = io("https://smart-menu-backend-5ge7.onrender.com");
+        const socket = io(SERVER_URL);
         socket.on("order-updated", (updatedOrder) => {
             if (updatedOrder._id === id) setOrder(updatedOrder);
         });
 
-        return () => socket.disconnect();
+        const interval = setInterval(fetchOrderData, 3000);
+        return () => { socket.disconnect(); clearInterval(interval); };
     }, [id]);
 
-    // HANDLER: Generate the Centered Digital Receipt
-    const handleDownloadReceipt = () => {
-        if (order && restaurant) {
+    // ✅ AUTO DOWNLOAD RECEIPT WHEN SERVED
+    useEffect(() => {
+        if (order && order.status === "Served" && !hasDownloaded && restaurant) {
             generateCustomerReceipt(order, restaurant);
-        } else {
-            alert("Syncing order data... please wait.");
+            setHasDownloaded(true);
         }
-    };
+    }, [order, hasDownloaded, restaurant]);
 
-    // HANDLER: Notify staff for help
+    const currentStep = order ? getStepIndex(order.status) : 0;
+    const isServed = currentStep === 3; 
+
     const handleCallWaiter = async () => {
-        if (!order || isCalling) return;
-        
         setIsCalling(true);
-        setCallStatus("Requesting...");
-        
+        setCallStatus("Calling...");
         try {
-            await axios.post(`${API_BASE}/orders/calls`, {
-                restaurantId: order.owner,
-                tableNumber: order.tableNumber,
+            await axios.post(`${API_BASE}/orders/call-waiter`, {
+                restaurantId: order.restaurantId,
+                tableNumber: order.tableNum,
                 type: "help"
             });
-            setCallStatus("Staff Notified ✓");
-            setTimeout(() => {
-                setCallStatus("Call Waiter");
-                setIsCalling(false);
-            }, 5000);
+            setCallStatus("Waiter Coming!");
+            setTimeout(() => { setCallStatus("Call Waiter"); setIsCalling(false); }, 5000);
         } catch (e) {
-            alert("Failed to notify staff.");
-            setCallStatus("Call Waiter");
+            setCallStatus("Try Again");
             setIsCalling(false);
         }
     };
 
-    const stages = [
-        { id: "PLACED", label: "Sent", icon: <FaCheck /> },
-        { id: "COOKING", label: "Cooking", icon: <FaUtensils /> },
-        { id: "READY", label: "Ready", icon: <FaConciergeBell /> },
-        { id: "SERVED", label: "Served", icon: <FaCheckCircle /> }
-    ];
-
-    if (!order) return (
-        <>
-            <style>{styles}</style>
-            <div className="loading-screen">
-                <FaSpinner className="spin" size={30} />
-                <span>Syncing Live Order...</span>
-            </div>
-        </>
-    );
-
-    // Status Mapping logic
-    const currentStatus = order.status === "PLACED" ? "PLACED" : (order.status === "Cooking" ? "COOKING" : (order.status === "Ready" ? "READY" : "SERVED"));
-    const activeIndex = stages.findIndex(s => s.id === currentStatus);
-    const progressWidth = (activeIndex / (stages.length - 1)) * 100;
-
-    const isPaid = order.paymentStatus === "Paid";
-    const isCash = order.paymentMethod === "Cash";
+    if (!order) return <div style={styles.center}><FaSpinner className="spin" size={30} color="#f97316"/></div>;
 
     return (
-        <>
-            <style>{styles}</style>
-            <div className="tracker-container">
-                
-                {/* 1. NAVIGATION HEADER */}
-                <div className="nav-header">
-                    <button onClick={() => navigate(-1)} className="back-btn"><FaArrowLeft /></button>
-                    <div>
-                        <h1 className="order-title">Track Order</h1>
-                        <div className="order-id">ID: #{order._id.slice(-6).toUpperCase()} • Table {order.tableNumber}</div>
-                    </div>
+        <div style={styles.container}>
+            {/* HEADER */}
+            <div style={styles.header}>
+                <button onClick={() => navigate(-1)} style={styles.backBtn}><FaArrowLeft /></button>
+                <div>
+                    <h1 style={styles.title}>Track Order</h1>
+                    <p style={styles.sub}>Order #{order._id.slice(-4).toUpperCase()}</p>
                 </div>
-
-                {/* 2. CURRENT STATUS CARD */}
-                <div className={`status-card ${currentStatus !== 'SERVED' ? 'pulse-active' : ''}`}>
-                    <div className="status-label">CURRENT STATUS</div>
-                    <div className="status-value" style={{ color: currentStatus === 'SERVED' ? '#22c55e' : 'white'}}>
-                        {currentStatus === "PLACED" ? "ORDER SENT" : 
-                         currentStatus === "COOKING" ? "PREPARING" : 
-                         currentStatus === "READY" ? "READY AT COUNTER" : "ENJOY MEAL"}
-                    </div>
-                    <div className="status-sub">
-                        {currentStatus === "SERVED" ? 
-                            <><FaCheckCircle/> Order Finished</> : 
-                            <><FaClock/> Live from Kitchen</>
-                        }
-                    </div>
-                </div>
-
-                {/* 3. STEPPER PROGRESS */}
-                <div className="stepper-wrapper">
-                    <div className="progress-bg"></div>
-                    <div className="progress-fill" style={{ width: `${progressWidth}%` }}></div>
-                    
-                    {stages.map((stage, i) => (
-                        <div key={stage.id} className="step-item">
-                            <div className={`step-icon ${i <= activeIndex ? 'active' : ''}`}>
-                                {stage.icon}
-                            </div>
-                            <div className={`step-label ${i <= activeIndex ? 'active' : ''}`}>
-                                {stage.label}
-                            </div>
-                        </div>
-                    ))}
-                </div>
-
-                {/* 4. RECEIPT & SUMMARY CARD */}
-                <div className="receipt-card">
-                    <div className="receipt-header">
-                        <span style={{fontWeight:'800', color:'#888', fontSize:'11px', textTransform:'uppercase'}}>ORDER SUMMARY</span>
-                        <FaReceipt color="#444"/>
-                    </div>
-
-                    {/* RECEIPT DOWNLOAD QUICK ACTION */}
-                    <div className="receipt-download-box">
-                        <span className="download-text">Digital Bill Receipt</span>
-                        <button onClick={handleDownloadReceipt} className="btn-download-mini">
-                            <FaDownload size={14}/>
-                        </button>
-                    </div>
-                    
-                    {order.items.map((item, i) => (
-                        <div key={i} className="item-row">
-                            <div>
-                                <span className="item-qty">{item.quantity}x</span>
-                                <span className="item-name">{item.name}</span>
-                            </div>
-                            <span className="item-price">₹{item.price * item.quantity}</span>
-                        </div>
-                    ))}
-
-                    {/* CHEF NOTES DISPLAY */}
-                    {order.note && (
-                        <div className="note-box">
-                            <FaExclamationCircle style={{minWidth: '12px', marginTop:'2px'}}/> 
-                            <span>Chef Note: "{order.note}"</span>
-                        </div>
-                    )}
-
-                    <div className="total-row">
-                        <div className="total-label">{isPaid ? "TOTAL PAID" : "TOTAL TO PAY"}</div>
-                        <div className="total-amount" style={{ color: isPaid ? '#22c55e' : 'white' }}>
-                            ₹{order.totalAmount}
-                        </div>
-                    </div>
-
-                    {/* PAYMENT INSTRUCTION FOR CASH CLIENTS */}
-                    {isCash && !isPaid && (
-                        <div style={{ marginTop: '15px', background: '#222', padding: '12px', borderRadius: '12px', display:'flex', alignItems:'center', gap:'10px' }}>
-                            <div style={{background:'#f97316', padding:'8px', borderRadius:'50%', display:'flex'}}><FaMoneyBillWave size={12} color="white"/></div>
-                            <div>
-                                <div style={{fontSize:'12px', fontWeight:'bold', color:'white'}}>Pay Cash at Counter</div>
-                                <div style={{fontSize:'10px', color:'#888'}}>Download the receipt above for checkout</div>
-                            </div>
-                        </div>
-                    )}
-                </div>
-
-                {/* 5. STICKY ACTION FOOTER */}
-                <div className="sticky-footer">
-                    <button 
-                        onClick={handleCallWaiter} 
-                        className="btn-call" 
-                        disabled={isCalling} 
-                        style={{opacity: isCalling ? 0.7 : 1}}
-                    >
-                        {isCalling ? <FaSpinner className="spin"/> : <FaPhoneAlt />} {callStatus}
-                    </button>
-                    
-                    <button onClick={handleDownloadReceipt} className="btn-status">
-                        <FaDownload /> SAVE RECEIPT
-                    </button>
-                </div>
-
             </div>
-        </>
+
+            {/* STATUS CARD */}
+            <div style={styles.statusCard}>
+                <h2 style={styles.statusTitle}>
+                    {currentStep === 0 ? "Order Sent" : 
+                     currentStep === 1 ? "Cooking..." : 
+                     currentStep === 2 ? "Ready to Serve" : "ENJOY MEAL"}
+                </h2>
+                
+                <div style={styles.statusBarContainer}>
+                    <div style={styles.lineBase}></div>
+                    <div style={{...styles.lineFill, width: `${currentStep * 33}%`}}></div>
+
+                    <div style={styles.stepWrapper}>
+                        <StepIcon icon={<FaCheck/>} label="Sent" active={currentStep >= 0} />
+                        <StepIcon icon={<FaUtensils/>} label="Cooking" active={currentStep >= 1} />
+                        <StepIcon icon={<FaConciergeBell/>} label="Ready" active={currentStep >= 2} />
+                        <StepIcon icon={<FaFlagCheckered/>} label="Served" active={currentStep >= 3} />
+                    </div>
+                </div>
+            </div>
+
+            {/* RECEIPT CARD */}
+            <div style={styles.receiptCard}>
+                <div style={styles.receiptHeader}>
+                    <FaReceipt color="#666" /> <span>ORDER SUMMARY</span>
+                </div>
+                <div style={styles.itemList}>
+                    {order.items.map((item, i) => (
+                        <div key={i} style={styles.itemRow}>
+                            <div style={styles.itemLeft}>
+                                <span style={styles.qtyBox}>{item.quantity}x</span>
+                                <span style={styles.itemName}>{item.name}</span>
+                            </div>
+                            <span style={styles.itemPrice}>₹{item.price * item.quantity}</span>
+                        </div>
+                    ))}
+                </div>
+                <div style={styles.divider}></div>
+                <div style={styles.totalRow}>
+                    <span>Total Bill</span>
+                    <span style={styles.totalPrice}>₹{order.totalAmount}</span>
+                </div>
+                <div style={styles.paymentTag}>
+                    {order.paymentMethod === "Online" ? "PAID ONLINE" : "PAY CASH AT COUNTER"}
+                </div>
+            </div>
+
+            {/* FOOTER */}
+            <div style={styles.footer}>
+                <button onClick={handleCallWaiter} disabled={isCalling} style={styles.outlineBtn}>
+                    <FaPhoneAlt /> {callStatus}
+                </button>
+                
+                {/* LOCKED BUTTON */}
+                <button 
+                    onClick={() => { if(isServed) generateCustomerReceipt(order, restaurant); }} 
+                    disabled={!isServed} 
+                    style={{...styles.solidBtn, background: isServed ? '#f97316' : '#333', color: isServed ? 'white' : '#666', cursor: isServed ? 'pointer' : 'not-allowed'}}
+                >
+                    {isServed ? <><FaDownload /> Download Bill</> : <><FaLock /> Wait for Bill</>}
+                </button>
+            </div>
+
+            <style>{`.spin { animation: spin 1s linear infinite; } @keyframes spin { 100% { transform: rotate(360deg); } }`}</style>
+        </div>
     );
+};
+
+const StepIcon = ({ icon, label, active }) => (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 2, width: '40px' }}>
+        <div style={{
+            width: '35px', height: '35px', borderRadius: '50%',
+            background: active ? '#f97316' : '#222',
+            border: '3px solid #050505',
+            color: active ? 'white' : '#555',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            transition: '0.3s all ease'
+        }}>
+            {icon}
+        </div>
+        <span style={{ fontSize: '9px', marginTop: '5px', fontWeight: 'bold', color: active ? 'white' : '#444' }}>{label}</span>
+    </div>
+);
+
+const styles = {
+    container: { minHeight: "100vh", background: "#050505", color: "white", padding: "20px", paddingBottom: "100px", fontFamily: "sans-serif" },
+    center: { height: "100vh", display: 'flex', justifyContent: 'center', alignItems: 'center' },
+    header: { display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '30px' },
+    backBtn: { width: '40px', height: '40px', background: '#222', border: 'none', borderRadius: '12px', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+    title: { margin: 0, fontSize: '24px', fontWeight: '900' },
+    sub: { margin: 0, color: '#888', fontSize: '12px', fontWeight: 'bold' },
+    statusCard: { background: '#111', borderRadius: '20px', padding: '25px 20px', border: '1px solid #222', marginBottom: '20px', textAlign: 'center' },
+    statusTitle: { margin: '0 0 30px 0', color: '#f97316', fontSize: '24px', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '1px' },
+    statusBarContainer: { position: 'relative', marginTop: '10px', padding: '0 10px' },
+    lineBase: { position: 'absolute', top: '15px', left: '25px', right: '25px', height: '4px', background: '#222', borderRadius: '2px', zIndex: 0 },
+    lineFill: { position: 'absolute', top: '15px', left: '25px', height: '4px', background: '#f97316', borderRadius: '2px', zIndex: 1, transition: 'width 0.5s ease' },
+    stepWrapper: { display: 'flex', justifyContent: 'space-between', position: 'relative', zIndex: 2 },
+    receiptCard: { background: '#111', borderRadius: '20px', padding: '20px', border: '1px solid #222' },
+    receiptHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', color: '#666', fontSize: '12px', fontWeight: 'bold', letterSpacing: '1px' },
+    itemList: { display: 'flex', flexDirection: 'column', gap: '15px' },
+    itemRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+    itemLeft: { display: 'flex', alignItems: 'center', gap: '10px' },
+    qtyBox: { background: '#222', padding: '4px 8px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', color: '#f97316' },
+    itemName: { fontWeight: '600', fontSize: '14px' },
+    itemPrice: { fontWeight: 'bold' },
+    divider: { height: '1px', background: '#222', margin: '20px 0' },
+    totalRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '18px', fontWeight: '900' },
+    totalPrice: { color: '#22c55e' },
+    paymentTag: { marginTop: '15px', background: '#1a1a1a', padding: '10px', borderRadius: '10px', textAlign: 'center', fontSize: '11px', fontWeight: 'bold', color: '#888', letterSpacing: '1px' },
+    footer: { position: 'fixed', bottom: 0, left: 0, right: 0, padding: '20px', background: 'rgba(5,5,5,0.95)', backdropFilter: 'blur(10px)', display: 'flex', gap: '15px', borderTop: '1px solid #222', zIndex: 100 },
+    outlineBtn: { flex: 1, height: '50px', background: 'transparent', border: '1px solid #333', color: 'white', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' },
+    solidBtn: { flex: 1, height: '50px', border: 'none', borderRadius: '12px', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }
 };
 
 export default OrderTracker;

@@ -4,43 +4,40 @@ import { Link, useParams } from "react-router-dom";
 import io from "socket.io-client";
 import confetti from "canvas-confetti";
 import { 
-    FaPlus, FaTrash, FaCog, FaUtensils, 
-    FaBell, FaCheckCircle, FaCircle, FaCrown, FaSignOutAlt, FaRocket, FaUnlock, FaStore
+    FaPlus, FaTrash, FaUtensils, 
+    FaBell, FaCheckCircle, FaCircle, FaCrown, FaSignOutAlt, FaRocket, FaUnlock, FaStore, FaExternalLinkAlt, FaCopy, FaImage
 } from "react-icons/fa";
 
-// --- INLINE CSS STYLES ---
+// --- STYLES (Mobile Optimized & Beautiful) ---
 const styles = `
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;900&display=swap');
-
-.admin-container {
-  min-height: 100vh;
-  padding: 20px;
-  background: radial-gradient(circle at top center, #1a0f0a 0%, #050505 60%);
-  color: white;
-  font-family: 'Inter', sans-serif;
-}
-
+.admin-container { min-height: 100vh; padding: 20px; background: radial-gradient(circle at top center, #1a0f0a 0%, #050505 60%); color: white; font-family: 'Inter', sans-serif; }
 .max-w-wrapper { max-width: 480px; margin: 0 auto; }
 .admin-header { margin-bottom: 30px; }
 .header-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
 .shop-title { font-size: 28px; font-weight: 900; margin: 0; letter-spacing: -1px; text-transform: uppercase; }
 .badge-pro { background: rgba(255, 153, 51, 0.15); color: #FF9933; border: 1px solid rgba(255, 153, 51, 0.3); padding: 4px 10px; border-radius: 20px; font-size: 10px; font-weight: 900; display: inline-flex; align-items: center; gap: 5px; }
-
-.btn-glass { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); color: white; padding: 10px 16px; border-radius: 12px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px; }
-.btn-primary { background: linear-gradient(135deg, #FF8800 0%, #FF5500 100%); border: none; color: white; width: 100%; padding: 16px; border-radius: 16px; font-size: 14px; font-weight: 700; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; }
-
+.btn-glass { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); color: white; padding: 10px 16px; border-radius: 12px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: 0.2s; }
+.btn-glass:hover { background: rgba(255, 255, 255, 0.1); }
+.btn-primary { background: linear-gradient(135deg, #FF8800 0%, #FF5500 100%); border: none; color: white; width: 100%; padding: 16px; border-radius: 16px; font-size: 14px; font-weight: 700; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; box-shadow: 0 4px 15px rgba(255, 85, 0, 0.4); transition: 0.2s; }
+.btn-primary:active { transform: scale(0.98); }
 .glass-card { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); backdrop-filter: blur(12px); border-radius: 24px; padding: 24px; margin-bottom: 24px; }
 .nav-tabs { display: flex; background: rgba(0,0,0,0.3); padding: 4px; border-radius: 16px; margin-bottom: 24px; }
-.tab-btn { flex: 1; padding: 12px; background: transparent; border: none; color: #888; font-size: 11px; font-weight: 900; cursor: pointer; border-radius: 12px; text-transform: uppercase; }
+.tab-btn { flex: 1; padding: 12px; background: transparent; border: none; color: #888; font-size: 11px; font-weight: 900; cursor: pointer; border-radius: 12px; text-transform: uppercase; transition: 0.3s; }
 .tab-btn.active { background: rgba(255,255,255,0.1); color: #FF9933; }
-
-.input-dark { width: 100%; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); padding: 14px; border-radius: 12px; color: white; margin-bottom: 15px; outline: none; }
+.input-dark { width: 100%; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); padding: 14px; border-radius: 12px; color: white; margin-bottom: 15px; outline: none; transition: 0.3s; }
+.input-dark:focus { border-color: #FF9933; background: rgba(0,0,0,0.6); }
 .dish-item { display: flex; justify-content: space-between; align-items: center; padding: 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
-
+.dish-item:last-child { border-bottom: none; }
 .toast-container { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); width: 90%; max-width: 400px; z-index: 1000; display: flex; flex-direction: column; gap: 10px; }
-.toast-alert { background: #FF9933; color: black; padding: 15px; border-radius: 15px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+.toast-alert { background: #FF9933; color: black; padding: 15px; border-radius: 15px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5); animation: slideDown 0.3s ease-out; }
+@keyframes slideDown { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 .lock-container { min-height: 100vh; background: #050505; display: flex; align-items: center; justify-content: center; padding: 20px; }
 .lock-card { width: 100%; max-width: 350px; background: #111; padding: 40px; border-radius: 30px; border: 1px solid #222; text-align: center; }
+.menu-link-box { background: rgba(0,0,0,0.3); border: 1px dashed #333; padding: 15px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.link-text { color: #3b82f6; font-size: 12px; font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; display: block; text-decoration: none; }
+.action-btn { background: none; border: none; color: #888; cursor: pointer; padding: 5px; transition: 0.2s; }
+.action-btn:hover { color: white; }
 `;
 
 // --- SETUP WIZARD COMPONENT ---
@@ -80,10 +77,10 @@ const SetupWizard = ({ dishesCount, pushEnabled }) => {
     );
 };
 
-// --- MAIN DASHBOARD ---
-const AdminPanel = () => {
+const RestaurantAdmin = () => {
     const { id } = useParams();
     const API_BASE = "https://smart-menu-backend-5ge7.onrender.com/api";
+    const publicMenuUrl = `${window.location.origin}/menu/${id}`;
 
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [password, setPassword] = useState("");
@@ -97,8 +94,10 @@ const AdminPanel = () => {
     const [trialEndsAt, setTrialEndsAt] = useState(null);
     const [isPro, setIsPro] = useState(false);
     const [dishes, setDishes] = useState([]);
-    const [formData, setFormData] = useState({ name: "", price: "", category: "Starters" });
+    // UPDATED FORM DATA: added image field
+    const [formData, setFormData] = useState({ name: "", price: "", category: "Starters", image: "" });
 
+    // --- LOGIN HANDLER ---
     const handleLogin = async (e) => {
         e.preventDefault();
         setAuthLoading(true);
@@ -123,6 +122,7 @@ const AdminPanel = () => {
         } catch (error) { console.error(error); } finally { setLoading(false); }
     };
 
+    // --- LIVE UPDATES (SOCKET.IO) ---
     useEffect(() => {
         if (isAuthenticated) {
             const mongoId = localStorage.getItem(`owner_id_${id}`);
@@ -143,17 +143,37 @@ const AdminPanel = () => {
         }
     }, [isAuthenticated, id]);
 
-    const handleLogout = () => { setIsAuthenticated(false); setPassword(""); };
+    const requestNotificationPermission = async () => {
+        const permission = await Notification.requestPermission();
+        if (permission === 'granted') setPushEnabled(true);
+    };
+
+    const handleLogout = () => { 
+        setIsAuthenticated(false); 
+        setPassword(""); 
+        localStorage.removeItem(`owner_token_${id}`);
+    };
 
     const handleAddDish = async (e) => {
         e.preventDefault();
         const token = localStorage.getItem(`owner_token_${id}`);
         const mongoId = localStorage.getItem(`owner_id_${id}`);
         try {
+            // POST data including image URL
             await axios.post(`${API_BASE}/dishes`, { ...formData, owner: mongoId }, { headers: { Authorization: `Bearer ${token}` } });
-            setFormData({ name: "", price: "", category: "Starters" });
+            setFormData({ name: "", price: "", category: "Starters", image: "" });
             fetchData(token, mongoId);
         } catch (e) { alert("Error saving dish."); }
+    };
+
+    const handleDeleteDish = async (dishId) => {
+        if(!window.confirm("Delete this dish?")) return;
+        const token = localStorage.getItem(`owner_token_${id}`);
+        const mongoId = localStorage.getItem(`owner_id_${id}`);
+        try {
+            await axios.delete(`${API_BASE}/dishes/${dishId}`, { headers: { Authorization: `Bearer ${token}` } });
+            fetchData(token, mongoId);
+        } catch (error) { alert("Delete failed."); }
     };
 
     const calculateDaysLeft = (date) => {
@@ -162,16 +182,28 @@ const AdminPanel = () => {
         return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
     };
 
+    const copyToClipboard = () => {
+        navigator.clipboard.writeText(publicMenuUrl);
+        alert("Menu Link Copied!");
+    };
+
     if (!isAuthenticated) return (
         <div className="admin-container">
             <style>{styles}</style>
             <div className="lock-container">
                 <div className="lock-card">
                     <FaStore size={40} color="#f97316" style={{ marginBottom: '15px' }} />
-                    <h1 style={{ fontSize: '20px', fontWeight: '900' }}>{id} Admin</h1>
+                    <h1 style={{ fontSize: '20px', fontWeight: '900' }}>{id.toUpperCase()} ADMIN</h1>
                     <form onSubmit={handleLogin} style={{ marginTop: '20px' }}>
-                        <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} className="input-dark" style={{ textAlign: 'center' }} />
-                        <button type="submit" className="btn-primary" disabled={authLoading}>{authLoading ? "Checking..." : <><FaUnlock /> Access Panel</>}</button>
+                        <input 
+                            type="password" placeholder="Password" 
+                            value={password} onChange={e => setPassword(e.target.value)} 
+                            className="input-dark" style={{ textAlign: 'center' }} 
+                            autoComplete="current-password" 
+                        />
+                        <button type="submit" className="btn-primary" disabled={authLoading}>
+                            {authLoading ? "Unlocking..." : <><FaUnlock /> Access Control</>}
+                        </button>
                     </form>
                 </div>
             </div>
@@ -181,12 +213,7 @@ const AdminPanel = () => {
     return (
         <div className="admin-container">
             <style>{styles}</style>
-            {broadcast && (
-                <div style={{ background: '#3b82f6', color: 'white', padding: '10px', textAlign: 'center', fontSize: '12px', borderRadius: '10px', marginBottom: '15px' }}>
-                    📢 {broadcast.title}: {broadcast.message}
-                    <button onClick={() => setBroadcast(null)} style={{ marginLeft: '10px', background: 'none', border: 'none', color: 'white' }}>✕</button>
-                </div>
-            )}
+            
             <div className="toast-container">
                 {activeAlerts.map((alert, i) => (
                     <div key={i} className="toast-alert">
@@ -194,26 +221,58 @@ const AdminPanel = () => {
                             <p style={{ fontSize: '10px', fontWeight: 900, margin: 0 }}>🛎️ TABLE {alert.tableNumber}</p>
                             <p style={{ fontWeight: 900, fontSize: '16px', margin: 0 }}>{alert.type?.toUpperCase()}</p>
                         </div>
-                        <button onClick={() => setActiveAlerts(prev => prev.filter((_, idx) => idx !== i))} style={{ background: 'black', color: 'white', padding: '5px 10px', borderRadius: '5px', border: 'none' }}>DONE</button>
+                        <button onClick={() => setActiveAlerts(prev => prev.filter((_, idx) => idx !== i))} style={{ background: 'black', color: 'white', padding: '5px 10px', borderRadius: '5px', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>DONE</button>
                     </div>
                 ))}
             </div>
 
             <div className="max-w-wrapper">
+                {broadcast && (
+                    <div style={{ background: '#3b82f6', color: 'white', padding: '12px', textAlign: 'left', fontSize: '12px', borderRadius: '15px', marginBottom: '20px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                        <span>📢 <strong>{broadcast.title}</strong>: {broadcast.message}</span>
+                        <button onClick={() => setBroadcast(null)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontWeight:'bold' }}>✕</button>
+                    </div>
+                )}
+
                 <header className="admin-header">
                     <div className="header-top">
                         <div>
                             <h1 className="shop-title">{restaurantName}</h1>
                             <div style={{ marginTop: '5px' }}>
-                                {isPro ? <span className="badge-pro"><FaCrown /> PRO</span> : 
-                                <span className="badge-pro" style={{ color: '#60a5fa', borderColor: '#60a5fa' }}>Trial: {calculateDaysLeft(trialEndsAt)} Days</span>}
+                                {isPro ? <span className="badge-pro"><FaCrown /> PRO PLAN</span> : 
+                                <span className="badge-pro" style={{ color: '#60a5fa', borderColor: '#60a5fa' }}>Trial: {calculateDaysLeft(trialEndsAt)} Days Left</span>}
                             </div>
                         </div>
                         <button onClick={handleLogout} className="btn-glass" style={{ color: '#ef4444' }}><FaSignOutAlt /></button>
                     </div>
+
+                    <div className="menu-link-box">
+                        <div style={{display:'flex', alignItems:'center', gap:'10px', overflow:'hidden'}}>
+                            <div style={{background:'rgba(59,130,246,0.2)', padding:'8px', borderRadius:'8px', color:'#3b82f6'}}>
+                                <FaUtensils size={14} />
+                            </div>
+                            <div style={{overflow:'hidden'}}>
+                                <p style={{fontSize:'10px', color:'#888', margin:0, fontWeight:'bold'}}>CUSTOMER MENU LINK</p>
+                                <a href={publicMenuUrl} target="_blank" rel="noreferrer" className="link-text">{publicMenuUrl}</a>
+                            </div>
+                        </div>
+                        <div style={{display:'flex', gap:'5px'}}>
+                            <button onClick={copyToClipboard} className="action-btn"><FaCopy /></button>
+                            <a href={publicMenuUrl} target="_blank" rel="noreferrer" className="action-btn"><FaExternalLinkAlt /></a>
+                        </div>
+                    </div>
+
                     <div style={{ display: 'flex', gap: '10px' }}>
-                        <Link to={`/${id}/chef`} target="_blank" style={{ flex: 1 }}><button className="btn-glass" style={{ width: '100%' }}><FaUtensils /> Chef View</button></Link>
-                        <Link to={`/${id}/waiter`} target="_blank" style={{ flex: 1 }}><button className="btn-glass" style={{ width: '100%' }}><FaBell /> Waiter View</button></Link>
+                        <Link to={`/${id}/chef`} target="_blank" style={{ flex: 1, textDecoration: 'none' }}>
+                            <button className="btn-glass" style={{ width: '100%', justifyContent: 'center' }}>
+                                <FaUtensils /> Chef KDS
+                            </button>
+                        </Link>
+                        <Link to={`/${id}/waiter`} target="_blank" style={{ flex: 1, textDecoration: 'none' }}>
+                            <button className="btn-glass" style={{ width: '100%', justifyContent: 'center' }}>
+                                <FaBell /> Waiter Desk
+                            </button>
+                        </Link>
                     </div>
                 </header>
 
@@ -221,39 +280,63 @@ const AdminPanel = () => {
 
                 <nav className="nav-tabs">
                     <button onClick={() => setActiveTab("menu")} className={`tab-btn ${activeTab === "menu" ? 'active' : ''}`}>Menu</button>
-                    <button onClick={() => setActiveTab("settings")} className={`tab-btn ${activeTab === "settings" ? 'active' : ''}`}>Settings</button>
+                    <button onClick={() => setActiveTab("settings")} className={`tab-btn ${activeTab === "settings" ? 'active' : ''}`}>Setup</button>
                 </nav>
 
                 {activeTab === "menu" ? (
                     <div className="glass-card">
-                        <h2 style={{ fontSize: '14px', fontWeight: 900, marginBottom: '20px' }}><FaPlus /> Add New Dish</h2>
+                        <h2 style={{ fontSize: '14px', fontWeight: 900, marginBottom: '20px' }}><FaPlus /> ADD ITEM</h2>
                         <form onSubmit={handleAddDish}>
-                            <input className="input-dark" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} placeholder="Item Name" required />
+                            <input className="input-dark" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} placeholder="Dish Name" required />
+                            
+                            {/* ADDED: IMAGE URL INPUT FIELD AS REQUESTED */}
+                            <input 
+                                className="input-dark" 
+                                value={formData.image} 
+                                onChange={e => setFormData({ ...formData, image: e.target.value })} 
+                                placeholder="Image URL (e.g. https://...)" 
+                            />
+                            
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
                                 <input className="input-dark" type="number" value={formData.price} onChange={e => setFormData({ ...formData, price: e.target.value })} placeholder="Price ₹" required />
                                 <select className="input-dark" value={formData.category} onChange={e => setFormData({ ...formData, category: e.target.value })}>
                                     <option>Starters</option><option>Main Course</option><option>Dessert</option><option>Drinks</option>
                                 </select>
                             </div>
-                            <button type="submit" className="btn-primary">Save to Menu</button>
+                            <button type="submit" className="btn-primary">Save Dish</button>
                         </form>
                         <div style={{ marginTop: '30px' }}>
                             {dishes.map(dish => (
                                 <div key={dish._id} className="dish-item">
-                                    <div>
-                                        <p style={{ fontWeight: 900, margin: 0, fontSize: '14px' }}>{dish.name}</p>
-                                        <p style={{ margin: 0, fontSize: '11px', color: '#FF9933', fontWeight: 900 }}>₹{dish.price} • {dish.category.toUpperCase()}</p>
+                                    <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+                                        
+                                        {/* ADDED: DISH IMAGE PREVIEW IN THE LIST */}
+                                        <div style={{ width: '50px', height: '50px', borderRadius: '10px', background: '#222', overflow: 'hidden' }}>
+                                            {dish.image ? (
+                                                <img src={dish.image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                            ) : (
+                                                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                    <FaUtensils color="#333" />
+                                                </div>
+                                            )}
+                                        </div>
+                                        
+                                        <div>
+                                            <p style={{ fontWeight: 900, margin: 0, fontSize: '14px' }}>{dish.name}</p>
+                                            <p style={{ margin: 0, fontSize: '11px', color: '#FF9933', fontWeight: 900 }}>₹{dish.price} • {dish.category.toUpperCase()}</p>
+                                        </div>
                                     </div>
-                                    <button onClick={() => handleDeleteDish(dish._id)} style={{ background: 'none', border: 'none', color: '#666' }}><FaTrash /></button>
+                                    <button onClick={() => handleDeleteDish(dish._id)} style={{ background: 'none', border: 'none', color: '#444', cursor: 'pointer' }}><FaTrash /></button>
                                 </div>
                             ))}
                         </div>
                     </div>
                 ) : (
                     <div className="glass-card">
-                        <h2 style={{ fontSize: '14px', fontWeight: 900, marginBottom: '20px' }}>Notifications</h2>
-                        <button onClick={() => setPushEnabled(true)} className="btn-primary" style={{ background: pushEnabled ? 'rgba(34, 197, 94, 0.1)' : null, color: pushEnabled ? '#22c55e' : 'white', border: pushEnabled ? '1px solid #22c55e' : 'none' }}>
-                            <FaBell /> {pushEnabled ? 'Alerts Enabled' : 'Enable Live Alerts'}
+                        <h2 style={{ fontSize: '14px', fontWeight: 900, marginBottom: '10px' }}>Staff Alerts</h2>
+                        <p style={{ fontSize: '12px', color: '#888', marginBottom: '20px' }}>Enable notifications to receive Table Help requests on this device.</p>
+                        <button onClick={requestNotificationPermission} className="btn-primary" style={{ background: pushEnabled ? 'rgba(34, 197, 94, 0.1)' : null, color: pushEnabled ? '#22c55e' : 'white', border: pushEnabled ? '1px solid #22c55e' : 'none', boxShadow: 'none' }}>
+                            <FaBell /> {pushEnabled ? 'Alerts are ON' : 'Turn On Alerts'}
                         </button>
                     </div>
                 )}
@@ -262,4 +345,4 @@ const AdminPanel = () => {
     );
 };
 
-export default AdminPanel;
+export default RestaurantAdmin;
