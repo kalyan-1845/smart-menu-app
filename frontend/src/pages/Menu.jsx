@@ -2,7 +2,6 @@ import React, { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { FaSearch, FaPlus, FaMinus, FaStar, FaArrowRight } from "react-icons/fa";
-import { v4 as uuidv4 } from 'uuid'; // Standard for unique ID generation
 
 const API_BASE = "https://smart-menu-backend-5ge7.onrender.com/api";
 
@@ -17,14 +16,13 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, clearCart }) => {
     const [activeCategory, setActiveCategory] = useState("All");
     const [loading, setLoading] = useState(true);
 
-    // --- 1. USER ISOLATION LOGIC ---
-    // Generate a unique ID for THIS specific customer session
+    // --- 1. USER ISOLATION LOGIC (Native Fix) ---
     const customerSessionId = useMemo(() => {
         let sid = sessionStorage.getItem("customer_sid");
         if (!sid) {
-            sid = Math.random().toString(36).substring(2, 15);
+            // Generates a unique ID using native browser crypto (No 'uuid' package needed)
+            sid = window.crypto?.randomUUID?.() || Math.random().toString(36).substring(2, 15);
             sessionStorage.setItem("customer_sid", sid);
-            // Auto-reset cart for a new fresh session
             clearCart?.(); 
         }
         return sid;
@@ -43,7 +41,6 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, clearCart }) => {
 
     useEffect(() => {
         if (currentRestId) {
-            // Save to sessionStorage (Resets when browser tab closes)
             sessionStorage.setItem("active_rest_id", currentRestId);
             if (currentTable) sessionStorage.setItem("active_table", currentTable);
             setRestaurantId?.(currentRestId);
@@ -139,10 +136,8 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, clearCart }) => {
                 })}
             </div>
 
-            {/* 🛒 CLEAN CART BUTTON - SESSION SECURE */}
             {totalQty > 0 && (
                 <div style={styles.floatBarContainer}>
-                    {/* Navigation includes the unique session ID as a query param to ensure 100% isolation */}
                     <button onClick={() => navigate(`/cart?sid=${customerSessionId}`)} style={styles.floatBar}>
                         <div style={styles.floatInfo}>
                             <span style={styles.floatQty}>{totalQty} ITEMS</span>
