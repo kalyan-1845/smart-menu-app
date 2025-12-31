@@ -24,7 +24,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
     const tableOptions = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, "Takeaway"];
     const totalPrice = cart.reduce((total, item) => total + (item.price * item.quantity), 0);
 
-    // --- 1. FETCH RESTAURANT DETAILS (For UPI & Info) ---
+    // --- 1. FETCH RESTAURANT DETAILS ---
     useEffect(() => {
         const fetchRestaurant = async () => {
             if (restaurantId) {
@@ -39,7 +39,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
         fetchRestaurant();
     }, [restaurantId]);
 
-    // --- 2. SUBMIT ORDER (The Bridge to Admin) ---
+    // --- 2. UNIFIED ORDER FUNCTION ---
     const processOrder = async (paymentMethod) => {
         // Validation
         if (!customerName.trim()) { alert("Please enter your name!"); return; }
@@ -48,28 +48,19 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
 
         setIsSubmitting(true);
 
-        // ✅ FIXED PAYLOAD: Sends ALL variations to satisfy Database
+        // ✅ Payload matching your Backend Schema EXACTLY
         const orderData = {
             customerName: customerName,
-            
-            // Send BOTH to be safe
             tableNum: tableNum.toString(), 
-            tableNumber: tableNum.toString(), 
-            
             items: cart.map(item => ({
                 name: item.name,
                 quantity: item.quantity,
                 price: item.price
             })),
-            
             totalAmount: totalPrice,
+            // Even if "Online" is clicked, we treat it as a placed order that goes to tracker
             paymentMethod: paymentMethod === "ONLINE" ? "Online" : "Cash",
-            
-            // Send BOTH to be safe
             restaurantId: restaurantId,
-            owner: restaurantId,
-            
-            // ✅ Fixes the 400 Error (DB likely accepts 'Pending')
             status: "Pending" 
         };
 
@@ -77,9 +68,8 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
             // 1. Send to Backend
             const response = await axios.post(`${API_BASE}/orders`, orderData);
             
-            // 2. 🔔 NOTIFY ADMIN (Side-by-Side Inbox)
+            // 2. Notify Owner (Ding!)
             const socket = io(SERVER_URL);
-            // This event makes it appear on the Chef/Owner Dashboard instantly
             socket.emit("new-order", response.data); 
             
             // 3. Save History & Clear Cart
@@ -87,27 +77,13 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
             localStorage.setItem("smartMenu_History", JSON.stringify([response.data._id, ...history]));
             clearCart(); 
 
-            // 4. REDIRECT Logic
-            if (paymentMethod === "ONLINE" && restaurant?.upiId) {
-                // If Online, open UPI then redirect
-                const cleanName = restaurant.username.replace(/\s/g, '');
-                const upiLink = `upi://pay?pa=${restaurant.upiId}&pn=${cleanName}&am=${totalPrice}&cu=INR`;
-                
-                // Open UPI App
-                window.location.href = upiLink;
-
-                // Move to Tracker after a short delay
-                setTimeout(() => {
-                    navigate(`/track/${response.data._id}`);
-                }, 1500);
-            } else {
-                // If Cash, Go DIRECTLY to Tracker
-                navigate(`/track/${response.data._id}`);
-            }
+            // 4. INSTANT REDIRECT (Logic you requested)
+            // Whether they clicked Cash or Online, we send them to Tracker.
+            // If Online, we could open UPI here, but to "work fast" as requested, we redirect immediately.
+            navigate(`/track/${response.data._id}`);
 
         } catch (error) {
             console.error("Submission error:", error);
-            // Alert the exact reason from the backend
             alert(`Order Failed: ${error.response?.data?.message || error.message}`);
             setIsSubmitting(false);
         }
@@ -122,7 +98,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
             fontFamily: 'sans-serif', overflowX: 'hidden', boxSizing: 'border-box'
         }}>
             
-            {/* TABLE MODAL */}
+            {/* 1. TABLE MODAL */}
             {showTableModal && (
                 <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.95)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
                     <div style={{ background: '#111', width: '100%', maxWidth: '400px', borderRadius: '32px', padding: '30px', border: '1px solid #222' }}>
@@ -139,13 +115,13 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                 </div>
             )}
 
-            {/* HEADER */}
+            {/* 2. HEADER */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '20px' }}>
                 <button onClick={() => navigate(-1)} style={{ border: 'none', color: 'white', background: '#1a1a1a', width: '40px', height: '40px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><FaArrowLeft /></button>
                 <h1 style={{ fontSize: '20px', fontWeight: '900', margin: 0 }}>Review Order</h1>
             </div>
 
-            {/* INFO CARD */}
+            {/* 3. INFO CARD */}
             <div style={{ background: '#111', padding: '20px', borderRadius: '24px', marginBottom: '15px', border: '1px solid #1a1a1a' }}>
                 <div onClick={() => setShowTableModal(true)} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px', cursor: 'pointer', alignItems: 'center' }}>
                     <div>
@@ -164,7 +140,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                 </div>
             </div>
 
-            {/* CART LIST */}
+            {/* 4. CART LIST */}
             {cart.length === 0 ? (
                 <div style={{textAlign: 'center', padding: '40px', color: '#444'}}>
                     <p>Your cart is empty.</p>
@@ -192,7 +168,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                 </div>
             )}
 
-            {/* FOOTER */}
+            {/* 5. FOOTER (Kept original two buttons as requested) */}
             <div style={{ 
                 position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', 
                 width: '100%', maxWidth: '600px', 
