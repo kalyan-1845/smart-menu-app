@@ -1,10 +1,10 @@
 [build]
-  base = "."
+  base = "frontend" # Ensure this points to your frontend folder if it's a subfolder
   publish = "dist"
   command = "npm install && npm run build"
 
 [build.environment]
-  NODE_VERSION = "18"
+  NODE_VERSION = "22"
   NPM_FLAGS = "--legacy-peer-deps"
 
 [[redirects]]
