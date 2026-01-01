@@ -22,7 +22,7 @@ const ChefDashboard = () => {
     const [isMuted, setIsMuted] = useState(false);
     const [activeTab, setActiveTab] = useState("orders");
     const [mongoId, setMongoId] = useState(null);
-    const [socket, setSocket] = useState(null); // 🟢 Store socket in state
+    const [socket, setSocket] = useState(null); 
 
     const audioRef = useRef(new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"));
     const callSound = useRef(new Audio("https://assets.mixkit.co/active_storage/sfx/2190/2190-preview.mp3"));
@@ -63,20 +63,24 @@ const ChefDashboard = () => {
                 axios.get(`${API_BASE}/orders?restaurantId=${rId}`),
                 axios.get(`${API_BASE}/dishes?restaurantId=${rId}`)
             ]);
-            // ✅ CHEF sees everything except what is already SERVED by the waiter
             const active = orderRes.data.filter(o => o.status !== "SERVED" && o.status !== "Served");
             setOrders(active.sort((a,b) => new Date(a.createdAt) - new Date(b.createdAt)));
             setDishes(dishRes.data);
         } catch (e) { console.error("Sync Failed", e); }
     };
 
+    // --- 🟢 AUTOMATIC SYNC LOGIC ---
     useEffect(() => {
         if(isAuthenticated && mongoId) {
-            const newSocket = io(SERVER_URL);
+            const newSocket = io(SERVER_URL, {
+                transports: ['websocket'], // Force websocket for mobile stability
+                reconnection: true
+            });
             setSocket(newSocket);
             newSocket.emit("join-restaurant", mongoId);
 
-            newSocket.on("new-order", (newOrder) => {
+            // Instant update when customer orders
+            newSocket.on("new-order", () => {
                 if (!isMuted) audioRef.current.play().catch(()=>{});
                 fetchData(mongoId);
             });
@@ -88,12 +92,17 @@ const ChefDashboard = () => {
                 setServiceCalls(prev => [callData, ...prev]);
             });
 
-            // 📢 LISTEN FOR GLOBAL CEO BROADCASTS
             newSocket.on("global-broadcast", (data) => {
                 alert(`📢 BROADCAST: ${data.title}\n${data.message}`);
             });
 
-            return () => newSocket.disconnect();
+            // 📱 MOBILE SAFETY: Auto-refresh every 30 seconds in case Socket drops
+            const heartbeat = setInterval(() => fetchData(mongoId), 30000);
+
+            return () => {
+                newSocket.disconnect();
+                clearInterval(heartbeat);
+            };
         }
     }, [isAuthenticated, mongoId, isMuted]);
 
@@ -102,17 +111,12 @@ const ChefDashboard = () => {
         if (order.status === "Pending" || order.status === "PLACED") nextStatus = "Cooking";
         else if (order.status === "Cooking") nextStatus = "Ready";
 
-        // If it's already "Ready", the Chef stops here. The Waiter must take over.
         if (order.status === "Ready") return; 
 
         try {
-            // Optimistic UI update
             setOrders(prev => prev.map(o => o._id === order._id ? { ...o, status: nextStatus } : o));
-            
-            // API Update
             await axios.put(`${API_BASE}/orders/${order._id}`, { status: nextStatus });
             
-            // ✅ EMIT TO WAITER: If marked READY, specifically tell the Waiter panel
             if (nextStatus === "Ready" && socket) {
                 socket.emit("chef-ready-alert", { 
                     restaurantId: mongoId, 

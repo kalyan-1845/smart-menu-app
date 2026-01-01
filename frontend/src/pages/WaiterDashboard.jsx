@@ -59,7 +59,13 @@ const WaiterDashboard = () => {
 
     useEffect(() => {
         if(mongoId) {
-            const socket = io(SERVER_URL);
+            // 📱 MOBILE FIX: Use websocket transport only for better mobile stability
+            const socket = io(SERVER_URL, {
+                transports: ['websocket'],
+                reconnection: true,
+                reconnectionAttempts: Infinity
+            });
+
             socket.emit("join-restaurant", mongoId);
 
             socket.on("connect", () => setIsConnected(true));
@@ -67,6 +73,7 @@ const WaiterDashboard = () => {
 
             // ✅ 1. LISTEN FOR NEW ORDERS (From Customers)
             socket.on("new-order", (order) => {
+                if ("vibrate" in navigator) navigator.vibrate([200, 100, 200]);
                 dingRef.current.play().catch(()=>{});
                 const alert = { id: Date.now(), table: order.tableNum, type: 'ORDER', msg: 'NEW ORDER RECEIVED' };
                 setSystemAlerts(prev => [alert, ...prev]);
@@ -75,8 +82,8 @@ const WaiterDashboard = () => {
 
             // ✅ 2. LISTEN FOR CHEF "READY" ALERTS (For the Popup)
             socket.on("chef-ready-alert", (data) => {
-                dingRef.current.play().catch(()=>{});
                 if ("vibrate" in navigator) navigator.vibrate([500, 200, 500]);
+                dingRef.current.play().catch(()=>{});
                 
                 const alert = { id: Date.now(), table: data.tableNum, type: 'READY', msg: 'ORDER READY FOR PICKUP' };
                 setSystemAlerts(prev => [alert, ...prev]);
@@ -99,8 +106,8 @@ const WaiterDashboard = () => {
 
             // ✅ 4. LISTEN FOR WAITER CALLS
             socket.on("new-waiter-call", (newCall) => {
+                if ("vibrate" in navigator) navigator.vibrate(800);
                 dingRef.current.play().catch(()=>{});
-                if ("vibrate" in navigator) navigator.vibrate(400);
                 setServiceCalls(prev => [newCall, ...prev]);
             });
 
@@ -182,7 +189,11 @@ const WaiterDashboard = () => {
                     <div><h1 style={styles.title}>WAITER DASH</h1><span style={styles.sub}>{id?.toUpperCase()}</span></div>
                 </div>
                 <div style={{display:'flex', gap:10}}>
-                    <button onClick={() => refreshData()} style={styles.iconBtn}><FaSync/></button>
+                    <button onClick={() => { 
+                        // 📱 Triggering play on sync button helps mobile chrome authorize audio
+                        dingRef.current.play().then(() => { dingRef.current.pause(); dingRef.current.currentTime = 0; });
+                        refreshData(); 
+                    }} style={styles.iconBtn}><FaSync/></button>
                     <div style={styles.status}>{isConnected ? <FaWifi color="#22c55e"/> : <FaWifi color="#666"/>}</div>
                 </div>
             </header>

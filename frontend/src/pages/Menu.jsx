@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import axios from "axios";
-import { FaSearch, FaPlus, FaMinus, FaStar, FaUtensils, FaArrowRight, FaLock } from "react-icons/fa";
+import { FaSearch, FaPlus, FaMinus, FaStar, FaUtensils, FaArrowRight, FaLock, FaSyncAlt } from "react-icons/fa";
 import LoadingSpinner from "../components/LoadingSpinner";
 
 // 🔗 SMART API CONNECTION
@@ -9,7 +9,7 @@ const API_BASE = window.location.hostname === "localhost" || window.location.hos
     ? "http://localhost:5000/api" 
     : "https://smart-menu-backend-5ge7.onrender.com/api";
 
-const Menu = ({ cart, addToCart, setRestaurantId, setTableNum }) => {
+const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
     const params = useParams();
     const currentRestId = params.restaurantId || params.id;
     const currentTable = params.table;
@@ -21,57 +21,90 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum }) => {
     const [searchTerm, setSearchTerm] = useState("");
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(false);
-    
-    // 🔴 NEW: Status state for Kill Switch
     const [isSuspended, setIsSuspended] = useState(false);
 
+    // 🔄 Pull-to-Refresh States
+    const [pullDistance, setPullDistance] = useState(0);
+    const [refreshing, setRefreshing] = useState(false);
+    const startY = useRef(0);
+
     const DEFAULT_IMG = "https://placehold.co/400x300/222/orange?text=Yummy";
+
+    // 🔄 NEW CUSTOMER SESSION LOGIC
+    useEffect(() => {
+        const lastTable = localStorage.getItem("last_table_scanned");
+        const lastRest = localStorage.getItem("last_rest_scanned");
+
+        if (lastTable !== currentTable || lastRest !== currentRestId) {
+            if (setCart) setCart([]); 
+            localStorage.setItem("last_table_scanned", currentTable || "");
+            localStorage.setItem("last_rest_scanned", currentRestId || "");
+        }
+    }, [currentRestId, currentTable, setCart]);
 
     // 1. ✅ SYNC PARAMS TO GLOBAL STATE
     useEffect(() => {
         if (!currentRestId) return;
         if (setRestaurantId) setRestaurantId(currentRestId);
         if (setTableNum && currentTable) setTableNum(currentTable);
-    }, [currentRestId, currentTable]);
+    }, [currentRestId, currentTable, setRestaurantId, setTableNum]);
 
-    // 2. ✅ FETCH MENU & CHECK STATUS
-    useEffect(() => {
+    // 2. ✅ FETCH MENU LOGIC
+    const fetchMenu = async (isManualRefresh = false) => {
         if (!currentRestId) return;
-        const controller = new AbortController();
-
-        const fetchMenu = async () => {
-            try {
-                setLoading(true);
-                const res = await axios.get(`${API_BASE}/dishes?restaurantId=${currentRestId}`, {
-                    signal: controller.signal
-                });
-                
-                if (res.data.status === "suspended") {
-                    setIsSuspended(true);
-                } else {
-                    const dishData = Array.isArray(res.data) ? res.data : (res.data.dishes || []);
-                    setDishes(dishData);
-                    setFilteredDishes(dishData);
-                }
-                
-                setLoading(false);
-            } catch (err) {
-                if (axios.isCancel(err)) return;
-                console.error("Fetch Error:", err);
-                if (err.response?.status === 403) {
-                    setIsSuspended(true);
-                } else {
-                    setError(true);
-                }
-                setLoading(false);
+        try {
+            if (!isManualRefresh) setLoading(true);
+            const res = await axios.get(`${API_BASE}/dishes?restaurantId=${currentRestId}`, {
+                timeout: 10000 
+            });
+            
+            if (res.data.status === "suspended") {
+                setIsSuspended(true);
+            } else {
+                const dishData = Array.isArray(res.data) ? res.data : (res.data.dishes || []);
+                setDishes(dishData);
+                setFilteredDishes(dishData);
             }
-        };
+            setError(false);
+        } catch (err) {
+            if (err.response?.status === 403) setIsSuspended(true);
+            else setError(true);
+        } finally {
+            setLoading(false);
+            setRefreshing(false);
+            setPullDistance(0);
+        }
+    };
 
+    useEffect(() => {
         fetchMenu();
-        return () => controller.abort();
     }, [currentRestId]);
 
-    // 3. Search & Filter Logic
+    // 3. ✅ PULL-TO-REFRESH HANDLERS
+    const handleTouchStart = (e) => {
+        if (window.scrollY === 0) {
+            startY.current = e.touches[0].pageY;
+        }
+    };
+
+    const handleTouchMove = (e) => {
+        const currentY = e.touches[0].pageY;
+        const diff = currentY - startY.current;
+        if (window.scrollY === 0 && diff > 0 && diff < 80) {
+            setPullDistance(diff);
+        }
+    };
+
+    const handleTouchEnd = () => {
+        if (pullDistance > 50) {
+            setRefreshing(true);
+            fetchMenu(true);
+        } else {
+            setPullDistance(0);
+        }
+    };
+
+    // 4. Search & Filter Logic
     useEffect(() => {
         let result = dishes;
         if (activeCategory !== "All") {
@@ -83,11 +116,6 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum }) => {
         setFilteredDishes(result);
     }, [searchTerm, activeCategory, dishes]);
 
-    // Cart Maths
-    const totalQty = cart.reduce((acc, item) => acc + item.quantity, 0);
-    const totalPrice = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
-    const categories = ["All", ...new Set(dishes.map(d => d.category))];
-
     const getQty = (id) => {
         const item = cart.find(i => i._id === id);
         return item ? item.quantity : 0;
@@ -95,7 +123,6 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum }) => {
 
     if (loading) return <LoadingSpinner />;
 
-    // 🚫 KILL SWITCH VIEW
     if (isSuspended) return (
         <div style={styles.center}>
             <div style={{textAlign:'center', padding: '40px'}}>
@@ -123,12 +150,26 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum }) => {
     );
 
     return (
-        <div style={styles.container}>
+        <div 
+            style={styles.container}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+        >
+            {/* 🔄 Pull-to-Refresh Indicator */}
+            <div style={{
+                ...styles.refreshIndicator,
+                height: `${pullDistance}px`,
+                opacity: pullDistance / 60,
+                transform: `translateY(${pullDistance > 0 ? 0 : -20}px)`
+            }}>
+                <FaSyncAlt className={refreshing ? "spin" : ""} style={{ color: "var(--primary)" }} />
+            </div>
+
             {/* 🚩 TOP SLOW MARQUEE BAR */}
             <div style={styles.marqueeWrapper}>
                 <div style={styles.marqueeContent}>
                     <span>JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • </span>
-                    {/* Secondary span for seamless looping */}
                     <span>JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • </span>
                 </div>
             </div>
@@ -198,6 +239,7 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum }) => {
                                     </div>
                                     <p style={styles.desc}>{dish.description || "Freshly prepared."}</p>
                                     
+                                    <div style={{marginTop:'auto', alignSelf: 'flex-end'}}>
                                     {dish.isAvailable !== false ? (
                                         qty > 0 ? (
                                             <div style={styles.counter}>
@@ -211,6 +253,7 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum }) => {
                                     ) : (
                                         <button disabled style={styles.disabledBtn}>Unavailable</button>
                                     )}
+                                    </div>
                                 </div>
                             </div>
                         );
@@ -238,6 +281,9 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum }) => {
                     0% { transform: translateX(0); }
                     100% { transform: translateX(-50%); }
                 }
+                .spin { animation: spin 1s linear infinite; }
+                @keyframes spin { 100% { transform: rotate(360deg); } }
+                * { -webkit-tap-highlight-color: transparent; }
             `}</style>
         </div>
     );
@@ -245,6 +291,7 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum }) => {
 
 const styles = {
     container: { minHeight: "100vh", background: "#09090b", color: "white", paddingBottom: "100px", fontFamily: "'Inter', sans-serif" },
+    refreshIndicator: { width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', overflow: 'hidden', transition: 'height 0.2s ease', background: "#09090b" },
     marqueeWrapper: { 
         background: "#f97316", 
         padding: "8px 0", 
@@ -256,7 +303,7 @@ const styles = {
     marqueeContent: {
         display: "flex",
         width: "max-content",
-        animation: "marquee 20s linear infinite", // Slower speed (20 seconds)
+        animation: "marquee 20s linear infinite",
         fontSize: "11px",
         fontWeight: "900",
         color: "#fff",
@@ -271,7 +318,7 @@ const styles = {
     ratingBadge: { background: "rgba(255,255,255,0.1)", padding: "6px 10px", borderRadius: "12px", fontSize: "12px", border: "1px solid #333" },
     searchContainer: { position: "relative", marginBottom: "10px" },
     searchIcon: { position: "absolute", left: "15px", top: "14px", color: "#71717a" },
-    searchInput: { width: "100%", padding: "12px 12px 12px 45px", borderRadius: "12px", background: "#27272a", border: "none", color: "white", outline: "none", boxSizing: "border-box" },
+    searchInput: { width: "100%", padding: "14px 12px 14px 45px", borderRadius: "12px", background: "#27272a", border: "none", color: "white", outline: "none", boxSizing: "border-box", fontSize: "16px" },
     stickyNav: { position: "sticky", top: 0, background: "rgba(9, 9, 11, 0.95)", backdropFilter: "blur(12px)", padding: "15px 0", zIndex: 10, borderBottom: "1px solid #27272a" },
     catScroll: { display: "flex", gap: "10px", padding: "0 20px", overflowX: "auto", scrollbarWidth: "none" },
     catBtn: { padding: "8px 18px", borderRadius: "20px", fontSize: "13px", fontWeight: "600", cursor: "pointer", whiteSpace: "nowrap" },
@@ -285,14 +332,14 @@ const styles = {
     row: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "4px" },
     dishTitle: { margin: 0, fontSize: "15px", fontWeight: "700", color: '#e4e4e7' },
     price: { color: "#f97316", fontWeight: "800", fontSize: "14px" },
-    desc: { color: "#71717a", fontSize: "11px", margin: "0 0 auto 0", overflow: 'hidden' },
-    addBtn: { width: "80px", padding: "8px", background: "white", color: "black", fontWeight: "800", fontSize: "12px", border: "none", borderRadius: "8px", cursor: "pointer", alignSelf: "flex-end" },
+    desc: { color: "#71717a", fontSize: "11px", margin: "0 0 auto 0", overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: '2', WebkitBoxOrient: 'vertical' },
+    addBtn: { width: "80px", padding: "10px", background: "white", color: "black", fontWeight: "800", fontSize: "12px", border: "none", borderRadius: "8px", cursor: "pointer" },
     disabledBtn: { width: "100%", padding: "8px", background: "#333", color: "#666", fontSize: "11px", borderRadius: "8px", cursor: "not-allowed" },
-    counter: { display: "flex", alignItems: "center", justifyContent: "space-between", background: "#27272a", borderRadius: "8px", padding: "4px", width: "90px", alignSelf: "flex-end" },
-    countBtn: { width: "24px", height: "24px", background: "#3f3f46", border: "none", color: "white", borderRadius: "6px", cursor: "pointer" },
-    qtyNum: { fontWeight: "bold", fontSize: "13px" },
+    counter: { display: "flex", alignItems: "center", justifyContent: "space-between", background: "#27272a", borderRadius: "8px", padding: "4px", width: "95px" },
+    countBtn: { width: "28px", height: "28px", background: "#3f3f46", border: "none", color: "white", borderRadius: "6px", cursor: "pointer", display: 'flex', alignItems: 'center', justifyContent: 'center' },
+    qtyNum: { fontWeight: "bold", fontSize: "14px" },
     floatBarContainer: { position: "fixed", bottom: "20px", left: "0", right: "0", padding: "0 20px", zIndex: 50, display: 'flex', justifyContent: 'center' },
-    floatBar: { background: "#22c55e", padding: "15px 25px", borderRadius: "50px", display: "flex", justifyContent: "space-between", alignItems: "center", textDecoration: "none", width: "100%", maxWidth: "500px" },
+    floatBar: { background: "#22c55e", padding: "15px 25px", borderRadius: "50px", display: "flex", justifyContent: "space-between", alignItems: "center", textDecoration: "none", width: "100%", maxWidth: "500px", boxShadow: "0 10px 20px rgba(0,0,0,0.3)" },
     floatInfo: { display: "flex", flexDirection: "column" },
     floatQty: { fontSize: "10px", fontWeight: "800", color: "#052e16", textTransform: "uppercase" },
     floatPrice: { fontSize: "16px", fontWeight: "900", color: "white" },
