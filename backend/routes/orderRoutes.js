@@ -71,8 +71,8 @@ router.post('/', async (req, res) => {
     }
 });
 
-// ✅ --- NEW: GET ALL WAITER CALLS (HISTORY) ---
-// This must sit ABOVE the router.get('/:id') to avoid 400 errors
+// ✅ --- 2. GET ALL WAITER CALLS (HISTORY) ---
+// Moved to the TOP to avoid matching with /:id
 router.get('/calls', async (req, res) => {
     try {
         const { restaurantId } = req.query;
@@ -86,31 +86,20 @@ router.get('/calls', async (req, res) => {
     }
 });
 
-// ✅ --- NEW: DELETE/RESOLVE WAITER CALL ---
-router.delete('/calls/:callId', async (req, res) => {
+// ✅ --- 3. GET INBOX ---
+// Moved to the TOP to avoid matching with /:id
+router.get('/inbox', async (req, res) => {
     try {
-        await Call.findByIdAndDelete(req.params.callId);
-        res.json({ success: true });
-    } catch (error) {
-        res.status(500).json({ message: "Failed to delete call" });
-    }
-});
-
-// --- 2. GET SINGLE ORDER (CUSTOMER TRACKER) ---
-router.get('/:id', async (req, res) => {
-    try {
-        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
-            return res.status(400).json({ message: "Invalid Order ID format" });
-        }
-        const order = await Order.findById(req.params.id);
-        if (!order) return res.status(404).json({ message: "Order not found" });
-        res.json(order);
+        const { restaurantId } = req.query;
+        if (!restaurantId) return res.status(400).json({ message: "Restaurant ID required" });
+        const orders = await Order.find({ restaurantId, isDownloaded: false }).sort({ createdAt: -1 });
+        res.json(orders);
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
 });
 
-// --- 3. GET ALL ORDERS (CHEF/WAITER VIEW) ---
+// --- 4. GET ALL ORDERS (CHEF/WAITER VIEW) ---
 router.get('/', async (req, res) => {
     try {
         const { restaurantId } = req.query;
@@ -122,7 +111,17 @@ router.get('/', async (req, res) => {
     }
 });
 
-// --- 4. UPDATE STATUS (CHEF ACTIONS) ---
+// --- 5. DELETE/RESOLVE WAITER CALL ---
+router.delete('/calls/:callId', async (req, res) => {
+    try {
+        await Call.findByIdAndDelete(req.params.callId);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ message: "Failed to delete call" });
+    }
+});
+
+// --- 6. UPDATE STATUS (CHEF ACTIONS) ---
 router.put('/:id', async (req, res) => {
     try {
         const order = await Order.findByIdAndUpdate(
@@ -162,7 +161,7 @@ router.put('/:id', async (req, res) => {
     }
 });
 
-// --- 5. CALL WAITER ---
+// --- 7. CALL WAITER ---
 router.post('/call-waiter', async (req, res) => {
     try {
         const { restaurantId, tableNumber, type } = req.body; 
@@ -190,19 +189,7 @@ router.post('/call-waiter', async (req, res) => {
     }
 });
 
-// --- 6. GET INBOX ---
-router.get('/inbox', async (req, res) => {
-    try {
-        const { restaurantId } = req.query;
-        if (!restaurantId) return res.status(400).json({ message: "Restaurant ID required" });
-        const orders = await Order.find({ restaurantId, isDownloaded: false }).sort({ createdAt: -1 });
-        res.json(orders);
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
-});
-
-// --- 7. CLEAR INBOX ---
+// --- 8. CLEAR INBOX ---
 router.put('/mark-downloaded', async (req, res) => {
     try {
         const { restaurantId } = req.body;
@@ -214,7 +201,21 @@ router.put('/mark-downloaded', async (req, res) => {
     }
 });
 
-// ✅ --- NEW: DELETE ORDER (CANCELLATIONS) ---
+// --- 9. GET SINGLE ORDER (DYNAMIC PARAMS - MUST BE LAST) ---
+router.get('/:id', async (req, res) => {
+    try {
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+            return res.status(400).json({ message: "Invalid Order ID format" });
+        }
+        const order = await Order.findById(req.params.id);
+        if (!order) return res.status(404).json({ message: "Order not found" });
+        res.json(order);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+// ✅ --- 10. DELETE ORDER (CANCELLATIONS) ---
 router.delete('/:id', async (req, res) => {
     try {
         await Order.findByIdAndDelete(req.params.id);
