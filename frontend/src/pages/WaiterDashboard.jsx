@@ -22,17 +22,12 @@ const WaiterDashboard = () => {
     // ✅ AUTOMATIC REFRESH ON SITE LOAD / MOBILE UNLOCK
     useEffect(() => {
         const handleEntryRefresh = () => {
-            // Trigger refresh whenever the app becomes visible (unlocked screen or tab switch)
             if (document.visibilityState === 'visible' && mongoId) {
                 refreshData(mongoId);
             }
         };
-
-        // Standard load event
         window.addEventListener('load', handleEntryRefresh);
-        // Visibility API for screen lock/unlock and tab switching
         document.addEventListener("visibilitychange", handleEntryRefresh);
-
         return () => {
             window.removeEventListener('load', handleEntryRefresh);
             document.removeEventListener("visibilitychange", handleEntryRefresh);
@@ -41,43 +36,52 @@ const WaiterDashboard = () => {
 
     const fetchRestaurantId = async () => {
         try {
+            // Use the username 'id' from URL to get the Mongo ObjectId
             const res = await axios.get(`${API_BASE}/auth/restaurant/${id}`); 
-            if (res.data?._id) {
+            if (res.data && res.data._id) {
                 setMongoId(res.data._id);
                 return res.data._id;
             }
-        } catch (e) { console.error("Sync error", e); }
+        } catch (e) { 
+            console.error("Failed to fetch Restaurant MongoID", e); 
+        }
         return null;
     };
 
-    const refreshData = async (rId = mongoId) => {
-        if (!rId) return;
+    const refreshData = async (rId) => {
+        // ✅ CRITICAL FIX: Prevent sending "undefined" to backend which causes 400 error
+        if (!rId || rId === "null" || rId === "undefined") return;
+        
         try {
             const [orderRes, callRes] = await Promise.all([
                 axios.get(`${API_BASE}/orders?restaurantId=${rId}`),
                 axios.get(`${API_BASE}/orders/calls?restaurantId=${rId}`)
             ]);
-            // ✅ NORMALIZATION FIX: Look for any variation of 'ready'
+            
             const pickupReady = orderRes.data.filter(o => 
                 o.status && o.status.toLowerCase() === "ready"
             );
             setReadyOrders(pickupReady);
             setServiceCalls(callRes.data);
             setLoading(false);
-        } catch (e) { setLoading(false); }
+        } catch (e) { 
+            console.error("Refresh Data Error:", e.response?.data || e.message);
+            setLoading(false); 
+        }
     };
 
     useEffect(() => {
         const init = async () => {
-            const rId = await fetchRestaurantId();
-            if (rId) refreshData(rId);
+            const fetchedId = await fetchRestaurantId();
+            if (fetchedId) {
+                refreshData(fetchedId);
+            }
         };
         init();
     }, [id]);
 
     useEffect(() => {
         if(mongoId) {
-            // 📱 MOBILE STABILITY FIX: Force websocket and background reconnection
             const socket = io(SERVER_URL, {
                 transports: ['websocket'],
                 reconnection: true,
@@ -89,12 +93,11 @@ const WaiterDashboard = () => {
 
             socket.on("connect", () => {
                 setIsConnected(true);
-                refreshData(mongoId); // Refresh when reconnecting
+                refreshData(mongoId); 
             });
             
             socket.on("disconnect", () => setIsConnected(false));
 
-            // ✅ 1. NEW ORDER SIGNAL
             socket.on("new-order", (order) => {
                 if ("vibrate" in navigator) navigator.vibrate([200, 100, 200]);
                 dingRef.current.play().catch(()=>{});
@@ -102,29 +105,28 @@ const WaiterDashboard = () => {
                 refreshData(mongoId);
             });
 
-            // ✅ 2. CHEF READY SIGNAL (Crucial Fix for your Video issue)
             socket.on("chef-ready-alert", (data) => {
                 if ("vibrate" in navigator) navigator.vibrate([500, 200, 500]);
                 dingRef.current.play().catch(()=>{});
                 
                 setSystemAlerts(prev => [{ id: Date.now(), table: data.tableNum, type: 'READY', msg: 'ORDER READY FOR PICKUP' }, ...prev]);
 
-                axios.get(`${API_BASE}/orders/${data.orderId}`).then(res => {
-                    setNotification(res.data);
-                    refreshData(mongoId); // Force list refresh so card appears
-                });
+                if (data.orderId) {
+                    axios.get(`${API_BASE}/orders/${data.orderId}`).then(res => {
+                        setNotification(res.data);
+                        refreshData(mongoId); 
+                    }).catch(e => refreshData(mongoId));
+                }
                 setTimeout(() => setNotification(null), 15000);
             });
 
-            // ✅ 3. SERVICE CALLS
             socket.on("new-waiter-call", (newCall) => {
                 if ("vibrate" in navigator) navigator.vibrate(800);
                 dingRef.current.play().catch(()=>{});
                 setServiceCalls(prev => [newCall, ...prev]);
             });
 
-            // ✅ 📱 MOBILE HEARTBEAT: Auto-sync every 20 seconds to catch what Socket missed
-            const interval = setInterval(() => refreshData(mongoId), 20000);
+            const interval = setInterval(() => refreshData(mongoId), 30000);
 
             return () => {
                 socket.disconnect();
@@ -135,8 +137,10 @@ const WaiterDashboard = () => {
 
     const handleServe = async (orderId) => {
         setReadyOrders(prev => prev.filter(o => o._id !== orderId));
-        try { await axios.put(`${API_BASE}/orders/${orderId}`, { status: "Served" }); } 
-        catch (e) { refreshData(mongoId); }
+        try { 
+            await axios.put(`${API_BASE}/orders/${orderId}`, { status: "Served" }); 
+            refreshData(mongoId);
+        } catch (e) { refreshData(mongoId); }
     };
 
     if (!mongoId && loading) return <div style={styles.center}><FaSpinner className="spin" size={30} color="#f97316"/></div>;
@@ -170,7 +174,7 @@ const WaiterDashboard = () => {
                         <div style={styles.popupHeader}><FaConciergeBell color="#22c55e" size={24}/><h2 style={styles.popupTitle}>PICKUP NOW</h2></div>
                         <div style={styles.popupBody}>
                             <div style={styles.popupTable}>TABLE {notification.tableNum}</div>
-                            <div style={styles.popupItems}>{notification.items.map((item, i) => (<div key={i} style={styles.popupItemRow}>{item.quantity}x {item.name}</div>))}</div>
+                            <div style={styles.popupItems}>{notification.items?.map((item, i) => (<div key={i} style={styles.popupItemRow}>{item.quantity}x {item.name}</div>))}</div>
                         </div>
                         <button onClick={() => { handleServe(notification._id); setNotification(null); }} style={styles.popupBtn}>MARK DELIVERED</button>
                     </div>
@@ -180,8 +184,8 @@ const WaiterDashboard = () => {
             <header style={styles.header}>
                 <div style={styles.brand}><FaUserTie size={24} color="#f97316"/><div><h1 style={styles.title}>WAITER DASH</h1><span style={styles.sub}>{id?.toUpperCase()}</span></div></div>
                 <button onClick={() => { 
-                    dingRef.current.play().then(() => { dingRef.current.pause(); dingRef.current.currentTime = 0; });
-                    refreshData(); 
+                    dingRef.current.play().then(() => { dingRef.current.pause(); dingRef.current.currentTime = 0; }).catch(()=>{});
+                    refreshData(mongoId); 
                 }} style={styles.iconBtn}><FaSync/></button>
             </header>
 
@@ -193,7 +197,7 @@ const WaiterDashboard = () => {
                     readyOrders.map(order => (
                         <div key={order._id} style={styles.card}>
                             <div style={styles.cardHeader}><div style={styles.tableBig}>TABLE {order.tableNum}</div></div>
-                            <div style={styles.items}>{order.items.map((item, i) => (<div key={i} style={styles.itemRow}><span style={styles.qty}>{item.quantity}x</span><span style={styles.name}>{item.name}</span></div>))}</div>
+                            <div style={styles.items}>{order.items?.map((item, i) => (<div key={i} style={styles.itemRow}><span style={styles.qty}>{item.quantity}x</span><span style={styles.name}>{item.name}</span></div>))}</div>
                             <button onClick={() => handleServe(order._id)} style={styles.serveBtn}>MARK SERVED</button>
                         </div>
                     ))

@@ -10,35 +10,36 @@ import {
     FaBell, FaCheckCircle, FaCircle, FaCrown, FaSignOutAlt, FaRocket, FaStore, FaExternalLinkAlt, FaCopy, FaInbox, FaDownload, FaQrcode
 } from "react-icons/fa";
 
-// --- STYLES (Includes Pulse Animation) ---
+// --- STYLES (Enhanced with Premium Glow) ---
 const styles = `
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;900&display=swap');
 .admin-container { min-height: 100vh; padding: 20px; background: radial-gradient(circle at top center, #1a0f0a 0%, #050505 60%); color: white; font-family: 'Inter', sans-serif; }
 .max-w-wrapper { max-width: 480px; margin: 0 auto; }
 .admin-header { margin-bottom: 30px; }
 .header-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
-.shop-title { font-size: 28px; font-weight: 900; margin: 0; letter-spacing: -1px; text-transform: uppercase; color: white; }
-.badge-pro { background: rgba(255, 153, 51, 0.15); color: #FF9933; border: 1px solid rgba(255, 153, 51, 0.3); padding: 4px 10px; border-radius: 20px; font-size: 10px; font-weight: 900; display: inline-flex; align-items: center; gap: 5px; }
+.shop-title { font-size: 28px; font-weight: 900; margin: 0; letter-spacing: -1px; text-transform: uppercase; color: white; text-shadow: 0 0 20px rgba(255,255,255,0.2); }
+.badge-pro { background: rgba(255, 153, 51, 0.15); color: #FF9933; border: 1px solid rgba(255, 153, 51, 0.3); padding: 4px 10px; border-radius: 20px; font-size: 10px; font-weight: 900; display: inline-flex; align-items: center; gap: 5px; box-shadow: 0 0 10px rgba(255, 153, 51, 0.2); }
 .btn-glass { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); color: white; padding: 10px 16px; border-radius: 12px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: 0.2s; }
-.btn-glass:hover { background: rgba(255, 255, 255, 0.1); }
-.btn-primary { background: linear-gradient(135deg, #FF8800 0%, #FF5500 100%); border: none; color: white; width: 100%; padding: 16px; border-radius: 16px; font-size: 14px; font-weight: 700; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; box-shadow: 0 4px 15px rgba(255, 85, 0, 0.4); transition: 0.2s; }
+.btn-glass:hover { background: rgba(255, 255, 255, 0.1); box-shadow: 0 0 15px rgba(255,255,255,0.1); }
+.btn-primary { background: linear-gradient(135deg, #FF8800 0%, #FF5500 100%); border: none; color: white; width: 100%; padding: 16px; border-radius: 16px; font-size: 14px; font-weight: 700; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; box-shadow: 0 4px 20px rgba(255, 85, 0, 0.5); transition: 0.2s; }
 .btn-primary:active { transform: scale(0.98); }
-.glass-card { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); backdrop-filter: blur(12px); border-radius: 24px; padding: 24px; margin-bottom: 24px; }
-.nav-tabs { display: flex; background: rgba(0,0,0,0.3); padding: 4px; border-radius: 16px; margin-bottom: 24px; }
+.glass-card { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); backdrop-filter: blur(12px); border-radius: 24px; padding: 24px; margin-bottom: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+.nav-tabs { display: flex; background: rgba(0,0,0,0.3); padding: 4px; border-radius: 16px; margin-bottom: 24px; border: 1px solid rgba(255,255,255,0.05); }
 .tab-btn { flex: 1; padding: 12px; background: transparent; border: none; color: #888; font-size: 11px; font-weight: 900; cursor: pointer; border-radius: 12px; text-transform: uppercase; transition: 0.3s; position: relative; }
-.tab-btn.active { background: rgba(255,255,255,0.1); color: #FF9933; }
-.input-dark { width: 100%; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); padding: 14px; border-radius: 12px; color: white; margin-bottom: 15px; outline: none; transition: 0.3s; }
-.input-dark:focus { border-color: #FF9933; background: rgba(0,0,0,0.6); }
+.tab-btn.active { background: rgba(255,255,255,0.1); color: #FF9933; text-shadow: 0 0 10px rgba(255, 153, 51, 0.5); }
+.input-dark { width: 100%; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); padding: 14px; border-radius: 12px; color: white; margin-bottom: 15px; outline: none; transition: 0.3s; box-sizing: border-box; }
+.input-dark:focus { border-color: #FF9933; background: rgba(0,0,0,0.6); box-shadow: 0 0 15px rgba(255, 153, 51, 0.2); }
 .dish-item { display: flex; justify-content: space-between; align-items: center; padding: 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
-.inbox-card { background: rgba(255, 255, 255, 0.05); padding: 15px; border-radius: 15px; margin-bottom: 10px; border-left: 4px solid #FF9933; }
+.inbox-card { background: rgba(255, 255, 255, 0.05); padding: 15px; border-radius: 15px; margin-bottom: 10px; border-left: 4px solid #FF9933; animation: slideIn 0.3s ease-out; }
+@keyframes slideIn { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
 .toast-container { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); width: 90%; max-width: 400px; z-index: 1000; display: flex; flex-direction: column; gap: 10px; }
-.toast-alert { background: #FF9933; color: black; padding: 15px; border-radius: 15px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+.toast-alert { background: #FF9933; color: black; padding: 15px; border-radius: 15px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 10px 30px rgba(255, 153, 51, 0.4); }
 .menu-link-box { background: rgba(0,0,0,0.3); border: 1px dashed #333; padding: 15px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 .link-text { color: #3b82f6; font-size: 12px; font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; display: block; text-decoration: none; }
 .action-btn { background: none; border: none; color: #888; cursor: pointer; padding: 5px; transition: 0.2s; }
 
 /* 🚨 Pulsing Dot */
-.pulse-dot { position: absolute; top: 8px; right: 8px; width: 8px; height: 8px; background: #FF9933; border-radius: 50%; box-shadow: 0 0 0 rgba(255, 153, 51, 0.4); animation: pulse-ring 1.5s infinite; }
+.pulse-dot { position: absolute; top: 8px; right: 8px; width: 8px; height: 8px; background: #FF9933; border-radius: 50%; box-shadow: 0 0 10px #FF9933; animation: pulse-ring 1.5s infinite; }
 @keyframes pulse-ring { 0% { box-shadow: 0 0 0 0 rgba(255, 153, 51, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(255, 153, 51, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 153, 51, 0); } }
 `;
 
@@ -61,7 +62,7 @@ const SetupWizard = ({ dishesCount, pushEnabled }) => {
                 <span style={{ color: '#FF9933', fontWeight: 900, fontSize: '12px' }}>{percent}% READY</span>
             </div>
             <div style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '10px', marginBottom: '15px', overflow: 'hidden' }}>
-                <div style={{ width: `${percent}%`, height: '100%', background: '#FF9933', transition: 'width 0.5s ease' }}></div>
+                <div style={{ width: `${percent}%`, height: '100%', background: '#FF9933', transition: 'width 0.5s ease', boxShadow: '0 0 10px #FF9933' }}></div>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
                 {steps.map(step => (
@@ -102,12 +103,12 @@ const RestaurantAdmin = () => {
         const mongoId = localStorage.getItem(`owner_id_${id}`);
         if (!mongoId) return;
         try {
+            // Updated fetch logic to get un-downloaded completed orders
             const res = await axios.get(`${API_BASE}/orders/inbox?restaurantId=${mongoId}`);
             setInboxOrders(res.data);
         } catch (err) { console.error("Inbox Error", err); }
     };
 
-    // --- ✅ UPDATED LOGIN: SUPPORT FOR SUPERADMIN MASTER LOGIN ---
     useEffect(() => {
         const checkGhostSession = () => {
             const ghostToken = localStorage.getItem(`owner_token_${id}`);
@@ -116,7 +117,6 @@ const RestaurantAdmin = () => {
                 setIsAuthenticated(true);
                 fetchData(ghostToken, ghostId);
                 fetchInbox();
-                // Optionally: fetch restaurant profile to set name/isPro
             }
         };
         checkGhostSession();
@@ -178,6 +178,12 @@ const RestaurantAdmin = () => {
             const socket = io("https://smart-menu-backend-5ge7.onrender.com");
             socket.emit("join-restaurant", mongoId);
             
+            // ✅ Listen for order updates (Served/Completed) to populate Inbox
+            socket.on("order-updated", () => {
+                fetchInbox();
+                if (activeTab !== "inbox") setHasNewOrder(true);
+            });
+
             socket.on("new-order", () => {
                 fetchInbox();
                 if (activeTab !== "inbox") setHasNewOrder(true); 
@@ -188,7 +194,6 @@ const RestaurantAdmin = () => {
                 setActiveAlerts(prev => [...prev, data]);
             });
 
-            // --- 📢 LISTENER FOR GLOBAL CEO BROADCASTS ---
             socket.on("global-broadcast", (data) => {
                 alert(`📢 ADMIN BROADCAST: ${data.title}\n\n${data.message}`);
             });
@@ -244,7 +249,7 @@ const RestaurantAdmin = () => {
         <div className="admin-container">
             <style>{styles}</style>
             <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <div className="glass-card" style={{ textAlign: 'center', width: '320px' }}>
+                <div className="glass-card" style={{ textAlign: 'center', width: '320px', boxShadow: '0 0 30px rgba(249, 115, 22, 0.2)' }}>
                     <FaStore size={40} color="#f97316" style={{ marginBottom: '15px' }} />
                     <h1 style={{ fontSize: '20px', fontWeight: '900' }}>{id.toUpperCase()} ADMIN</h1>
                     <form onSubmit={handleLogin} style={{ marginTop: '20px' }}>
@@ -292,8 +297,8 @@ const RestaurantAdmin = () => {
                     </div>
 
                     <div style={{ display: 'flex', gap: '10px' }}>
-                        <Link to={`/${id}/chef`} target="_blank" style={{flex:1}}><button className="btn-glass" style={{width:'100%'}}><FaUtensils /> Chef</button></Link>
-                        <Link to={`/${id}/waiter`} target="_blank" style={{flex:1}}><button className="btn-glass" style={{width:'100%'}}><FaBell /> Waiter</button></Link>
+                        <Link to={`/${id}/chef`} target="_blank" style={{flex:1, textDecoration:'none'}}><button className="btn-glass" style={{width:'100%'}}><FaUtensils /> Chef</button></Link>
+                        <Link to={`/${id}/waiter`} target="_blank" style={{flex:1, textDecoration:'none'}}><button className="btn-glass" style={{width:'100%'}}><FaBell /> Waiter</button></Link>
                     </div>
                 </header>
 
@@ -310,12 +315,12 @@ const RestaurantAdmin = () => {
                 </nav>
 
                 {activeTab === "inbox" && (
-                    <div className="glass-card">
+                    <div className="glass-card" style={{boxShadow: '0 0 20px rgba(255, 153, 51, 0.1)'}}>
                         <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'20px'}}>
                             <h2 style={{fontSize:'14px', fontWeight:900}}><FaInbox color="#FF9933"/> NEW ORDERS</h2>
                             <button onClick={handleDownloadAndClear} className="btn-glass" style={{background:'#FF9933', color:'black', border:'none'}}><FaDownload /> PDF & Clear</button>
                         </div>
-                        {inboxOrders.length === 0 ? <p style={{textAlign:'center', padding:'20px'}}>Inbox Empty</p> : 
+                        {inboxOrders.length === 0 ? <p style={{textAlign:'center', padding:'20px', color: '#666'}}>Inbox Empty</p> : 
                             inboxOrders.map(order => (
                                 <div key={order._id} className="inbox-card">
                                     <p style={{fontWeight:900, color:'#FF9933', margin:0}}>TABLE {order.tableNum}</p>
@@ -344,8 +349,8 @@ const RestaurantAdmin = () => {
                             {dishes.map(dish => (
                                 <div key={dish._id} className="dish-item">
                                     <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
-                                        <div style={{ width: '50px', height: '50px', borderRadius: '10px', background: '#222', overflow: 'hidden' }}>
-                                            {dish.image ? <img src={dish.image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <FaUtensils color="#333" />}
+                                        <div style={{ width: '50px', height: '50px', borderRadius: '10px', background: '#222', overflow: 'hidden', boxShadow: '0 0 10px rgba(0,0,0,0.5)' }}>
+                                            {dish.image ? <img src={dish.image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div style={{display:'flex', alignItems:'center', justifyContent:'center', height:'100%'}}><FaUtensils color="#333" /></div>}
                                         </div>
                                         <div>
                                             <p style={{ fontWeight: 900, margin: 0, fontSize: '14px' }}>{dish.name}</p>
