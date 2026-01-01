@@ -117,6 +117,19 @@ router.put('/:id', async (req, res) => {
                 $inc: { totalRevenue: order.totalAmount }
             });
         }
+
+        // ✅ 📱 MOBILE PUSH FOR WAITER: Notify waiter when order is READY for pickup
+        if (req.body.status === "Ready" || req.body.status === "READY") {
+            const restaurant = await Owner.findById(order.restaurantId);
+            if (restaurant && restaurant.pushSubscriptions?.length > 0) {
+                const payload = JSON.stringify({
+                    title: "🍱 ORDER READY",
+                    body: `Table ${order.tableNum} is ready for pickup!`,
+                    url: `/waiter/${restaurant.username}`
+                });
+                restaurant.pushSubscriptions.forEach(sub => webpush.sendNotification(sub, payload).catch(() => {}));
+            }
+        }
         
         if (req.io) {
              req.io.to(order.restaurantId.toString()).emit('order-updated', order);

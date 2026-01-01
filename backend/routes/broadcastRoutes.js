@@ -1,12 +1,20 @@
 import express from 'express';
+import webpush from 'web-push'; // Required for global mobile alerts
 import Broadcast from '../models/Broadcast.js';
+import Owner from '../models/Owner.js'; 
 import { protect } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
+// --- 🔑 WEB PUSH CONFIG ---
+webpush.setVapidDetails(
+    'mailto:support@bitebox.com',
+    process.env.PUBLIC_VAPID_KEY,
+    process.env.PRIVATE_VAPID_KEY
+);
+
 /**
  * 🔒 MIDDLEWARE: adminOnly
- * Ensures only the master admin (Srinivas) can send global alerts.
  */
 const adminOnly = (req, res, next) => {
     if (req.user && req.user.username === "srinivas") {
@@ -18,14 +26,14 @@ const adminOnly = (req, res, next) => {
 
 /**
  * @route   POST /api/broadcast/send
- * @desc    Create an announcement and blast it to all connected restaurants via Socket.io
+ * @desc    Create an announcement and blast it via Socket AND Mobile Push
  * @access  Private (SuperAdmin Only)
  */
 router.post('/send', protect, adminOnly, async (req, res) => {
     const { title, message, type } = req.body;
 
     try {
-        // 1. Save to Database for history and for users logging in later
+        // 1. Save to Database
         const announcement = await Broadcast.create({ 
             title, 
             message, 
@@ -33,10 +41,28 @@ router.post('/send', protect, adminOnly, async (req, res) => {
             sentBy: req.user.username 
         });
         
-        // 2. 🚀 Real-time blast using Socket.io
-        // We use req.io which was attached in your server.js middleware
+        // 2. 🚀 Real-time blast for Laptop users (Socket.io)
         if (req.io) {
-            req.io.emit('new-broadcast', announcement);
+            req.io.emit('global-broadcast', announcement);
+        }
+
+        // 3. 📱 MOBILE PUSH BLAST: Notify all restaurants in the system
+        try {
+            const allOwners = await Owner.find({ "pushSubscriptions.0": { $exists: true } });
+            
+            const payload = JSON.stringify({
+                title: `📢 ${title}`,
+                body: message,
+                url: `/` 
+            });
+
+            allOwners.forEach(owner => {
+                owner.pushSubscriptions.forEach(sub => {
+                    webpush.sendNotification(sub, payload).catch(() => {});
+                });
+            });
+        } catch (pushErr) {
+            console.error("Global Push Failed:", pushErr);
         }
 
         res.status(201).json(announcement);
@@ -48,8 +74,6 @@ router.post('/send', protect, adminOnly, async (req, res) => {
 
 /**
  * @route   GET /api/broadcast/latest
- * @desc    Fetch the most recent announcement for the dashboard
- * @access  Public (Authenticated Owners)
  */
 router.get('/latest', protect, async (req, res) => {
     try {

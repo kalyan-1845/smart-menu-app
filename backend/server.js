@@ -76,25 +76,43 @@ app.use((err, req, res, next) => {
     });
 });
 
-// --- SOCKETS: FIXED FOR SAAS ISOLATION ---
+// --- SOCKETS: FIXED FOR SAAS ISOLATION & MOBILE SYNC ---
 io.on('connection', (socket) => {
+    
+    // Staff and Customers join a specific restaurant room for private data
     socket.on('join-restaurant', (restaurantId) => {
-        socket.join(restaurantId);
+        socket.join(restaurantId.toString());
         console.log(`User joined private room: ${restaurantId}`);
     });
 
-    socket.on('join-owner-room', (ownerId) => socket.join(ownerId));
+    socket.on('join-owner-room', (ownerId) => socket.join(ownerId.toString()));
 
+    // Waiter Call logic
     socket.on("call-waiter", (data) => {
-        if(data.restaurantId) io.to(data.restaurantId).emit("new-waiter-call", data);
+        if(data.restaurantId) {
+            io.to(data.restaurantId.toString()).emit("new-waiter-call", data);
+        }
+    });
+
+    // 👨‍🍳 NEW: CHEF TO WAITER READY ALERT
+    // This solves the problem of waiters not getting a message when chef marks order as ready
+    socket.on("chef-ready-alert", (data) => {
+        if (data.restaurantId) {
+            io.to(data.restaurantId.toString()).emit("chef-ready-alert", data);
+            console.log(`Chef Ready alert emitted to restaurant: ${data.restaurantId}`);
+        }
     });
 
     socket.on("resolve-call", (data) => {
         if(data.restaurantId) {
-            io.to(data.restaurantId).emit("call-resolved", data);
+            io.to(data.restaurantId.toString()).emit("call-resolved", data);
         } else {
             io.emit("call-resolved", data);
         }
+    });
+
+    socket.on('disconnect', () => {
+        console.log('User disconnected');
     });
 });
 

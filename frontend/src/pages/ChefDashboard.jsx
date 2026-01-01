@@ -27,17 +27,33 @@ const ChefDashboard = () => {
     const audioRef = useRef(new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"));
     const callSound = useRef(new Audio("https://assets.mixkit.co/active_storage/sfx/2190/2190-preview.mp3"));
 
-    // 📱 MOBILE FIX: Permission trigger for Audio/Vibration
-    const enableMobileAlerts = () => {
+    // 📱 MOBILE FIX: Wake up audio and request notification permissions
+    const enableMobileAlerts = async (rId) => {
         audioRef.current.play().then(() => {
             audioRef.current.pause();
             audioRef.current.currentTime = 0;
         }).catch(() => {});
+
+        if ('serviceWorker' in navigator) {
+            try {
+                const registration = await navigator.serviceWorker.ready;
+                const permission = await Notification.requestPermission();
+                if (permission === 'granted') {
+                    const subscription = await registration.pushManager.subscribe({
+                        userVisibleOnly: true,
+                        applicationServerKey: 'YOUR_PUBLIC_VAPID_KEY' 
+                    });
+                    await axios.post(`${API_BASE}/auth/save-subscription`, {
+                        restaurantId: rId,
+                        subscription: subscription
+                    });
+                }
+            } catch (e) { console.log("Notification setup skipped"); }
+        }
     };
 
     const handleLogin = async (e) => {
         if(e) e.preventDefault();
-        enableMobileAlerts(); // Wake up mobile audio engine
         setAuthLoading(true);
         setError("");
         try {
@@ -51,6 +67,7 @@ const ChefDashboard = () => {
                 setMongoId(dbId);
                 localStorage.setItem(`chef_session_${id}`, dbId);
                 setIsAuthenticated(true);
+                enableMobileAlerts(dbId); // 📱 Trigger mobile wake-up
                 fetchData(dbId);
             } else { setError("❌ Access Denied"); }
         } catch (err) { setError("❌ Invalid PIN"); } finally { setAuthLoading(false); }
@@ -80,7 +97,6 @@ const ChefDashboard = () => {
 
     useEffect(() => {
         if(isAuthenticated && mongoId) {
-            // 📱 MOBILE FIX: Forced Transports for cellular data stability
             const newSocket = io(SERVER_URL, {
                 transports: ['websocket'],
                 reconnection: true,
@@ -93,7 +109,6 @@ const ChefDashboard = () => {
 
             newSocket.on("new-order", (newOrder) => {
                 if (!isMuted) audioRef.current.play().catch(()=>{});
-                // 📱 MOBILE FIX: Vibration for noisy kitchens
                 if ("vibrate" in navigator) navigator.vibrate([200, 100, 200]);
                 fetchData(mongoId);
             });
@@ -110,12 +125,21 @@ const ChefDashboard = () => {
                 alert(`📢 BROADCAST: ${data.title}\n${data.message}`);
             });
 
-            // 📱 MOBILE SAFETY: Auto-poll data every 20 seconds as a backup to Sockets
+            // 📱 MOBILE FIX: When Chef re-opens the app/phone, force an immediate sync
+            const handleVisibilityChange = () => {
+                if (document.visibilityState === 'visible') {
+                    fetchData(mongoId);
+                    if (!newSocket.connected) newSocket.connect();
+                }
+            };
+            document.addEventListener("visibilitychange", handleVisibilityChange);
+
             const mobileSync = setInterval(() => fetchData(mongoId), 20000);
 
             return () => {
                 newSocket.disconnect();
                 clearInterval(mobileSync);
+                document.removeEventListener("visibilitychange", handleVisibilityChange);
             };
         }
     }, [isAuthenticated, mongoId, isMuted]);
@@ -145,26 +169,7 @@ const ChefDashboard = () => {
             await axios.put(`${API_BASE}/dishes/${dishId}`, { isAvailable: !currentStatus });
         } catch (e) { alert("Stock update failed"); }
     };
-     const subscribeToNotifications = async (rId) => {
-    if ('serviceWorker' in navigator) {
-        const registration = await navigator.serviceWorker.ready;
-        
-        // Ask for permission
-        const permission = await Notification.requestPermission();
-        if (permission === 'granted') {
-            const subscription = await registration.pushManager.subscribe({
-                userVisibleOnly: true,
-                applicationServerKey: 'YOUR_PUBLIC_VAPID_KEY_HERE' // Put your generated public key here
-            });
 
-            // Save this subscription to your Backend DB
-            await axios.post(`${API_BASE}/auth/save-subscription`, {
-                restaurantId: rId,
-                subscription: subscription
-            });
-        }
-    }
-};
     if (!isAuthenticated) {
         return (
             <div style={styles.lockContainer}>
@@ -214,11 +219,9 @@ const ChefDashboard = () => {
                 </button>
             </div>
 
-            {activeTab === "orders" ? (
-                <div style={styles.grid}>
-                    {orders.length === 0 ? (
-                        <div style={styles.emptyState}><h2>No Orders</h2></div>
-                    ) : (
+            <div style={styles.grid}>
+                {activeTab === "orders" ? (
+                    orders.length === 0 ? <div style={styles.emptyState}><h2>No Orders</h2></div> : (
                         orders.map((order) => (
                             <div key={order._id} style={{
                                 ...styles.card, 
@@ -240,9 +243,7 @@ const ChefDashboard = () => {
                                 </div>
                                 <div style={styles.actionContainer}>
                                     {order.status === "Ready" ? (
-                                        <div style={styles.readyIndicator}>
-                                            <FaCheck /> WAITING FOR WAITER
-                                        </div>
+                                        <div style={styles.readyIndicator}><FaCheck /> WAITING FOR WAITER</div>
                                     ) : (
                                         <button onClick={() => advanceOrderStatus(order)} style={{
                                             ...styles.actionBtn, 
@@ -255,20 +256,18 @@ const ChefDashboard = () => {
                                 </div>
                             </div>
                         ))
-                    )}
-                </div>
-            ) : (
-                <div style={styles.grid}>
-                    {dishes.map(dish => (
+                    )
+                ) : (
+                    dishes.map(dish => (
                         <div key={dish._id} style={{...styles.stockCard, opacity: dish.isAvailable ? 1 : 0.6}}>
                             <h3 style={{ margin: 0, fontSize: '15px' }}>{dish.name}</h3>
                             <button onClick={() => toggleStock(dish._id, dish.isAvailable)} style={{...styles.stockBtn, background: dish.isAvailable ? '#ef4444' : '#22c55e'}}>
                                 {dish.isAvailable ? "OUT" : "IN"}
                             </button>
                         </div>
-                    ))}
-                </div>
-            )}
+                    ))
+                )}
+            </div>
             <style>{`.spin { animation: spin 1s linear infinite; } @keyframes spin { 100% { transform: rotate(360deg); } }`}</style>
         </div>
     );
