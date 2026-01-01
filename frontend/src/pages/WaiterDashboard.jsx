@@ -37,9 +37,7 @@ const WaiterDashboard = () => {
                 axios.get(`${API_BASE}/orders/calls?restaurantId=${rId}`)
             ]);
 
-            // 🧹 AUTO-ARCHIVE LOGIC: 
-            // We only show "Ready" orders to the waiter. 
-            // "Served" orders stay in the DB for SuperAdmin but disappear from this UI.
+            // Filter for orders Chef has marked "Ready"
             const pickupReady = orderRes.data.filter(o => o.status === "Ready");
             
             setReadyOrders(pickupReady);
@@ -64,21 +62,29 @@ const WaiterDashboard = () => {
             socket.on("connect", () => setIsConnected(true));
             socket.on("disconnect", () => setIsConnected(false));
 
-            socket.on("order-updated", (updatedOrder) => {
-                // If Chef marks it Ready, show popup and add to list
-                if (updatedOrder.status === "Ready") {
-                    dingRef.current.play().catch(()=>{});
-                    if ("vibrate" in navigator) navigator.vibrate([500, 200, 500]);
-                    setNotification(updatedOrder);
+            // ✅ 1. LISTEN FOR CHEF "READY" ALERTS (For the Popup)
+            socket.on("chef-ready-alert", (data) => {
+                dingRef.current.play().catch(()=>{});
+                if ("vibrate" in navigator) navigator.vibrate([500, 200, 500]);
+                
+                // Fetch the full order details to show in popup
+                axios.get(`${API_BASE}/orders/${data.orderId}`).then(res => {
+                    setNotification(res.data);
                     refreshData(mongoId);
-                    setTimeout(() => setNotification(null), 10000);
-                }
-                // If any order is marked "Served", remove it from the Waiter's view immediately
+                });
+                
+                setTimeout(() => setNotification(null), 15000);
+            });
+
+            // ✅ 2. LISTEN FOR GENERAL UPDATES (When Chef starts cooking or marks served)
+            socket.on("order-updated", (updatedOrder) => {
+                refreshData(mongoId);
                 if (updatedOrder.status === "Served" || updatedOrder.status === "SERVED") {
                     setReadyOrders(prev => prev.filter(o => o._id !== updatedOrder._id));
                 }
             });
 
+            // ✅ 3. LISTEN FOR WAITER CALLS (Customer help)
             socket.on("new-waiter-call", (newCall) => {
                 dingRef.current.play().catch(()=>{});
                 if ("vibrate" in navigator) navigator.vibrate(400);
@@ -95,10 +101,8 @@ const WaiterDashboard = () => {
     }, [mongoId]);
 
     const handleServe = async (orderId) => {
-        // Optimistic UI update: Remove from list immediately
         setReadyOrders(prev => prev.filter(o => o._id !== orderId));
         try { 
-            // Update status to Served. This "Archives" it from the dashboard.
             await axios.put(`${API_BASE}/orders/${orderId}`, { status: "Served" }); 
         } 
         catch (e) { refreshData(mongoId); }
@@ -109,7 +113,7 @@ const WaiterDashboard = () => {
     return (
         <div style={styles.container}>
             
-            {/* 🚨 TOP CALL NOTIFICATIONS */}
+            {/* 🚨 TOP CALL NOTIFICATIONS (Customer Help) */}
             <div style={styles.callNotificationWrapper}>
                 {serviceCalls.map(call => (
                     <div key={call._id} style={styles.alertCard} className="pulse-top">
@@ -124,7 +128,7 @@ const WaiterDashboard = () => {
                 ))}
             </div>
 
-            {/* 🚨 PICKUP POPUP */}
+            {/* 🚨 PICKUP POPUP (When Chef marks Ready) */}
             {notification && (
                 <div style={styles.popupOverlay}>
                     <div style={styles.popupCard} className="slide-up">
@@ -148,7 +152,7 @@ const WaiterDashboard = () => {
 
             <header style={styles.header}>
                 <div style={styles.brand}><FaUserTie size={24} color="#f97316"/>
-                    <div><h1 style={styles.title}>WAITER DASH</h1><span style={styles.sub}>{id.toUpperCase()}</span></div>
+                    <div><h1 style={styles.title}>WAITER DASH</h1><span style={styles.sub}>{id?.toUpperCase()}</span></div>
                 </div>
                 <div style={{display:'flex', gap:10}}>
                     <button onClick={() => refreshData()} style={styles.iconBtn}><FaSync/></button>
@@ -156,7 +160,7 @@ const WaiterDashboard = () => {
                 </div>
             </header>
 
-            {/* PICKUP LIST */}
+            {/* READY FOR DELIVERY LIST */}
             <div style={styles.section}>
                 <h3 style={styles.sectionTitle}>READY FOR DELIVERY ({readyOrders.length})</h3>
                 {readyOrders.length === 0 ? (
