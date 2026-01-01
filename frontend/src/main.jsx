@@ -1,17 +1,18 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
-import { Toaster } from 'react-hot-toast'; // For those pro notifications
+import { Toaster } from 'react-hot-toast'; // ✅ Ensure you've run 'npm install react-hot-toast'
 
 // --- 🛠️ ENHANCED SERVICE WORKER REGISTRATION ---
-// This enables Offline Support, App Install (PWA), and Push Notifications
+// Enables Offline Support, App Install (PWA), and Push Notifications
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
+    // Registers the worker located in the /public folder
     navigator.serviceWorker.register('/sw.js')
       .then(reg => {
         console.log('✅ BiteBox Service Worker Active:', reg.scope);
 
-        // Check for updates every time the app is opened
+        // Logic to detect new code updates and force a refresh
         reg.onupdatefound = () => {
           const installingWorker = reg.installing;
           if (installingWorker == null) return;
@@ -19,12 +20,11 @@ if ('serviceWorker' in navigator) {
           installingWorker.onstatechange = () => {
             if (installingWorker.state === 'installed') {
               if (navigator.serviceWorker.controller) {
-                // At this point, the old content will have been purged and
-                // the fresh content will have been added to the cache.
+                // New content is available; refresh the page to update the app
                 console.log('🚀 New version available! Refreshing for latest updates...');
                 window.location.reload();
               } else {
-                // At this point, everything has been precached.
+                // Content is now cached for the first time
                 console.log('✨ Content is cached for offline use.');
               }
             }
@@ -38,7 +38,9 @@ if ('serviceWorker' in navigator) {
 // Render the application root
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    {/* Global Toaster: Handles all "Success", "Error", and "Chef Ready" alerts */}
+    {/* Global Toaster: Configuration for system-wide alerts.
+        Styled with a dark glassmorphism effect to match the BiteBox UI.
+    */}
     <Toaster 
       position="top-center" 
       reverseOrder={false} 
@@ -53,18 +55,18 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           padding: '16px',
           fontSize: '14px',
           fontWeight: '600',
-          fontFamily: 'Inter, sans-serif',
+          fontFamily: "'Inter', sans-serif",
           boxShadow: '0 10px 30px rgba(0,0,0,0.5)'
         },
         success: {
           iconTheme: {
-            primary: '#22c55e',
+            primary: '#22c55e', // Green for orders/payments
             secondary: '#fff',
           },
         },
         error: {
           iconTheme: {
-            primary: '#ef4444',
+            primary: '#ef4444', // Red for system errors
             secondary: '#fff',
           },
         },
