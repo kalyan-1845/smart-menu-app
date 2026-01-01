@@ -8,20 +8,32 @@ import Order from '../models/Order.js';
 
 const router = express.Router();
 
-// --- 🔑 WEB PUSH CONFIGURATION ---
-// These should ideally be in your .env file
-webpush.setVapidDetails(
-    'mailto:support@bitebox.com',
-    process.env.PUBLIC_VAPID_KEY,
-    process.env.PRIVATE_VAPID_KEY
-);
+// --- 🔑 SAFE WEB PUSH CONFIGURATION (FIXED) ---
+// 1. We use the correct names: VAPID_PUBLIC_KEY (not PUBLIC_VAPID_KEY)
+const publicKey = process.env.VAPID_PUBLIC_KEY;
+const privateKey = process.env.VAPID_PRIVATE_KEY;
+
+// 2. We check if they exist BEFORE initializing to prevent the crash
+if (publicKey && privateKey) {
+    try {
+        webpush.setVapidDetails(
+            'mailto:support@bitebox.com',
+            publicKey,
+            privateKey
+        );
+        console.log("✅ Push Notifications Initialized");
+    } catch (err) {
+        console.error("❌ VAPID Config Error:", err.message);
+    }
+} else {
+    console.warn("⚠️ PUSH OFF: VAPID keys missing in .env (Server will still run)");
+}
 
 const generateToken = (id) => {
     return jwt.sign({ id }, process.env.JWT_SECRET || 'fallback_secret', { expiresIn: '30d' });
 };
 
 // --- 📲 NEW: SAVE PUSH SUBSCRIPTION ---
-// This allows the mobile app to save the phone's "address" for notifications
 router.post('/save-subscription', async (req, res) => {
     const { restaurantId, subscription } = req.body;
     try {

@@ -6,12 +6,26 @@ import { protect } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-// --- 🔑 WEB PUSH CONFIG ---
-webpush.setVapidDetails(
-    'mailto:support@bitebox.com',
-    process.env.PUBLIC_VAPID_KEY,
-    process.env.PRIVATE_VAPID_KEY
-);
+// --- 🔑 SAFE WEB PUSH CONFIG (FIXED) ---
+// 1. Use CORRECT names matching your .env
+const publicKey = process.env.VAPID_PUBLIC_KEY;
+const privateKey = process.env.VAPID_PRIVATE_KEY;
+
+// 2. ONLY initialize if keys exist
+if (publicKey && privateKey) {
+    try {
+        webpush.setVapidDetails(
+            'mailto:support@bitebox.com',
+            publicKey,
+            privateKey
+        );
+        console.log("✅ Broadcast Routes: Push Initialized");
+    } catch (err) {
+        console.error("❌ Broadcast Routes VAPID Error:", err.message);
+    }
+} else {
+    console.warn("⚠️ Broadcast Routes: Skipping VAPID (Keys missing)");
+}
 
 /**
  * 🔒 MIDDLEWARE: adminOnly
@@ -47,22 +61,25 @@ router.post('/send', protect, adminOnly, async (req, res) => {
         }
 
         // 3. 📱 MOBILE PUSH BLAST: Notify all restaurants in the system
-        try {
-            const allOwners = await Owner.find({ "pushSubscriptions.0": { $exists: true } });
-            
-            const payload = JSON.stringify({
-                title: `📢 ${title}`,
-                body: message,
-                url: `/` 
-            });
-
-            allOwners.forEach(owner => {
-                owner.pushSubscriptions.forEach(sub => {
-                    webpush.sendNotification(sub, payload).catch(() => {});
+        // Safe check for keys before sending
+        if (publicKey && privateKey) {
+            try {
+                const allOwners = await Owner.find({ "pushSubscriptions.0": { $exists: true } });
+                
+                const payload = JSON.stringify({
+                    title: `📢 ${title}`,
+                    body: message,
+                    url: `/` 
                 });
-            });
-        } catch (pushErr) {
-            console.error("Global Push Failed:", pushErr);
+
+                allOwners.forEach(owner => {
+                    owner.pushSubscriptions.forEach(sub => {
+                        webpush.sendNotification(sub, payload).catch(() => {});
+                    });
+                });
+            } catch (pushErr) {
+                console.error("Global Push Failed:", pushErr);
+            }
         }
 
         res.status(201).json(announcement);

@@ -7,12 +7,26 @@ import Owner from '../models/Owner.js';
 
 const router = express.Router();
 
-// --- 🔑 WEB PUSH CONFIGURATION ---
-webpush.setVapidDetails(
-    'mailto:support@bitebox.com',
-    process.env.PUBLIC_VAPID_KEY,
-    process.env.PRIVATE_VAPID_KEY
-);
+// --- 🔑 SAFE WEB PUSH CONFIGURATION (FIXED) ---
+// 1. Use CORRECT names matching your .env
+const publicKey = process.env.VAPID_PUBLIC_KEY;
+const privateKey = process.env.VAPID_PRIVATE_KEY;
+
+// 2. ONLY initialize if keys exist
+if (publicKey && privateKey) {
+    try {
+        webpush.setVapidDetails(
+            'mailto:support@bitebox.com',
+            publicKey,
+            privateKey
+        );
+        console.log("✅ Order Routes: Push Initialized");
+    } catch (err) {
+        console.error("❌ Order Routes VAPID Error:", err.message);
+    }
+} else {
+    console.warn("⚠️ Order Routes: Skipping VAPID (Keys missing)");
+}
 
 // --- 1. PLACE ORDER ---
 router.post('/', async (req, res) => {
@@ -49,18 +63,21 @@ router.post('/', async (req, res) => {
             req.io.to(finalRestaurantId.toString()).emit('new-order', savedOrder);
         }
 
+        // Safe Notification Trigger
         try {
-            const restaurant = await Owner.findById(finalRestaurantId);
-            if (restaurant && restaurant.pushSubscriptions && restaurant.pushSubscriptions.length > 0) {
-                const payload = JSON.stringify({
-                    title: "🛎️ NEW ORDER RECEIVED",
-                    body: `Table ${finalTableNum}: ₹${totalAmount}`,
-                    url: `/chef/${restaurant.username}` 
-                });
+            if (publicKey && privateKey) {
+                const restaurant = await Owner.findById(finalRestaurantId);
+                if (restaurant && restaurant.pushSubscriptions && restaurant.pushSubscriptions.length > 0) {
+                    const payload = JSON.stringify({
+                        title: "🛎️ NEW ORDER RECEIVED",
+                        body: `Table ${finalTableNum}: ₹${totalAmount}`,
+                        url: `/chef/${restaurant.username}` 
+                    });
 
-                restaurant.pushSubscriptions.forEach(sub => {
-                    webpush.sendNotification(sub, payload).catch(e => console.error("Push failed for device"));
-                });
+                    restaurant.pushSubscriptions.forEach(sub => {
+                        webpush.sendNotification(sub, payload).catch(e => console.error("Push failed for device"));
+                    });
+                }
             }
         } catch (pushErr) { console.error("Notification trigger failed"); }
 
@@ -72,7 +89,6 @@ router.post('/', async (req, res) => {
 });
 
 // ✅ --- 2. GET ALL WAITER CALLS (HISTORY) ---
-// Moved to the TOP to avoid matching with /:id
 router.get('/calls', async (req, res) => {
     try {
         const { restaurantId } = req.query;
@@ -87,7 +103,6 @@ router.get('/calls', async (req, res) => {
 });
 
 // ✅ --- 3. GET INBOX ---
-// Moved to the TOP to avoid matching with /:id
 router.get('/inbox', async (req, res) => {
     try {
         const { restaurantId } = req.query;
@@ -138,7 +153,8 @@ router.put('/:id', async (req, res) => {
             });
         }
 
-        if (req.body.status === "Ready" || req.body.status === "READY") {
+        // Safe Notification Trigger
+        if ((req.body.status === "Ready" || req.body.status === "READY") && publicKey && privateKey) {
             const restaurant = await Owner.findById(order.restaurantId);
             if (restaurant && restaurant.pushSubscriptions?.length > 0) {
                 const payload = JSON.stringify({
@@ -172,14 +188,16 @@ router.post('/call-waiter', async (req, res) => {
         }
 
         try {
-            const restaurant = await Owner.findById(restaurantId);
-            if (restaurant && restaurant.pushSubscriptions && restaurant.pushSubscriptions.length > 0) {
-                const payload = JSON.stringify({
-                    title: "🛎️ ASSISTANCE NEEDED",
-                    body: `Table ${tableNumber} is calling for help!`,
-                    url: `/waiter/${restaurant.username}` 
-                });
-                restaurant.pushSubscriptions.forEach(sub => webpush.sendNotification(sub, payload).catch(()=>{}));
+            if (publicKey && privateKey) {
+                const restaurant = await Owner.findById(restaurantId);
+                if (restaurant && restaurant.pushSubscriptions && restaurant.pushSubscriptions.length > 0) {
+                    const payload = JSON.stringify({
+                        title: "🛎️ ASSISTANCE NEEDED",
+                        body: `Table ${tableNumber} is calling for help!`,
+                        url: `/waiter/${restaurant.username}` 
+                    });
+                    restaurant.pushSubscriptions.forEach(sub => webpush.sendNotification(sub, payload).catch(()=>{}));
+                }
             }
         } catch (e) {}
         
@@ -201,7 +219,7 @@ router.put('/mark-downloaded', async (req, res) => {
     }
 });
 
-// --- 9. GET SINGLE ORDER (DYNAMIC PARAMS - MUST BE LAST) ---
+// --- 9. GET SINGLE ORDER ---
 router.get('/:id', async (req, res) => {
     try {
         if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
@@ -215,7 +233,7 @@ router.get('/:id', async (req, res) => {
     }
 });
 
-// ✅ --- 10. DELETE ORDER (CANCELLATIONS) ---
+// --- 10. DELETE ORDER ---
 router.delete('/:id', async (req, res) => {
     try {
         await Order.findByIdAndDelete(req.params.id);
