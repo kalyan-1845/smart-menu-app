@@ -1,22 +1,50 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
+import webpush from 'web-push'; // Required for notifications
 import Owner from '../models/Owner.js'; 
 import Dish from '../models/Dish.js'; 
 import Order from '../models/Order.js'; 
 
 const router = express.Router();
 
+// --- 🔑 WEB PUSH CONFIGURATION ---
+// These should ideally be in your .env file
+webpush.setVapidDetails(
+    'mailto:support@bitebox.com',
+    process.env.PUBLIC_VAPID_KEY,
+    process.env.PRIVATE_VAPID_KEY
+);
+
 const generateToken = (id) => {
     return jwt.sign({ id }, process.env.JWT_SECRET || 'fallback_secret', { expiresIn: '30d' });
 };
+
+// --- 📲 NEW: SAVE PUSH SUBSCRIPTION ---
+// This allows the mobile app to save the phone's "address" for notifications
+router.post('/save-subscription', async (req, res) => {
+    const { restaurantId, subscription } = req.body;
+    try {
+        const user = await Owner.findById(restaurantId);
+        if (!user) return res.status(404).json({ message: "Restaurant not found" });
+
+        // Check if subscription already exists to avoid duplicates
+        const exists = user.pushSubscriptions.find(s => s.endpoint === subscription.endpoint);
+        if (!exists) {
+            user.pushSubscriptions.push(subscription);
+            await user.save();
+        }
+        res.status(200).json({ success: true, message: "Subscription saved" });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 
 // --- REGISTER ROUTE ---
 router.post('/register', async (req, res) => {
     try {
         let { restaurantName, username, email, password, trialEndsAt } = req.body;
 
-        // Auto-fill missing data to prevent validation errors
         if (!email) email = `${username.replace(/\s+/g, '')}@smartmenu.local`; 
         if (!trialEndsAt) {
             const date = new Date();
@@ -68,19 +96,17 @@ router.post('/login', async (req, res) => {
 });
 
 // --- ✅ FIXED: VERIFY ROLE (Chef AND Waiter Support) ---
-// This prevents the 404 error by defining the endpoint the frontend is looking for
 router.post('/verify-role', async (req, res) => {
     try {
         const { role, username, password, token } = req.body;
 
-        // FIX: Check for BOTH 'chef' AND 'waiter'
         if (role === 'chef' || role === 'waiter') {
             const user = await Owner.findOne({ username });
             
             if (!user) return res.status(404).json({ message: "Restaurant not found" });
 
-            // Safety: Use default password if none is set
-            const validPass = user.chefPassword || "bitebox18"; 
+            // Safety: Check correct password based on role
+            const validPass = role === 'chef' ? (user.chefPassword || "bitebox18") : (user.waiterPassword || "bitebox18"); 
 
             if (password === validPass) {
                  return res.json({ 
@@ -94,7 +120,6 @@ router.post('/verify-role', async (req, res) => {
             }
         }
 
-        // Owner Token Check
         const actualToken = token || req.headers.authorization?.split(" ")[1];
         if (!actualToken) return res.status(401).json({ message: "No token" });
 
@@ -110,7 +135,6 @@ router.post('/verify-role', async (req, res) => {
     }
 });
 
-// Also support GET for verify-role if your frontend uses GET
 router.get('/verify-role', async (req, res) => {
     try {
         const token = req.headers.authorization?.split(" ")[1];

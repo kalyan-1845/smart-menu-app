@@ -22,6 +22,7 @@ const OrderTracker = () => {
     const [isCalling, setIsCalling] = useState(false);
     const [hasDownloaded, setHasDownloaded] = useState(false);
 
+    // 🔄 Map status strings to the 4 visual steps
     const getStepIndex = (status) => {
         if (!status) return 0;
         const s = status.toLowerCase();
@@ -32,35 +33,33 @@ const OrderTracker = () => {
         return 0;
     };
 
-    useEffect(() => {
-        const fetchOrderData = async () => {
-            try {
-                const res = await axios.get(`${API_BASE}/orders/${id}`); 
-                setOrder(res.data);
-                
-                if(res.data.restaurantId && !restaurant) {
-                    const resInfo = await axios.get(`${API_BASE}/auth/restaurant/${res.data.restaurantId}`);
-                    setRestaurant(resInfo.data);
-                }
-            } catch (e) { console.error("Fetch Error:", e); }
-        };
+    const fetchOrderData = async () => {
+        try {
+            const res = await axios.get(`${API_BASE}/orders/${id}`); 
+            setOrder(res.data);
+            
+            // Fetch restaurant details for the receipt if not already fetched
+            if(res.data.restaurantId && !restaurant) {
+                const resInfo = await axios.get(`${API_BASE}/auth/restaurant/${res.data.restaurantId}`);
+                setRestaurant(resInfo.data);
+            }
+        } catch (e) { console.error("Fetch Error:", e); }
+    };
 
+    useEffect(() => {
         fetchOrderData();
         
-        // --- 🔒 EXTRA PART: PRIVATE ROOM JOIN ---
-        const socket = io(SERVER_URL);
-        
-        // Join a private room specifically for this Order ID
+        // 🔒 REAL-TIME SYNC: Join the private order room
+        const socket = io(SERVER_URL, { transports: ['websocket'] });
         socket.emit('join-restaurant', id); 
 
         socket.on("order-updated", (updatedOrder) => {
-            // Only update if the ID matches to prevent cross-customer data leakage
             if (updatedOrder._id === id) {
                 setOrder(updatedOrder);
             }
         });
 
-        // Backup polling for unstable mobile networks
+        // 📱 MOBILE BACKUP: Poll every 5 seconds in case socket disconnects in background
         const interval = setInterval(fetchOrderData, 5000);
 
         return () => { 
@@ -69,6 +68,7 @@ const OrderTracker = () => {
         };
     }, [id]);
 
+    // 🧾 AUTO-RECEIPT: Download bill once the order is marked "Served"
     useEffect(() => {
         if (order && order.status === "Served" && !hasDownloaded && restaurant) {
             generateCustomerReceipt(order, restaurant);

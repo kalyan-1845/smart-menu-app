@@ -27,8 +27,17 @@ const ChefDashboard = () => {
     const audioRef = useRef(new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"));
     const callSound = useRef(new Audio("https://assets.mixkit.co/active_storage/sfx/2190/2190-preview.mp3"));
 
+    // 📱 MOBILE FIX: Permission trigger for Audio/Vibration
+    const enableMobileAlerts = () => {
+        audioRef.current.play().then(() => {
+            audioRef.current.pause();
+            audioRef.current.currentTime = 0;
+        }).catch(() => {});
+    };
+
     const handleLogin = async (e) => {
         if(e) e.preventDefault();
+        enableMobileAlerts(); // Wake up mobile audio engine
         setAuthLoading(true);
         setError("");
         try {
@@ -69,19 +78,23 @@ const ChefDashboard = () => {
         } catch (e) { console.error("Sync Failed", e); }
     };
 
-    // --- 🟢 AUTOMATIC SYNC LOGIC ---
     useEffect(() => {
         if(isAuthenticated && mongoId) {
+            // 📱 MOBILE FIX: Forced Transports for cellular data stability
             const newSocket = io(SERVER_URL, {
-                transports: ['websocket'], // Force websocket for mobile stability
-                reconnection: true
+                transports: ['websocket'],
+                reconnection: true,
+                reconnectionAttempts: Infinity,
+                timeout: 10000
             });
+            
             setSocket(newSocket);
             newSocket.emit("join-restaurant", mongoId);
 
-            // Instant update when customer orders
-            newSocket.on("new-order", () => {
+            newSocket.on("new-order", (newOrder) => {
                 if (!isMuted) audioRef.current.play().catch(()=>{});
+                // 📱 MOBILE FIX: Vibration for noisy kitchens
+                if ("vibrate" in navigator) navigator.vibrate([200, 100, 200]);
                 fetchData(mongoId);
             });
 
@@ -89,6 +102,7 @@ const ChefDashboard = () => {
 
             newSocket.on("new-waiter-call", (callData) => {
                 if (!isMuted) callSound.current.play().catch(()=>{});
+                if ("vibrate" in navigator) navigator.vibrate(500);
                 setServiceCalls(prev => [callData, ...prev]);
             });
 
@@ -96,12 +110,12 @@ const ChefDashboard = () => {
                 alert(`📢 BROADCAST: ${data.title}\n${data.message}`);
             });
 
-            // 📱 MOBILE SAFETY: Auto-refresh every 30 seconds in case Socket drops
-            const heartbeat = setInterval(() => fetchData(mongoId), 30000);
+            // 📱 MOBILE SAFETY: Auto-poll data every 20 seconds as a backup to Sockets
+            const mobileSync = setInterval(() => fetchData(mongoId), 20000);
 
             return () => {
                 newSocket.disconnect();
-                clearInterval(heartbeat);
+                clearInterval(mobileSync);
             };
         }
     }, [isAuthenticated, mongoId, isMuted]);
@@ -110,13 +124,11 @@ const ChefDashboard = () => {
         let nextStatus = "";
         if (order.status === "Pending" || order.status === "PLACED") nextStatus = "Cooking";
         else if (order.status === "Cooking") nextStatus = "Ready";
-
         if (order.status === "Ready") return; 
 
         try {
             setOrders(prev => prev.map(o => o._id === order._id ? { ...o, status: nextStatus } : o));
             await axios.put(`${API_BASE}/orders/${order._id}`, { status: nextStatus });
-            
             if (nextStatus === "Ready" && socket) {
                 socket.emit("chef-ready-alert", { 
                     restaurantId: mongoId, 
@@ -133,7 +145,26 @@ const ChefDashboard = () => {
             await axios.put(`${API_BASE}/dishes/${dishId}`, { isAvailable: !currentStatus });
         } catch (e) { alert("Stock update failed"); }
     };
+     const subscribeToNotifications = async (rId) => {
+    if ('serviceWorker' in navigator) {
+        const registration = await navigator.serviceWorker.ready;
+        
+        // Ask for permission
+        const permission = await Notification.requestPermission();
+        if (permission === 'granted') {
+            const subscription = await registration.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: 'YOUR_PUBLIC_VAPID_KEY_HERE' // Put your generated public key here
+            });
 
+            // Save this subscription to your Backend DB
+            await axios.post(`${API_BASE}/auth/save-subscription`, {
+                restaurantId: rId,
+                subscription: subscription
+            });
+        }
+    }
+};
     if (!isAuthenticated) {
         return (
             <div style={styles.lockContainer}>
@@ -259,7 +290,7 @@ const styles = {
     iconButtonRed: { background: '#3b0a0a', border: 'none', color: '#ef4444', padding: '10px', borderRadius: '8px' },
     tabContainer: { display: 'flex', gap: '10px', marginBottom: '15px' },
     tabButton: { flex: 1, padding: '12px', borderRadius: '10px', border: 'none', color: 'white', fontWeight: 'bold', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px' },
-    grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '12px' },
+    grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' },
     card: { background: '#111', borderRadius: '12px', border: '1px solid #222', display: 'flex', flexDirection: 'column' },
     cardHeader: { padding: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
     tableNumber: { fontSize: '20px', fontWeight: '900', margin:0 },

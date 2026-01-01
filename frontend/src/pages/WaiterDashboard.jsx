@@ -15,8 +15,6 @@ const WaiterDashboard = () => {
     const [mongoId, setMongoId] = useState(null); 
     const [isConnected, setIsConnected] = useState(false);
     const [notification, setNotification] = useState(null);
-
-    // 🚨 NEW: Notification stack for Placed/Ready orders to ensure they show up at the top
     const [systemAlerts, setSystemAlerts] = useState([]);
 
     const dingRef = useRef(new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"));
@@ -39,10 +37,7 @@ const WaiterDashboard = () => {
                 axios.get(`${API_BASE}/orders?restaurantId=${rId}`),
                 axios.get(`${API_BASE}/orders/calls?restaurantId=${rId}`)
             ]);
-
-            // ✅ Filter for orders Chef has marked "Ready"
             const pickupReady = orderRes.data.filter(o => o.status === "Ready");
-            
             setReadyOrders(pickupReady);
             setServiceCalls(callRes.data);
             setLoading(false);
@@ -59,72 +54,65 @@ const WaiterDashboard = () => {
 
     useEffect(() => {
         if(mongoId) {
-            // 📱 MOBILE FIX: Use websocket transport only for better mobile stability
+            // 📱 MOBILE STABILITY FIX: Force websocket and background reconnection
             const socket = io(SERVER_URL, {
                 transports: ['websocket'],
                 reconnection: true,
-                reconnectionAttempts: Infinity
+                reconnectionAttempts: Infinity,
+                timeout: 10000
             });
 
             socket.emit("join-restaurant", mongoId);
 
-            socket.on("connect", () => setIsConnected(true));
+            socket.on("connect", () => {
+                setIsConnected(true);
+                refreshData(mongoId); // Refresh when reconnecting
+            });
+            
             socket.on("disconnect", () => setIsConnected(false));
 
-            // ✅ 1. LISTEN FOR NEW ORDERS (From Customers)
+            // ✅ 1. NEW ORDER SIGNAL
             socket.on("new-order", (order) => {
                 if ("vibrate" in navigator) navigator.vibrate([200, 100, 200]);
                 dingRef.current.play().catch(()=>{});
-                const alert = { id: Date.now(), table: order.tableNum, type: 'ORDER', msg: 'NEW ORDER RECEIVED' };
-                setSystemAlerts(prev => [alert, ...prev]);
+                setSystemAlerts(prev => [{ id: Date.now(), table: order.tableNum, type: 'ORDER', msg: 'NEW ORDER RECEIVED' }, ...prev]);
                 refreshData(mongoId);
             });
 
-            // ✅ 2. LISTEN FOR CHEF "READY" ALERTS (For the Popup)
+            // ✅ 2. CHEF READY SIGNAL (The Alert)
             socket.on("chef-ready-alert", (data) => {
                 if ("vibrate" in navigator) navigator.vibrate([500, 200, 500]);
                 dingRef.current.play().catch(()=>{});
                 
-                const alert = { id: Date.now(), table: data.tableNum, type: 'READY', msg: 'ORDER READY FOR PICKUP' };
-                setSystemAlerts(prev => [alert, ...prev]);
+                setSystemAlerts(prev => [{ id: Date.now(), table: data.tableNum, type: 'READY', msg: 'ORDER READY FOR PICKUP' }, ...prev]);
 
                 axios.get(`${API_BASE}/orders/${data.orderId}`).then(res => {
                     setNotification(res.data);
                     refreshData(mongoId);
                 });
-                
                 setTimeout(() => setNotification(null), 15000);
             });
 
-            // ✅ 3. LISTEN FOR GENERAL UPDATES
-            socket.on("order-updated", (updatedOrder) => {
-                refreshData(mongoId);
-                if (updatedOrder.status === "Served" || updatedOrder.status === "SERVED") {
-                    setReadyOrders(prev => prev.filter(o => o._id !== updatedOrder._id));
-                }
-            });
-
-            // ✅ 4. LISTEN FOR WAITER CALLS
+            // ✅ 3. SERVICE CALLS
             socket.on("new-waiter-call", (newCall) => {
                 if ("vibrate" in navigator) navigator.vibrate(800);
                 dingRef.current.play().catch(()=>{});
                 setServiceCalls(prev => [newCall, ...prev]);
             });
 
-            // 📢 LISTEN FOR CEO BROADCASTS
-            socket.on("global-broadcast", (data) => {
-                alert(`📢 SYSTEM MESSAGE: ${data.title}\n\n${data.message}`);
-            });
+            // ✅ 📱 MOBILE HEARTBEAT: Auto-sync every 20 seconds to catch what Socket missed
+            const interval = setInterval(() => refreshData(mongoId), 20000);
 
-            return () => socket.disconnect();
+            return () => {
+                socket.disconnect();
+                clearInterval(interval);
+            };
         }
     }, [mongoId]);
 
     const handleServe = async (orderId) => {
         setReadyOrders(prev => prev.filter(o => o._id !== orderId));
-        try { 
-            await axios.put(`${API_BASE}/orders/${orderId}`, { status: "Served" }); 
-        } 
+        try { await axios.put(`${API_BASE}/orders/${orderId}`, { status: "Served" }); } 
         catch (e) { refreshData(mongoId); }
     };
 
@@ -132,52 +120,34 @@ const WaiterDashboard = () => {
 
     return (
         <div style={styles.container}>
-            
-            {/* 🚨 UNIFIED TOP ALERT STACK */}
             <div style={styles.callNotificationWrapper}>
-                {/* A. Customer Service Calls */}
                 {serviceCalls.map(call => (
                     <div key={call._id} style={styles.alertCard} className="pulse-top">
                         <div style={styles.alertContent}>
                             <span style={styles.tableBadge}>T-{call.tableNumber}</span>
                             <span style={styles.alertMsg}>ASSISTANCE REQUIRED 🛎️</span>
                         </div>
-                        <button onClick={() => setServiceCalls(prev => prev.filter(c => c._id !== call._id))} style={styles.checkBtn}>
-                            <FaCheck/>
-                        </button>
+                        <button onClick={() => setServiceCalls(prev => prev.filter(c => c._id !== call._id))} style={styles.checkBtn}><FaCheck/></button>
                     </div>
                 ))}
-
-                {/* B. New Orders & Chef Ready Alerts */}
                 {systemAlerts.map(alert => (
                     <div key={alert.id} style={{...styles.alertCard, background: alert.type === 'ORDER' ? '#3b82f6' : '#22c55e'}}>
                         <div style={styles.alertContent}>
                             <span style={{...styles.tableBadge, color: alert.type === 'ORDER' ? '#3b82f6' : '#22c55e'}}>T-{alert.table}</span>
                             <span style={styles.alertMsg}>{alert.msg}</span>
                         </div>
-                        <button onClick={() => setSystemAlerts(prev => prev.filter(a => a.id !== alert.id))} style={styles.checkBtn}>
-                            <FaTimes color={alert.type === 'ORDER' ? '#3b82f6' : '#22c55e'}/>
-                        </button>
+                        <button onClick={() => setSystemAlerts(prev => prev.filter(a => a.id !== alert.id))} style={styles.checkBtn}><FaTimes color={alert.type === 'ORDER' ? '#3b82f6' : '#22c55e'}/></button>
                     </div>
                 ))}
             </div>
 
-            {/* 🚨 PICKUP POPUP (Modal) */}
             {notification && (
                 <div style={styles.popupOverlay}>
                     <div style={styles.popupCard} className="slide-up">
-                        <div style={styles.popupHeader}>
-                            <FaConciergeBell color="#22c55e" size={24}/>
-                            <h2 style={styles.popupTitle}>PICKUP NOW</h2>
-                            <button onClick={() => setNotification(null)} style={styles.closePopup}><FaTimes/></button>
-                        </div>
+                        <div style={styles.popupHeader}><FaConciergeBell color="#22c55e" size={24}/><h2 style={styles.popupTitle}>PICKUP NOW</h2></div>
                         <div style={styles.popupBody}>
                             <div style={styles.popupTable}>TABLE {notification.tableNum}</div>
-                            <div style={styles.popupItems}>
-                                {notification.items.map((item, i) => (
-                                    <div key={i} style={styles.popupItemRow}>{item.quantity}x {item.name}</div>
-                                ))}
-                            </div>
+                            <div style={styles.popupItems}>{notification.items.map((item, i) => (<div key={i} style={styles.popupItemRow}>{item.quantity}x {item.name}</div>))}</div>
                         </div>
                         <button onClick={() => { handleServe(notification._id); setNotification(null); }} style={styles.popupBtn}>MARK DELIVERED</button>
                     </div>
@@ -185,39 +155,22 @@ const WaiterDashboard = () => {
             )}
 
             <header style={styles.header}>
-                <div style={styles.brand}><FaUserTie size={24} color="#f97316"/>
-                    <div><h1 style={styles.title}>WAITER DASH</h1><span style={styles.sub}>{id?.toUpperCase()}</span></div>
-                </div>
-                <div style={{display:'flex', gap:10}}>
-                    <button onClick={() => { 
-                        // 📱 Triggering play on sync button helps mobile chrome authorize audio
-                        dingRef.current.play().then(() => { dingRef.current.pause(); dingRef.current.currentTime = 0; });
-                        refreshData(); 
-                    }} style={styles.iconBtn}><FaSync/></button>
-                    <div style={styles.status}>{isConnected ? <FaWifi color="#22c55e"/> : <FaWifi color="#666"/>}</div>
-                </div>
+                <div style={styles.brand}><FaUserTie size={24} color="#f97316"/><div><h1 style={styles.title}>WAITER DASH</h1><span style={styles.sub}>{id?.toUpperCase()}</span></div></div>
+                <button onClick={() => { 
+                    dingRef.current.play().then(() => { dingRef.current.pause(); dingRef.current.currentTime = 0; });
+                    refreshData(); 
+                }} style={styles.iconBtn}><FaSync/></button>
             </header>
 
-            {/* READY FOR DELIVERY LIST */}
             <div style={styles.section}>
                 <h3 style={styles.sectionTitle}>READY FOR DELIVERY ({readyOrders.length})</h3>
                 {readyOrders.length === 0 ? (
-                    <div style={styles.empty}>
-                        <FaTruckLoading size={30} style={{marginBottom: 10}}/>
-                        <p>Waiting for Chef to finish orders...</p>
-                    </div>
+                    <div style={styles.empty}><FaTruckLoading size={30} style={{marginBottom: 10}}/><p>Waiting for Chef...</p></div>
                 ) : (
                     readyOrders.map(order => (
                         <div key={order._id} style={styles.card}>
-                            <div style={styles.cardHeader}>
-                                <div style={styles.tableBig}>TABLE {order.tableNum}</div>
-                                <div style={styles.time}>{new Date(order.updatedAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</div>
-                            </div>
-                            <div style={styles.items}>
-                                {order.items.map((item, i) => (
-                                    <div key={i} style={styles.itemRow}><span style={styles.qty}>{item.quantity}x</span><span style={styles.name}>{item.name}</span></div>
-                                ))}
-                            </div>
+                            <div style={styles.cardHeader}><div style={styles.tableBig}>TABLE {order.tableNum}</div></div>
+                            <div style={styles.items}>{order.items.map((item, i) => (<div key={i} style={styles.itemRow}><span style={styles.qty}>{item.quantity}x</span><span style={styles.name}>{item.name}</span></div>))}</div>
                             <button onClick={() => handleServe(order._id)} style={styles.serveBtn}>MARK SERVED</button>
                         </div>
                     ))
@@ -225,12 +178,10 @@ const WaiterDashboard = () => {
             </div>
 
             <style>{`
-                .spin { animation: spin 1s linear infinite; } 
-                @keyframes spin { 100% { transform: rotate(360deg); } } 
-                .pulse-top { animation: pulse-top-red 1s infinite alternate; } 
-                @keyframes pulse-top-red { from { background-color: #ef4444; transform: translateY(0); } to { background-color: #dc2626; transform: translateY(3px); } } 
-                .slide-up { animation: slideUp 0.3s ease-out; } 
-                @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+                .spin { animation: spin 1s linear infinite; } @keyframes spin { 100% { transform: rotate(360deg); } } 
+                .pulse-top { animation: pulse-top-red 1s infinite alternate; } @keyframes pulse-top-red { from { background-color: #ef4444; } to { background-color: #dc2626; } } 
+                .slide-up { animation: slideUp 0.3s ease-out; } @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+                * { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
             `}</style>
         </div>
     );
@@ -245,8 +196,7 @@ const styles = {
     title: { margin: 0, fontSize: '18px', fontWeight: '900' },
     sub: { fontSize: '10px', color: '#666', fontWeight: 'bold' },
     iconBtn: { background:'#222', border:'none', color:'white', borderRadius:'8px', padding:'8px' },
-    status: { background:'#1a1a1a', padding:'8px', borderRadius:'8px' },
-    sectionTitle: { fontSize: '11px', color: '#f97316', fontWeight: 'bold', marginBottom: '15px', textTransform:'uppercase', letterSpacing:'1px' },
+    sectionTitle: { fontSize: '11px', color: '#f97316', fontWeight: 'bold', marginBottom: '15px', textTransform:'uppercase' },
     alertCard: { background: '#ef4444', padding: '12px', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.5)' },
     alertContent: { display:'flex', alignItems:'center', gap:'10px' },
     tableBadge: { background:'white', color:'#ef4444', fontWeight:'900', padding:'4px 8px', borderRadius:'6px' },
@@ -255,7 +205,6 @@ const styles = {
     card: { background: '#111', borderRadius: '16px', padding: '15px', border: '1px solid #222', marginBottom:'15px' },
     cardHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' },
     tableBig: { fontSize: '24px', fontWeight: '900', color: '#22c55e' },
-    time: { fontSize: '11px', color: '#444' },
     itemRow: { display:'flex', gap:'10px', marginBottom: '5px' },
     qty: { color: '#22c55e', fontWeight: 'bold' },
     serveBtn: { width: '100%', padding: '12px', background: '#22c55e', color: 'white', border: 'none', borderRadius: '12px', fontWeight: '900', marginTop: '10px' },
@@ -263,7 +212,6 @@ const styles = {
     popupCard: { background: '#1a1a1a', borderRadius: '24px', width: '100%', maxWidth: '350px', padding: '20px', border: '2px solid #22c55e' },
     popupHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' },
     popupTitle: { fontSize: '16px', fontWeight: '900', color: '#22c55e', margin: 0 },
-    closePopup: { background: 'none', border: 'none', color: '#444' },
     popupTable: { fontSize: '40px', fontWeight: '900', textAlign: 'center', margin: '10px 0' },
     popupItems: { background: '#0a0a0a', padding: '15px', borderRadius: '12px', marginBottom: '20px' },
     popupItemRow: { fontSize: '13px', color: '#888', marginBottom: '4px' },

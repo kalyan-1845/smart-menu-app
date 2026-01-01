@@ -30,8 +30,11 @@ const ownerSchema = new mongoose.Schema({
   waiterPassword: { type: String, default: "bitebox18" },
   chefPassword: { type: String, default: "bitebox18" },
   
-  // For Push Notifications (Alerts)
-  pushSubscription: { type: String } 
+  // ✅ PUSH NOTIFICATIONS FIX: Changed to Array to support multiple devices (Mobile + Laptop)
+  pushSubscriptions: { 
+    type: [Object], 
+    default: [] 
+  } 
 
 }, { timestamps: true });
 

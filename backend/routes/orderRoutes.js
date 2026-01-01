@@ -1,10 +1,18 @@
 import express from 'express';
 import mongoose from 'mongoose'; 
+import webpush from 'web-push'; // Required for mobile push alerts
 import Order from '../models/Order.js';
 import Call from '../models/Call.js'; 
 import Owner from '../models/Owner.js'; 
 
 const router = express.Router();
+
+// --- 🔑 WEB PUSH CONFIGURATION ---
+webpush.setVapidDetails(
+    'mailto:support@bitebox.com',
+    process.env.PUBLIC_VAPID_KEY,
+    process.env.PRIVATE_VAPID_KEY
+);
 
 // --- 1. PLACE ORDER ---
 router.post('/', async (req, res) => {
@@ -18,7 +26,7 @@ router.post('/', async (req, res) => {
         if (!finalRestaurantId) return res.status(400).json({ message: "Restaurant ID is required" });
         if (!finalTableNum) return res.status(400).json({ message: "Table Number is required" });
 
-        // Fix: Convert Username to ID if necessary for multi-tenant support
+        // Fix: Convert Username to ID if necessary
         if (!mongoose.Types.ObjectId.isValid(finalRestaurantId)) {
             const restaurantOwner = await Owner.findOne({ username: finalRestaurantId });
             if (!restaurantOwner) return res.status(404).json({ message: "Restaurant not found." });
@@ -33,15 +41,31 @@ router.post('/', async (req, res) => {
             totalAmount, 
             paymentMethod,
             status: finalStatus,
-            isDownloaded: false // Default to false so it shows in Admin Inbox
+            isDownloaded: false 
         });
 
         const savedOrder = await newOrder.save();
 
-        // Socket emit to specific restaurant room for real-time staff alerts
+        // ✅ Socket emit for instant Laptop Dashboard alerts
         if (req.io) {
             req.io.to(finalRestaurantId.toString()).emit('new-order', savedOrder);
         }
+
+        // ✅ 📱 MOBILE PUSH TRIGGER: Notify Chef even if phone screen is OFF
+        try {
+            const restaurant = await Owner.findById(finalRestaurantId);
+            if (restaurant && restaurant.pushSubscriptions && restaurant.pushSubscriptions.length > 0) {
+                const payload = JSON.stringify({
+                    title: "🛎️ NEW ORDER RECEIVED",
+                    body: `Table ${finalTableNum}: ₹${totalAmount}`,
+                    url: `/chef/${restaurant.username}` 
+                });
+
+                restaurant.pushSubscriptions.forEach(sub => {
+                    webpush.sendNotification(sub, payload).catch(e => console.error("Push failed for device"));
+                });
+            }
+        } catch (pushErr) { console.error("Notification trigger failed"); }
 
         res.status(201).json(savedOrder);
     } catch (error) {
@@ -50,10 +74,9 @@ router.post('/', async (req, res) => {
     }
 });
 
-// --- 2. GET SINGLE ORDER (CRITICAL FOR CUSTOMER TRACKER) ---
+// --- 2. GET SINGLE ORDER (CUSTOMER TRACKER) ---
 router.get('/:id', async (req, res) => {
     try {
-        // Validation check for Mongo ID format
         if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
             return res.status(400).json({ message: "Invalid Order ID format" });
         }
@@ -70,7 +93,6 @@ router.get('/', async (req, res) => {
     try {
         const { restaurantId } = req.query;
         if (!restaurantId) return res.status(400).json({ message: "Restaurant ID required" });
-        
         const orders = await Order.find({ restaurantId }).sort({ createdAt: -1 });
         res.json(orders);
     } catch (error) {
@@ -86,12 +108,21 @@ router.put('/:id', async (req, res) => {
             { status: req.body.status }, 
             { new: true }
         );
+
+        if (!order) return res.status(404).json({ message: "Order not found" });
         
-        if (req.io && order) {
-             // Notify both the Restaurant Staff and the Customer Tracker
+        // ✅ 📈 REVENUE TRACKING: When served, add to restaurant total
+        if (req.body.status === "Served" || req.body.status === "SERVED") {
+            await Owner.findByIdAndUpdate(order.restaurantId, {
+                $inc: { totalRevenue: order.totalAmount }
+            });
+        }
+        
+        if (req.io) {
              req.io.to(order.restaurantId.toString()).emit('order-updated', order);
              req.io.emit('order-updated', order); 
         }
+
         res.json(order);
     } catch (error) {
         res.status(400).json({ message: error.message });
@@ -105,9 +136,21 @@ router.post('/call-waiter', async (req, res) => {
         const newCall = await Call.create({ restaurantId, tableNumber, type: type || 'help' });
         
         if (req.io) {
-            // Target only the specific restaurant staff room
             req.io.to(restaurantId.toString()).emit('new-waiter-call', newCall);
         }
+
+        // ✅ 📱 MOBILE PUSH FOR WAITER CALL
+        try {
+            const restaurant = await Owner.findById(restaurantId);
+            if (restaurant && restaurant.pushSubscriptions && restaurant.pushSubscriptions.length > 0) {
+                const payload = JSON.stringify({
+                    title: "🛎️ ASSISTANCE NEEDED",
+                    body: `Table ${tableNumber} is calling for help!`,
+                    url: `/waiter/${restaurant.username}` 
+                });
+                restaurant.pushSubscriptions.forEach(sub => webpush.sendNotification(sub, payload).catch(()=>{}));
+            }
+        } catch (e) {}
         
         res.status(201).json(newCall);
     } catch (error) {
@@ -115,39 +158,24 @@ router.post('/call-waiter', async (req, res) => {
     }
 });
 
-// --- 6. GET INBOX (Only non-downloaded orders for Admin/PDF generation) ---
+// --- 6. GET INBOX ---
 router.get('/inbox', async (req, res) => {
     try {
         const { restaurantId } = req.query;
         if (!restaurantId) return res.status(400).json({ message: "Restaurant ID required" });
-
-        const orders = await Order.find({ 
-            restaurantId, 
-            isDownloaded: false 
-        }).sort({ createdAt: -1 });
-
+        const orders = await Order.find({ restaurantId, isDownloaded: false }).sort({ createdAt: -1 });
         res.json(orders);
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
 });
-// Inside your Order Status Update Route
-if (req.body.status === "Served") {
-    await Owner.findByIdAndUpdate(order.restaurantId, {
-        $inc: { totalRevenue: order.totalAmount }
-    });
-}
-// --- 7. CLEAR INBOX (Mark as downloaded after PDF export) ---
+
+// --- 7. CLEAR INBOX ---
 router.put('/mark-downloaded', async (req, res) => {
     try {
         const { restaurantId } = req.body;
         if (!restaurantId) return res.status(400).json({ message: "Restaurant ID required" });
-        
-        await Order.updateMany(
-            { restaurantId, isDownloaded: false },
-            { $set: { isDownloaded: true } }
-        );
-
+        await Order.updateMany({ restaurantId, isDownloaded: false }, { $set: { isDownloaded: true } });
         res.status(200).json({ message: "Inbox cleared successfully" });
     } catch (error) {
         res.status(500).json({ error: "Failed to clear inbox" });
