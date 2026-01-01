@@ -38,26 +38,36 @@ const ProtectedSuperAdmin = ({ children }) => {
   return children;
 };
 
+// ==========================================
+// 🎨 GLOBAL STYLES (Retained & Optimized)
+// ==========================================
 const GlobalStyles = () => (
   <style>{`
-    :root { font-family: Inter, system-ui, sans-serif; color: rgba(255, 255, 255, 0.87); background-color: #050505; }
-    body { margin: 0; min-height: 100vh; overflow-x: hidden; }
+    :root { 
+      font-family: 'Inter', system-ui, sans-serif; 
+      color: rgba(255, 255, 255, 0.87); 
+      background-color: #050505; 
+    }
+    body { margin: 0; min-height: 100vh; overflow-x: hidden; background-color: #050505; }
     #root { width: 100%; margin: 0 auto; text-align: center; }
+    
+    /* Premium Scrollbar */
     ::-webkit-scrollbar { width: 6px; }
-    ::-webkit-scrollbar-track { background: #111; }
-    ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+    ::-webkit-scrollbar-track { background: #0a0a0a; }
+    ::-webkit-scrollbar-thumb { background: #222; border-radius: 10px; }
     ::-webkit-scrollbar-thumb:hover { background: #f97316; }
     
+    /* Page Animations */
     @keyframes slideUp {
-      from { transform: translateY(20px); opacity: 0; }
+      from { transform: translateY(15px); opacity: 0; }
       to { transform: translateY(0); opacity: 1; }
     }
-    .page-transition { animation: slideUp 0.4s ease-out forwards; }
+    .page-transition { animation: slideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
   `}</style>
 );
 
 function App() {
-  // 1. Load Cart & Restaurant ID from LocalStorage
+  // --- 1. STATE INITIALIZATION (LocalStorage Hydration) ---
   const [cart, setCart] = useState(() => {
       const saved = localStorage.getItem("smartMenu_Cart");
       return saved ? JSON.parse(saved) : [];
@@ -71,7 +81,7 @@ function App() {
       return localStorage.getItem("last_table_num") || "";
   }); 
 
-  // 2. Sync State to LocalStorage
+  // --- 2. STATE PERSISTENCE ---
   useEffect(() => {
       localStorage.setItem("smartMenu_Cart", JSON.stringify(cart));
   }, [cart]);
@@ -82,7 +92,7 @@ function App() {
       }
   }, [restaurantId]);
 
-  // --- CART ACTIONS ---
+  // --- 3. CART ACTIONS (RETAINED) ---
   const addToCart = (dish) => {
     setCart((prev) => {
       const exists = prev.find((item) => item._id === dish._id);
@@ -110,6 +120,7 @@ function App() {
         <Route path="/login" element={<OwnerLogin />} />
         <Route path="/register" element={<Register />} />
 
+        {/* Standard Menu View */}
         <Route path="/menu/:restaurantId" element={
             <div className="page-transition">
               <Menu 
@@ -122,6 +133,7 @@ function App() {
             </div>
         } />
         
+        {/* Scanned QR View (Includes Table) */}
         <Route path="/menu/:restaurantId/:table" element={
             <div className="page-transition">
               <Menu 
@@ -161,13 +173,14 @@ function App() {
           } 
         />
         
-        {/* --- STAFF DASHBOARDS --- */}
+        {/* --- STAFF DASHBOARDS (Multi-Tenant) --- */}
+        {/* Route matching for Admin, Chef (Kitchen), and Waiters */}
         <Route path="/:id/admin" element={<RestaurantAdmin />} />
         <Route path="/:id/chef" element={<ChefDashboard />} />
         <Route path="/:id/kitchen" element={<ChefDashboard />} />
         <Route path="/:id/waiter" element={<WaiterDashboard />} />
 
-        {/* Catch-all Redirect */}
+        {/* 404 Safety Redirect */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>
