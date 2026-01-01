@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 
 // --- PAGES ---
 import LandingPage from "./pages/LandingPage"; 
@@ -8,24 +8,13 @@ import Cart from "./pages/Cart";
 import OrderTracker from "./pages/OrderTracker";
 import OwnerLogin from "./pages/OwnerLogin"; 
 import Register from "./pages/Register"; 
-import SuperLogin from "./pages/SuperLogin"; 
+import SuperLogin from "./pages/SuperLogin"; // Added for CEO Access
 
 // --- STAFF PANELS ---
 import SuperAdmin from "./pages/SuperAdmin";
 import RestaurantAdmin from "./pages/RestaurantAdmin";
 import ChefDashboard from "./pages/ChefDashboard"; 
 import WaiterDashboard from "./pages/WaiterDashboard";
-
-// ==========================================
-// 🛡️ HELPER: Scroll to top on navigation
-// ==========================================
-const ScrollToTop = () => {
-  const { pathname } = useLocation();
-  useEffect(() => { 
-    window.scrollTo(0, 0); 
-  }, [pathname]);
-  return null;
-};
 
 // ==========================================
 // 🛡️ THE ROUTE GUARD (CEO Access Control)
@@ -38,36 +27,25 @@ const ProtectedSuperAdmin = ({ children }) => {
   return children;
 };
 
-// ==========================================
-// 🎨 GLOBAL STYLES (Retained & Optimized)
-// ==========================================
 const GlobalStyles = () => (
   <style>{`
-    :root { 
-      font-family: 'Inter', system-ui, sans-serif; 
-      color: rgba(255, 255, 255, 0.87); 
-      background-color: #050505; 
-    }
-    body { margin: 0; min-height: 100vh; overflow-x: hidden; background-color: #050505; }
+    :root { font-family: Inter, system-ui, sans-serif; color: rgba(255, 255, 255, 0.87); background-color: #050505; }
+    body { margin: 0; min-height: 100vh; }
     #root { width: 100%; margin: 0 auto; text-align: center; }
-    
-    /* Premium Scrollbar */
     ::-webkit-scrollbar { width: 6px; }
-    ::-webkit-scrollbar-track { background: #0a0a0a; }
-    ::-webkit-scrollbar-thumb { background: #222; border-radius: 10px; }
+    ::-webkit-scrollbar-track { background: #111; }
+    ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
     ::-webkit-scrollbar-thumb:hover { background: #f97316; }
     
-    /* Page Animations */
     @keyframes slideUp {
-      from { transform: translateY(15px); opacity: 0; }
+      from { transform: translateY(100%); opacity: 0; }
       to { transform: translateY(0); opacity: 1; }
     }
-    .page-transition { animation: slideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
   `}</style>
 );
 
 function App() {
-  // --- 1. STATE INITIALIZATION (LocalStorage Hydration) ---
+  // 1. Load Cart & Restaurant ID from LocalStorage with isolation
   const [cart, setCart] = useState(() => {
       const saved = localStorage.getItem("smartMenu_Cart");
       return saved ? JSON.parse(saved) : [];
@@ -81,7 +59,7 @@ function App() {
       return localStorage.getItem("last_table_num") || "";
   }); 
 
-  // --- 2. STATE PERSISTENCE ---
+  // 2. Sync State to LocalStorage
   useEffect(() => {
       localStorage.setItem("smartMenu_Cart", JSON.stringify(cart));
   }, [cart]);
@@ -92,7 +70,7 @@ function App() {
       }
   }, [restaurantId]);
 
-  // --- 3. CART ACTIONS (RETAINED) ---
+  // --- CART ACTIONS ---
   const addToCart = (dish) => {
     setCart((prev) => {
       const exists = prev.find((item) => item._id === dish._id);
@@ -112,7 +90,6 @@ function App() {
   return (
     <Router>
       <GlobalStyles />
-      <ScrollToTop />
       <Routes>
         
         {/* --- PUBLIC CUSTOMER ROUTES --- */}
@@ -120,47 +97,37 @@ function App() {
         <Route path="/login" element={<OwnerLogin />} />
         <Route path="/register" element={<Register />} />
 
-        {/* Standard Menu View */}
         <Route path="/menu/:restaurantId" element={
-            <div className="page-transition">
-              <Menu 
-                  cart={cart} 
-                  addToCart={addToCart} 
-                  setRestaurantId={setRestaurantId} 
-                  setTableNum={setTableNum}
-                  setCart={setCart}
-              />
-            </div>
+            <Menu 
+                cart={cart} 
+                addToCart={addToCart} 
+                setRestaurantId={setRestaurantId} 
+                setTableNum={setTableNum}
+            />
         } />
         
-        {/* Scanned QR View (Includes Table) */}
         <Route path="/menu/:restaurantId/:table" element={
-            <div className="page-transition">
-              <Menu 
-                  cart={cart} 
-                  addToCart={addToCart} 
-                  setRestaurantId={setRestaurantId} 
-                  setTableNum={setTableNum}
-                  setCart={setCart}
-              />
-            </div>
+            <Menu 
+                cart={cart} 
+                addToCart={addToCart} 
+                setRestaurantId={setRestaurantId} 
+                setTableNum={setTableNum}
+            />
         } />
 
         <Route path="/cart" element={
-            <div className="page-transition">
-              <Cart 
-                  cart={cart} 
-                  removeFromCart={removeFromCart} 
-                  clearCart={clearCart} 
-                  updateQuantity={updateQuantity} 
-                  restaurantId={restaurantId} 
-                  tableNum={tableNum} 
-                  setTableNum={setTableNum} 
-              />
-            </div>
+            <Cart 
+                cart={cart} 
+                removeFromCart={removeFromCart} 
+                clearCart={clearCart} 
+                updateQuantity={updateQuantity} 
+                restaurantId={restaurantId} 
+                tableNum={tableNum} 
+                setTableNum={setTableNum} 
+            />
         } />
 
-        <Route path="/track/:id" element={<div className="page-transition"><OrderTracker /></div>} />
+        <Route path="/track/:id" element={<OrderTracker />} />
 
         {/* --- 🔐 PROTECTED CEO / SUPER ADMIN AREA --- */}
         <Route path="/super-login" element={<SuperLogin />} />
@@ -173,14 +140,12 @@ function App() {
           } 
         />
         
-        {/* --- STAFF DASHBOARDS (Multi-Tenant) --- */}
-        {/* Route matching for Admin, Chef (Kitchen), and Waiters */}
+        {/* --- STAFF DASHBOARDS --- */}
         <Route path="/:id/admin" element={<RestaurantAdmin />} />
         <Route path="/:id/chef" element={<ChefDashboard />} />
         <Route path="/:id/kitchen" element={<ChefDashboard />} />
         <Route path="/:id/waiter" element={<WaiterDashboard />} />
 
-        {/* 404 Safety Redirect */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>

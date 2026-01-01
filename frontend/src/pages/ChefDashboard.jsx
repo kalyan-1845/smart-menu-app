@@ -27,7 +27,7 @@ const ChefDashboard = () => {
     const audioRef = useRef(new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"));
     const callSound = useRef(new Audio("https://assets.mixkit.co/active_storage/sfx/2190/2190-preview.mp3"));
 
-    // 🔄 AUTOMATIC REFRESH ON SITE LOAD & VISIBILITY CHANGE
+    // ✅ AUTOMATIC REFRESH ON SITE LOAD
     useEffect(() => {
         const handleEntryRefresh = () => {
             if (document.visibilityState === 'visible' && mongoId) {
@@ -42,7 +42,6 @@ const ChefDashboard = () => {
         };
     }, [mongoId]);
 
-    // 📱 MOBILE PUSH NOTIFICATION SETUP
     const enableMobileAlerts = async (rId) => {
         audioRef.current.play().then(() => {
             audioRef.current.pause();
@@ -106,14 +105,13 @@ const ChefDashboard = () => {
             ]);
             // ✅ AUTO-CLEAR: Filter out orders marked as Served
             const active = orderRes.data.filter(o => 
-                o.status.toLowerCase() !== "served" && o.status.toLowerCase() !== "completed"
+                o.status.toLowerCase() !== "served"
             );
             setOrders(active.sort((a,b) => new Date(a.createdAt) - new Date(b.createdAt)));
             setDishes(dishRes.data);
         } catch (e) { console.error("Sync Failed", e); }
     };
 
-    // 🔒 REAL-TIME WEB-SOCKET LOGIC
     useEffect(() => {
         if(isAuthenticated && mongoId) {
             const newSocket = io(SERVER_URL, {
@@ -132,8 +130,9 @@ const ChefDashboard = () => {
                 fetchData(mongoId);
             });
 
+            // ✅ AUTO-UPDATE: Sync when waiter marks as Served
             newSocket.on("order-updated", (updatedOrder) => {
-                if (updatedOrder.status.toLowerCase() === "served" || updatedOrder.status.toLowerCase() === "completed") {
+                if (updatedOrder.status.toLowerCase() === "served") {
                     setOrders(prev => prev.filter(o => o._id !== updatedOrder._id));
                 } else {
                     fetchData(mongoId);
@@ -172,13 +171,11 @@ const ChefDashboard = () => {
             setOrders(prev => prev.map(o => o._id === order._id ? { ...o, status: nextStatus } : o));
             await axios.put(`${API_BASE}/orders/${order._id}`, { status: nextStatus });
             
-            if (socket) {
-                // Notify Tracker and Waiter
+            if (nextStatus === "ready" && socket) {
                 socket.emit("chef-ready-alert", { 
                     restaurantId: mongoId, 
                     tableNum: order.tableNum,
-                    orderId: order._id,
-                    status: nextStatus
+                    orderId: order._id 
                 });
             }
         } catch (error) { fetchData(mongoId); }
@@ -242,7 +239,7 @@ const ChefDashboard = () => {
 
             <div style={styles.grid}>
                 {activeTab === "orders" ? (
-                    orders.length === 0 ? <div style={styles.emptyState}><h2>No Pending Orders</h2></div> : (
+                    orders.length === 0 ? <div style={styles.emptyState}><h2>No Orders</h2></div> : (
                         orders.map((order) => (
                             <div key={order._id} style={{
                                 ...styles.card, 
@@ -267,7 +264,7 @@ const ChefDashboard = () => {
                                 </div>
                                 <div style={styles.actionContainer}>
                                     {order.status.toLowerCase() === "ready" ? (
-                                        <div style={styles.readyIndicator}><FaCheck /> SENT TO WAITER</div>
+                                        <div style={styles.readyIndicator}><FaCheck /> WAITING FOR WAITER</div>
                                     ) : (
                                         <button onClick={() => advanceOrderStatus(order)} style={{
                                             ...styles.actionBtn, 

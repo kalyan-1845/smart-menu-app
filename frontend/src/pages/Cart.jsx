@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import io from "socket.io-client"; 
-import { FaArrowLeft, FaTrash, FaMobileAlt, FaMoneyBillWave, FaCheckCircle, FaBell, FaUtensils, FaChair } from "react-icons/fa";
+import { FaArrowLeft, FaTrash, FaMobileAlt, FaMoneyBillWave, FaCheckCircle, FaBell, FaUtensils } from "react-icons/fa";
 
 const SERVER_URL = "https://smart-menu-backend-5ge7.onrender.com";
 const API_BASE = `${SERVER_URL}/api`;
@@ -10,9 +10,7 @@ const API_BASE = `${SERVER_URL}/api`;
 const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, tableNum, setTableNum }) => {
     const navigate = useNavigate();
     const [customerName, setCustomerName] = useState("");
-    // Automatically show modal if tableNum is missing
     const [showTableModal, setShowTableModal] = useState(!tableNum);
-    const [tempTable, setTempTable] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [orderSuccess, setOrderSuccess] = useState(false); 
     const [callLoading, setCallLoading] = useState(false);
@@ -23,31 +21,15 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
 
     const totalPrice = cart.reduce((total, item) => total + (item.price * (item.quantity || 1)), 0);
 
-    // High-performance cleanup
+    // High-performance cleanup for mobile memory management
     useEffect(() => {
         return () => {
             if (socketRef.current) socketRef.current.disconnect();
         };
     }, []);
 
-    // Force table selection on entry if not present
-    useEffect(() => {
-        if (!finalTableNum) {
-            setShowTableModal(true);
-        }
-    }, [finalTableNum]);
-
-    const handleTableSubmit = (e) => {
-        e.preventDefault();
-        if (!tempTable || tempTable < 1) return alert("Enter a valid Table Number");
-        setTableNum(tempTable);
-        localStorage.setItem("last_table_num", tempTable);
-        setShowTableModal(false);
-        if ("vibrate" in navigator) navigator.vibrate(50);
-    };
-
     const handleCallWaiter = async () => {
-        if (!finalTableNum) return setShowTableModal(true);
+        if (!finalTableNum) return alert("Please select a table first!");
         setCallLoading(true);
         if ("vibrate" in navigator) navigator.vibrate(100);
 
@@ -57,6 +39,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                 tableNumber: finalTableNum
             });
 
+            // Fast-handshake socket for high traffic
             const socket = io(SERVER_URL, { transports: ['websocket'], upgrade: false });
             socket.emit("join-restaurant", finalRestaurantId);
             socket.emit("new-waiter-call", {
@@ -76,7 +59,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
 
     const processOrder = async (paymentType) => {
         if (isSubmitting) return;
-        if (!customerName.trim()) return alert("Please enter your name!");
+        if (!customerName.trim()) return alert("Enter your name!");
         if (!finalTableNum) return setShowTableModal(true);
         if (!cart.length) return alert("Cart is empty!");
 
@@ -87,7 +70,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
             const payload = {
                 customerName,
                 tableNum: finalTableNum.toString(),
-                items: cart.map(i => ({ name: i.name, quantity: i.quantity, price: i.price, image: i.image })),
+                items: cart.map(i => ({ name: i.name, quantity: i.quantity, price: i.price })),
                 totalAmount: totalPrice,
                 paymentMethod: paymentType === "ONLINE" ? "Online" : "Cash",
                 restaurantId: finalRestaurantId,
@@ -96,12 +79,14 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
 
             const res = await axios.post(`${API_BASE}/orders`, payload);
             
+            // Scalable socket emission
             const socket = io(SERVER_URL, { transports: ['websocket'], upgrade: false });
             socket.emit("join-restaurant", finalRestaurantId); 
             socket.emit("new-order", res.data);
 
             setOrderSuccess(true);
             
+            // FASTER REDIRECT: Reduced to 1.2s for high-speed user experience
             setTimeout(() => {
                 clearCart();
                 socket.disconnect();
@@ -116,31 +101,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
 
     return (
         <div style={styles.container}>
-            {/* --- MANDATORY TABLE SELECTION MODAL --- */}
-            {showTableModal && (
-                <div style={styles.overlay}>
-                    <div style={styles.tableCard} className="pop-in">
-                        <FaChair size={40} color="#f97316" style={{marginBottom: 15}}/>
-                        <h2 style={{margin: '0 0 10px 0', fontSize: '20px'}}>Where are you sitting?</h2>
-                        <p style={{color: '#888', fontSize: '13px', marginBottom: '20px'}}>Enter your table number to continue.</p>
-                        <form onSubmit={handleTableSubmit}>
-                            <input 
-                                style={styles.tableInput} 
-                                type="number" 
-                                pattern="\d*"
-                                placeholder="Table No." 
-                                value={tempTable} 
-                                onChange={(e) => setTempTable(e.target.value)} 
-                                autoFocus 
-                                required
-                            />
-                            <button type="submit" style={styles.confirmBtn}>Confirm Table</button>
-                        </form>
-                    </div>
-                </div>
-            )}
-
-            {/* --- SUCCESS SCREEN --- */}
+            {/* --- FASTER HIGH-SPEED SUCCESS SCREEN --- */}
             {orderSuccess && (
                 <div style={styles.overlay}>
                     <div style={styles.successCard} className="pop-in">
@@ -170,7 +131,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
 
             <div style={styles.infoCard}>
                 <div onClick={() => setShowTableModal(true)} style={styles.infoRow}>
-                    <p style={{margin: 0}}>Table: <span style={{color: '#f97316', fontWeight: 'bold'}}>{finalTableNum || "Tap to Set"}</span></p>
+                    <p style={{margin: 0}}>Table: <span style={{color: '#f97316', fontWeight: 'bold'}}>{finalTableNum || "Select"}</span></p>
                     <button style={styles.changeBtn}>Change</button>
                 </div>
                 <input style={styles.input} placeholder="Enter Your Name" value={customerName} onChange={e => setCustomerName(e.target.value)} />
@@ -231,13 +192,8 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
 
 const styles = {
     container: { minHeight: '100vh', background: '#050505', color: 'white', padding: '20px', paddingBottom: '160px', fontFamily: 'Inter, sans-serif' },
-    overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.9)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)' },
+    overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' },
     
-    // Table Selection Modal
-    tableCard: { background: '#111', padding: '30px', borderRadius: '24px', textAlign: 'center', border: '1px solid #333', width: '85%', maxWidth: '320px' },
-    tableInput: { width: '100%', padding: '15px', background: '#000', border: '1px solid #f97316', borderRadius: '12px', color: 'white', fontSize: '20px', textAlign: 'center', marginBottom: '15px', outline: 'none' },
-    confirmBtn: { width: '100%', padding: '15px', background: '#f97316', color: 'white', border: 'none', borderRadius: '12px', fontWeight: 'bold', fontSize: '16px' },
-
     successCard: { background: '#111', padding: '40px 30px', borderRadius: '32px', textAlign: 'center', border: '1px solid #22c55e', width: '85%', maxWidth: '320px', boxShadow: '0 20px 40px rgba(0,0,0,0.5)' },
     successTitle: { fontSize: '24px', fontWeight: '900', color: 'white', margin: '0 0 10px 0' },
     successSub: { color: '#888', fontSize: '14px', lineHeight: '1.5', margin: 0 },

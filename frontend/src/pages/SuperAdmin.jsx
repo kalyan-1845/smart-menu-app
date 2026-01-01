@@ -68,7 +68,6 @@ const SuperAdmin = () => {
                 headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` }
             });
             if (res.data.success) {
-                // Multi-session safety: save with unique keys
                 localStorage.setItem(`owner_token_${username}`, res.data.token);
                 localStorage.setItem(`owner_id_${username}`, ownerId);
                 window.open(`/${username}/admin`, '_blank');
@@ -147,7 +146,6 @@ const SuperAdmin = () => {
         if (isLive) {
             const socket = io(API_URL);
             socket.on("new-order", () => {
-                if ("vibrate" in navigator) navigator.vibrate(50);
                 alertSound.current.play().catch(() => {}); 
                 fetchGlobalStats(); 
                 fetchRestaurants(); 
@@ -319,7 +317,6 @@ const SuperAdmin = () => {
                     50% { transform: scale(1.5); opacity: 0.5; }
                     100% { transform: scale(1); opacity: 1; }
                 }
-                .pulse-dot { animation: pulse 2s infinite; }
             `}</style>
         </div>
     );
@@ -348,6 +345,7 @@ const styles = {
     metaRow: { display: 'flex', gap: '15px', marginTop: '6px' },
     metaItem: { fontSize: '10px', color: '#666', display: 'flex', alignItems: 'center', gap: '4px' },
     detailsToggle: { background: 'none', border: 'none', color: '#3b82f6', fontSize: '11px', marginTop: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', padding: 0 },
+    itemSub: { fontSize: '11px', color: '#444', fontWeight: 'bold', marginTop: '4px' },
     revenueBadge: { background: '#14532d', color: '#4ade80', padding: '5px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold' },
     actionGroup: { display: 'flex', alignItems: 'center', gap: '15px' },
     actionIconBtn: { background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '18px', display: 'flex', alignItems: 'center' },

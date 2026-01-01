@@ -1,76 +1,66 @@
 import mongoose from 'mongoose';
 
 // 1. Define the Schema for BiteBox Smart Menu
+// Optimized for Dine-In only flow
 const orderSchema = new mongoose.Schema({
   // Link to the specific restaurant owner
   restaurantId: { 
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'Owner', 
     required: true, 
-    index: true // High-speed lookup for specific restaurant dashboards
+    index: true 
   },
   
-  // Table Number is mandatory for the Dine-In flow
+  // Table Number is mandatory for the Dine-In MVP
   tableNum: { 
     type: String, 
-    required: true,
-    index: true // Faster lookup for Waiter filtering
+    required: true 
   },
   
-  // List of food items ordered
-  items: {
-    type: [{
-        name: { type: String, required: true },
-        quantity: { type: Number, required: true },
-        price: { type: Number, required: true },
-        image: { type: String }, // RETAINED: Chef/Waiter can see what the dish looks like
-        _id: { type: String } 
-    }],
-    validate: [v => v.length > 0, 'Order must contain at least one item']
-  },
+  // List of food items ordered by the customer
+  items: [{
+    name: { type: String, required: true },
+    quantity: { type: Number, required: true },
+    price: { type: Number, required: true },
+    _id: { type: String } // Matches the dish ID from the database
+  }],
   
+  // Financial totals calculated at the time of order
   totalAmount: { 
     type: Number, 
     required: true 
   },
   
-  // High-Speed Status Flow
+  // The 'Arrangement' status used by Chef and Waiter dashboards
+  // Flow: Pending -> Cooking -> Ready -> Served -> Paid (Offline)
   status: { 
     type: String, 
-    enum: ['Pending', 'Cooking', 'Ready', 'Served', 'Paid', 'Cancelled'], 
-    default: 'Pending',
-    index: true // CRITICAL: Makes the "Live Orders" tab load instantly
+    enum: ['Pending', 'Cooking', 'Ready', 'Served', 'Paid'], 
+    default: 'Pending' 
   },
   
+  // Optional name for personalizing the order
   customerName: { 
     type: String, 
     default: "Guest" 
   },
 
-  // Tracks payment choice from Cart.jsx
-  paymentMethod: {
-    type: String,
-    enum: ['Online', 'Cash'],
-    default: 'Cash'
-  },
-
-  // For the Admin Inbox/Receipt feature
+  // --- NEW FIELD FOR INBOX FEATURE ---
+  // Tracks if the receipt has been downloaded by the admin
   isDownloaded: { 
     type: Boolean, 
     default: false 
   }
 
 }, { 
+  // Automatically tracks 'createdAt' (Order Time) and 'updatedAt'
   timestamps: true 
 });
 
-// --- 🚀 PRO SPEED OPTIMIZATION ---
-// This index specifically helps the Restaurant Admin Dashboard
-// when calculating revenue or fetching active orders.
-orderSchema.index({ restaurantId: 1, status: 1, createdAt: -1 });
-
 /**
  * 2. Export the Model
+ * Includes an "exists" check to prevent model recompilation errors during 
+ * development/hot-reloads.
  */
 const Order = mongoose.models.Order || mongoose.model('Order', orderSchema);
 export default Order;

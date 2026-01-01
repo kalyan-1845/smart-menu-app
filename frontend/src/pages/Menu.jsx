@@ -4,7 +4,6 @@ import axios from "axios";
 import { FaSearch, FaPlus, FaMinus, FaStar, FaUtensils, FaArrowRight, FaLock, FaSyncAlt } from "react-icons/fa";
 import LoadingSpinner from "../components/LoadingSpinner";
 
-// Dynamic API Selection: High Speed for Local / Reliable for Production
 const API_BASE = window.location.hostname === "localhost" || window.location.hostname.startsWith("192.168")
     ? "http://localhost:5000/api" 
     : "https://smart-menu-backend-5ge7.onrender.com/api";
@@ -32,23 +31,12 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
 
     const DEFAULT_IMG = "https://placehold.co/400x300/222/orange?text=BiteBox";
 
-    // --- 🔄 FETCH LOGIC (Fixed for Username & MongoDB ID mismatch) ---
+    // --- 🔄 FETCH LOGIC (Ensures Admin items & Images load) ---
     const fetchMenu = async (isManual = false) => {
         if (!currentRestId) return;
         try {
             if (!isManual && dishes.length === 0) setLoading(true);
-
-            // 1. Resolve ID: If URL is 'kalyanresto1', resolve to real MongoDB ID first
-            let finalId = currentRestId;
-            if (!currentRestId.match(/^[0-9a-fA-F]{24}$/)) {
-                try {
-                    const resInfo = await axios.get(`${API_BASE}/auth/restaurant/${currentRestId}`);
-                    finalId = resInfo.data._id;
-                } catch (e) { console.error("Identity resolution failed"); }
-            }
-
-            // 2. Fetch using verified MongoDB ID
-            const res = await axios.get(`${API_BASE}/dishes?restaurantId=${finalId}`, { timeout: 8000 });
+            const res = await axios.get(`${API_BASE}/dishes?restaurantId=${currentRestId}`, { timeout: 8000 });
             
             if (res.data.status === "suspended") {
                 setIsSuspended(true);
@@ -68,7 +56,7 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
         }
     };
 
-    // ✅ HEARTBEAT: Sync every 15s so items added in Admin appear without refresh
+    // ✅ ⏱️ REAL-TIME STOCK HEARTBEAT (Syncs Admin changes every 15s)
     useEffect(() => {
         fetchMenu();
         const stockInterval = setInterval(() => fetchMenu(true), 15000); 
@@ -95,14 +83,14 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
         }
     }, [currentRestId, currentTable, setCart]);
 
-    // 📍 SYNC CONTEXT
+    // 📍 SYNC RESTAURANT CONTEXT
     useEffect(() => {
         if (!currentRestId) return;
         if (setRestaurantId) setRestaurantId(currentRestId);
         if (setTableNum && currentTable) setTableNum(currentTable);
     }, [currentRestId, currentTable]);
 
-    // --- TOUCH HANDLERS ---
+    // --- TOUCH HANDLERS (Pull to Refresh) ---
     const handleTouchStart = (e) => { if (window.scrollY === 0) startY.current = e.touches[0].pageY; };
     const handleTouchMove = (e) => {
         const diff = e.touches[0].pageY - startY.current;
@@ -113,12 +101,13 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
         else setPullDistance(0);
     };
 
+    // --- ACTIONS (Vibration + Cart) ---
     const handleAction = (dish, val = 1) => {
         if ("vibrate" in navigator) navigator.vibrate(40); 
         addToCart(val === -1 ? {...dish, quantity: -1} : dish);
     };
 
-    // SEARCH & CATEGORY FILTER
+    // 🔍 SEARCH & FILTER
     useEffect(() => {
         let result = dishes;
         if (activeCategory !== "All") result = result.filter(d => d.category === activeCategory);
@@ -131,15 +120,23 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
     const categories = ["All", ...new Set(dishes.map(d => d.category))];
 
     if (loading && dishes.length === 0) return <LoadingSpinner />;
-    if (isSuspended) return <div style={styles.center}><FaLock size={60} color="#f97316"/><h1 style={{color:'white', marginTop:20}}>SERVICE UNAVAILABLE</h1></div>;
+
+    if (isSuspended) return (
+        <div style={styles.center}>
+            <FaLock size={60} color="#f97316"/>
+            <h1 style={{color:'white', marginTop:20}}>SERVICE UNAVAILABLE</h1>
+        </div>
+    );
 
     return (
         <div style={styles.container} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}>
             
+            {/* Pull to Refresh Loader */}
             <div style={{...styles.pullLoader, height: `${pullDistance}px`, opacity: pullDistance / 60}}>
                 <FaSyncAlt className={refreshing ? "spin" : ""} style={{color: '#f97316'}} />
             </div>
 
+            {/* Complex Feature: Marquee */}
             <div style={styles.marqueeWrapper}>
                 <div style={styles.marqueeContent}>
                     <span>JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • </span>
@@ -147,6 +144,7 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
                 </div>
             </div>
 
+            {/* Hero Section */}
             <div style={styles.hero}>
                 <div style={styles.heroContent}>
                     <div>
@@ -161,6 +159,7 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
                 </div>
             </div>
 
+            {/* Sticky Navigation */}
             <div style={styles.stickyNav}>
                 <div style={styles.catScroll}>
                     {categories.map(cat => (
@@ -177,6 +176,7 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
                 </div>
             </div>
 
+            {/* Product Grid */}
             <div style={styles.grid}>
                 {filteredDishes.map(dish => {
                     const itemInCart = cart.find(i => i._id === dish._id);
@@ -184,6 +184,7 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
                     return (
                         <div key={dish._id} style={styles.card}>
                             <div style={styles.imgWrapper}>
+                                {/* ✅ DISPLAY ADMIN IMAGE */}
                                 <img 
                                     src={dish.image || DEFAULT_IMG} 
                                     alt={dish.name} 
@@ -216,6 +217,7 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
                 })}
             </div>
 
+            {/* Floating Action Bar */}
             {totalQty > 0 && (
                 <div style={styles.floatBarContainer}>
                     <Link to="/cart" style={styles.floatBar}>
@@ -235,7 +237,6 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
                 * { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
                 body { overscroll-behavior-y: contain; background: #09090b; }
                 ::-webkit-scrollbar { display: none; }
-                .add-btn:active, .float-bar:active { transform: scale(0.96); transition: 0.1s; }
             `}</style>
         </div>
     );
@@ -268,7 +269,7 @@ const styles = {
     dishTitle: { margin: 0, fontSize: "16px", color: '#fff', fontWeight: "700" },
     price: { color: "#f97316", fontWeight: "900", fontSize: "16px" },
     desc: { color: "#71717a", fontSize: "11px", marginTop: 4, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: '2', WebkitBoxOrient: 'vertical' },
-    addBtn: { width: "80px", padding: "8px", background: "#fff", color: "#000", fontWeight: "900", borderRadius: "10px", border: "none", cursor: 'pointer' },
+    addBtn: { width: "80px", padding: "8px", background: "#fff", color: "#000", fontWeight: "900", borderRadius: "10px", border: "none" },
     counter: { display: "flex", alignItems: "center", justifyContent: "space-between", background: "#f97316", borderRadius: "10px", width: "100px", padding: "2px", boxShadow: "0 0 15px rgba(249, 115, 22, 0.3)" },
     countBtn: { width: "32px", height: "32px", background: "transparent", border: "none", color: "white", display: "flex", alignItems: "center", justifyContent: "center" },
     qtyNum: { fontWeight: "900", color: "white" },
