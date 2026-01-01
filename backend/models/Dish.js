@@ -1,77 +1,84 @@
 import mongoose from 'mongoose';
 
 /**
- * Dish Model (Simplified v2.8)
- * Represents a menu item with manual availability.
+ * Dish Model (Enterprise v3.0)
+ * Represents a menu item with real-time stock and multi-tenant isolation.
  */
 const dishSchema = new mongoose.Schema({
-  // The display name of the food item
   name: { 
     type: String, 
     required: true, 
     trim: true 
   },
   
-  // Pricing for the Dine-In MVP
   price: { 
     type: Number, 
-    required: true 
+    required: true,
+    min: 0 // Prevents accidental negative pricing
   },
   
-  // Categorization (e.g., Starters, Main Course) for the menu scroller
+  // Categorization for the high-speed menu scroller
   category: { 
     type: String, 
     required: true, 
-    index: true 
+    index: true,
+    trim: true
   },
   
-  // Optional image URL for the dish
   image: { 
-    type: String 
+    type: String,
+    default: "" // Ensures no 'undefined' errors in the frontend
   },
   
-  // Short detail about the ingredients or taste
   description: { 
-    type: String 
+    type: String,
+    trim: true
   },
 
   /**
-   * 🔴 AVAILABILITY TOGGLE
-   * Critical Feature: Used by the Chef Dashboard to manually mark items 
-   * as "Sold Out" in real-time if the kitchen runs out of ingredients.
+   * 🔴 REAL-TIME AVAILABILITY
+   * Indexed for instant menu filtering when the Chef toggles stock.
    */
   isAvailable: { 
     type: Boolean, 
-    default: true 
+    default: true,
+    index: true 
   },
 
   /**
-   * 🛠️ SPECIFICATIONS / CUSTOMIZATIONS
-   * Allows customers to see specific options (e.g., "Extra Spicy", "No Onion").
+   * 🛠️ CUSTOMIZATIONS
+   * Standardized for the frontend "Specifications" drawer.
    */
   specifications: [
     {
-      label: { type: String }, 
+      label: { type: String, trim: true }, 
       isAdded: { type: Boolean, default: false } 
     }
   ],
 
   /**
-   * 🔒 OWNER LINK
-   * Multi-tenant security ensures that dishes only appear for the correct restaurant.
+   * 🔒 MULTI-TENANT LINK
+   * restaurantId matches the field name in the Order model for consistency.
    */
-  owner: { 
+  restaurantId: { 
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'Owner', 
-    required: true 
+    required: true,
+    alias: 'owner' // Allows you to use both 'owner' or 'restaurantId' in queries
   }
 }, { 
-  // Automatically tracks when dishes are added or edited
   timestamps: true 
 });
 
+// --- 🚀 PRO PERFORMANCE INDEXING ---
+// Speeds up category-based menu rendering for specific restaurants
+dishSchema.index({ restaurantId: 1, category: 1 });
+
+// Speeds up "In-Stock Only" menu views
+dishSchema.index({ restaurantId: 1, isAvailable: 1 });
+
 /**
  * 🏗️ EXPORT MODEL
- * Uses the existence check to prevent compilation errors during server restarts.
  */
-export default mongoose.models.Dish || mongoose.model('Dish', dishSchema);
+const Dish = mongoose.models.Dish || mongoose.model('Dish', dishSchema);
+export default Dish;

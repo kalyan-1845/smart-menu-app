@@ -70,7 +70,7 @@ const OrderTracker = () => {
 
     // 🧾 AUTO-RECEIPT: Download bill once the order is marked "Served"
     useEffect(() => {
-        if (order && order.status === "Served" && !hasDownloaded && restaurant) {
+        if (order && (order.status === "Served" || order.status === "Completed") && !hasDownloaded && restaurant) {
             generateCustomerReceipt(order, restaurant);
             setHasDownloaded(true);
         }
@@ -89,6 +89,7 @@ const OrderTracker = () => {
                 type: "help"
             });
             setCallStatus("Waiter Coming!");
+            if ("vibrate" in navigator) navigator.vibrate(100);
             setTimeout(() => { setCallStatus("Call Waiter"); setIsCalling(false); }, 5000);
         } catch (e) {
             setCallStatus("Try Again");

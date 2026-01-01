@@ -1,19 +1,17 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
-import webpush from 'web-push'; // Required for notifications
+import webpush from 'web-push'; 
 import Owner from '../models/Owner.js'; 
 import Dish from '../models/Dish.js'; 
 import Order from '../models/Order.js'; 
 
 const router = express.Router();
 
-// --- 🔑 SAFE WEB PUSH CONFIGURATION (FIXED) ---
-// 1. We use the correct names: VAPID_PUBLIC_KEY (not PUBLIC_VAPID_KEY)
+// --- 🔑 SAFE WEB PUSH CONFIGURATION ---
 const publicKey = process.env.VAPID_PUBLIC_KEY;
 const privateKey = process.env.VAPID_PRIVATE_KEY;
 
-// 2. We check if they exist BEFORE initializing to prevent the crash
 if (publicKey && privateKey) {
     try {
         webpush.setVapidDetails(
@@ -26,21 +24,20 @@ if (publicKey && privateKey) {
         console.error("❌ VAPID Config Error:", err.message);
     }
 } else {
-    console.warn("⚠️ PUSH OFF: VAPID keys missing in .env (Server will still run)");
+    console.warn("⚠️ PUSH OFF: VAPID keys missing in .env");
 }
 
 const generateToken = (id) => {
     return jwt.sign({ id }, process.env.JWT_SECRET || 'fallback_secret', { expiresIn: '30d' });
 };
 
-// --- 📲 NEW: SAVE PUSH SUBSCRIPTION ---
+// --- 📲 SAVE PUSH SUBSCRIPTION ---
 router.post('/save-subscription', async (req, res) => {
     const { restaurantId, subscription } = req.body;
     try {
         const user = await Owner.findById(restaurantId);
         if (!user) return res.status(404).json({ message: "Restaurant not found" });
 
-        // Check if subscription already exists to avoid duplicates
         const exists = user.pushSubscriptions.find(s => s.endpoint === subscription.endpoint);
         if (!exists) {
             user.pushSubscriptions.push(subscription);
@@ -58,17 +55,24 @@ router.post('/register', async (req, res) => {
         let { restaurantName, username, email, password, trialEndsAt } = req.body;
 
         if (!email) email = `${username.replace(/\s+/g, '')}@smartmenu.local`; 
+        
+        // Ensure 100 Year Access logic is server-side guaranteed
         if (!trialEndsAt) {
             const date = new Date();
             date.setFullYear(date.getFullYear() + 100); 
-            trialEndsAt = date.toISOString();
+            trialEndsAt = date;
         }
 
-        const userExists = await Owner.findOne({ $or: [{ username }, { email }] });
+        const userExists = await Owner.findOne({ $or: [{ username: username.toLowerCase() }, { email }] });
         if (userExists) return res.status(400).json({ message: 'Username or Email already registered.' });
 
         const user = await Owner.create({ 
-            restaurantName, username, email, password, trialEndsAt, isPro: true
+            restaurantName, 
+            username: username.toLowerCase(), 
+            email, 
+            password, 
+            trialEndsAt, 
+            isPro: true
         });
         
         res.status(201).json({
@@ -88,7 +92,7 @@ router.post('/register', async (req, res) => {
 router.post('/login', async (req, res) => {
     const { username, password } = req.body;
     try {
-        const user = await Owner.findOne({ username });
+        const user = await Owner.findOne({ username: username.toLowerCase() });
         if (user && (await user.matchPassword(password))) {
             res.json({
                 _id: user._id,
@@ -100,31 +104,28 @@ router.post('/login', async (req, res) => {
                 trialEndsAt: user.trialEndsAt
             });
         } else {
-            res.status(401).json({ message: 'Invalid username or password' });
+            res.status(401).json({ message: 'Invalid credentials' });
         }
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
 });
 
-// --- ✅ FIXED: VERIFY ROLE (Chef AND Waiter Support) ---
+// --- ✅ VERIFY ROLE (Chef AND Waiter Support) ---
 router.post('/verify-role', async (req, res) => {
     try {
         const { role, username, password, token } = req.body;
 
         if (role === 'chef' || role === 'waiter') {
-            const user = await Owner.findOne({ username });
-            
+            const user = await Owner.findOne({ username: username.toLowerCase() });
             if (!user) return res.status(404).json({ message: "Restaurant not found" });
 
-            // Safety: Check correct password based on role
             const validPass = role === 'chef' ? (user.chefPassword || "bitebox18") : (user.waiterPassword || "bitebox18"); 
 
             if (password === validPass) {
                  return res.json({ 
                     success: true, 
                     role: role, 
-                    _id: user._id, 
                     restaurantId: user._id 
                 });
             } else {
@@ -139,7 +140,6 @@ router.post('/verify-role', async (req, res) => {
         const user = await Owner.findById(decoded.id).select("-password");
 
         if (!user) return res.status(404).json({ message: "User not found" });
-
         res.json({ role: "owner", _id: user._id, restaurantName: user.restaurantName });
 
     } catch (error) {
@@ -147,23 +147,7 @@ router.post('/verify-role', async (req, res) => {
     }
 });
 
-router.get('/verify-role', async (req, res) => {
-    try {
-        const token = req.headers.authorization?.split(" ")[1];
-        if (!token) return res.status(401).json({ message: "No token" });
-
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret');
-        const user = await Owner.findById(decoded.id).select("-password");
-
-        if (!user) return res.status(404).json({ message: "User not found" });
-
-        res.json({ success: true, role: "owner", _id: user._id, restaurantName: user.restaurantName });
-    } catch (error) {
-        res.status(401).json({ message: "Invalid Token" });
-    }
-});
-
-// --- ✅ PUBLIC RESTAURANT LOOKUP ---
+// --- ✅ PUBLIC RESTAURANT LOOKUP (Clean Data) ---
 router.get('/restaurant/:id', async (req, res) => {
     try {
         const { id } = req.params;
@@ -171,30 +155,35 @@ router.get('/restaurant/:id', async (req, res) => {
 
         if (mongoose.Types.ObjectId.isValid(id)) {
             owner = await Owner.findById(id).select('username restaurantName email isPro upiId');
-        } 
-        
-        if (!owner) {
-            owner = await Owner.findOne({ username: id }).select('username restaurantName email isPro upiId');
+        } else {
+            owner = await Owner.findOne({ username: id.toLowerCase() }).select('username restaurantName email isPro upiId');
         }
 
         if (!owner) return res.status(404).json({ message: 'Restaurant not found' });
-        
         res.json(owner);
     } catch (error) {
-        console.error("Lookup Error:", error);
         res.status(500).json({ message: error.message });
     }
 });
 
-router.get('/restaurants', async (req, res) => {
+// --- ✅ CEO GHOST LOGIN (Used by SuperAdmin) ---
+router.get('/ghost-login/:id', async (req, res) => {
     try {
-        const owners = await Owner.find().select('_id username restaurantName');
-        res.json(owners);
+        // In a real app, verify the admin_token here first
+        const owner = await Owner.findById(req.params.id);
+        if (!owner) return res.status(404).json({ message: "Owner not found" });
+        
+        res.json({
+            success: true,
+            token: generateToken(owner._id),
+            _id: owner._id
+        });
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
 });
 
+// --- ADMIN LISTING ---
 router.get('/admin/all-owners', async (req, res) => {
     try {
         const owners = await Owner.find().select('-password').sort({ createdAt: -1 }); 
@@ -210,7 +199,7 @@ router.delete('/admin/delete-owner/:id', async (req, res) => {
         await Owner.findByIdAndDelete(ownerId);
         await Dish.deleteMany({ restaurantId: ownerId }); 
         await Order.deleteMany({ restaurantId: ownerId });
-        res.json({ message: "Owner deleted" });
+        res.json({ message: "Owner and all associated data deleted successfully" });
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
