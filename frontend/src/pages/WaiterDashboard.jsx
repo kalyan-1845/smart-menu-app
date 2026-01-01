@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { useParams } from "react-router-dom";
 import io from "socket.io-client";
-import { FaUserTie, FaBell, FaCheck, FaUtensils, FaSpinner, FaWifi, FaSync, FaTimes, FaConciergeBell, FaTruckLoading } from "react-icons/fa";
+import { FaUserTie, FaBell, FaCheck, FaUtensils, FaSpinner, FaWifi, FaSync, FaTimes, FaConciergeBell, FaTruckLoading, FaShoppingBag } from "react-icons/fa";
 
 const SERVER_URL = "https://smart-menu-backend-5ge7.onrender.com";
 const API_BASE = `${SERVER_URL}/api`;
@@ -15,6 +15,9 @@ const WaiterDashboard = () => {
     const [mongoId, setMongoId] = useState(null); 
     const [isConnected, setIsConnected] = useState(false);
     const [notification, setNotification] = useState(null);
+
+    // 🚨 NEW: Alert Stack for NEW orders and CHEF alerts
+    const [liveAlerts, setLiveAlerts] = useState([]);
 
     const dingRef = useRef(new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"));
 
@@ -36,11 +39,8 @@ const WaiterDashboard = () => {
                 axios.get(`${API_BASE}/orders?restaurantId=${rId}`),
                 axios.get(`${API_BASE}/orders/calls?restaurantId=${rId}`)
             ]);
-
-            // Filter for orders Chef has marked "Ready"
-            const pickupReady = orderRes.data.filter(o => o.status === "Ready");
-            
-            setReadyOrders(pickupReady);
+            // Only show orders that are currently "Ready"
+            setReadyOrders(orderRes.data.filter(o => o.status === "Ready"));
             setServiceCalls(callRes.data);
             setLoading(false);
         } catch (e) { setLoading(false); }
@@ -62,38 +62,38 @@ const WaiterDashboard = () => {
             socket.on("connect", () => setIsConnected(true));
             socket.on("disconnect", () => setIsConnected(false));
 
-            // ✅ 1. LISTEN FOR CHEF "READY" ALERTS (For the Popup)
+            // ✅ 1. LISTEN FOR NEW ORDERS (From Customers)
+            socket.on("new-order", (order) => {
+                dingRef.current.play().catch(()=>{});
+                const alert = { id: Date.now(), table: order.tableNum, type: 'ORDER', msg: 'NEW ORDER RECEIVED' };
+                setLiveAlerts(prev => [alert, ...prev]);
+                refreshData(mongoId);
+            });
+
+            // ✅ 2. LISTEN FOR CHEF "READY" ALERTS
             socket.on("chef-ready-alert", (data) => {
                 dingRef.current.play().catch(()=>{});
-                if ("vibrate" in navigator) navigator.vibrate([500, 200, 500]);
+                const alert = { id: Date.now(), table: data.tableNum, type: 'PICKUP', msg: 'DISHES READY FOR PICKUP' };
+                setLiveAlerts(prev => [alert, ...prev]);
                 
-                // Fetch the full order details to show in popup
+                // Show the big popup for 15 seconds
                 axios.get(`${API_BASE}/orders/${data.orderId}`).then(res => {
                     setNotification(res.data);
                     refreshData(mongoId);
                 });
-                
                 setTimeout(() => setNotification(null), 15000);
             });
 
-            // ✅ 2. LISTEN FOR GENERAL UPDATES (When Chef starts cooking or marks served)
-            socket.on("order-updated", (updatedOrder) => {
-                refreshData(mongoId);
-                if (updatedOrder.status === "Served" || updatedOrder.status === "SERVED") {
-                    setReadyOrders(prev => prev.filter(o => o._id !== updatedOrder._id));
-                }
-            });
-
-            // ✅ 3. LISTEN FOR WAITER CALLS (Customer help)
+            // ✅ 3. LISTEN FOR SERVICE CALLS
             socket.on("new-waiter-call", (newCall) => {
                 dingRef.current.play().catch(()=>{});
                 if ("vibrate" in navigator) navigator.vibrate(400);
                 setServiceCalls(prev => [newCall, ...prev]);
             });
 
-            // 📢 CEO GLOBAL BROADCAST
+            // ✅ 4. GLOBAL BROADCAST
             socket.on("global-broadcast", (data) => {
-                alert(`📢 SYSTEM MESSAGE: ${data.title}\n\n${data.message}`);
+                alert(`📢 SYSTEM: ${data.title}\n${data.message}`);
             });
 
             return () => socket.disconnect();
@@ -108,27 +108,45 @@ const WaiterDashboard = () => {
         catch (e) { refreshData(mongoId); }
     };
 
+    const removeAlert = (alertId) => {
+        setLiveAlerts(prev => prev.filter(a => a.id !== alertId));
+    };
+
     if (!mongoId && loading) return <div style={styles.center}><FaSpinner className="spin" size={30} color="#f97316"/></div>;
 
     return (
         <div style={styles.container}>
             
-            {/* 🚨 TOP CALL NOTIFICATIONS (Customer Help) */}
+            {/* 🚨 UNIFIED TOP ALERT STACK (Calls, Ready Alerts, New Orders) */}
             <div style={styles.callNotificationWrapper}>
+                {/* 1. CUSTOMER CALLS */}
                 {serviceCalls.map(call => (
                     <div key={call._id} style={styles.alertCard} className="pulse-top">
                         <div style={styles.alertContent}>
                             <span style={styles.tableBadge}>T-{call.tableNumber}</span>
-                            <span style={styles.alertMsg}>ASSISTANCE REQUIRED</span>
+                            <span style={styles.alertMsg}>NEEDS HELP 🛎️</span>
                         </div>
                         <button onClick={() => setServiceCalls(prev => prev.filter(c => c._id !== call._id))} style={styles.checkBtn}>
                             <FaCheck/>
                         </button>
                     </div>
                 ))}
+
+                {/* 2. LIVE SYSTEM ALERTS (NEW ORDER / READY) */}
+                {liveAlerts.map(alert => (
+                    <div key={alert.id} style={{...styles.alertCard, background: alert.type === 'ORDER' ? '#3b82f6' : '#22c55e'}}>
+                        <div style={styles.alertContent}>
+                            <span style={{...styles.tableBadge, color: alert.type === 'ORDER' ? '#3b82f6' : '#22c55e'}}>T-{alert.table}</span>
+                            <span style={styles.alertMsg}>{alert.msg} {alert.type === 'ORDER' ? '🛍️' : '👨‍🍳'}</span>
+                        </div>
+                        <button onClick={() => removeAlert(alert.id)} style={styles.checkBtn}>
+                            <FaTimes color={alert.type === 'ORDER' ? '#3b82f6' : '#22c55e'}/>
+                        </button>
+                    </div>
+                ))}
             </div>
 
-            {/* 🚨 PICKUP POPUP (When Chef marks Ready) */}
+            {/* 🚨 PICKUP POPUP MODAL */}
             {notification && (
                 <div style={styles.popupOverlay}>
                     <div style={styles.popupCard} className="slide-up">
@@ -160,7 +178,7 @@ const WaiterDashboard = () => {
                 </div>
             </header>
 
-            {/* READY FOR DELIVERY LIST */}
+            {/* MAIN LIST */}
             <div style={styles.section}>
                 <h3 style={styles.sectionTitle}>READY FOR DELIVERY ({readyOrders.length})</h3>
                 {readyOrders.length === 0 ? (
@@ -190,7 +208,7 @@ const WaiterDashboard = () => {
                 .spin { animation: spin 1s linear infinite; } 
                 @keyframes spin { 100% { transform: rotate(360deg); } } 
                 .pulse-top { animation: pulse-top-red 1s infinite alternate; } 
-                @keyframes pulse-top-red { from { background-color: #ef4444; transform: translateY(0); } to { background-color: #dc2626; transform: translateY(3px); } } 
+                @keyframes pulse-top-red { from { transform: translateY(0); } to { transform: translateY(3px); } } 
                 .slide-up { animation: slideUp 0.3s ease-out; } 
                 @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
             `}</style>
@@ -200,7 +218,7 @@ const WaiterDashboard = () => {
 
 const styles = {
     container: { minHeight: "100vh", background: "#050505", color: "white", padding: "15px", fontFamily: "Inter, sans-serif" },
-    callNotificationWrapper: { position: 'fixed', top: '10px', left: '50%', transform: 'translateX(-50%)', zIndex: 1100, width: '90%', maxWidth: '400px' },
+    callNotificationWrapper: { position: 'fixed', top: '10px', left: '50%', transform: 'translateX(-50%)', zIndex: 1100, width: '95%', maxWidth: '400px', display:'flex', flexDirection:'column', gap:'5px' },
     center: { height: "100vh", display: 'flex', justifyContent: 'center', alignItems: 'center' },
     header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom:'1px solid #222', paddingBottom:'10px' },
     brand: { display: 'flex', alignItems: 'center', gap: '10px' },
@@ -209,11 +227,11 @@ const styles = {
     iconBtn: { background:'#222', border:'none', color:'white', borderRadius:'8px', padding:'8px' },
     status: { background:'#1a1a1a', padding:'8px', borderRadius:'8px' },
     sectionTitle: { fontSize: '11px', color: '#f97316', fontWeight: 'bold', marginBottom: '15px', textTransform:'uppercase', letterSpacing:'1px' },
-    alertCard: { background: '#ef4444', padding: '12px', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom:'10px', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.5)' },
+    alertCard: { background: '#ef4444', padding: '12px', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.5)' },
     alertContent: { display:'flex', alignItems:'center', gap:'10px' },
     tableBadge: { background:'white', color:'#ef4444', fontWeight:'900', padding:'4px 8px', borderRadius:'6px' },
     alertMsg: { fontWeight:'bold', fontSize:'12px' },
-    checkBtn: { width: '30px', height: '30px', borderRadius: '50%', border: 'none', background: 'white', color: '#ef4444' },
+    checkBtn: { width: '30px', height: '30px', borderRadius: '50%', border: 'none', background: 'white', color: '#ef4444', display:'flex', alignItems:'center', justifyContent:'center' },
     card: { background: '#111', borderRadius: '16px', padding: '15px', border: '1px solid #222', marginBottom:'15px' },
     cardHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' },
     tableBig: { fontSize: '24px', fontWeight: '900', color: '#22c55e' },
