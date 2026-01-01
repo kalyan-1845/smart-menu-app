@@ -131,15 +131,15 @@ const RestaurantAdmin = () => {
     const handleAddDish = async (e) => {
         e.preventDefault();
         const token = localStorage.getItem(`owner_token_${id}`);
-        const mongoId = localStorage.getItem(`owner_id_${id}`); // ✅ CRITICAL: Use MongoDB _id
+        const mongoId = localStorage.getItem(`owner_id_${id}`); 
         
         try {
             await axios.post(`${API_BASE}/dishes`, 
-                { ...formData, restaurantId: mongoId }, // ✅ Syncs with Menu/Chef dashboard
+                { ...formData, restaurantId: mongoId }, 
                 { headers: { Authorization: `Bearer ${token}` } }
             );
             setFormData({ name: "", price: "", category: "Starters", image: "" });
-            fetchData(token, mongoId); // Refresh list
+            fetchData(token, mongoId); 
             alert("✅ Dish Added to Menu & Chef Panel!");
         } catch (err) { alert("Error adding dish"); }
     };
@@ -156,7 +156,6 @@ const RestaurantAdmin = () => {
         } catch (err) { alert("Delete failed"); }
     };
 
-    // Socket listeners for real-time sync
     useEffect(() => {
         if (isAuthenticated) {
             const mongoId = localStorage.getItem(`owner_id_${id}`);
@@ -166,6 +165,15 @@ const RestaurantAdmin = () => {
             socket.on("new-order", () => {
                 fetchInbox();
                 if (activeTab !== "inbox") setHasNewOrder(true); 
+            });
+
+            socket.on("new-waiter-call", (data) => {
+                new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3").play().catch(() => {});
+                setActiveAlerts(prev => [...prev, data]);
+            });
+
+            socket.on("global-broadcast", (data) => {
+                alert(`📢 ADMIN BROADCAST: ${data.title}\n\n${data.message}`);
             });
             
             return () => socket.disconnect();
@@ -233,6 +241,18 @@ const RestaurantAdmin = () => {
     return (
         <div className="admin-container">
             <style>{styles}</style>
+            <div className="toast-container">
+                {activeAlerts.map((alert, i) => (
+                    <div key={i} className="toast-alert">
+                        <div>
+                            <p style={{ fontSize: '10px', fontWeight: 900 }}>🛎️ TABLE {alert.tableNumber}</p>
+                            <p style={{ fontWeight: 900, fontSize: '16px' }}>{alert.type?.toUpperCase()}</p>
+                        </div>
+                        <button onClick={() => setActiveAlerts(prev => prev.filter((_, idx) => idx !== i))} style={{ background: 'black', color: 'white', padding: '5px 10px', border: 'none', borderRadius: '5px' }}>DONE</button>
+                    </div>
+                ))}
+            </div>
+
             <div className="max-w-wrapper">
                 <header className="admin-header">
                     <div className="header-top">
@@ -292,7 +312,7 @@ const RestaurantAdmin = () => {
                         <form onSubmit={handleAddDish}>
                             <input className="input-dark" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} placeholder="Dish Name (e.g. Burger)" required />
                             
-                            {/* ✅ NEW: IMAGE URL FIELD ADDED */}
+                            {/* ✅ IMAGE URL FIELD ADDED */}
                             <div style={{position:'relative'}}>
                                 <input className="input-dark" value={formData.image} onChange={e => setFormData({ ...formData, image: e.target.value })} placeholder="Image Link (https://...)" />
                                 <FaLink style={{position:'absolute', right:'15px', top:'15px', color:'#444'}} />
