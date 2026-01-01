@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import io from "socket.io-client";
 import { FaUserTie, FaBell, FaCheck, FaUtensils, FaSpinner, FaWifi, FaSync, FaTimes, FaConciergeBell, FaTruckLoading, FaShoppingBag } from "react-icons/fa";
 
@@ -16,8 +16,8 @@ const WaiterDashboard = () => {
     const [isConnected, setIsConnected] = useState(false);
     const [notification, setNotification] = useState(null);
 
-    // 🚨 NEW: Alert Stack for NEW orders and CHEF alerts
-    const [liveAlerts, setLiveAlerts] = useState([]);
+    // 🚨 NEW: Notification stack for Placed/Ready orders to ensure they show up at the top
+    const [systemAlerts, setSystemAlerts] = useState([]);
 
     const dingRef = useRef(new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"));
 
@@ -39,8 +39,11 @@ const WaiterDashboard = () => {
                 axios.get(`${API_BASE}/orders?restaurantId=${rId}`),
                 axios.get(`${API_BASE}/orders/calls?restaurantId=${rId}`)
             ]);
-            // Only show orders that are currently "Ready"
-            setReadyOrders(orderRes.data.filter(o => o.status === "Ready"));
+
+            // ✅ Filter for orders Chef has marked "Ready"
+            const pickupReady = orderRes.data.filter(o => o.status === "Ready");
+            
+            setReadyOrders(pickupReady);
             setServiceCalls(callRes.data);
             setLoading(false);
         } catch (e) { setLoading(false); }
@@ -66,34 +69,44 @@ const WaiterDashboard = () => {
             socket.on("new-order", (order) => {
                 dingRef.current.play().catch(()=>{});
                 const alert = { id: Date.now(), table: order.tableNum, type: 'ORDER', msg: 'NEW ORDER RECEIVED' };
-                setLiveAlerts(prev => [alert, ...prev]);
+                setSystemAlerts(prev => [alert, ...prev]);
                 refreshData(mongoId);
             });
 
-            // ✅ 2. LISTEN FOR CHEF "READY" ALERTS
+            // ✅ 2. LISTEN FOR CHEF "READY" ALERTS (For the Popup)
             socket.on("chef-ready-alert", (data) => {
                 dingRef.current.play().catch(()=>{});
-                const alert = { id: Date.now(), table: data.tableNum, type: 'PICKUP', msg: 'DISHES READY FOR PICKUP' };
-                setLiveAlerts(prev => [alert, ...prev]);
+                if ("vibrate" in navigator) navigator.vibrate([500, 200, 500]);
                 
-                // Show the big popup for 15 seconds
+                const alert = { id: Date.now(), table: data.tableNum, type: 'READY', msg: 'ORDER READY FOR PICKUP' };
+                setSystemAlerts(prev => [alert, ...prev]);
+
                 axios.get(`${API_BASE}/orders/${data.orderId}`).then(res => {
                     setNotification(res.data);
                     refreshData(mongoId);
                 });
+                
                 setTimeout(() => setNotification(null), 15000);
             });
 
-            // ✅ 3. LISTEN FOR SERVICE CALLS
+            // ✅ 3. LISTEN FOR GENERAL UPDATES
+            socket.on("order-updated", (updatedOrder) => {
+                refreshData(mongoId);
+                if (updatedOrder.status === "Served" || updatedOrder.status === "SERVED") {
+                    setReadyOrders(prev => prev.filter(o => o._id !== updatedOrder._id));
+                }
+            });
+
+            // ✅ 4. LISTEN FOR WAITER CALLS
             socket.on("new-waiter-call", (newCall) => {
                 dingRef.current.play().catch(()=>{});
                 if ("vibrate" in navigator) navigator.vibrate(400);
                 setServiceCalls(prev => [newCall, ...prev]);
             });
 
-            // ✅ 4. GLOBAL BROADCAST
+            // 📢 LISTEN FOR CEO BROADCASTS
             socket.on("global-broadcast", (data) => {
-                alert(`📢 SYSTEM: ${data.title}\n${data.message}`);
+                alert(`📢 SYSTEM MESSAGE: ${data.title}\n\n${data.message}`);
             });
 
             return () => socket.disconnect();
@@ -108,23 +121,19 @@ const WaiterDashboard = () => {
         catch (e) { refreshData(mongoId); }
     };
 
-    const removeAlert = (alertId) => {
-        setLiveAlerts(prev => prev.filter(a => a.id !== alertId));
-    };
-
     if (!mongoId && loading) return <div style={styles.center}><FaSpinner className="spin" size={30} color="#f97316"/></div>;
 
     return (
         <div style={styles.container}>
             
-            {/* 🚨 UNIFIED TOP ALERT STACK (Calls, Ready Alerts, New Orders) */}
+            {/* 🚨 UNIFIED TOP ALERT STACK */}
             <div style={styles.callNotificationWrapper}>
-                {/* 1. CUSTOMER CALLS */}
+                {/* A. Customer Service Calls */}
                 {serviceCalls.map(call => (
                     <div key={call._id} style={styles.alertCard} className="pulse-top">
                         <div style={styles.alertContent}>
                             <span style={styles.tableBadge}>T-{call.tableNumber}</span>
-                            <span style={styles.alertMsg}>NEEDS HELP 🛎️</span>
+                            <span style={styles.alertMsg}>ASSISTANCE REQUIRED 🛎️</span>
                         </div>
                         <button onClick={() => setServiceCalls(prev => prev.filter(c => c._id !== call._id))} style={styles.checkBtn}>
                             <FaCheck/>
@@ -132,21 +141,21 @@ const WaiterDashboard = () => {
                     </div>
                 ))}
 
-                {/* 2. LIVE SYSTEM ALERTS (NEW ORDER / READY) */}
-                {liveAlerts.map(alert => (
+                {/* B. New Orders & Chef Ready Alerts */}
+                {systemAlerts.map(alert => (
                     <div key={alert.id} style={{...styles.alertCard, background: alert.type === 'ORDER' ? '#3b82f6' : '#22c55e'}}>
                         <div style={styles.alertContent}>
                             <span style={{...styles.tableBadge, color: alert.type === 'ORDER' ? '#3b82f6' : '#22c55e'}}>T-{alert.table}</span>
-                            <span style={styles.alertMsg}>{alert.msg} {alert.type === 'ORDER' ? '🛍️' : '👨‍🍳'}</span>
+                            <span style={styles.alertMsg}>{alert.msg}</span>
                         </div>
-                        <button onClick={() => removeAlert(alert.id)} style={styles.checkBtn}>
+                        <button onClick={() => setSystemAlerts(prev => prev.filter(a => a.id !== alert.id))} style={styles.checkBtn}>
                             <FaTimes color={alert.type === 'ORDER' ? '#3b82f6' : '#22c55e'}/>
                         </button>
                     </div>
                 ))}
             </div>
 
-            {/* 🚨 PICKUP POPUP MODAL */}
+            {/* 🚨 PICKUP POPUP (Modal) */}
             {notification && (
                 <div style={styles.popupOverlay}>
                     <div style={styles.popupCard} className="slide-up">
@@ -178,7 +187,7 @@ const WaiterDashboard = () => {
                 </div>
             </header>
 
-            {/* MAIN LIST */}
+            {/* READY FOR DELIVERY LIST */}
             <div style={styles.section}>
                 <h3 style={styles.sectionTitle}>READY FOR DELIVERY ({readyOrders.length})</h3>
                 {readyOrders.length === 0 ? (
@@ -208,7 +217,7 @@ const WaiterDashboard = () => {
                 .spin { animation: spin 1s linear infinite; } 
                 @keyframes spin { 100% { transform: rotate(360deg); } } 
                 .pulse-top { animation: pulse-top-red 1s infinite alternate; } 
-                @keyframes pulse-top-red { from { transform: translateY(0); } to { transform: translateY(3px); } } 
+                @keyframes pulse-top-red { from { background-color: #ef4444; transform: translateY(0); } to { background-color: #dc2626; transform: translateY(3px); } } 
                 .slide-up { animation: slideUp 0.3s ease-out; } 
                 @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
             `}</style>
