@@ -36,8 +36,13 @@ const WaiterDashboard = () => {
                 axios.get(`${API_BASE}/orders?restaurantId=${rId}`),
                 axios.get(`${API_BASE}/orders/calls?restaurantId=${rId}`)
             ]);
-            // ✅ Only show orders that the Chef has marked "Ready"
-            setReadyOrders(orderRes.data.filter(o => o.status === "Ready"));
+
+            // 🧹 AUTO-ARCHIVE LOGIC: 
+            // We only show "Ready" orders to the waiter. 
+            // "Served" orders stay in the DB for SuperAdmin but disappear from this UI.
+            const pickupReady = orderRes.data.filter(o => o.status === "Ready");
+            
+            setReadyOrders(pickupReady);
             setServiceCalls(callRes.data);
             setLoading(false);
         } catch (e) { setLoading(false); }
@@ -59,8 +64,8 @@ const WaiterDashboard = () => {
             socket.on("connect", () => setIsConnected(true));
             socket.on("disconnect", () => setIsConnected(false));
 
-            // ✅ LISTENING FOR CHEF UPDATES
             socket.on("order-updated", (updatedOrder) => {
+                // If Chef marks it Ready, show popup and add to list
                 if (updatedOrder.status === "Ready") {
                     dingRef.current.play().catch(()=>{});
                     if ("vibrate" in navigator) navigator.vibrate([500, 200, 500]);
@@ -68,7 +73,8 @@ const WaiterDashboard = () => {
                     refreshData(mongoId);
                     setTimeout(() => setNotification(null), 10000);
                 }
-                if (updatedOrder.status === "Served") {
+                // If any order is marked "Served", remove it from the Waiter's view immediately
+                if (updatedOrder.status === "Served" || updatedOrder.status === "SERVED") {
                     setReadyOrders(prev => prev.filter(o => o._id !== updatedOrder._id));
                 }
             });
@@ -79,15 +85,20 @@ const WaiterDashboard = () => {
                 setServiceCalls(prev => [newCall, ...prev]);
             });
 
+            // 📢 CEO GLOBAL BROADCAST
+            socket.on("global-broadcast", (data) => {
+                alert(`📢 SYSTEM MESSAGE: ${data.title}\n\n${data.message}`);
+            });
+
             return () => socket.disconnect();
         }
     }, [mongoId]);
 
     const handleServe = async (orderId) => {
-        // Optimistic UI update
+        // Optimistic UI update: Remove from list immediately
         setReadyOrders(prev => prev.filter(o => o._id !== orderId));
         try { 
-            // ✅ Mark as Served so it disappears from Chef screen too
+            // Update status to Served. This "Archives" it from the dashboard.
             await axios.put(`${API_BASE}/orders/${orderId}`, { status: "Served" }); 
         } 
         catch (e) { refreshData(mongoId); }
@@ -97,7 +108,23 @@ const WaiterDashboard = () => {
 
     return (
         <div style={styles.container}>
-            {/* 🚨 ORDER READY POPUP (Triggered by Chef) */}
+            
+            {/* 🚨 TOP CALL NOTIFICATIONS */}
+            <div style={styles.callNotificationWrapper}>
+                {serviceCalls.map(call => (
+                    <div key={call._id} style={styles.alertCard} className="pulse-top">
+                        <div style={styles.alertContent}>
+                            <span style={styles.tableBadge}>T-{call.tableNumber}</span>
+                            <span style={styles.alertMsg}>ASSISTANCE REQUIRED</span>
+                        </div>
+                        <button onClick={() => setServiceCalls(prev => prev.filter(c => c._id !== call._id))} style={styles.checkBtn}>
+                            <FaCheck/>
+                        </button>
+                    </div>
+                ))}
+            </div>
+
+            {/* 🚨 PICKUP POPUP */}
             {notification && (
                 <div style={styles.popupOverlay}>
                     <div style={styles.popupCard} className="slide-up">
@@ -129,18 +156,7 @@ const WaiterDashboard = () => {
                 </div>
             </header>
 
-            {/* SECTION 1: CUSTOMER SERVICE CALLS */}
-            <div style={styles.section}>
-                <h3 style={styles.sectionTitle}>TABLE ASSISTANCE ({serviceCalls.length})</h3>
-                {serviceCalls.map(call => (
-                    <div key={call._id} style={styles.alertCard} className="pulse">
-                        <div style={styles.alertContent}><span style={styles.tableBadge}>T-{call.tableNumber}</span><span style={styles.alertMsg}>NEEDS HELP</span></div>
-                        <button onClick={() => setServiceCalls(prev => prev.filter(c => c._id !== call._id))} style={styles.checkBtn}><FaCheck/></button>
-                    </div>
-                ))}
-            </div>
-
-            {/* SECTION 2: PICKUP LIST (Synced with Chef) */}
+            {/* PICKUP LIST */}
             <div style={styles.section}>
                 <h3 style={styles.sectionTitle}>READY FOR DELIVERY ({readyOrders.length})</h3>
                 {readyOrders.length === 0 ? (
@@ -165,13 +181,22 @@ const WaiterDashboard = () => {
                     ))
                 )}
             </div>
-            <style>{`.spin { animation: spin 1s linear infinite; } @keyframes spin { 100% { transform: rotate(360deg); } } .pulse { animation: pulse-red 1.5s infinite; } @keyframes pulse-red { 0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); } 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } } .slide-up { animation: slideUp 0.3s ease-out; } @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }`}</style>
+
+            <style>{`
+                .spin { animation: spin 1s linear infinite; } 
+                @keyframes spin { 100% { transform: rotate(360deg); } } 
+                .pulse-top { animation: pulse-top-red 1s infinite alternate; } 
+                @keyframes pulse-top-red { from { background-color: #ef4444; transform: translateY(0); } to { background-color: #dc2626; transform: translateY(3px); } } 
+                .slide-up { animation: slideUp 0.3s ease-out; } 
+                @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+            `}</style>
         </div>
     );
 };
 
 const styles = {
     container: { minHeight: "100vh", background: "#050505", color: "white", padding: "15px", fontFamily: "Inter, sans-serif" },
+    callNotificationWrapper: { position: 'fixed', top: '10px', left: '50%', transform: 'translateX(-50%)', zIndex: 1100, width: '90%', maxWidth: '400px' },
     center: { height: "100vh", display: 'flex', justifyContent: 'center', alignItems: 'center' },
     header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom:'1px solid #222', paddingBottom:'10px' },
     brand: { display: 'flex', alignItems: 'center', gap: '10px' },
@@ -180,7 +205,7 @@ const styles = {
     iconBtn: { background:'#222', border:'none', color:'white', borderRadius:'8px', padding:'8px' },
     status: { background:'#1a1a1a', padding:'8px', borderRadius:'8px' },
     sectionTitle: { fontSize: '11px', color: '#f97316', fontWeight: 'bold', marginBottom: '15px', textTransform:'uppercase', letterSpacing:'1px' },
-    alertCard: { background: '#ef4444', padding: '12px', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom:'10px' },
+    alertCard: { background: '#ef4444', padding: '12px', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom:'10px', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.5)' },
     alertContent: { display:'flex', alignItems:'center', gap:'10px' },
     tableBadge: { background:'white', color:'#ef4444', fontWeight:'900', padding:'4px 8px', borderRadius:'6px' },
     alertMsg: { fontWeight:'bold', fontSize:'12px' },

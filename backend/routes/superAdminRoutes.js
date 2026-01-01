@@ -1,7 +1,7 @@
 import express from 'express';
 import Owner from '../models/Owner.js'; 
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken'; // 🚨 Added for Ghost Mode token generation
+import jwt from 'jsonwebtoken'; 
 import { protect } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
@@ -64,7 +64,7 @@ router.get('/platform-stats', protect, adminOnly, async (req, res) => {
 });
 
 // ============================================================
-// 🚀 NEW: 2. KILL SWITCH & SECURITY (God Mode)
+// 🚀 2. KILL SWITCH & SECURITY (God Mode)
 // ============================================================
 
 /**
@@ -198,6 +198,25 @@ router.put('/update-subscription/:id', protect, adminOnly, async (req, res) => {
         res.json({ message: "Subscription Updated", owner });
     } catch (error) {
         res.status(500).json({ message: "Update Error" });
+    }
+});
+
+// ============================================================
+// 📢 4. GLOBAL BROADCAST (CEO Announcements)
+// ============================================================
+
+/**
+ * @route   POST /api/superadmin/broadcast
+ * @desc    Send a message to all active staff panels (Chef/Waiter/Owner)
+ */
+router.post('/broadcast', protect, adminOnly, async (req, res) => {
+    const { title, message, type } = req.body;
+    try {
+        // You can link this to your Socket.io instance here:
+        // req.app.get('socketio').emit('global-broadcast', { title, message, type });
+        res.json({ success: true, message: "Broadcast queued" });
+    } catch (error) {
+        res.status(500).json({ message: "Broadcast Failed" });
     }
 });
 

@@ -22,6 +22,7 @@ const ChefDashboard = () => {
     const [isMuted, setIsMuted] = useState(false);
     const [activeTab, setActiveTab] = useState("orders");
     const [mongoId, setMongoId] = useState(null);
+    const [socket, setSocket] = useState(null); // 🟢 Store socket in state
 
     const audioRef = useRef(new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"));
     const callSound = useRef(new Audio("https://assets.mixkit.co/active_storage/sfx/2190/2190-preview.mp3"));
@@ -63,7 +64,7 @@ const ChefDashboard = () => {
                 axios.get(`${API_BASE}/dishes?restaurantId=${rId}`)
             ]);
             // ✅ CHEF sees everything except what is already SERVED by the waiter
-            const active = orderRes.data.filter(o => o.status !== "SERVED");
+            const active = orderRes.data.filter(o => o.status !== "SERVED" && o.status !== "Served");
             setOrders(active.sort((a,b) => new Date(a.createdAt) - new Date(b.createdAt)));
             setDishes(dishRes.data);
         } catch (e) { console.error("Sync Failed", e); }
@@ -71,26 +72,31 @@ const ChefDashboard = () => {
 
     useEffect(() => {
         if(isAuthenticated && mongoId) {
-            const socket = io(SERVER_URL);
-            socket.emit("join-restaurant", mongoId);
+            const newSocket = io(SERVER_URL);
+            setSocket(newSocket);
+            newSocket.emit("join-restaurant", mongoId);
 
-            socket.on("new-order", (newOrder) => {
+            newSocket.on("new-order", (newOrder) => {
                 if (!isMuted) audioRef.current.play().catch(()=>{});
                 fetchData(mongoId);
             });
 
-            socket.on("order-updated", () => fetchData(mongoId));
+            newSocket.on("order-updated", () => fetchData(mongoId));
 
-            socket.on("new-waiter-call", (callData) => {
+            newSocket.on("new-waiter-call", (callData) => {
                 if (!isMuted) callSound.current.play().catch(()=>{});
                 setServiceCalls(prev => [callData, ...prev]);
             });
 
-            return () => socket.disconnect();
+            // 📢 LISTEN FOR GLOBAL CEO BROADCASTS
+            newSocket.on("global-broadcast", (data) => {
+                alert(`📢 BROADCAST: ${data.title}\n${data.message}`);
+            });
+
+            return () => newSocket.disconnect();
         }
     }, [isAuthenticated, mongoId, isMuted]);
 
-    // ✅ FIXED: Chef advances status, but ONLY the waiter can finish the order
     const advanceOrderStatus = async (order) => {
         let nextStatus = "";
         if (order.status === "Pending" || order.status === "PLACED") nextStatus = "Cooking";
@@ -106,7 +112,14 @@ const ChefDashboard = () => {
             // API Update
             await axios.put(`${API_BASE}/orders/${order._id}`, { status: nextStatus });
             
-            // ✅ If marked READY, the backend socket will automatically alert the Waiter
+            // ✅ EMIT TO WAITER: If marked READY, specifically tell the Waiter panel
+            if (nextStatus === "Ready" && socket) {
+                socket.emit("chef-ready-alert", { 
+                    restaurantId: mongoId, 
+                    tableNum: order.tableNum,
+                    orderId: order._id 
+                });
+            }
         } catch (error) { fetchData(mongoId); }
     };
 
@@ -192,7 +205,9 @@ const ChefDashboard = () => {
                                 </div>
                                 <div style={styles.actionContainer}>
                                     {order.status === "Ready" ? (
-                                        <p style={{textAlign:'center', color:'#22c55e', fontSize:'12px', fontWeight:'900'}}>WAITING FOR WAITER...</p>
+                                        <div style={styles.readyIndicator}>
+                                            <FaCheck /> WAITING FOR WAITER
+                                        </div>
                                     ) : (
                                         <button onClick={() => advanceOrderStatus(order)} style={{
                                             ...styles.actionBtn, 
@@ -251,6 +266,7 @@ const styles = {
     itemName: { fontSize: '15px' },
     actionContainer: { padding: '12px' },
     actionBtn: { width: '100%', border: 'none', padding: '12px', borderRadius: '8px', fontWeight: '900' },
+    readyIndicator: { textAlign: 'center', color: '#22c55e', fontSize: '12px', fontWeight: '900', background: 'rgba(34, 197, 94, 0.1)', padding: '10px', borderRadius: '8px', border: '1px dashed #22c55e' },
     stockCard: { background: '#111', padding: '12px', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border:'1px solid #222' },
     stockBtn: { padding: '6px 12px', borderRadius: '6px', border: 'none', color: 'white', fontWeight: 'bold' },
     emptyState: { gridColumn: '1/-1', textAlign: 'center', padding: '50px', color:'#666' },

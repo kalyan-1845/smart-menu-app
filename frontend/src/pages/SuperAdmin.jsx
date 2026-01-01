@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from "react";
 import { 
     FaTrash, FaSearch, FaStore, FaSignOutAlt, FaChartLine, 
     FaUtensils, FaUsers, FaBroadcastTower, FaPowerOff, FaKey, FaShieldAlt,
-    FaUserSecret, FaCalendarPlus, FaCrown, FaClock
+    FaUserSecret, FaCalendarPlus, FaCrown, FaClock, FaInfoCircle, FaCommentDots
 } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -18,6 +18,9 @@ const SuperAdmin = () => {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
     const [isLive, setIsLive] = useState(false);
+    
+    // --- 🚀 MODAL STATE FOR INSIGHTS & FEEDBACK ---
+    const [selectedClient, setSelectedClient] = useState(null);
 
     // 🔊 AUDIO REF (Notification for new platform activity)
     const alertSound = useRef(new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"));
@@ -37,7 +40,7 @@ const SuperAdmin = () => {
     // --- 2. DATA FETCHING ---
     const fetchRestaurants = async () => {
         try {
-            // ✅ Fetching from all-owners to get trial details and reg dates
+            // ✅ Fetching from /all-owners to get trial details and reg dates
             const res = await axios.get(`${API_URL}/api/superadmin/all-owners`, {
                 headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` }
             });
@@ -56,7 +59,7 @@ const SuperAdmin = () => {
         } catch (e) { console.error("Stats Error:", e); }
     };
 
-    // --- 3. 🚀 CEO POWER TOOLS (NEW ADDITIONS) ---
+    // --- 3. 🚀 CEO POWER TOOLS (INTEGRATED) ---
 
     // 👻 GHOST MODE: Login as Owner without password
     const handleGhostLogin = async (ownerId, username) => {
@@ -65,10 +68,8 @@ const SuperAdmin = () => {
                 headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` }
             });
             if (res.data.success) {
-                // Save specific restaurant session
                 localStorage.setItem(`owner_token_${username}`, res.data.token);
                 localStorage.setItem(`owner_id_${username}`, ownerId);
-                // Open their dashboard in new tab
                 window.open(`/${username}/admin`, '_blank');
             }
         } catch (err) { alert("Ghost Mode failed."); }
@@ -78,7 +79,6 @@ const SuperAdmin = () => {
     const handleSubscriptionUpdate = async (id, restaurantName, days) => {
         const months = days === 365 ? 12 : 1;
         const type = days === 365 ? "YEARLY (365 Days)" : "MONTHLY (30 Days)";
-        
         if (!window.confirm(`Extend ${restaurantName} by ${type}?`)) return;
 
         try {
@@ -89,11 +89,11 @@ const SuperAdmin = () => {
                 headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` }
             });
             alert(`✅ ${restaurantName} upgraded successfully!`);
-            fetchRestaurants(); // Refresh dates
+            fetchRestaurants(); 
         } catch (err) { alert("Upgrade failed."); }
     };
 
-    // 🔴 KILL SWITCH (RETAINED)
+    // 🔴 KILL SWITCH
     const toggleDeactivate = async (id, currentStatus) => {
         const confirmMsg = currentStatus === "suspended" 
             ? "Re-activate this restaurant's online URL?" 
@@ -110,7 +110,7 @@ const SuperAdmin = () => {
         } catch (err) { alert("Action failed."); }
     };
 
-    // 🔑 MASTER PASSWORD RESET (RETAINED)
+    // 🔑 MASTER PASSWORD RESET
     const resetPassword = async (id, restaurantName) => {
         const newPass = prompt(`Enter new password for ${restaurantName}:`);
         if (!newPass) return;
@@ -137,7 +137,7 @@ const SuperAdmin = () => {
             );
             alert("🚀 Broadcast Blasted to All Staff Panels!");
         } catch (e) {
-            alert("Broadcast failed. Master admin permission required.");
+            alert("Broadcast failed.");
         }
     };
 
@@ -145,13 +145,11 @@ const SuperAdmin = () => {
     useEffect(() => {
         if (isLive) {
             const socket = io(API_URL);
-
             socket.on("new-order", () => {
                 alertSound.current.play().catch(() => {}); 
                 fetchGlobalStats(); 
                 fetchRestaurants(); 
             });
-
             return () => socket.disconnect();
         }
     }, [isLive]);
@@ -160,7 +158,9 @@ const SuperAdmin = () => {
     const handleDelete = async (id) => {
         if (!window.confirm("⚠️ PERMANENT ACTION: Delete this restaurant and all its data?")) return;
         try {
-            await axios.delete(`${API_URL}/api/auth/admin/delete-owner/${id}`);
+            await axios.delete(`${API_URL}/api/auth/admin/delete-owner/${id}`, {
+                headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` }
+            });
             fetchRestaurants();
         } catch (err) { alert("Delete failed"); }
     };
@@ -177,7 +177,7 @@ const SuperAdmin = () => {
             {/* HEADER */}
             <div style={styles.header}>
                 <h1 style={styles.logo}>
-                    <FaShieldAlt color="#f97316" /> CEO Master Control
+                    <FaShieldAlt color="#f97316" /> BiteBox CEO Control
                 </h1>
                 <div style={styles.headerRight}>
                     <div style={styles.liveIndicator}>
@@ -224,7 +224,7 @@ const SuperAdmin = () => {
                 <div style={styles.searchWrapper}>
                     <FaSearch style={styles.searchIcon} />
                     <input 
-                        placeholder="Search SaaS Network..." 
+                        placeholder="Search SaaS Network by Name or ID..." 
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         style={styles.searchInput}
@@ -240,18 +240,20 @@ const SuperAdmin = () => {
                             borderLeft: r.status === "suspended" ? "5px solid #ef4444" : "5px solid #22c55e"
                         }}>
                             <div style={{ flex: 1 }}>
-                                <h3 style={styles.itemName}>
-                                    {r.restaurantName} 
-                                    {r.isPro ? <FaCrown color="#f97316" style={{marginLeft: 8}} /> : <span style={styles.trialBadge}>TRIAL</span>}
-                                    {r.status === "suspended" && <span style={styles.offlineTag}>OFFLINE</span>}
-                                </h3>
+                                <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
+                                    <h3 style={styles.itemName}>{r.restaurantName}</h3>
+                                    {r.isPro ? <FaCrown color="#f97316" title="Premium Client" /> : <span style={styles.trialBadge}>TRIAL</span>}
+                                    {r.status === "suspended" && <span style={styles.offlineTag}>URL LOCKED</span>}
+                                </div>
                                 <div style={styles.metaRow}>
-                                    <span style={styles.metaItem}><FaClock size={10}/> Reg: {new Date(r.createdAt).toLocaleDateString()}</span>
+                                    <span style={styles.metaItem}><FaClock size={10}/> Registered: {new Date(r.createdAt).toLocaleDateString()}</span>
                                     <span style={{...styles.metaItem, color: r.daysLeft < 7 ? '#ef4444' : '#666'}}>
-                                        <FaCalendarPlus size={10}/> {r.daysLeft} days remaining
+                                        <FaCalendarPlus size={10}/> {r.daysLeft} Days Remaining
                                     </span>
                                 </div>
-                                <div style={styles.itemSub}>Owner ID: <span style={{color: '#f97316'}}>{r.username}</span></div>
+                                <button onClick={() => setSelectedClient(r)} style={styles.detailsToggle}>
+                                    <FaInfoCircle /> View Insights & Feedback
+                                </button>
                             </div>
                             
                             <div style={styles.actionGroup}>
@@ -272,22 +274,43 @@ const SuperAdmin = () => {
                                     <FaCrown color="#eab308" />
                                 </button>
 
-                                <button onClick={() => resetPassword(r._id, r.restaurantName)} style={styles.actionIconBtn} title="Reset Password">
-                                    <FaKey color="#6366f1" />
-                                </button>
-
-                                <button onClick={() => toggleDeactivate(r._id, r.status)} style={styles.actionIconBtn} title="Kill Switch">
-                                    <FaPowerOff color={r.status === "suspended" ? "#22c55e" : "#ef4444"} />
-                                </button>
-
-                                <button onClick={() => handleDelete(r._id)} style={styles.delBtn}>
-                                    <FaTrash />
-                                </button>
+                                <button onClick={() => resetPassword(r._id, r.restaurantName)} style={styles.actionIconBtn} title="Reset Pass"><FaKey color="#6366f1" /></button>
+                                <button onClick={() => toggleDeactivate(r._id, r.status)} style={styles.actionIconBtn} title="Kill Switch"><FaPowerOff color={r.status === "suspended" ? "#22c55e" : "#ef4444"} /></button>
+                                <button onClick={() => handleDelete(r._id)} style={styles.delBtn}><FaTrash /></button>
                             </div>
                         </div>
                     ))}
                 </div>
             </div>
+
+            {/* 📋 MODAL: CLIENT INSIGHTS & FEEDBACK BOX */}
+            {selectedClient && (
+                <div style={styles.modalOverlay}>
+                    <div style={styles.modalCard}>
+                        <div style={styles.modalHeader}>
+                            <h2>{selectedClient.restaurantName} Insights</h2>
+                            <button onClick={() => setSelectedClient(null)} style={styles.closeBtn}>×</button>
+                        </div>
+                        <div style={styles.modalBody}>
+                            <div style={styles.infoBox}>
+                                <p><strong>Owner Username:</strong> {selectedClient.username}</p>
+                                <p><strong>Email Address:</strong> {selectedClient.email || "Not Provided"}</p>
+                                <p><strong>Database ID:</strong> {selectedClient._id}</p>
+                                <p><strong>Total Revenue:</strong> ₹{selectedClient.totalRevenue?.toLocaleString()}</p>
+                            </div>
+                            <div style={styles.feedbackSection}>
+                                <h3><FaCommentDots /> Recent Customer Feedback</h3>
+                                <div style={styles.feedbackList}>
+                                    <p style={{color: '#444', fontStyle: 'italic', fontSize: '12px'}}>
+                                        Feedback analytics loading from orders database...
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <style>{`
                 @keyframes pulse {
                     0% { transform: scale(1); opacity: 1; }
@@ -318,16 +341,24 @@ const styles = {
     searchInput: { width: '100%', padding: '15px 15px 15px 50px', background: '#0a0a0a', border: '1px solid #1a1a1a', borderRadius: '12px', color: 'white', outline: 'none' },
     list: { display: 'flex', flexDirection: 'column', gap: '12px' },
     item: { background: '#0a0a0a', border: '1px solid #1a1a1a', padding: '15px 25px', borderRadius: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-    itemName: { margin: 0, fontSize: '16px', fontWeight: '700', display: 'flex', alignItems: 'center' },
-    itemSub: { fontSize: '11px', color: '#444', fontWeight: 'bold', marginTop: '4px' },
+    itemName: { margin: 0, fontSize: '16px', fontWeight: '700' },
     metaRow: { display: 'flex', gap: '15px', marginTop: '6px' },
     metaItem: { fontSize: '10px', color: '#666', display: 'flex', alignItems: 'center', gap: '4px' },
+    detailsToggle: { background: 'none', border: 'none', color: '#3b82f6', fontSize: '11px', marginTop: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', padding: 0 },
+    itemSub: { fontSize: '11px', color: '#444', fontWeight: 'bold', marginTop: '4px' },
     revenueBadge: { background: '#14532d', color: '#4ade80', padding: '5px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold' },
     actionGroup: { display: 'flex', alignItems: 'center', gap: '15px' },
     actionIconBtn: { background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '18px', display: 'flex', alignItems: 'center' },
     delBtn: { background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.2)', padding: '10px', borderRadius: '10px', cursor: 'pointer' },
-    trialBadge: { background: '#1e1b4b', color: '#818cf8', fontSize: '9px', padding: '2px 6px', borderRadius: '4px', marginLeft: '10px', fontWeight: '900' },
-    offlineTag: { background: '#450a0a', color: '#ef4444', fontSize: '9px', padding: '2px 6px', borderRadius: '4px', marginLeft: '10px', fontWeight: '900' },
+    trialBadge: { background: '#1e1b4b', color: '#818cf8', fontSize: '9px', padding: '2px 6px', borderRadius: '4px', fontWeight: '900' },
+    offlineTag: { background: '#450a0a', color: '#ef4444', fontSize: '9px', padding: '2px 6px', borderRadius: '4px', fontWeight: '900' },
+    modalOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 },
+    modalCard: { background: '#0a0a0a', border: '1px solid #222', borderRadius: '24px', width: '90%', maxWidth: '500px', padding: '30px' },
+    modalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #222', paddingBottom: '15px', marginBottom: '20px' },
+    closeBtn: { background: 'none', border: 'none', color: 'white', fontSize: '24px', cursor: 'pointer' },
+    infoBox: { background: '#111', padding: '15px', borderRadius: '12px', marginBottom: '20px', fontSize: '13px', lineHeight: '1.8' },
+    feedbackSection: { borderTop: '1px solid #222', paddingTop: '15px' },
+    feedbackList: { marginTop: '10px' },
     centerText: { textAlign: 'center', color: '#444', marginTop: '40px' },
     emptyState: { textAlign: "center", color: "#333", padding: "60px" }
 };

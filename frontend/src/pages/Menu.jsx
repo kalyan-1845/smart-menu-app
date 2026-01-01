@@ -46,13 +46,9 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum }) => {
                     signal: controller.signal
                 });
                 
-                // 🛡️ CHECK STATUS FROM API RESPONSE
-                // This assumes your backend returns { dishes: [], status: "active" }
-                // If your backend returns an array directly, you may need a separate "status" fetch or check
                 if (res.data.status === "suspended") {
                     setIsSuspended(true);
                 } else {
-                    // Handle if backend returns array directly or inside an object
                     const dishData = Array.isArray(res.data) ? res.data : (res.data.dishes || []);
                     setDishes(dishData);
                     setFilteredDishes(dishData);
@@ -62,8 +58,6 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum }) => {
             } catch (err) {
                 if (axios.isCancel(err)) return;
                 console.error("Fetch Error:", err);
-                
-                // 🚨 If backend returns 403 or specific suspended message
                 if (err.response?.status === 403) {
                     setIsSuspended(true);
                 } else {
@@ -101,7 +95,7 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum }) => {
 
     if (loading) return <LoadingSpinner />;
 
-    // 🚫 KILL SWITCH VIEW: If suspended, block the entire menu
+    // 🚫 KILL SWITCH VIEW
     if (isSuspended) return (
         <div style={styles.center}>
             <div style={{textAlign:'center', padding: '40px'}}>
@@ -130,6 +124,15 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum }) => {
 
     return (
         <div style={styles.container}>
+            {/* 🚩 TOP SLOW MARQUEE BAR */}
+            <div style={styles.marqueeWrapper}>
+                <div style={styles.marqueeContent}>
+                    <span>JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • </span>
+                    {/* Secondary span for seamless looping */}
+                    <span>JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • </span>
+                </div>
+            </div>
+
             {/* HERO HEADER */}
             <div style={styles.hero}>
                 <div style={styles.heroContent}>
@@ -229,12 +232,36 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum }) => {
                     </Link>
                 </div>
             )}
+
+            <style>{`
+                @keyframes marquee {
+                    0% { transform: translateX(0); }
+                    100% { transform: translateX(-50%); }
+                }
+            `}</style>
         </div>
     );
 };
 
 const styles = {
     container: { minHeight: "100vh", background: "#09090b", color: "white", paddingBottom: "100px", fontFamily: "'Inter', sans-serif" },
+    marqueeWrapper: { 
+        background: "#f97316", 
+        padding: "8px 0", 
+        overflow: "hidden", 
+        whiteSpace: "nowrap", 
+        borderBottom: "1px solid #ea580c",
+        boxShadow: "0 0 10px rgba(249, 115, 22, 0.2)"
+    },
+    marqueeContent: {
+        display: "flex",
+        width: "max-content",
+        animation: "marquee 20s linear infinite", // Slower speed (20 seconds)
+        fontSize: "11px",
+        fontWeight: "900",
+        color: "#fff",
+        letterSpacing: "3px"
+    },
     center: { height: "100vh", display: "flex", justifyContent: "center", alignItems: "center", background: "#09090b" },
     retryBtn: { marginTop: 20, padding: "10px 20px", background: "#f97316", border: "none", color: "white", borderRadius: 8, cursor: "pointer" },
     hero: { padding: "20px 20px 10px", background: "linear-gradient(180deg, #18181b 0%, #09090b 100%)", borderBottom: '1px solid #27272a' },
