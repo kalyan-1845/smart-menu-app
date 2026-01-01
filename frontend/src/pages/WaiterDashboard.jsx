@@ -19,6 +19,26 @@ const WaiterDashboard = () => {
 
     const dingRef = useRef(new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"));
 
+    // ✅ AUTOMATIC REFRESH ON SITE LOAD / MOBILE UNLOCK
+    useEffect(() => {
+        const handleEntryRefresh = () => {
+            // Trigger refresh whenever the app becomes visible (unlocked screen or tab switch)
+            if (document.visibilityState === 'visible' && mongoId) {
+                refreshData(mongoId);
+            }
+        };
+
+        // Standard load event
+        window.addEventListener('load', handleEntryRefresh);
+        // Visibility API for screen lock/unlock and tab switching
+        document.addEventListener("visibilitychange", handleEntryRefresh);
+
+        return () => {
+            window.removeEventListener('load', handleEntryRefresh);
+            document.removeEventListener("visibilitychange", handleEntryRefresh);
+        };
+    }, [mongoId]);
+
     const fetchRestaurantId = async () => {
         try {
             const res = await axios.get(`${API_BASE}/auth/restaurant/${id}`); 
@@ -37,7 +57,10 @@ const WaiterDashboard = () => {
                 axios.get(`${API_BASE}/orders?restaurantId=${rId}`),
                 axios.get(`${API_BASE}/orders/calls?restaurantId=${rId}`)
             ]);
-            const pickupReady = orderRes.data.filter(o => o.status === "Ready");
+            // ✅ NORMALIZATION FIX: Look for any variation of 'ready'
+            const pickupReady = orderRes.data.filter(o => 
+                o.status && o.status.toLowerCase() === "ready"
+            );
             setReadyOrders(pickupReady);
             setServiceCalls(callRes.data);
             setLoading(false);
@@ -79,7 +102,7 @@ const WaiterDashboard = () => {
                 refreshData(mongoId);
             });
 
-            // ✅ 2. CHEF READY SIGNAL (The Alert)
+            // ✅ 2. CHEF READY SIGNAL (Crucial Fix for your Video issue)
             socket.on("chef-ready-alert", (data) => {
                 if ("vibrate" in navigator) navigator.vibrate([500, 200, 500]);
                 dingRef.current.play().catch(()=>{});
@@ -88,7 +111,7 @@ const WaiterDashboard = () => {
 
                 axios.get(`${API_BASE}/orders/${data.orderId}`).then(res => {
                     setNotification(res.data);
-                    refreshData(mongoId);
+                    refreshData(mongoId); // Force list refresh so card appears
                 });
                 setTimeout(() => setNotification(null), 15000);
             });
