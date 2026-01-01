@@ -94,7 +94,7 @@ const RestaurantAdmin = () => {
     const [dishes, setDishes] = useState([]);
     const [inboxOrders, setInboxOrders] = useState([]);
     const [ownerEmail, setOwnerEmail] = useState("");
-    const [hasNewOrder, setHasNewOrder] = useState(false); // 🚨 INDICATOR STATE
+    const [hasNewOrder, setHasNewOrder] = useState(false); 
     const [formData, setFormData] = useState({ name: "", price: "", category: "Starters", image: "" });
     const [qrRange, setQrRange] = useState({ start: 1, end: 5 });
 
@@ -106,6 +106,21 @@ const RestaurantAdmin = () => {
             setInboxOrders(res.data);
         } catch (err) { console.error("Inbox Error", err); }
     };
+
+    // --- ✅ UPDATED LOGIN: SUPPORT FOR SUPERADMIN MASTER LOGIN ---
+    useEffect(() => {
+        const checkGhostSession = () => {
+            const ghostToken = localStorage.getItem(`owner_token_${id}`);
+            const ghostId = localStorage.getItem(`owner_id_${id}`);
+            if (ghostToken && ghostId) {
+                setIsAuthenticated(true);
+                fetchData(ghostToken, ghostId);
+                fetchInbox();
+                // Optionally: fetch restaurant profile to set name/isPro
+            }
+        };
+        checkGhostSession();
+    }, [id]);
 
     const handleLogin = async (e) => {
         e.preventDefault();
@@ -131,6 +146,32 @@ const RestaurantAdmin = () => {
         } catch (error) { console.error(error); }
     };
 
+    const handleAddDish = async (e) => {
+        e.preventDefault();
+        const token = localStorage.getItem(`owner_token_${id}`);
+        const mongoId = localStorage.getItem(`owner_id_${id}`);
+        try {
+            await axios.post(`${API_BASE}/dishes`, { ...formData, restaurantId: mongoId }, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setFormData({ name: "", price: "", category: "Starters", image: "" });
+            fetchData(token, mongoId);
+            alert("Dish Added!");
+        } catch (err) { alert("Error adding dish"); }
+    };
+
+    const handleDeleteDish = async (dishId) => {
+        if (!window.confirm("Delete this dish?")) return;
+        const token = localStorage.getItem(`owner_token_${id}`);
+        const mongoId = localStorage.getItem(`owner_id_${id}`);
+        try {
+            await axios.delete(`${API_BASE}/dishes/${dishId}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            fetchData(token, mongoId);
+        } catch (err) { alert("Delete failed"); }
+    };
+
     useEffect(() => {
         if (isAuthenticated) {
             const mongoId = localStorage.getItem(`owner_id_${id}`);
@@ -139,12 +180,17 @@ const RestaurantAdmin = () => {
             
             socket.on("new-order", () => {
                 fetchInbox();
-                if (activeTab !== "inbox") setHasNewOrder(true); // 🚨 TRIGGER INDICATOR
+                if (activeTab !== "inbox") setHasNewOrder(true); 
             });
             
             socket.on("new-waiter-call", (data) => {
                 new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3").play().catch(() => {});
                 setActiveAlerts(prev => [...prev, data]);
+            });
+
+            // --- 📢 LISTENER FOR GLOBAL CEO BROADCASTS ---
+            socket.on("global-broadcast", (data) => {
+                alert(`📢 ADMIN BROADCAST: ${data.title}\n\n${data.message}`);
             });
 
             const interval = setInterval(fetchInbox, 15000);
@@ -188,7 +234,11 @@ const RestaurantAdmin = () => {
         printWindow.document.close();
     };
 
-    const handleLogout = () => { setIsAuthenticated(false); localStorage.removeItem(`owner_token_${id}`); };
+    const handleLogout = () => { 
+        setIsAuthenticated(false); 
+        localStorage.removeItem(`owner_token_${id}`); 
+        localStorage.removeItem(`owner_id_${id}`);
+    };
 
     if (!isAuthenticated) return (
         <div className="admin-container">
