@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import axios from "axios";
-import { FaSearch, FaPlus, FaMinus, FaStar, FaUtensils, FaArrowRight } from "react-icons/fa";
+import { FaSearch, FaPlus, FaMinus, FaStar, FaUtensils, FaArrowRight, FaLock } from "react-icons/fa";
 import LoadingSpinner from "../components/LoadingSpinner";
 
 // 🔗 SMART API CONNECTION
@@ -21,6 +21,9 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum }) => {
     const [searchTerm, setSearchTerm] = useState("");
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(false);
+    
+    // 🔴 NEW: Status state for Kill Switch
+    const [isSuspended, setIsSuspended] = useState(false);
 
     const DEFAULT_IMG = "https://placehold.co/400x300/222/orange?text=Yummy";
 
@@ -31,7 +34,7 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum }) => {
         if (setTableNum && currentTable) setTableNum(currentTable);
     }, [currentRestId, currentTable]);
 
-    // 2. ✅ FETCH MENU
+    // 2. ✅ FETCH MENU & CHECK STATUS
     useEffect(() => {
         if (!currentRestId) return;
         const controller = new AbortController();
@@ -42,13 +45,30 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum }) => {
                 const res = await axios.get(`${API_BASE}/dishes?restaurantId=${currentRestId}`, {
                     signal: controller.signal
                 });
-                setDishes(res.data);
-                setFilteredDishes(res.data);
+                
+                // 🛡️ CHECK STATUS FROM API RESPONSE
+                // This assumes your backend returns { dishes: [], status: "active" }
+                // If your backend returns an array directly, you may need a separate "status" fetch or check
+                if (res.data.status === "suspended") {
+                    setIsSuspended(true);
+                } else {
+                    // Handle if backend returns array directly or inside an object
+                    const dishData = Array.isArray(res.data) ? res.data : (res.data.dishes || []);
+                    setDishes(dishData);
+                    setFilteredDishes(dishData);
+                }
+                
                 setLoading(false);
             } catch (err) {
                 if (axios.isCancel(err)) return;
                 console.error("Fetch Error:", err);
-                setError(true);
+                
+                // 🚨 If backend returns 403 or specific suspended message
+                if (err.response?.status === 403) {
+                    setIsSuspended(true);
+                } else {
+                    setError(true);
+                }
                 setLoading(false);
             }
         };
@@ -80,6 +100,23 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum }) => {
     };
 
     if (loading) return <LoadingSpinner />;
+
+    // 🚫 KILL SWITCH VIEW: If suspended, block the entire menu
+    if (isSuspended) return (
+        <div style={styles.center}>
+            <div style={{textAlign:'center', padding: '40px'}}>
+                <FaLock size={60} color="#f97316" style={{marginBottom: '20px'}}/>
+                <h1 style={{fontSize: '24px', fontWeight: '900', color: 'white'}}>SERVICE UNAVAILABLE</h1>
+                <p style={{color:'#71717a', marginTop: '10px', lineHeight: '1.6'}}>
+                    This restaurant's digital menu has been temporarily deactivated. <br/>
+                    Please contact the establishment for assistance.
+                </p>
+                <div style={{marginTop: '30px', padding: '15px', border: '1px solid #27272a', borderRadius: '12px', color: '#f97316', fontWeight: 'bold'}}>
+                    Smart Menu Cloud Security
+                </div>
+            </div>
+        </div>
+    );
     
     if (error) return (
         <div style={styles.center}>
@@ -196,7 +233,6 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum }) => {
     );
 };
 
-// 🎨 DARK THEME STYLES (Retained from your previous work)
 const styles = {
     container: { minHeight: "100vh", background: "#09090b", color: "white", paddingBottom: "100px", fontFamily: "'Inter', sans-serif" },
     center: { height: "100vh", display: "flex", justifyContent: "center", alignItems: "center", background: "#09090b" },

@@ -1,7 +1,7 @@
 import express from 'express';
 import Owner from '../models/Owner.js'; 
-// Ensure you have a Payment model created for the ledger logic below
-// import Payment from '../models/Payment.js'; 
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken'; // 🚨 Added for Ghost Mode token generation
 import { protect } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
@@ -25,15 +25,12 @@ const adminOnly = (req, res, next) => {
 
 /**
  * @route   GET /api/superadmin/all-owners
- * @desc    Fetch every restaurant on the platform and calculate their trial status.
- * @access  Master Admin Only
  */
 router.get('/all-owners', protect, adminOnly, async (req, res) => {
     try {
         const owners = await Owner.find({}).select('-password').sort({ createdAt: -1 });
         
         const data = owners.map(owner => {
-            // Calculate how many days are left in the 60-day trial
             const diffTime = new Date(owner.trialEndsAt) - new Date();
             const daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
             return { ...owner._doc, daysLeft };
@@ -47,16 +44,12 @@ router.get('/all-owners', protect, adminOnly, async (req, res) => {
 
 /**
  * @route   GET /api/superadmin/platform-stats
- * @desc    BiteBox Analytics: Revenue tracking and client conversion.
- * @access  Master Admin Only
  */
 router.get('/platform-stats', protect, adminOnly, async (req, res) => {
     try {
         const totalClients = await Owner.countDocuments({});
         const proClients = await Owner.countDocuments({ isPro: true });
         const activeTrials = totalClients - proClients;
-        
-        // MRR (Monthly Recurring Revenue) calculation based on your 999/mo pricing strategy
         const monthlyRecurringRevenue = proClients * 999;
 
         res.json({
@@ -71,21 +64,101 @@ router.get('/platform-stats', protect, adminOnly, async (req, res) => {
 });
 
 // ============================================================
-// 2. SUBSCRIPTION & PAYMENT MANAGEMENT (Manual Onboarding)
+// 🚀 NEW: 2. KILL SWITCH & SECURITY (God Mode)
+// ============================================================
+
+/**
+ * @route   GET /api/superadmin/ghost-login/:id
+ * @desc    👻 GHOST MODE: Generate a login token for any owner.
+ * @access  Master Admin Only
+ */
+router.get('/ghost-login/:id', protect, adminOnly, async (req, res) => {
+    try {
+        const owner = await Owner.findById(req.params.id);
+        if (!owner) return res.status(404).json({ message: "Owner not found" });
+
+        // Generate a standard JWT token for this specific owner
+        const token = jwt.sign(
+            { id: owner._id, username: owner.username }, 
+            process.env.JWT_SECRET, 
+            { expiresIn: '1h' } // Token lasts for 1 hour
+        );
+
+        res.json({
+            success: true,
+            token,
+            username: owner.username,
+            restaurantName: owner.restaurantName
+        });
+    } catch (error) {
+        res.status(500).json({ message: "Ghost Login Failed" });
+    }
+});
+
+/**
+ * @route   PUT /api/superadmin/toggle-status/:id
+ * @desc    🔴 KILL SWITCH: Deactivate public menu URL but keep data safe.
+ * @access  Master Admin Only
+ */
+router.put('/toggle-status/:id', protect, adminOnly, async (req, res) => {
+    try {
+        const owner = await Owner.findById(req.params.id);
+        if (!owner) return res.status(404).json({ message: "Restaurant not found" });
+
+        owner.status = owner.status === 'active' ? 'suspended' : 'active';
+        
+        await owner.save();
+        res.json({ 
+            success: true, 
+            newStatus: owner.status, 
+            message: `Restaurant is now ${owner.status}` 
+        });
+    } catch (error) {
+        res.status(500).json({ message: "Kill Switch Error" });
+    }
+});
+
+/**
+ * @route   PUT /api/superadmin/reset-password/:id
+ * @desc    🔑 MASTER RESET: Change any owner password without knowing the old one.
+ * @access  Master Admin Only
+ */
+router.put('/reset-password/:id', protect, adminOnly, async (req, res) => {
+    try {
+        const { newPassword } = req.body;
+        if (!newPassword || newPassword.length < 4) {
+            return res.status(400).json({ message: "Valid new password required" });
+        }
+
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+        const updatedOwner = await Owner.findByIdAndUpdate(
+            req.params.id,
+            { password: hashedPassword },
+            { new: true }
+        );
+
+        if (!updatedOwner) return res.status(404).json({ message: "Restaurant not found" });
+
+        res.json({ success: true, message: "Password updated successfully" });
+    } catch (error) {
+        res.status(500).json({ message: "Master Reset Error" });
+    }
+});
+
+// ============================================================
+// 3. SUBSCRIPTION & PAYMENT MANAGEMENT (Manual Onboarding)
 // ============================================================
 
 /**
  * @route   PUT /api/superadmin/extend/:id
- * @desc    Quick Extend: Manually add 30 days. Perfect for when a restaurant 
- * pays you cash in person.
- * @access  Master Admin Only
  */
 router.put('/extend/:id', protect, adminOnly, async (req, res) => {
     try {
         const owner = await Owner.findById(req.params.id);
         if (!owner) return res.status(404).json({ message: "Restaurant not found" });
 
-        // Logic to ensure extension starts from today if already expired
         const currentExpiry = new Date(owner.trialEndsAt) > new Date() 
             ? new Date(owner.trialEndsAt) 
             : new Date();
@@ -93,19 +166,8 @@ router.put('/extend/:id', protect, adminOnly, async (req, res) => {
         owner.trialEndsAt = new Date(currentExpiry.getTime() + 30 * 24 * 60 * 60 * 1000);
         owner.isPro = true; 
 
-        // Note: Ensure the Payment model is imported/created to use this ledger logic
-        /*
-        await Payment.create({
-            restaurantId: owner._id,
-            restaurantName: owner.restaurantName,
-            amount: 999, 
-            method: 'Cash/Manual',
-            monthsPaid: 1
-        });
-        */
-
         await owner.save();
-        res.json({ message: "Plan Extended & Cash Payment Logged", owner });
+        res.json({ message: "Plan Extended", owner });
     } catch (error) {
         res.status(500).json({ message: "Extension Error" });
     }
@@ -113,11 +175,10 @@ router.put('/extend/:id', protect, adminOnly, async (req, res) => {
 
 /**
  * @route   PUT /api/superadmin/update-subscription/:id
- * @desc    Flexible update for specific months/amounts (e.g., Annual Plans).
  */
 router.put('/update-subscription/:id', protect, adminOnly, async (req, res) => {
     try {
-        const { isPro, addMonths, amount, method } = req.body;
+        const { isPro, addMonths } = req.body;
         const owner = await Owner.findById(req.params.id);
 
         if (!owner) return res.status(404).json({ message: "Restaurant not found" });
@@ -131,17 +192,6 @@ router.put('/update-subscription/:id', protect, adminOnly, async (req, res) => {
             
             owner.trialEndsAt = new Date(currentExpiry.getTime() + addMonths * 30 * 24 * 60 * 60 * 1000);
             owner.isPro = true; 
-
-            // Record the manual payment in the database
-            /*
-            await Payment.create({
-                restaurantId: owner._id,
-                restaurantName: owner.restaurantName,
-                amount: amount || (addMonths * 999),
-                method: method || 'UPI',
-                monthsPaid: addMonths
-            });
-            */
         }
 
         await owner.save();
