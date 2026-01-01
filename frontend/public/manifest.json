@@ -7,6 +7,15 @@
   "orientation": "portrait",
   "theme_color": "#000000",
   "background_color": "#000000",
+  "categories": ["food", "business", "productivity"],
+  "screenshots": [
+    {
+      "src": "screenshot1.png",
+      "type": "image/png",
+      "sizes": "1080x1920",
+      "form_factor": "narrow"
+    }
+  ],
   "icons": [
     {
       "src": "favicon.ico",

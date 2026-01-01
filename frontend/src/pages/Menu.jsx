@@ -4,6 +4,7 @@ import axios from "axios";
 import { FaSearch, FaPlus, FaMinus, FaStar, FaUtensils, FaArrowRight, FaLock, FaSyncAlt } from "react-icons/fa";
 import LoadingSpinner from "../components/LoadingSpinner";
 
+// Dynamic API Selection: High Speed for Local / Reliable for Production
 const API_BASE = window.location.hostname === "localhost" || window.location.hostname.startsWith("192.168")
     ? "http://localhost:5000/api" 
     : "https://smart-menu-backend-5ge7.onrender.com/api";
@@ -13,6 +14,7 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
     const currentRestId = params.restaurantId || params.id;
     const currentTable = params.table;
 
+    // --- STATE & CACHE ---
     const [dishes, setDishes] = useState(() => {
         const cached = localStorage.getItem(`menu_cache_${currentRestId}`);
         return cached ? JSON.parse(cached) : [];
@@ -28,57 +30,32 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
     const [refreshing, setRefreshing] = useState(false);
     const startY = useRef(0);
 
-    const DEFAULT_IMG = "https://placehold.co/400x300/222/orange?text=Yummy";
+    const DEFAULT_IMG = "https://placehold.co/400x300/222/orange?text=BiteBox";
 
-    // ✅ SUGGESTION: REAL-TIME STOCK INDICATOR (Heartbeat Sync)
-    // Synchronizes dish availability every 15 seconds for 100,000+ members
-    useEffect(() => {
-        if (!currentRestId) return;
-        const stockInterval = setInterval(() => {
-            fetchMenu(true); // Background sync
-        }, 15000); 
-
-        return () => clearInterval(stockInterval);
-    }, [currentRestId]);
-
-    // 🔄 MOBILE AUTO-REFRESH ON RE-ENTRY
-    useEffect(() => {
-        const handleVisibilityChange = () => {
-            if (document.visibilityState === "visible") {
-                fetchMenu(true); 
-            }
-        };
-        document.addEventListener("visibilitychange", handleVisibilityChange);
-        return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
-    }, [currentRestId]);
-
-    useEffect(() => {
-        const lastTable = localStorage.getItem("last_table_scanned");
-        const lastRest = localStorage.getItem("last_rest_scanned");
-        if (lastTable !== currentTable || lastRest !== currentRestId) {
-            if (setCart) setCart([]); 
-            localStorage.setItem("last_table_scanned", currentTable || "");
-            localStorage.setItem("last_rest_scanned", currentRestId || "");
-        }
-    }, [currentRestId, currentTable, setCart]);
-
-    useEffect(() => {
-        if (!currentRestId) return;
-        if (setRestaurantId) setRestaurantId(currentRestId);
-        if (setTableNum && currentTable) setTableNum(currentTable);
-    }, [currentRestId, currentTable]);
-
+    // --- 🔄 FETCH LOGIC (Fixed for Username & MongoDB ID mismatch) ---
     const fetchMenu = async (isManual = false) => {
         if (!currentRestId) return;
         try {
             if (!isManual && dishes.length === 0) setLoading(true);
-            const res = await axios.get(`${API_BASE}/dishes?restaurantId=${currentRestId}`, { timeout: 8000 });
+
+            // 1. Resolve ID: If URL is 'kalyanresto1', resolve to real MongoDB ID first
+            let finalId = currentRestId;
+            if (!currentRestId.match(/^[0-9a-fA-F]{24}$/)) {
+                try {
+                    const resInfo = await axios.get(`${API_BASE}/auth/restaurant/${currentRestId}`);
+                    finalId = resInfo.data._id;
+                } catch (e) { console.error("Identity resolution failed"); }
+            }
+
+            // 2. Fetch using verified MongoDB ID
+            const res = await axios.get(`${API_BASE}/dishes?restaurantId=${finalId}`, { timeout: 8000 });
             
             if (res.data.status === "suspended") {
                 setIsSuspended(true);
             } else {
                 const dishData = Array.isArray(res.data) ? res.data : (res.data.dishes || []);
                 setDishes(dishData);
+                // Update Cache so new Admin items persist
                 localStorage.setItem(`menu_cache_${currentRestId}`, JSON.stringify(dishData));
             }
             setError(false);
@@ -91,8 +68,41 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
         }
     };
 
-    useEffect(() => { fetchMenu(); }, [currentRestId]);
+    // ✅ HEARTBEAT: Sync every 15s so items added in Admin appear without refresh
+    useEffect(() => {
+        fetchMenu();
+        const stockInterval = setInterval(() => fetchMenu(true), 15000); 
+        return () => clearInterval(stockInterval);
+    }, [currentRestId]);
 
+    // 🔄 MOBILE AUTO-REFRESH ON RE-ENTRY
+    useEffect(() => {
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === "visible") fetchMenu(true); 
+        };
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+        return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+    }, [currentRestId]);
+
+    // 🧹 CART AUTO-CLEAN ON NEW TABLE/RESTAURANT
+    useEffect(() => {
+        const lastTable = localStorage.getItem("last_table_scanned");
+        const lastRest = localStorage.getItem("last_rest_scanned");
+        if (lastTable !== currentTable || lastRest !== currentRestId) {
+            if (setCart) setCart([]); 
+            localStorage.setItem("last_table_scanned", currentTable || "");
+            localStorage.setItem("last_rest_scanned", currentRestId || "");
+        }
+    }, [currentRestId, currentTable, setCart]);
+
+    // 📍 SYNC CONTEXT
+    useEffect(() => {
+        if (!currentRestId) return;
+        if (setRestaurantId) setRestaurantId(currentRestId);
+        if (setTableNum && currentTable) setTableNum(currentTable);
+    }, [currentRestId, currentTable]);
+
+    // --- TOUCH HANDLERS ---
     const handleTouchStart = (e) => { if (window.scrollY === 0) startY.current = e.touches[0].pageY; };
     const handleTouchMove = (e) => {
         const diff = e.touches[0].pageY - startY.current;
@@ -108,6 +118,7 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
         addToCart(val === -1 ? {...dish, quantity: -1} : dish);
     };
 
+    // SEARCH & CATEGORY FILTER
     useEffect(() => {
         let result = dishes;
         if (activeCategory !== "All") result = result.filter(d => d.category === activeCategory);
@@ -120,13 +131,7 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
     const categories = ["All", ...new Set(dishes.map(d => d.category))];
 
     if (loading && dishes.length === 0) return <LoadingSpinner />;
-
-    if (isSuspended) return (
-        <div style={styles.center}>
-            <FaLock size={60} color="#f97316"/>
-            <h1 style={{color:'white', marginTop:20}}>SERVICE UNAVAILABLE</h1>
-        </div>
-    );
+    if (isSuspended) return <div style={styles.center}><FaLock size={60} color="#f97316"/><h1 style={{color:'white', marginTop:20}}>SERVICE UNAVAILABLE</h1></div>;
 
     return (
         <div style={styles.container} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}>
@@ -174,12 +179,18 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
 
             <div style={styles.grid}>
                 {filteredDishes.map(dish => {
-                    const item = cart.find(i => i._id === dish._id);
-                    const qty = item ? item.quantity : 0;
+                    const itemInCart = cart.find(i => i._id === dish._id);
+                    const qty = itemInCart ? itemInCart.quantity : 0;
                     return (
                         <div key={dish._id} style={styles.card}>
                             <div style={styles.imgWrapper}>
-                                <img src={dish.image || DEFAULT_IMG} alt={dish.name} style={styles.img} loading="lazy" />
+                                <img 
+                                    src={dish.image || DEFAULT_IMG} 
+                                    alt={dish.name} 
+                                    style={styles.img} 
+                                    loading="lazy" 
+                                    onError={(e) => { e.target.src = DEFAULT_IMG; }}
+                                />
                                 {dish.isAvailable === false && <div style={styles.soldOut}>OUT OF STOCK</div>}
                             </div>
                             <div style={styles.info}>
@@ -224,6 +235,7 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
                 * { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
                 body { overscroll-behavior-y: contain; background: #09090b; }
                 ::-webkit-scrollbar { display: none; }
+                .add-btn:active, .float-bar:active { transform: scale(0.96); transition: 0.1s; }
             `}</style>
         </div>
     );
@@ -256,12 +268,12 @@ const styles = {
     dishTitle: { margin: 0, fontSize: "16px", color: '#fff', fontWeight: "700" },
     price: { color: "#f97316", fontWeight: "900", fontSize: "16px" },
     desc: { color: "#71717a", fontSize: "11px", marginTop: 4, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: '2', WebkitBoxOrient: 'vertical' },
-    addBtn: { width: "80px", padding: "8px", background: "#fff", color: "#000", fontWeight: "900", borderRadius: "10px", border: "none" },
+    addBtn: { width: "80px", padding: "8px", background: "#fff", color: "#000", fontWeight: "900", borderRadius: "10px", border: "none", cursor: 'pointer' },
     counter: { display: "flex", alignItems: "center", justifyContent: "space-between", background: "#f97316", borderRadius: "10px", width: "100px", padding: "2px", boxShadow: "0 0 15px rgba(249, 115, 22, 0.3)" },
     countBtn: { width: "32px", height: "32px", background: "transparent", border: "none", color: "white", display: "flex", alignItems: "center", justifyContent: "center" },
     qtyNum: { fontWeight: "900", color: "white" },
     floatBarContainer: { position: "fixed", bottom: "25px", left: "0", right: "0", padding: "0 20px", zIndex: 100 },
-    floatBar: { background: "#22c55e", padding: "16px 25px", borderRadius: "20px", display: "flex", justifyContent: "space-between", alignItems: "center", textDecoration: "none", boxShadow: "0 15px 35px rgba(34, 197, 94, 0.5)", border: "1px solid rgba(255,255,255,0.25)", transition: "0.3s transform active" },
+    floatBar: { background: "#22c55e", padding: "16px 25px", borderRadius: "20px", display: "flex", justifyContent: "space-between", alignItems: "center", textDecoration: "none", boxShadow: "0 15px 35px rgba(34, 197, 94, 0.5)", border: "1px solid rgba(255,255,255,0.25)" },
     floatInfo: { display: "flex", flexDirection: "column" },
     floatQty: { fontSize: "11px", color: "#052e16", fontWeight: "800" },
     floatPrice: { fontSize: "18px", fontWeight: "900", color: "white" },
