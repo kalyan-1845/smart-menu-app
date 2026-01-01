@@ -2,7 +2,12 @@ import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { useParams, useNavigate } from "react-router-dom";
 import io from "socket.io-client";
-import { FaUserTie, FaBell, FaCheck, FaUtensils, FaSpinner, FaWifi, FaSync, FaTimes, FaConciergeBell, FaTruckLoading, FaShoppingBag } from "react-icons/fa";
+import { 
+    FaUserTie, FaBell, FaCheck, FaUtensils, FaSpinner, 
+    FaSync, FaTimes, FaConciergeBell, FaTruckLoading, 
+    FaHistory, FaClock, FaTrash 
+} from "react-icons/fa";
+import { toast } from "react-hot-toast";
 
 const SERVER_URL = "https://smart-menu-backend-5ge7.onrender.com";
 const API_BASE = `${SERVER_URL}/api`;
@@ -36,7 +41,6 @@ const WaiterDashboard = () => {
 
     const fetchRestaurantId = async () => {
         try {
-            // Use the username 'id' from URL to get the Mongo ObjectId
             const res = await axios.get(`${API_BASE}/auth/restaurant/${id}`); 
             if (res.data && res.data._id) {
                 setMongoId(res.data._id);
@@ -49,9 +53,7 @@ const WaiterDashboard = () => {
     };
 
     const refreshData = async (rId) => {
-        // ✅ CRITICAL FIX: Prevent sending "undefined" to backend which causes 400 error
         if (!rId || rId === "null" || rId === "undefined") return;
-        
         try {
             const [orderRes, callRes] = await Promise.all([
                 axios.get(`${API_BASE}/orders?restaurantId=${rId}`),
@@ -70,12 +72,30 @@ const WaiterDashboard = () => {
         }
     };
 
+    // ✅ DELETE ORDER (Cancellations)
+    const handleDeleteOrder = async (orderId) => {
+        if (!window.confirm("Delete this order? This cannot be undone.")) return;
+        try {
+            await axios.delete(`${API_BASE}/orders/${orderId}`);
+            setReadyOrders(prev => prev.filter(o => o._id !== orderId));
+            toast.success("Order Removed");
+        } catch (e) {
+            toast.error("Delete failed");
+        }
+    };
+
+    // ✅ RESOLVE SERVICE CALL
+    const resolveCall = async (callId) => {
+        setServiceCalls(prev => prev.filter(c => c._id !== callId));
+        try {
+            await axios.delete(`${API_BASE}/orders/calls/${callId}`);
+        } catch (e) { console.error("Sync error"); }
+    };
+
     useEffect(() => {
         const init = async () => {
             const fetchedId = await fetchRestaurantId();
-            if (fetchedId) {
-                refreshData(fetchedId);
-            }
+            if (fetchedId) refreshData(fetchedId);
         };
         init();
     }, [id]);
@@ -108,7 +128,6 @@ const WaiterDashboard = () => {
             socket.on("chef-ready-alert", (data) => {
                 if ("vibrate" in navigator) navigator.vibrate([500, 200, 500]);
                 dingRef.current.play().catch(()=>{});
-                
                 setSystemAlerts(prev => [{ id: Date.now(), table: data.tableNum, type: 'READY', msg: 'ORDER READY FOR PICKUP' }, ...prev]);
 
                 if (data.orderId) {
@@ -127,7 +146,6 @@ const WaiterDashboard = () => {
             });
 
             const interval = setInterval(() => refreshData(mongoId), 30000);
-
             return () => {
                 socket.disconnect();
                 clearInterval(interval);
@@ -140,6 +158,7 @@ const WaiterDashboard = () => {
         try { 
             await axios.put(`${API_BASE}/orders/${orderId}`, { status: "Served" }); 
             refreshData(mongoId);
+            toast.success("Served Successfully!");
         } catch (e) { refreshData(mongoId); }
     };
 
@@ -154,7 +173,7 @@ const WaiterDashboard = () => {
                             <span style={styles.tableBadge}>T-{call.tableNumber}</span>
                             <span style={styles.alertMsg}>ASSISTANCE REQUIRED 🛎️</span>
                         </div>
-                        <button onClick={() => setServiceCalls(prev => prev.filter(c => c._id !== call._id))} style={styles.checkBtn}><FaCheck/></button>
+                        <button onClick={() => resolveCall(call._id)} style={styles.checkBtn}><FaCheck/></button>
                     </div>
                 ))}
                 {systemAlerts.map(alert => (
@@ -196,9 +215,32 @@ const WaiterDashboard = () => {
                 ) : (
                     readyOrders.map(order => (
                         <div key={order._id} style={styles.card}>
-                            <div style={styles.cardHeader}><div style={styles.tableBig}>TABLE {order.tableNum}</div></div>
-                            <div style={styles.items}>{order.items?.map((item, i) => (<div key={i} style={styles.itemRow}><span style={styles.qty}>{item.quantity}x</span><span style={styles.name}>{item.name}</span></div>))}</div>
-                            <button onClick={() => handleServe(order._id)} style={styles.serveBtn}>MARK SERVED</button>
+                            <div style={styles.cardHeader}>
+                                <div style={styles.tableBig}>TABLE {order.tableNum}</div>
+                                <div style={styles.readyBadge}>READY</div>
+                            </div>
+                            
+                            <div style={styles.items}>
+                                {order.customerName && <p style={{margin: '0 0 10px 0', fontSize: '18px', fontWeight: 'bold'}}><span style={{color: '#f97316'}}>1x</span> {order.customerName}</p>}
+                                {order.items?.map((item, i) => (
+                                    <div key={i} style={styles.itemRow}>
+                                        <span style={styles.qty}>{item.quantity}x</span>
+                                        <span style={styles.name}>{item.name}</span>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* ✅ SERVICE HISTORY BOX */}
+                            <div style={styles.historyBox}>
+                                <div style={styles.historyTitle}><FaHistory size={10}/> SERVICE HISTORY</div>
+                                <div style={styles.historyItem}><FaClock size={10}/> Order Placed: {new Date(order.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                                <div style={styles.historyItem}><FaCheck size={10} color="#22c55e"/> Chef Finished Cooking</div>
+                            </div>
+
+                            <div style={{display: 'flex', gap: '10px', marginTop: '15px'}}>
+                                <button onClick={() => handleServe(order._id)} style={styles.serveBtn}><FaCheck style={{marginRight: 8}}/> MARK SERVED</button>
+                                <button onClick={() => handleDeleteOrder(order._id)} style={styles.deleteBtn}><FaTrash /></button>
+                            </div>
                         </div>
                     ))
                 )}
@@ -229,12 +271,18 @@ const styles = {
     tableBadge: { background:'white', color:'#ef4444', fontWeight:'900', padding:'4px 8px', borderRadius:'6px' },
     alertMsg: { fontWeight:'bold', fontSize:'12px' },
     checkBtn: { width: '30px', height: '30px', borderRadius: '50%', border: 'none', background: 'white', color: '#ef4444', display:'flex', alignItems:'center', justifyContent:'center' },
-    card: { background: '#111', borderRadius: '16px', padding: '15px', border: '1px solid #222', marginBottom:'15px' },
+    card: { background: '#111', borderRadius: '16px', padding: '18px', border: '1px solid #222', marginBottom:'15px', boxShadow: '0 0 20px rgba(34, 197, 94, 0.1)' },
     cardHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' },
-    tableBig: { fontSize: '24px', fontWeight: '900', color: '#22c55e' },
+    tableBig: { fontSize: '28px', fontWeight: '900', color: 'white' },
+    readyBadge: { background: '#22c55e', color: 'white', fontSize: '10px', fontWeight: '900', padding: '4px 10px', borderRadius: '8px' },
     itemRow: { display:'flex', gap:'10px', marginBottom: '5px' },
-    qty: { color: '#22c55e', fontWeight: 'bold' },
-    serveBtn: { width: '100%', padding: '12px', background: '#22c55e', color: 'white', border: 'none', borderRadius: '12px', fontWeight: '900', marginTop: '10px' },
+    qty: { color: '#f97316', fontWeight: 'bold' },
+    name: { fontSize: '16px', color: '#eee' },
+    historyBox: { background: '#181818', padding: '12px', borderRadius: '10px', marginTop: '15px', border: '1px solid #222' },
+    historyTitle: { fontSize: '9px', fontWeight: '900', color: '#f97316', marginBottom: '8px', letterSpacing: '1px' },
+    historyItem: { fontSize: '11px', color: '#888', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' },
+    serveBtn: { flex: 1, padding: '15px', background: 'transparent', color: '#22c55e', border: '2px dashed #22c55e', borderRadius: '12px', fontWeight: '900', fontSize: '14px', cursor: 'pointer' },
+    deleteBtn: { background: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444', color: '#ef4444', padding: '12px', borderRadius: '12px', cursor: 'pointer' },
     popupOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.9)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' },
     popupCard: { background: '#1a1a1a', borderRadius: '24px', width: '100%', maxWidth: '350px', padding: '20px', border: '2px solid #22c55e' },
     popupHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' },
