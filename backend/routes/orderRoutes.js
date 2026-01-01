@@ -26,7 +26,6 @@ router.post('/', async (req, res) => {
         if (!finalRestaurantId) return res.status(400).json({ message: "Restaurant ID is required" });
         if (!finalTableNum) return res.status(400).json({ message: "Table Number is required" });
 
-        // Fix: Convert Username to ID if necessary
         if (!mongoose.Types.ObjectId.isValid(finalRestaurantId)) {
             const restaurantOwner = await Owner.findOne({ username: finalRestaurantId });
             if (!restaurantOwner) return res.status(404).json({ message: "Restaurant not found." });
@@ -46,12 +45,10 @@ router.post('/', async (req, res) => {
 
         const savedOrder = await newOrder.save();
 
-        // ✅ Socket emit for instant Laptop Dashboard alerts
         if (req.io) {
             req.io.to(finalRestaurantId.toString()).emit('new-order', savedOrder);
         }
 
-        // ✅ 📱 MOBILE PUSH TRIGGER: Notify Chef even if phone screen is OFF
         try {
             const restaurant = await Owner.findById(finalRestaurantId);
             if (restaurant && restaurant.pushSubscriptions && restaurant.pushSubscriptions.length > 0) {
@@ -71,6 +68,31 @@ router.post('/', async (req, res) => {
     } catch (error) {
         console.error("Order Error:", error.message);
         res.status(400).json({ message: error.message });
+    }
+});
+
+// ✅ --- NEW: GET ALL WAITER CALLS (HISTORY) ---
+// This must sit ABOVE the router.get('/:id') to avoid 400 errors
+router.get('/calls', async (req, res) => {
+    try {
+        const { restaurantId } = req.query;
+        if (!restaurantId || !mongoose.Types.ObjectId.isValid(restaurantId)) {
+            return res.status(400).json({ message: "Invalid Restaurant ID format" });
+        }
+        const calls = await Call.find({ restaurantId }).sort({ createdAt: -1 });
+        res.json(calls);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+// ✅ --- NEW: DELETE/RESOLVE WAITER CALL ---
+router.delete('/calls/:callId', async (req, res) => {
+    try {
+        await Call.findByIdAndDelete(req.params.callId);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ message: "Failed to delete call" });
     }
 });
 
@@ -111,14 +133,12 @@ router.put('/:id', async (req, res) => {
 
         if (!order) return res.status(404).json({ message: "Order not found" });
         
-        // ✅ 📈 REVENUE TRACKING: When served, add to restaurant total
         if (req.body.status === "Served" || req.body.status === "SERVED") {
             await Owner.findByIdAndUpdate(order.restaurantId, {
                 $inc: { totalRevenue: order.totalAmount }
             });
         }
 
-        // ✅ 📱 MOBILE PUSH FOR WAITER: Notify waiter when order is READY for pickup
         if (req.body.status === "Ready" || req.body.status === "READY") {
             const restaurant = await Owner.findById(order.restaurantId);
             if (restaurant && restaurant.pushSubscriptions?.length > 0) {
@@ -152,7 +172,6 @@ router.post('/call-waiter', async (req, res) => {
             req.io.to(restaurantId.toString()).emit('new-waiter-call', newCall);
         }
 
-        // ✅ 📱 MOBILE PUSH FOR WAITER CALL
         try {
             const restaurant = await Owner.findById(restaurantId);
             if (restaurant && restaurant.pushSubscriptions && restaurant.pushSubscriptions.length > 0) {
@@ -192,6 +211,16 @@ router.put('/mark-downloaded', async (req, res) => {
         res.status(200).json({ message: "Inbox cleared successfully" });
     } catch (error) {
         res.status(500).json({ error: "Failed to clear inbox" });
+    }
+});
+
+// ✅ --- NEW: DELETE ORDER (CANCELLATIONS) ---
+router.delete('/:id', async (req, res) => {
+    try {
+        await Order.findByIdAndDelete(req.params.id);
+        res.json({ success: true, message: "Order deleted" });
+    } catch (error) {
+        res.status(500).json({ message: "Delete failed" });
     }
 });
 
