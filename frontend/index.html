@@ -2,12 +2,152 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>frontend</title>
+
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#0d0d0d" />
+    <meta
+      name="description"
+      content="Smart Restaurant Menu & Real-time Ordering System"
+    />
+
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="mobile-web-app-title" content="SmartMenu" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" href="/logo192.png" />
+
+    <title>Smart Menu | Cloud Kitchen</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&family=Poppins:wght@600;700;800&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+      /* --- GLOBAL VARIABLES & RESET --- */
+      :root {
+        --bg-color: #050505; 
+        --primary-orange: #f97316;
+        --safe-area-inset-bottom: env(safe-area-inset-bottom);
+
+        font-family: "Inter", system-ui, Avenir, Helvetica, Arial, sans-serif;
+        line-height: 1.5;
+        font-weight: 400;
+        color-scheme: light dark;
+        color: rgba(255, 255, 255, 0.87);
+        font-synthesis: none;
+        text-rendering: optimizeLegibility;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      html, body {
+        height: 100%;
+        background-color: var(--bg-color);
+        overscroll-behavior-y: none; /* Prevents pull-to-refresh */
+        min-width: 320px; 
+      }
+
+      body {
+        color: #ffffff;
+        font-family: "Inter", sans-serif;
+      }
+
+      /* --- APP CONTAINER --- */
+      #root {
+        width: 100%;
+        min-height: 100vh;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+      }
+
+      /* --- 🖨️ THERMAL PRINTER (KOT/Invoice) LOGIC --- */
+      /* This ensures that when you press Print, only the receipt shows up */
+      @media print {
+        body * {
+          visibility: hidden;
+        }
+        #kot-receipt, #kot-receipt * {
+          visibility: visible;
+        }
+        #kot-receipt {
+          position: absolute;
+          left: 0;
+          top: 0;
+          width: 80mm; /* Standard 80mm Thermal Width */
+          background: white !important;
+          color: black !important;
+          padding: 5px;
+          font-family: 'Courier New', Courier, monospace;
+        }
+        @page {
+          margin: 0; /* Removes browser header/footer text */
+        }
+      }
+
+      /* --- 🌀 LOADING SPINNER (Shows before React starts) --- */
+      #root:empty {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+      }
+
+      #root:empty::before {
+        content: "";
+        width: 50px;
+        height: 50px;
+        border: 4px solid rgba(249, 115, 22, 0.1);
+        border-top: 4px solid var(--primary-orange);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin-bottom: 20px;
+      }
+
+      #root:empty::after {
+        content: "LOADING SYSTEM...";
+        font-family: "Poppins", sans-serif;
+        font-weight: 800;
+        font-size: 12px;
+        letter-spacing: 3px;
+        color: var(--primary-orange);
+        animation: fade 1.5s ease-in-out infinite;
+      }
+
+      @keyframes spin { 100% { transform: rotate(360deg); } }
+      @keyframes fade { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
+    </style>
   </head>
+
   <body>
     <div id="root"></div>
+
     <script type="module" src="/src/main.jsx"></script>
+
+    <script>
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", () => {
+          navigator.serviceWorker
+            .register("/sw.js")
+            .then((reg) => console.log("✅ SW Active"))
+            .catch((err) => console.log("❌ SW Error: ", err));
+        });
+      }
+    </script>
   </body>
 </html>
