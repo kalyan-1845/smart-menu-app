@@ -13,7 +13,6 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
     const currentRestId = params.restaurantId || params.id;
     const currentTable = params.table;
 
-    // --- STATE & CACHE ---
     const [dishes, setDishes] = useState(() => {
         const cached = localStorage.getItem(`menu_cache_${currentRestId}`);
         return cached ? JSON.parse(cached) : [];
@@ -29,9 +28,46 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
     const [refreshing, setRefreshing] = useState(false);
     const startY = useRef(0);
 
-    const DEFAULT_IMG = "https://placehold.co/400x300/222/orange?text=BiteBox";
+    const DEFAULT_IMG = "https://placehold.co/400x300/222/orange?text=Yummy";
 
-    // --- 🔄 FETCH LOGIC (Ensures Admin items & Images load) ---
+    // ✅ SUGGESTION: REAL-TIME STOCK INDICATOR (Heartbeat Sync)
+    // Synchronizes dish availability every 15 seconds for 100,000+ members
+    useEffect(() => {
+        if (!currentRestId) return;
+        const stockInterval = setInterval(() => {
+            fetchMenu(true); // Background sync
+        }, 15000); 
+
+        return () => clearInterval(stockInterval);
+    }, [currentRestId]);
+
+    // 🔄 MOBILE AUTO-REFRESH ON RE-ENTRY
+    useEffect(() => {
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === "visible") {
+                fetchMenu(true); 
+            }
+        };
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+        return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+    }, [currentRestId]);
+
+    useEffect(() => {
+        const lastTable = localStorage.getItem("last_table_scanned");
+        const lastRest = localStorage.getItem("last_rest_scanned");
+        if (lastTable !== currentTable || lastRest !== currentRestId) {
+            if (setCart) setCart([]); 
+            localStorage.setItem("last_table_scanned", currentTable || "");
+            localStorage.setItem("last_rest_scanned", currentRestId || "");
+        }
+    }, [currentRestId, currentTable, setCart]);
+
+    useEffect(() => {
+        if (!currentRestId) return;
+        if (setRestaurantId) setRestaurantId(currentRestId);
+        if (setTableNum && currentTable) setTableNum(currentTable);
+    }, [currentRestId, currentTable]);
+
     const fetchMenu = async (isManual = false) => {
         if (!currentRestId) return;
         try {
@@ -43,7 +79,6 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
             } else {
                 const dishData = Array.isArray(res.data) ? res.data : (res.data.dishes || []);
                 setDishes(dishData);
-                // Update Cache so new Admin items persist
                 localStorage.setItem(`menu_cache_${currentRestId}`, JSON.stringify(dishData));
             }
             setError(false);
@@ -56,41 +91,8 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
         }
     };
 
-    // ✅ ⏱️ REAL-TIME STOCK HEARTBEAT (Syncs Admin changes every 15s)
-    useEffect(() => {
-        fetchMenu();
-        const stockInterval = setInterval(() => fetchMenu(true), 15000); 
-        return () => clearInterval(stockInterval);
-    }, [currentRestId]);
+    useEffect(() => { fetchMenu(); }, [currentRestId]);
 
-    // 🔄 MOBILE AUTO-REFRESH ON RE-ENTRY
-    useEffect(() => {
-        const handleVisibilityChange = () => {
-            if (document.visibilityState === "visible") fetchMenu(true); 
-        };
-        document.addEventListener("visibilitychange", handleVisibilityChange);
-        return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
-    }, [currentRestId]);
-
-    // 🧹 CART AUTO-CLEAN ON NEW TABLE/RESTAURANT
-    useEffect(() => {
-        const lastTable = localStorage.getItem("last_table_scanned");
-        const lastRest = localStorage.getItem("last_rest_scanned");
-        if (lastTable !== currentTable || lastRest !== currentRestId) {
-            if (setCart) setCart([]); 
-            localStorage.setItem("last_table_scanned", currentTable || "");
-            localStorage.setItem("last_rest_scanned", currentRestId || "");
-        }
-    }, [currentRestId, currentTable, setCart]);
-
-    // 📍 SYNC RESTAURANT CONTEXT
-    useEffect(() => {
-        if (!currentRestId) return;
-        if (setRestaurantId) setRestaurantId(currentRestId);
-        if (setTableNum && currentTable) setTableNum(currentTable);
-    }, [currentRestId, currentTable]);
-
-    // --- TOUCH HANDLERS (Pull to Refresh) ---
     const handleTouchStart = (e) => { if (window.scrollY === 0) startY.current = e.touches[0].pageY; };
     const handleTouchMove = (e) => {
         const diff = e.touches[0].pageY - startY.current;
@@ -101,13 +103,11 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
         else setPullDistance(0);
     };
 
-    // --- ACTIONS (Vibration + Cart) ---
     const handleAction = (dish, val = 1) => {
         if ("vibrate" in navigator) navigator.vibrate(40); 
         addToCart(val === -1 ? {...dish, quantity: -1} : dish);
     };
 
-    // 🔍 SEARCH & FILTER
     useEffect(() => {
         let result = dishes;
         if (activeCategory !== "All") result = result.filter(d => d.category === activeCategory);
@@ -131,12 +131,10 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
     return (
         <div style={styles.container} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}>
             
-            {/* Pull to Refresh Loader */}
             <div style={{...styles.pullLoader, height: `${pullDistance}px`, opacity: pullDistance / 60}}>
                 <FaSyncAlt className={refreshing ? "spin" : ""} style={{color: '#f97316'}} />
             </div>
 
-            {/* Complex Feature: Marquee */}
             <div style={styles.marqueeWrapper}>
                 <div style={styles.marqueeContent}>
                     <span>JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • </span>
@@ -144,7 +142,6 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
                 </div>
             </div>
 
-            {/* Hero Section */}
             <div style={styles.hero}>
                 <div style={styles.heroContent}>
                     <div>
@@ -159,7 +156,6 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
                 </div>
             </div>
 
-            {/* Sticky Navigation */}
             <div style={styles.stickyNav}>
                 <div style={styles.catScroll}>
                     {categories.map(cat => (
@@ -176,22 +172,14 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
                 </div>
             </div>
 
-            {/* Product Grid */}
             <div style={styles.grid}>
                 {filteredDishes.map(dish => {
-                    const itemInCart = cart.find(i => i._id === dish._id);
-                    const qty = itemInCart ? itemInCart.quantity : 0;
+                    const item = cart.find(i => i._id === dish._id);
+                    const qty = item ? item.quantity : 0;
                     return (
                         <div key={dish._id} style={styles.card}>
                             <div style={styles.imgWrapper}>
-                                {/* ✅ DISPLAY ADMIN IMAGE */}
-                                <img 
-                                    src={dish.image || DEFAULT_IMG} 
-                                    alt={dish.name} 
-                                    style={styles.img} 
-                                    loading="lazy" 
-                                    onError={(e) => { e.target.src = DEFAULT_IMG; }}
-                                />
+                                <img src={dish.image || DEFAULT_IMG} alt={dish.name} style={styles.img} loading="lazy" />
                                 {dish.isAvailable === false && <div style={styles.soldOut}>OUT OF STOCK</div>}
                             </div>
                             <div style={styles.info}>
@@ -217,7 +205,6 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
                 })}
             </div>
 
-            {/* Floating Action Bar */}
             {totalQty > 0 && (
                 <div style={styles.floatBarContainer}>
                     <Link to="/cart" style={styles.floatBar}>
@@ -274,7 +261,7 @@ const styles = {
     countBtn: { width: "32px", height: "32px", background: "transparent", border: "none", color: "white", display: "flex", alignItems: "center", justifyContent: "center" },
     qtyNum: { fontWeight: "900", color: "white" },
     floatBarContainer: { position: "fixed", bottom: "25px", left: "0", right: "0", padding: "0 20px", zIndex: 100 },
-    floatBar: { background: "#22c55e", padding: "16px 25px", borderRadius: "20px", display: "flex", justifyContent: "space-between", alignItems: "center", textDecoration: "none", boxShadow: "0 15px 35px rgba(34, 197, 94, 0.5)", border: "1px solid rgba(255,255,255,0.25)" },
+    floatBar: { background: "#22c55e", padding: "16px 25px", borderRadius: "20px", display: "flex", justifyContent: "space-between", alignItems: "center", textDecoration: "none", boxShadow: "0 15px 35px rgba(34, 197, 94, 0.5)", border: "1px solid rgba(255,255,255,0.25)", transition: "0.3s transform active" },
     floatInfo: { display: "flex", flexDirection: "column" },
     floatQty: { fontSize: "11px", color: "#052e16", fontWeight: "800" },
     floatPrice: { fontSize: "18px", fontWeight: "900", color: "white" },
