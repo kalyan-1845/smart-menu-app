@@ -1,14 +1,12 @@
 [build]
-  # 🟢 Tells Netlify to enter the frontend folder first
-  base = "frontend"
-  
-  # 🟢 Tells Netlify to output the build here
+  base = "."
   publish = "dist"
-  
-  # 🟢 The command to run (inside the frontend folder)
   command = "npm install && npm run build"
 
-# 🟢 IMPORTANT: This fixes the "Page Not Found" errors on refresh
+[build.environment]
+  NODE_VERSION = "18"
+  NPM_FLAGS = "--legacy-peer-deps"
+
 [[redirects]]
   from = "/*"
   to = "/index.html"
