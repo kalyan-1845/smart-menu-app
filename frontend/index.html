@@ -15,7 +15,6 @@
 
     <link rel="manifest" href="/manifest.json" />
     <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="mobile-web-app-title" content="SmartMenu" />
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
@@ -77,6 +76,7 @@
       }
 
       /* --- 🖨️ THERMAL PRINTER (KOT/Invoice) LOGIC --- */
+      /* This ensures that when you press Print, only the receipt shows up */
       @media print {
         body * {
           visibility: hidden;
@@ -93,10 +93,9 @@
           color: black !important;
           padding: 5px;
           font-family: 'Courier New', Courier, monospace;
-          break-inside: avoid;
         }
         @page {
-          margin: 0; 
+          margin: 0; /* Removes browser header/footer text */
         }
       }
 
@@ -137,8 +136,6 @@
 
   <body>
     <div id="root"></div>
-
-    <div id="kot-receipt"></div>
 
     <script type="module" src="/src/main.jsx"></script>
 
