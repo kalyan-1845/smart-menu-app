@@ -1,19 +1,19 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
-import webpush from 'web-push'; // Required for notifications
+import webpush from 'web-push'; 
 import Owner from '../models/Owner.js'; 
 import Dish from '../models/Dish.js'; 
 import Order from '../models/Order.js'; 
 
 const router = express.Router();
 
-// --- 🔑 SAFE WEB PUSH CONFIGURATION (FIXED) ---
-// 1. We use the correct names: VAPID_PUBLIC_KEY (not PUBLIC_VAPID_KEY)
+// ==========================================
+// 🔑 SAFE WEB PUSH CONFIGURATION
+// ==========================================
 const publicKey = process.env.VAPID_PUBLIC_KEY;
 const privateKey = process.env.VAPID_PRIVATE_KEY;
 
-// 2. We check if they exist BEFORE initializing to prevent the crash
 if (publicKey && privateKey) {
     try {
         webpush.setVapidDetails(
@@ -21,24 +21,26 @@ if (publicKey && privateKey) {
             publicKey,
             privateKey
         );
-        console.log("✅ Push Notifications Initialized");
+        console.log("✅ Auth Routes: Push Initialized");
     } catch (err) {
         console.error("❌ VAPID Config Error:", err.message);
     }
-} else {
-    console.warn("⚠️ PUSH OFF: VAPID keys missing in .env (Server will still run)");
 }
 
+// Helper: Generate JWT Token
 const generateToken = (id) => {
     return jwt.sign({ id }, process.env.JWT_SECRET || 'fallback_secret', { expiresIn: '30d' });
 };
 
-// --- 📥 NEW: INBOX ROUTE (Fixes frontend 500 error) ---
+// ==========================================
+// 📥 DASHBOARD & ORDERS (Legacy Support)
+// ==========================================
+
+// GET INBOX
 router.get('/inbox', async (req, res) => {
     try {
         const { restaurantId } = req.query;
         if (!restaurantId) return res.status(400).json({ message: "Restaurant ID is required" });
-
         const orders = await Order.find({ restaurantId }).sort({ createdAt: -1 });
         res.json(orders);
     } catch (error) {
@@ -46,7 +48,7 @@ router.get('/inbox', async (req, res) => {
     }
 });
 
-// --- 📊 NEW: SALES SUMMARY ROUTE ---
+// GET SALES SUMMARY
 router.get('/sales-summary', async (req, res) => {
     try {
         const { restaurantId } = req.query;
@@ -65,14 +67,14 @@ router.get('/sales-summary', async (req, res) => {
     }
 });
 
-// --- 📲 NEW: SAVE PUSH SUBSCRIPTION ---
+// SAVE SUBSCRIPTION
 router.post('/save-subscription', async (req, res) => {
     const { restaurantId, subscription } = req.body;
     try {
         const user = await Owner.findById(restaurantId);
         if (!user) return res.status(404).json({ message: "Restaurant not found" });
 
-        // Check if subscription already exists to avoid duplicates
+        // Avoid duplicates
         const exists = user.pushSubscriptions.find(s => s.endpoint === subscription.endpoint);
         if (!exists) {
             user.pushSubscriptions.push(subscription);
@@ -84,7 +86,11 @@ router.post('/save-subscription', async (req, res) => {
     }
 });
 
-// --- REGISTER ROUTE ---
+// ==========================================
+// 🔐 AUTHENTICATION
+// ==========================================
+
+// REGISTER
 router.post('/register', async (req, res) => {
     try {
         let { restaurantName, username, email, password, trialEndsAt } = req.body;
@@ -110,13 +116,12 @@ router.post('/register', async (req, res) => {
             token: generateToken(user._id),
             trialEndsAt: user.trialEndsAt
         });
-
     } catch (error) {
         res.status(400).json({ message: error.message });
     }
 });
 
-// --- LOGIN ROUTE ---
+// LOGIN
 router.post('/login', async (req, res) => {
     const { username, password } = req.body;
     try {
@@ -139,7 +144,7 @@ router.post('/login', async (req, res) => {
     }
 });
 
-// --- ✅ FIXED: VERIFY ROLE (Chef AND Waiter Support) ---
+// VERIFY ROLE (Chef/Waiter/Owner)
 router.post('/verify-role', async (req, res) => {
     try {
         const { role, username, password, token } = req.body;
@@ -149,7 +154,6 @@ router.post('/verify-role', async (req, res) => {
             
             if (!user) return res.status(404).json({ message: "Restaurant not found" });
 
-            // Safety: Check correct password based on role
             const validPass = role === 'chef' ? (user.chefPassword || "bitebox18") : (user.waiterPassword || "bitebox18"); 
 
             if (password === validPass) {
@@ -179,6 +183,7 @@ router.post('/verify-role', async (req, res) => {
     }
 });
 
+// GET CURRENT USER
 router.get('/verify-role', async (req, res) => {
     try {
         const token = req.headers.authorization?.split(" ")[1];
@@ -195,18 +200,27 @@ router.get('/verify-role', async (req, res) => {
     }
 });
 
-// --- ✅ PUBLIC RESTAURANT LOOKUP ---
+// ==========================================
+// 🔍 PUBLIC RESTAURANT LOOKUP (FIXED)
+// ==========================================
 router.get('/restaurant/:id', async (req, res) => {
     try {
         const { id } = req.params;
         let owner;
 
-        if (mongoose.Types.ObjectId.isValid(id)) {
+        // 🛑 STRICT CHECK: Only check ID if it's 24-char HEX
+        // This prevents "kalyanresto1" (12 chars) from looking like an ID
+        const isValidHexId = /^[0-9a-fA-F]{24}$/.test(id);
+
+        if (isValidHexId) {
             owner = await Owner.findById(id).select('username restaurantName email isPro upiId');
         } 
         
+        // If not found by ID (or not a valid ID), try username
         if (!owner) {
-            owner = await Owner.findOne({ username: id }).select('username restaurantName email isPro upiId');
+            owner = await Owner.findOne({ 
+                username: { $regex: new RegExp("^" + id + "$", "i") } 
+            }).select('username restaurantName email isPro upiId');
         }
 
         if (!owner) return res.status(404).json({ message: 'Restaurant not found' });
@@ -218,6 +232,7 @@ router.get('/restaurant/:id', async (req, res) => {
     }
 });
 
+// GET ALL RESTAURANTS
 router.get('/restaurants', async (req, res) => {
     try {
         const owners = await Owner.find().select('_id username restaurantName');
@@ -227,6 +242,7 @@ router.get('/restaurants', async (req, res) => {
     }
 });
 
+// --- ADMIN ROUTES ---
 router.get('/admin/all-owners', async (req, res) => {
     try {
         const owners = await Owner.find().select('-password').sort({ createdAt: -1 }); 
