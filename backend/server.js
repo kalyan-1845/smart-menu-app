@@ -18,7 +18,7 @@ import menuRoutes from './routes/menuRoutes.js';
 const app = express();
 
 // 🔴 CRITICAL FIX FOR RENDER: TRUST PROXY
-// This fixes the "ERR_ERL_UNEXPECTED_X_FORWARDED_FOR" crash
+// This stops the Rate Limiter from crashing the server
 app.set('trust proxy', 1);
 
 const httpServer = createServer(app);
@@ -32,19 +32,21 @@ const allowedOrigins = [
     "https://smartmenuss.netlify.app"
 ];
 
-// Regex to match ANY Netlify deploy preview
 const deployPreviewPattern = /^https:\/\/.*--smartmenuss\.netlify\.app$/;
 
 const isOriginAllowed = (origin) => {
-    if (!origin) return true; // Allow backend-to-backend calls (no origin)
+    // If no origin (like Postman or Health Checks), allow it
+    if (!origin) return true; 
     return allowedOrigins.includes(origin) || deployPreviewPattern.test(origin);
 };
 
-// 1. MANUAL HEADERS (SAFE MODE)
+// 1. MANUAL HEADERS (SAFE VERSION)
 app.use((req, res, next) => {
     const origin = req.headers.origin;
     
-    // 🛑 Strictly check if origin exists before setting it
+    // 🛑 CRITICAL SAFETY CHECK:
+    // Only set the header if 'origin' actually exists.
+    // This prevents the "Invalid value undefined" crash.
     if (origin && isOriginAllowed(origin)) {
         res.setHeader("Access-Control-Allow-Origin", origin);
     }
@@ -57,7 +59,7 @@ app.use((req, res, next) => {
     next();
 });
 
-// 2. CORS LIBRARY
+// 2. CORS LIBRARY (Main Gatekeeper)
 app.use(cors({
     origin: (origin, callback) => {
         if (isOriginAllowed(origin)) {
@@ -73,13 +75,14 @@ app.use(cors({
 
 app.use(express.json({ limit: '10mb' })); 
 
-// Rate Limiter (Now safe with trust proxy enabled)
+// Rate Limiter
 const limiter = rateLimit({ 
     windowMs: 15 * 60 * 1000, 
     max: 1000, 
     standardHeaders: true, 
     legacyHeaders: false,
-    validate: { xForwardedForHeader: false } // Extra safety to silence proxy warnings
+    // Fix for Render Proxy issues
+    validate: { xForwardedForHeader: false } 
 });
 app.use(limiter); 
 
