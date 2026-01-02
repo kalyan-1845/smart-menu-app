@@ -7,14 +7,72 @@ import Owner from '../models/Owner.js';
 
 const router = express.Router();
 
-// --- 🔑 WEB PUSH CONFIGURATION ---
-webpush.setVapidDetails(
-    'mailto:support@bitebox.com',
-    process.env.PUBLIC_VAPID_KEY,
-    process.env.PRIVATE_VAPID_KEY
-);
+// --- 🔑 SAFE WEB PUSH CONFIGURATION ---
+const publicKey = process.env.VAPID_PUBLIC_KEY;
+const privateKey = process.env.VAPID_PRIVATE_KEY;
 
-// --- 1. PLACE ORDER ---
+if (publicKey && privateKey) {
+    try {
+        webpush.setVapidDetails(
+            'mailto:support@bitebox.com',
+            publicKey,
+            privateKey
+        );
+        console.log("✅ Order Routes: Push Initialized");
+    } catch (err) {
+        console.error("❌ Order Routes VAPID Error:", err.message);
+    }
+}
+
+// ==========================================
+// 🚨 IMPORTANT: SPECIFIC ROUTES MUST BE TOP
+// ==========================================
+
+// --- 1. GET INBOX (Restaurant Dashboard) ---
+router.get('/inbox', async (req, res) => {
+    try {
+        const { restaurantId } = req.query;
+        if (!restaurantId) return res.status(400).json({ message: "Restaurant ID required" });
+        
+        // Fetch orders that are NOT downloaded yet
+        const orders = await Order.find({ restaurantId, isDownloaded: false }).sort({ createdAt: -1 });
+        res.json(orders);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+// --- 2. GET WAITER CALLS (History) ---
+router.get('/calls', async (req, res) => {
+    try {
+        const { restaurantId } = req.query;
+        if (!restaurantId || !mongoose.Types.ObjectId.isValid(restaurantId)) {
+            return res.status(400).json({ message: "Invalid Restaurant ID format" });
+        }
+        const calls = await Call.find({ restaurantId }).sort({ createdAt: -1 });
+        res.json(calls);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+// --- 3. GET ALL ORDERS (History/Chef View) ---
+router.get('/', async (req, res) => {
+    try {
+        const { restaurantId } = req.query;
+        if (!restaurantId) return res.status(400).json({ message: "Restaurant ID required" });
+        const orders = await Order.find({ restaurantId }).sort({ createdAt: -1 });
+        res.json(orders);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+// ==========================================
+// 🛒 POST & PUT ROUTES
+// ==========================================
+
+// --- 4. PLACE ORDER ---
 router.post('/', async (req, res) => {
     try {
         const { customerName, items, totalAmount, paymentMethod, tableNum, tableNumber, restaurantId, owner, status } = req.body;
@@ -49,20 +107,23 @@ router.post('/', async (req, res) => {
             req.io.to(finalRestaurantId.toString()).emit('new-order', savedOrder);
         }
 
-        try {
-            const restaurant = await Owner.findById(finalRestaurantId);
-            if (restaurant && restaurant.pushSubscriptions && restaurant.pushSubscriptions.length > 0) {
-                const payload = JSON.stringify({
-                    title: "🛎️ NEW ORDER RECEIVED",
-                    body: `Table ${finalTableNum}: ₹${totalAmount}`,
-                    url: `/chef/${restaurant.username}` 
-                });
+        // Send Push Notification (Safely)
+        if (publicKey && privateKey) {
+            try {
+                const restaurant = await Owner.findById(finalRestaurantId);
+                if (restaurant && restaurant.pushSubscriptions && restaurant.pushSubscriptions.length > 0) {
+                    const payload = JSON.stringify({
+                        title: "🛎️ NEW ORDER RECEIVED",
+                        body: `Table ${finalTableNum}: ₹${totalAmount}`,
+                        url: `/chef/${restaurant.username}` 
+                    });
 
-                restaurant.pushSubscriptions.forEach(sub => {
-                    webpush.sendNotification(sub, payload).catch(e => console.error("Push failed for device"));
-                });
-            }
-        } catch (pushErr) { console.error("Notification trigger failed"); }
+                    restaurant.pushSubscriptions.forEach(sub => {
+                        webpush.sendNotification(sub, payload).catch(e => console.error("Push failed for device"));
+                    });
+                }
+            } catch (pushErr) { console.error("Notification trigger failed"); }
+        }
 
         res.status(201).json(savedOrder);
     } catch (error) {
@@ -71,22 +132,50 @@ router.post('/', async (req, res) => {
     }
 });
 
-// ✅ --- NEW: GET ALL WAITER CALLS (HISTORY) ---
-// This must sit ABOVE the router.get('/:id') to avoid 400 errors
-router.get('/calls', async (req, res) => {
+// --- 5. CALL WAITER ---
+router.post('/call-waiter', async (req, res) => {
     try {
-        const { restaurantId } = req.query;
-        if (!restaurantId || !mongoose.Types.ObjectId.isValid(restaurantId)) {
-            return res.status(400).json({ message: "Invalid Restaurant ID format" });
+        const { restaurantId, tableNumber, type } = req.body; 
+        const newCall = await Call.create({ restaurantId, tableNumber, type: type || 'help' });
+        
+        if (req.io) {
+            req.io.to(restaurantId.toString()).emit('new-waiter-call', newCall);
         }
-        const calls = await Call.find({ restaurantId }).sort({ createdAt: -1 });
-        res.json(calls);
+
+        // Send Push Notification (Safely)
+        if (publicKey && privateKey) {
+            try {
+                const restaurant = await Owner.findById(restaurantId);
+                if (restaurant && restaurant.pushSubscriptions && restaurant.pushSubscriptions.length > 0) {
+                    const payload = JSON.stringify({
+                        title: "🛎️ ASSISTANCE NEEDED",
+                        body: `Table ${tableNumber} is calling for help!`,
+                        url: `/waiter/${restaurant.username}` 
+                    });
+                    restaurant.pushSubscriptions.forEach(sub => webpush.sendNotification(sub, payload).catch(()=>{}));
+                }
+            } catch (e) {}
+        }
+        
+        res.status(201).json(newCall);
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
 });
 
-// ✅ --- NEW: DELETE/RESOLVE WAITER CALL ---
+// --- 6. CLEAR INBOX (Mark Downloaded) ---
+router.put('/mark-downloaded', async (req, res) => {
+    try {
+        const { restaurantId } = req.body;
+        if (!restaurantId) return res.status(400).json({ message: "Restaurant ID required" });
+        await Order.updateMany({ restaurantId, isDownloaded: false }, { $set: { isDownloaded: true } });
+        res.status(200).json({ message: "Inbox cleared successfully" });
+    } catch (error) {
+        res.status(500).json({ error: "Failed to clear inbox" });
+    }
+});
+
+// --- 7. DELETE CALL ---
 router.delete('/calls/:callId', async (req, res) => {
     try {
         await Call.findByIdAndDelete(req.params.callId);
@@ -96,7 +185,11 @@ router.delete('/calls/:callId', async (req, res) => {
     }
 });
 
-// --- 2. GET SINGLE ORDER (CUSTOMER TRACKER) ---
+// ==========================================
+// 🔗 DYNAMIC ROUTES (MUST BE LAST)
+// ==========================================
+
+// --- 8. GET SINGLE ORDER (By ID) ---
 router.get('/:id', async (req, res) => {
     try {
         if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
@@ -110,19 +203,7 @@ router.get('/:id', async (req, res) => {
     }
 });
 
-// --- 3. GET ALL ORDERS (CHEF/WAITER VIEW) ---
-router.get('/', async (req, res) => {
-    try {
-        const { restaurantId } = req.query;
-        if (!restaurantId) return res.status(400).json({ message: "Restaurant ID required" });
-        const orders = await Order.find({ restaurantId }).sort({ createdAt: -1 });
-        res.json(orders);
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
-});
-
-// --- 4. UPDATE STATUS (CHEF ACTIONS) ---
+// --- 9. UPDATE ORDER STATUS (By ID) ---
 router.put('/:id', async (req, res) => {
     try {
         const order = await Order.findByIdAndUpdate(
@@ -139,7 +220,8 @@ router.put('/:id', async (req, res) => {
             });
         }
 
-        if (req.body.status === "Ready" || req.body.status === "READY") {
+        // Send Push Notification (Safely)
+        if ((req.body.status === "Ready" || req.body.status === "READY") && publicKey && privateKey) {
             const restaurant = await Owner.findById(order.restaurantId);
             if (restaurant && restaurant.pushSubscriptions?.length > 0) {
                 const payload = JSON.stringify({
@@ -162,59 +244,7 @@ router.put('/:id', async (req, res) => {
     }
 });
 
-// --- 5. CALL WAITER ---
-router.post('/call-waiter', async (req, res) => {
-    try {
-        const { restaurantId, tableNumber, type } = req.body; 
-        const newCall = await Call.create({ restaurantId, tableNumber, type: type || 'help' });
-        
-        if (req.io) {
-            req.io.to(restaurantId.toString()).emit('new-waiter-call', newCall);
-        }
-
-        try {
-            const restaurant = await Owner.findById(restaurantId);
-            if (restaurant && restaurant.pushSubscriptions && restaurant.pushSubscriptions.length > 0) {
-                const payload = JSON.stringify({
-                    title: "🛎️ ASSISTANCE NEEDED",
-                    body: `Table ${tableNumber} is calling for help!`,
-                    url: `/waiter/${restaurant.username}` 
-                });
-                restaurant.pushSubscriptions.forEach(sub => webpush.sendNotification(sub, payload).catch(()=>{}));
-            }
-        } catch (e) {}
-        
-        res.status(201).json(newCall);
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
-});
-
-// --- 6. GET INBOX ---
-router.get('/inbox', async (req, res) => {
-    try {
-        const { restaurantId } = req.query;
-        if (!restaurantId) return res.status(400).json({ message: "Restaurant ID required" });
-        const orders = await Order.find({ restaurantId, isDownloaded: false }).sort({ createdAt: -1 });
-        res.json(orders);
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
-});
-
-// --- 7. CLEAR INBOX ---
-router.put('/mark-downloaded', async (req, res) => {
-    try {
-        const { restaurantId } = req.body;
-        if (!restaurantId) return res.status(400).json({ message: "Restaurant ID required" });
-        await Order.updateMany({ restaurantId, isDownloaded: false }, { $set: { isDownloaded: true } });
-        res.status(200).json({ message: "Inbox cleared successfully" });
-    } catch (error) {
-        res.status(500).json({ error: "Failed to clear inbox" });
-    }
-});
-
-// ✅ --- NEW: DELETE ORDER (CANCELLATIONS) ---
+// --- 10. DELETE ORDER (By ID) ---
 router.delete('/:id', async (req, res) => {
     try {
         await Order.findByIdAndDelete(req.params.id);
