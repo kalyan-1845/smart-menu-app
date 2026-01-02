@@ -25,13 +25,15 @@ const allowedOrigins = [
 ];
 
 // ============================================================
-// ☢️ NUCLEAR CORS FIX (LAYER 1: MANUAL HEADERS) - RETAINED
+// ☢️ NUCLEAR CORS FIX (LAYER 1: MANUAL HEADERS)
 // ============================================================
 app.use((req, res, next) => {
     const origin = req.headers.origin;
+    
     if (allowedOrigins.includes(origin)) {
         res.setHeader("Access-Control-Allow-Origin", origin);
     }
+
     res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
     res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, Origin, X-Requested-With, Accept");
     res.header("Access-Control-Allow-Credentials", "true");
@@ -39,11 +41,12 @@ app.use((req, res, next) => {
     if (req.method === "OPTIONS") {
         return res.status(200).end();
     }
+
     next();
 });
 
 // ============================================================
-// 🛡️ STANDARD CORS (LAYER 2: LIBRARY BACKUP) - RETAINED
+// 🛡️ STANDARD CORS (LAYER 2: LIBRARY BACKUP)
 // ============================================================
 app.use(cors({
     origin: allowedOrigins,
@@ -51,12 +54,13 @@ app.use(cors({
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
 }));
 
+// --- MIDDLEWARE ---
 app.use(express.json({ limit: '10mb' })); 
 
-// Rate Limiter - Optimized for 1000+ simultaneous users
+// Rate Limiter - Optimized for high traffic (100k users)
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, 
-    max: 1000, // Increased to support high traffic without blocking users
+    max: 1000, // Increased to support simultaneous users
     standardHeaders: true,
     legacyHeaders: false,
 });
@@ -71,6 +75,7 @@ const io = new Server(httpServer, {
     }
 });
 
+// Attach Socket to Request
 app.use((req, res, next) => {
     req.io = io;
     next();
@@ -100,17 +105,17 @@ app.use((err, req, res, next) => {
     });
 });
 
-// --- SOCKETS: FIXED FOR SAAS ISOLATION ---
+// --- SOCKETS (SaaS Isolated Logic) ---
 io.on('connection', (socket) => {
-    // Users and Admins join a private "Room" based on their Restaurant ID
+    // Isolated Rooms: Ensures orders for Shop A don't show up in Shop B
     socket.on('join-restaurant', (restaurantId) => {
         socket.join(restaurantId);
-        console.log(`User joined private room for restaurant: ${restaurantId}`);
+        console.log(`Connection established for Shop: ${restaurantId}`);
     });
 
     socket.on('join-owner-room', (ownerId) => socket.join(ownerId));
 
-    // Waiter Call Isolation: Only broadcast to the specific restaurant room
+    // Waiter Call Isolation
     socket.on("call-waiter", (data) => {
         if(data.restaurantId) {
             io.to(data.restaurantId).emit("new-waiter-call", data);
@@ -126,7 +131,7 @@ io.on('connection', (socket) => {
     });
 });
 
-// --- SELF PING (Keep Alive) - RETAINED ---
+// --- SELF PING (Keep Alive) ---
 const pingUrl = "https://smart-menu-backend-5ge7.onrender.com/"; 
 setInterval(() => {
     https.get(pingUrl, (res) => {
