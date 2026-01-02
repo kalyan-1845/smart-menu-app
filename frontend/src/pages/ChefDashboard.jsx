@@ -27,21 +27,7 @@ const ChefDashboard = () => {
     const audioRef = useRef(new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"));
     const callSound = useRef(new Audio("https://assets.mixkit.co/active_storage/sfx/2190/2190-preview.mp3"));
 
-    // ✅ AUTOMATIC REFRESH ON SITE LOAD
-    useEffect(() => {
-        const handleEntryRefresh = () => {
-            if (document.visibilityState === 'visible' && mongoId) {
-                fetchData(mongoId);
-            }
-        };
-        window.addEventListener('load', handleEntryRefresh);
-        document.addEventListener("visibilitychange", handleEntryRefresh);
-        return () => {
-            window.removeEventListener('load', handleEntryRefresh);
-            document.removeEventListener("visibilitychange", handleEntryRefresh);
-        };
-    }, [mongoId]);
-
+    // 📱 MOBILE FIX: Wake up audio and request notification permissions
     const enableMobileAlerts = async (rId) => {
         audioRef.current.play().then(() => {
             audioRef.current.pause();
@@ -81,7 +67,7 @@ const ChefDashboard = () => {
                 setMongoId(dbId);
                 localStorage.setItem(`chef_session_${id}`, dbId);
                 setIsAuthenticated(true);
-                enableMobileAlerts(dbId); 
+                enableMobileAlerts(dbId); // 📱 Trigger mobile wake-up
                 fetchData(dbId);
             } else { setError("❌ Access Denied"); }
         } catch (err) { setError("❌ Invalid PIN"); } finally { setAuthLoading(false); }
@@ -103,10 +89,7 @@ const ChefDashboard = () => {
                 axios.get(`${API_BASE}/orders?restaurantId=${rId}`),
                 axios.get(`${API_BASE}/dishes?restaurantId=${rId}`)
             ]);
-            // ✅ AUTO-CLEAR: Filter out orders marked as Served
-            const active = orderRes.data.filter(o => 
-                o.status.toLowerCase() !== "served"
-            );
+            const active = orderRes.data.filter(o => o.status !== "SERVED" && o.status !== "Served");
             setOrders(active.sort((a,b) => new Date(a.createdAt) - new Date(b.createdAt)));
             setDishes(dishRes.data);
         } catch (e) { console.error("Sync Failed", e); }
@@ -130,14 +113,7 @@ const ChefDashboard = () => {
                 fetchData(mongoId);
             });
 
-            // ✅ AUTO-UPDATE: Sync when waiter marks as Served
-            newSocket.on("order-updated", (updatedOrder) => {
-                if (updatedOrder.status.toLowerCase() === "served") {
-                    setOrders(prev => prev.filter(o => o._id !== updatedOrder._id));
-                } else {
-                    fetchData(mongoId);
-                }
-            });
+            newSocket.on("order-updated", () => fetchData(mongoId));
 
             newSocket.on("new-waiter-call", (callData) => {
                 if (!isMuted) callSound.current.play().catch(()=>{});
@@ -149,29 +125,35 @@ const ChefDashboard = () => {
                 alert(`📢 BROADCAST: ${data.title}\n${data.message}`);
             });
 
+            // 📱 MOBILE FIX: When Chef re-opens the app/phone, force an immediate sync
+            const handleVisibilityChange = () => {
+                if (document.visibilityState === 'visible') {
+                    fetchData(mongoId);
+                    if (!newSocket.connected) newSocket.connect();
+                }
+            };
+            document.addEventListener("visibilitychange", handleVisibilityChange);
+
             const mobileSync = setInterval(() => fetchData(mongoId), 20000);
 
             return () => {
                 newSocket.disconnect();
                 clearInterval(mobileSync);
+                document.removeEventListener("visibilitychange", handleVisibilityChange);
             };
         }
     }, [isAuthenticated, mongoId, isMuted]);
 
     const advanceOrderStatus = async (order) => {
         let nextStatus = "";
-        const currentStatus = order.status.toLowerCase();
-
-        if (currentStatus === "pending" || currentStatus === "placed") nextStatus = "cooking";
-        else if (currentStatus === "cooking") nextStatus = "ready";
-        
-        if (currentStatus === "ready") return; 
+        if (order.status === "Pending" || order.status === "PLACED") nextStatus = "Cooking";
+        else if (order.status === "Cooking") nextStatus = "Ready";
+        if (order.status === "Ready") return; 
 
         try {
             setOrders(prev => prev.map(o => o._id === order._id ? { ...o, status: nextStatus } : o));
             await axios.put(`${API_BASE}/orders/${order._id}`, { status: nextStatus });
-            
-            if (nextStatus === "ready" && socket) {
+            if (nextStatus === "Ready" && socket) {
                 socket.emit("chef-ready-alert", { 
                     restaurantId: mongoId, 
                     tableNum: order.tableNum,
@@ -243,15 +225,12 @@ const ChefDashboard = () => {
                         orders.map((order) => (
                             <div key={order._id} style={{
                                 ...styles.card, 
-                                borderTop: order.status.toLowerCase() === 'ready' ? '5px solid #22c55e' : (order.status.toLowerCase() === 'cooking' ? '5px solid #eab308' : '5px solid #f97316')
+                                borderTop: order.status === 'Ready' ? '5px solid #22c55e' : (order.status === 'Cooking' ? '5px solid #eab308' : '5px solid #f97316')
                             }}>
                                 <div style={styles.cardHeader}>
                                     <h2 style={styles.tableNumber}>T-{order.tableNum}</h2>
-                                    <span style={{
-                                        ...styles.statusBadge, 
-                                        background: order.status.toLowerCase() === 'ready' ? '#22c55e' : (order.status.toLowerCase() === 'cooking' ? '#eab308' : '#374151')
-                                    }}>
-                                        {order.status.toUpperCase()}
+                                    <span style={{...styles.statusBadge, background: order.status === 'Ready' ? '#22c55e' : (order.status === 'Cooking' ? '#eab308' : '#374151')}}>
+                                        {order.status}
                                     </span>
                                 </div>
                                 <div style={styles.itemsContainer}>
@@ -263,15 +242,15 @@ const ChefDashboard = () => {
                                     ))}
                                 </div>
                                 <div style={styles.actionContainer}>
-                                    {order.status.toLowerCase() === "ready" ? (
+                                    {order.status === "Ready" ? (
                                         <div style={styles.readyIndicator}><FaCheck /> WAITING FOR WAITER</div>
                                     ) : (
                                         <button onClick={() => advanceOrderStatus(order)} style={{
                                             ...styles.actionBtn, 
-                                            background: order.status.toLowerCase() === 'cooking' ? '#eab308' : '#f97316',
-                                            color: order.status.toLowerCase() === 'cooking' ? 'black' : 'white'
+                                            background: order.status === 'Cooking' ? '#eab308' : '#f97316',
+                                            color: order.status === 'Cooking' ? 'black' : 'white'
                                         }}>
-                                            {order.status.toLowerCase() === "cooking" ? "MARK READY" : "START COOKING"}
+                                            {order.status === "Cooking" ? "MARK READY" : "START COOKING"}
                                         </button>
                                     )}
                                 </div>
