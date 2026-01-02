@@ -18,7 +18,6 @@ router.post('/', async (req, res) => {
         if (!finalRestaurantId) return res.status(400).json({ message: "Restaurant ID is required" });
         if (!finalTableNum) return res.status(400).json({ message: "Table Number is required" });
 
-        // Fix: Convert Username to ID if necessary for multi-tenant support
         if (!mongoose.Types.ObjectId.isValid(finalRestaurantId)) {
             const restaurantOwner = await Owner.findOne({ username: finalRestaurantId });
             if (!restaurantOwner) return res.status(404).json({ message: "Restaurant not found." });
@@ -33,44 +32,39 @@ router.post('/', async (req, res) => {
             totalAmount, 
             paymentMethod,
             status: finalStatus,
-            isDownloaded: false // Default to false so it shows in Admin Inbox
+            isDownloaded: false 
         });
 
         const savedOrder = await newOrder.save();
 
-        // Socket emit to specific restaurant room for real-time staff alerts
         if (req.io) {
             req.io.to(finalRestaurantId.toString()).emit('new-order', savedOrder);
         }
 
         res.status(201).json(savedOrder);
     } catch (error) {
-        console.error("Order Error:", error.message);
         res.status(400).json({ message: error.message });
     }
 });
 
-// --- 2. GET SINGLE ORDER (CRITICAL FOR CUSTOMER TRACKER) ---
+// --- 2. GET SINGLE ORDER ---
 router.get('/:id', async (req, res) => {
     try {
-        // Validation check for Mongo ID format
         if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
-            return res.status(400).json({ message: "Invalid Order ID format" });
+            return res.status(400).json({ message: "Invalid Order ID" });
         }
         const order = await Order.findById(req.params.id);
-        if (!order) return res.status(404).json({ message: "Order not found" });
         res.json(order);
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
 });
 
-// --- 3. GET ALL ORDERS (CHEF/WAITER VIEW) ---
+// --- 3. GET ALL ORDERS (CHEF VIEW) ---
 router.get('/', async (req, res) => {
     try {
         const { restaurantId } = req.query;
-        if (!restaurantId) return res.status(400).json({ message: "Restaurant ID required" });
-        
+        if (!restaurantId) return res.status(400).json({ message: "ID required" });
         const orders = await Order.find({ restaurantId }).sort({ createdAt: -1 });
         res.json(orders);
     } catch (error) {
@@ -78,34 +72,25 @@ router.get('/', async (req, res) => {
     }
 });
 
-// --- 4. UPDATE STATUS (CHEF ACTIONS) ---
+// --- 4. UPDATE STATUS & REVENUE ---
 router.put('/:id', async (req, res) => {
     try {
         const { status } = req.body;
+        const order = await Order.findByIdAndUpdate(req.params.id, { status }, { new: true });
         
-        // 1. Update the order
-        const order = await Order.findByIdAndUpdate(
-            req.params.id, 
-            { status: status }, 
-            { new: true }
-        );
-        
-        if (!order) return res.status(404).json({ message: "Order not found" });
+        if (!order) return res.status(404).json({ message: "Not found" });
 
-        // 2. REVENUE LOGIC: If order is marked "Served", increment owner's revenue
+        // Revenue logic preserved
         if (status === "Served") {
             await Owner.findByIdAndUpdate(order.restaurantId, {
                 $inc: { totalRevenue: order.totalAmount }
             });
         }
 
-        // 3. Real-time notifications
         if (req.io) {
-             // Notify both the Restaurant Staff and the Customer Tracker
              req.io.to(order.restaurantId.toString()).emit('order-updated', order);
              req.io.emit('order-updated', order); 
         }
-
         res.json(order);
     } catch (error) {
         res.status(400).json({ message: error.message });
@@ -117,23 +102,22 @@ router.post('/call-waiter', async (req, res) => {
     try {
         const { restaurantId, tableNumber, type } = req.body; 
         const newCall = await Call.create({ restaurantId, tableNumber, type: type || 'help' });
-        
-        if (req.io) {
-            // Target only the specific restaurant staff room
-            req.io.to(restaurantId.toString()).emit('new-waiter-call', newCall);
-        }
-        
+        if (req.io) req.io.to(restaurantId.toString()).emit('new-waiter-call', newCall);
         res.status(201).json(newCall);
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
 });
 
-// --- 6. GET INBOX (Only non-downloaded orders for Admin/PDF generation) ---
+// --- 6. GET INBOX (Universal ID Fix) ---
 router.get('/inbox', async (req, res) => {
     try {
-        const { restaurantId } = req.query;
-        if (!restaurantId) return res.status(400).json({ message: "Restaurant ID required" });
+        // Fix: Detects ID from query OR URL segment to prevent 400 errors
+        const restaurantId = req.query.restaurantId || req.params.restaurantId;
+
+        if (!restaurantId || restaurantId === 'undefined') {
+            return res.status(400).json({ message: "Restaurant ID required" });
+        }
 
         const orders = await Order.find({ 
             restaurantId, 
@@ -146,20 +130,14 @@ router.get('/inbox', async (req, res) => {
     }
 });
 
-// --- 7. CLEAR INBOX (Mark as downloaded after PDF export) ---
+// --- 7. MARK DOWNLOADED ---
 router.put('/mark-downloaded', async (req, res) => {
     try {
         const { restaurantId } = req.body;
-        if (!restaurantId) return res.status(400).json({ message: "Restaurant ID required" });
-        
-        await Order.updateMany(
-            { restaurantId, isDownloaded: false },
-            { $set: { isDownloaded: true } }
-        );
-
-        res.status(200).json({ message: "Inbox cleared successfully" });
+        await Order.updateMany({ restaurantId, isDownloaded: false }, { $set: { isDownloaded: true } });
+        res.status(200).json({ message: "Cleared" });
     } catch (error) {
-        res.status(500).json({ error: "Failed to clear inbox" });
+        res.status(500).json({ error: error.message });
     }
 });
 
