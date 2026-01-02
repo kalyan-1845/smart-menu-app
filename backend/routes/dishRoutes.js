@@ -94,5 +94,24 @@ router.delete('/:id', protect, async (req, res) => {
         res.status(500).json({ message: 'Server error' });
     }
 });
+// ==========================================
+// 🩺 DEBUG X-RAY ROUTE (Delete this later)
+// ==========================================
+router.get('/debug/xray', async (req, res) => {
+    try {
+        // 1. Get all Owners (ID and Username)
+        const owners = await Owner.find({}, 'username _id');
+        
+        // 2. Get all Dishes (Name and Owner ID)
+        const dishes = await Dish.find({}, 'name owner');
 
+        res.json({
+            message: "--- X-RAY REPORT ---",
+            owners: owners,
+            dishes: dishes
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
 export default router;
