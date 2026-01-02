@@ -1,80 +1,34 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
-import webpush from 'web-push'; 
+import webpush from 'web-push'; // Required for notifications
 import Owner from '../models/Owner.js'; 
 import Dish from '../models/Dish.js'; 
 import Order from '../models/Order.js'; 
 
 const router = express.Router();
 
-// ==========================================
-// 🔑 SAFE WEB PUSH CONFIGURATION
-// ==========================================
-const publicKey = process.env.VAPID_PUBLIC_KEY;
-const privateKey = process.env.VAPID_PRIVATE_KEY;
+// --- 🔑 WEB PUSH CONFIGURATION ---
+// These should ideally be in your .env file
+webpush.setVapidDetails(
+    'mailto:support@bitebox.com',
+    process.env.PUBLIC_VAPID_KEY,
+    process.env.PRIVATE_VAPID_KEY
+);
 
-if (publicKey && privateKey) {
-    try {
-        webpush.setVapidDetails(
-            'mailto:support@bitebox.com',
-            publicKey,
-            privateKey
-        );
-        console.log("✅ Auth Routes: Push Initialized");
-    } catch (err) {
-        console.error("❌ VAPID Config Error:", err.message);
-    }
-}
-
-// Helper: Generate JWT Token
 const generateToken = (id) => {
     return jwt.sign({ id }, process.env.JWT_SECRET || 'fallback_secret', { expiresIn: '30d' });
 };
 
-// ==========================================
-// 📥 DASHBOARD & ORDERS (Legacy Support)
-// ==========================================
-
-// GET INBOX
-router.get('/inbox', async (req, res) => {
-    try {
-        const { restaurantId } = req.query;
-        if (!restaurantId) return res.status(400).json({ message: "Restaurant ID is required" });
-        const orders = await Order.find({ restaurantId }).sort({ createdAt: -1 });
-        res.json(orders);
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
-});
-
-// GET SALES SUMMARY
-router.get('/sales-summary', async (req, res) => {
-    try {
-        const { restaurantId } = req.query;
-        if (!restaurantId) return res.status(400).json({ message: "Restaurant ID is required" });
-
-        const orders = await Order.find({ restaurantId, status: 'Completed' });
-        const totalRevenue = orders.reduce((acc, order) => acc + (order.totalAmount || 0), 0);
-        
-        res.json({
-            totalRevenue,
-            totalOrders: orders.length,
-            recentOrders: orders.slice(0, 5)
-        });
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
-});
-
-// SAVE SUBSCRIPTION
+// --- 📲 NEW: SAVE PUSH SUBSCRIPTION ---
+// This allows the mobile app to save the phone's "address" for notifications
 router.post('/save-subscription', async (req, res) => {
     const { restaurantId, subscription } = req.body;
     try {
         const user = await Owner.findById(restaurantId);
         if (!user) return res.status(404).json({ message: "Restaurant not found" });
 
-        // Avoid duplicates
+        // Check if subscription already exists to avoid duplicates
         const exists = user.pushSubscriptions.find(s => s.endpoint === subscription.endpoint);
         if (!exists) {
             user.pushSubscriptions.push(subscription);
@@ -86,11 +40,7 @@ router.post('/save-subscription', async (req, res) => {
     }
 });
 
-// ==========================================
-// 🔐 AUTHENTICATION
-// ==========================================
-
-// REGISTER
+// --- REGISTER ROUTE ---
 router.post('/register', async (req, res) => {
     try {
         let { restaurantName, username, email, password, trialEndsAt } = req.body;
@@ -116,12 +66,13 @@ router.post('/register', async (req, res) => {
             token: generateToken(user._id),
             trialEndsAt: user.trialEndsAt
         });
+
     } catch (error) {
         res.status(400).json({ message: error.message });
     }
 });
 
-// LOGIN
+// --- LOGIN ROUTE ---
 router.post('/login', async (req, res) => {
     const { username, password } = req.body;
     try {
@@ -144,7 +95,7 @@ router.post('/login', async (req, res) => {
     }
 });
 
-// VERIFY ROLE (Chef/Waiter/Owner)
+// --- ✅ FIXED: VERIFY ROLE (Chef AND Waiter Support) ---
 router.post('/verify-role', async (req, res) => {
     try {
         const { role, username, password, token } = req.body;
@@ -154,6 +105,7 @@ router.post('/verify-role', async (req, res) => {
             
             if (!user) return res.status(404).json({ message: "Restaurant not found" });
 
+            // Safety: Check correct password based on role
             const validPass = role === 'chef' ? (user.chefPassword || "bitebox18") : (user.waiterPassword || "bitebox18"); 
 
             if (password === validPass) {
@@ -183,7 +135,6 @@ router.post('/verify-role', async (req, res) => {
     }
 });
 
-// GET CURRENT USER
 router.get('/verify-role', async (req, res) => {
     try {
         const token = req.headers.authorization?.split(" ")[1];
@@ -200,27 +151,18 @@ router.get('/verify-role', async (req, res) => {
     }
 });
 
-// ==========================================
-// 🔍 PUBLIC RESTAURANT LOOKUP (FIXED)
-// ==========================================
+// --- ✅ PUBLIC RESTAURANT LOOKUP ---
 router.get('/restaurant/:id', async (req, res) => {
     try {
         const { id } = req.params;
         let owner;
 
-        // 🛑 STRICT CHECK: Only check ID if it's 24-char HEX
-        // This prevents "kalyanresto1" (12 chars) from looking like an ID
-        const isValidHexId = /^[0-9a-fA-F]{24}$/.test(id);
-
-        if (isValidHexId) {
+        if (mongoose.Types.ObjectId.isValid(id)) {
             owner = await Owner.findById(id).select('username restaurantName email isPro upiId');
         } 
         
-        // If not found by ID (or not a valid ID), try username
         if (!owner) {
-            owner = await Owner.findOne({ 
-                username: { $regex: new RegExp("^" + id + "$", "i") } 
-            }).select('username restaurantName email isPro upiId');
+            owner = await Owner.findOne({ username: id }).select('username restaurantName email isPro upiId');
         }
 
         if (!owner) return res.status(404).json({ message: 'Restaurant not found' });
@@ -232,7 +174,6 @@ router.get('/restaurant/:id', async (req, res) => {
     }
 });
 
-// GET ALL RESTAURANTS
 router.get('/restaurants', async (req, res) => {
     try {
         const owners = await Owner.find().select('_id username restaurantName');
@@ -242,7 +183,6 @@ router.get('/restaurants', async (req, res) => {
     }
 });
 
-// --- ADMIN ROUTES ---
 router.get('/admin/all-owners', async (req, res) => {
     try {
         const owners = await Owner.find().select('-password').sort({ createdAt: -1 }); 

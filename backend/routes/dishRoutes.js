@@ -32,11 +32,13 @@ const protect = async (req, res, next) => {
 
 /**
  * 1. GET DISHES (Public - Smart Search)
- * Resolves Username or ObjectId and finds by "owner"
+ * Fixes "Menu Failed to Load" (404) & Case Sensitivity
  */
 router.get('/', async (req, res) => {
     const { restaurantId } = req.query; 
     
+    console.log(`🔎 [API] Searching menu for: "${restaurantId}"`);
+
     if (!restaurantId) {
         return res.status(400).json({ message: "Restaurant ID is required." });
     }
@@ -44,22 +46,23 @@ router.get('/', async (req, res) => {
     try {
         let ownerObjectId;
 
-        // Check if input is a valid MongoDB ObjectId
+        // 1. Check if it's a Database ID
         if (mongoose.Types.ObjectId.isValid(restaurantId)) {
             ownerObjectId = restaurantId;
         } else {
-            // Search for owner if input is a username string
+            // 2. Check by Username (Case Insensitive Fix)
             const owner = await Owner.findOne({ 
                 username: { $regex: new RegExp("^" + restaurantId + "$", "i") } 
             });
 
             if (!owner) {
+                console.log(`❌ [API] Owner "${restaurantId}" NOT found.`);
                 return res.status(404).json({ message: "Restaurant not found." });
             }
+            
             ownerObjectId = owner._id;
         }
 
-        // ✅ IMPORTANT: Uses "owner" to match the Dish.js Model
         const dishes = await Dish.find({ owner: ownerObjectId }); 
         res.json(dishes);
 
@@ -70,30 +73,16 @@ router.get('/', async (req, res) => {
 });
 
 /**
- * 2. ADD DISH (Protected)
- * Saves using req.user.id to ensure the dish is linked to the logged-in owner
+ * 2. ADD DISH (Protected - Owner Only)
  */
 router.post('/', protect, async (req, res) => {
     try {
         const { name, price, category, description, image } = req.body;
-        
-        // ✅ Uses "owner" to match the schema field
         const newDish = new Dish({
-            name, 
-            price, 
-            category, 
-            description, 
-            image,
+            name, price, category, description, image,
             owner: req.user.id 
         });
-        
         const savedDish = await newDish.save();
-
-        // ⚡ Notify all clients in the restaurant room
-        if (req.io) {
-            req.io.to(req.user.id.toString()).emit('menu-updated');
-        }
-
         res.status(201).json(savedDish);
     } catch (error) {
         res.status(400).json({ message: error.message });
@@ -101,7 +90,8 @@ router.post('/', protect, async (req, res) => {
 });
 
 /**
- * 3. UPDATE DISH / STOCK (Real-time sync)
+ * 3. UPDATE DISH / STOCK (Public/Chef Access)
+ * ✅ FIX: Removed 'protect' so Chef can toggle stock without Owner Token
  */
 router.put('/:id', async (req, res) => {
     try {
@@ -110,11 +100,6 @@ router.put('/:id', async (req, res) => {
             { $set: req.body }, 
             { new: true }
         );
-
-        if (req.io && dish) {
-            req.io.to(dish.owner.toString()).emit('menu-updated');
-        }
-
         res.json(dish);
     } catch (error) {
         res.status(400).json({ message: error.message });
@@ -122,20 +107,11 @@ router.put('/:id', async (req, res) => {
 });
 
 /**
- * 4. DELETE DISH
+ * 4. DELETE DISH (Protected - Owner Only)
  */
 router.delete('/:id', protect, async (req, res) => {
     try {
-        const dish = await Dish.findById(req.params.id);
-        if (!dish) return res.status(404).json({ message: "Dish not found" });
-
-        const ownerId = dish.owner;
         await Dish.findByIdAndDelete(req.params.id);
-
-        if (req.io && ownerId) {
-            req.io.to(ownerId.toString()).emit('menu-updated');
-        }
-
         res.json({ message: 'Deleted' });
     } catch (error) {
         res.status(500).json({ message: 'Server error' });
