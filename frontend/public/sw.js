@@ -1,47 +1,44 @@
-const CACHE_NAME = 'bitebox-cache-v2'; // Incremented version for update detection
+const CACHE_NAME = 'bitebox-v2';
 
-// 1. Install Event
+// 1. Install Event - Force update to the latest logic immediately
 self.addEventListener('install', (event) => {
-  // Force the new service worker to take control immediately
-  self.skipWaiting();
+    self.skipWaiting();
 });
 
-// 2. Activate Event
+// 2. Activate Event - Clean up old cache versions to save mobile storage
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cache) => {
-          if (cache !== CACHE_NAME) {
-            console.log('Cleaning old cache:', cache);
-            return caches.delete(cache);
-          }
+    event.waitUntil(
+        caches.keys().then((cacheNames) => {
+            return Promise.all(
+                cacheNames.map((cache) => {
+                    if (cache !== CACHE_NAME) {
+                        return caches.delete(cache);
+                    }
+                })
+            );
         })
-      );
-    })
-  );
-  // Ensure the service worker takes control of all clients immediately
-  return self.clients.claim();
+    );
+    return self.clients.claim();
 });
 
-// 3. Push Event (The Brains of Staff Alerts)
+// 3. Push Event - The Brains of Staff Alerts (Chef & Waiter Notifications)
 self.addEventListener('push', function(event) {
     if (!event.data) return;
 
     try {
         const data = event.data.json();
         
-        // --- 🛠️ SUGGESTION: ADD ACTIONS ---
-        // This allows staff to interact directly from the notification bar
+        // Critical for Staff: Intense vibration and persistent visibility
         const options = {
             body: data.body,
             icon: '/logo192.png',
             badge: '/logo192.png',
-            vibrate: [500, 110, 500, 110, 450, 110, 200, 110, 170, 40, 450, 110, 200, 110, 170, 40], // Long Attention Pattern
+            // Attention-grabbing vibration pattern: SOS style
+            vibrate: [500, 110, 500, 110, 450, 110, 200, 110, 170, 40], 
             data: { url: data.url || '/' },
-            tag: 'staff-alert', // Groups notifications to prevent clutter
-            renotify: true, // Forces phone to vibrate even if previous notification is still there
-            requireInteraction: true, // Keeps notification on screen until staff clicks it
+            tag: 'staff-alert', 
+            renotify: true, 
+            requireInteraction: true, // IMPORTANT: Notification stays until swiped/clicked
             actions: [
                 { action: 'open', title: '✅ Open Dashboard' },
                 { action: 'close', title: '❌ Dismiss' }
@@ -56,26 +53,24 @@ self.addEventListener('push', function(event) {
     }
 });
 
-// 4. Notification Click Event
+// 4. Notification Click Event - Smart Window Management
 self.addEventListener('notificationclick', function(event) {
     event.notification.close();
 
-    // Handle button actions
     if (event.action === 'close') return;
 
     event.waitUntil(
         clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
-            // Find the target URL from the push data
             const targetUrl = event.notification.data.url;
 
-            // If a window is already open, focus it and navigate to the specific path
+            // If a staff member already has the dashboard open, just focus it
             for (let client of clientList) {
                 if (client.url.includes(targetUrl) && 'focus' in client) {
                     return client.focus();
                 }
             }
             
-            // Otherwise open a new window
+            // Otherwise, open a fresh window (App View)
             if (clients.openWindow) {
                 return clients.openWindow(targetUrl);
             }
@@ -83,34 +78,44 @@ self.addEventListener('notificationclick', function(event) {
     );
 });
 
-// 5. Fetch Event (Optimized for 100k+ users)
+// 5. Fetch Event - Optimized for High-Speed & Low Bandwidth
 self.addEventListener('fetch', (event) => {
-  const url = event.request.url;
+    const url = new URL(event.request.url);
 
-  // STRATEGY: Bypass cache for Audio and API to ensure real-time accuracy
-  if (url.includes('mixkit') || url.includes('/api/') || url.includes('socket.io')) {
-    return; 
-  }
+    // ✅ BYPASS CACHE for real-time traffic
+    // We never cache API calls, Socket.io, or external alert sounds
+    if (url.pathname.startsWith('/api/') || 
+        url.hostname.includes('socket.io') || 
+        url.hostname.includes('mixkit.co')) {
+        return; 
+    }
 
-  // STRATEGY: Cache-First for UI Assets (CSS/JS/Images) to save bandwidth
-  event.respondWith(
-    caches.match(event.request).then((response) => {
-      return response || fetch(event.request).then((fetchRes) => {
-          // Only cache successful GET requests for UI files
-          if (event.request.method === 'GET' && fetchRes.status === 200) {
-              return caches.open(CACHE_NAME).then((cache) => {
-                  cache.put(event.request, fetchRes.clone());
-                  return fetchRes;
-              });
-          }
-          return fetchRes;
-      }).catch(() => {
-        // Fallback for offline mode
-        return new Response('Offline: BiteBox requires internet for live updates.', { 
-            status: 503, 
-            headers: { 'Content-Type': 'text/plain' } 
-        });
-      });
-    })
-  );
+    // ✅ CACHE-FIRST for Static Assets (Images, CSS, JS)
+    // This makes the menu load in < 200ms for returning customers
+    event.respondWith(
+        caches.match(event.request).then((cachedResponse) => {
+            if (cachedResponse) {
+                return cachedResponse;
+            }
+
+            return fetch(event.request).then((networkResponse) => {
+                // Cache only valid UI assets
+                if (event.request.method === 'GET' && networkResponse.status === 200) {
+                    const responseToCache = networkResponse.clone();
+                    caches.open(CACHE_NAME).then((cache) => {
+                        cache.put(event.request, responseToCache);
+                    });
+                }
+                return networkResponse;
+            }).catch(() => {
+                // Return a custom offline message for the Menu
+                if (event.request.mode === 'navigate') {
+                    return new Response(
+                        '<h1>Connection Lost</h1><p>BiteBox requires internet for live menu updates.</p>', 
+                        { headers: { 'Content-Type': 'text/html' } }
+                    );
+                }
+            });
+        })
+    );
 });

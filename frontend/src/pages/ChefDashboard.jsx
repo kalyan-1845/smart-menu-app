@@ -22,10 +22,50 @@ const ChefDashboard = () => {
     const [isMuted, setIsMuted] = useState(false);
     const [activeTab, setActiveTab] = useState("orders");
     const [mongoId, setMongoId] = useState(null);
-    const [socket, setSocket] = useState(null); // 🟢 Store socket in state
+    const [socket, setSocket] = useState(null); 
 
     const audioRef = useRef(new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"));
     const callSound = useRef(new Audio("https://assets.mixkit.co/active_storage/sfx/2190/2190-preview.mp3"));
+
+    // 🔄 AUTOMATIC REFRESH ON SITE LOAD & VISIBILITY CHANGE
+    useEffect(() => {
+        const handleEntryRefresh = () => {
+            if (document.visibilityState === 'visible' && mongoId) {
+                fetchData(mongoId);
+            }
+        };
+        window.addEventListener('load', handleEntryRefresh);
+        document.addEventListener("visibilitychange", handleEntryRefresh);
+        return () => {
+            window.removeEventListener('load', handleEntryRefresh);
+            document.removeEventListener("visibilitychange", handleEntryRefresh);
+        };
+    }, [mongoId]);
+
+    // 📱 MOBILE PUSH NOTIFICATION SETUP
+    const enableMobileAlerts = async (rId) => {
+        audioRef.current.play().then(() => {
+            audioRef.current.pause();
+            audioRef.current.currentTime = 0;
+        }).catch(() => {});
+
+        if ('serviceWorker' in navigator) {
+            try {
+                const registration = await navigator.serviceWorker.ready;
+                const permission = await Notification.requestPermission();
+                if (permission === 'granted') {
+                    const subscription = await registration.pushManager.subscribe({
+                        userVisibleOnly: true,
+                        applicationServerKey: 'YOUR_PUBLIC_VAPID_KEY' 
+                    });
+                    await axios.post(`${API_BASE}/auth/save-subscription`, {
+                        restaurantId: rId,
+                        subscription: subscription
+                    });
+                }
+            } catch (e) { console.log("Notification setup skipped"); }
+        }
+    };
 
     const handleLogin = async (e) => {
         if(e) e.preventDefault();
@@ -42,6 +82,7 @@ const ChefDashboard = () => {
                 setMongoId(dbId);
                 localStorage.setItem(`chef_session_${id}`, dbId);
                 setIsAuthenticated(true);
+                enableMobileAlerts(dbId); 
                 fetchData(dbId);
             } else { setError("❌ Access Denied"); }
         } catch (err) { setError("❌ Invalid PIN"); } finally { setAuthLoading(false); }
@@ -63,61 +104,81 @@ const ChefDashboard = () => {
                 axios.get(`${API_BASE}/orders?restaurantId=${rId}`),
                 axios.get(`${API_BASE}/dishes?restaurantId=${rId}`)
             ]);
-            // ✅ CHEF sees everything except what is already SERVED by the waiter
-            const active = orderRes.data.filter(o => o.status !== "SERVED" && o.status !== "Served");
+            // ✅ AUTO-CLEAR: Filter out orders marked as Served
+            const active = orderRes.data.filter(o => 
+                o.status.toLowerCase() !== "served" && o.status.toLowerCase() !== "completed"
+            );
             setOrders(active.sort((a,b) => new Date(a.createdAt) - new Date(b.createdAt)));
             setDishes(dishRes.data);
         } catch (e) { console.error("Sync Failed", e); }
     };
 
+    // 🔒 REAL-TIME WEB-SOCKET LOGIC
     useEffect(() => {
         if(isAuthenticated && mongoId) {
-            const newSocket = io(SERVER_URL);
+            const newSocket = io(SERVER_URL, {
+                transports: ['websocket'],
+                reconnection: true,
+                reconnectionAttempts: Infinity,
+                timeout: 10000
+            });
+            
             setSocket(newSocket);
             newSocket.emit("join-restaurant", mongoId);
 
             newSocket.on("new-order", (newOrder) => {
                 if (!isMuted) audioRef.current.play().catch(()=>{});
+                if ("vibrate" in navigator) navigator.vibrate([200, 100, 200]);
                 fetchData(mongoId);
             });
 
-            newSocket.on("order-updated", () => fetchData(mongoId));
+            newSocket.on("order-updated", (updatedOrder) => {
+                if (updatedOrder.status.toLowerCase() === "served" || updatedOrder.status.toLowerCase() === "completed") {
+                    setOrders(prev => prev.filter(o => o._id !== updatedOrder._id));
+                } else {
+                    fetchData(mongoId);
+                }
+            });
 
             newSocket.on("new-waiter-call", (callData) => {
                 if (!isMuted) callSound.current.play().catch(()=>{});
+                if ("vibrate" in navigator) navigator.vibrate(500);
                 setServiceCalls(prev => [callData, ...prev]);
             });
 
-            // 📢 LISTEN FOR GLOBAL CEO BROADCASTS
             newSocket.on("global-broadcast", (data) => {
                 alert(`📢 BROADCAST: ${data.title}\n${data.message}`);
             });
 
-            return () => newSocket.disconnect();
+            const mobileSync = setInterval(() => fetchData(mongoId), 20000);
+
+            return () => {
+                newSocket.disconnect();
+                clearInterval(mobileSync);
+            };
         }
     }, [isAuthenticated, mongoId, isMuted]);
 
     const advanceOrderStatus = async (order) => {
         let nextStatus = "";
-        if (order.status === "Pending" || order.status === "PLACED") nextStatus = "Cooking";
-        else if (order.status === "Cooking") nextStatus = "Ready";
+        const currentStatus = order.status.toLowerCase();
 
-        // If it's already "Ready", the Chef stops here. The Waiter must take over.
-        if (order.status === "Ready") return; 
+        if (currentStatus === "pending" || currentStatus === "placed") nextStatus = "cooking";
+        else if (currentStatus === "cooking") nextStatus = "ready";
+        
+        if (currentStatus === "ready") return; 
 
         try {
-            // Optimistic UI update
             setOrders(prev => prev.map(o => o._id === order._id ? { ...o, status: nextStatus } : o));
-            
-            // API Update
             await axios.put(`${API_BASE}/orders/${order._id}`, { status: nextStatus });
             
-            // ✅ EMIT TO WAITER: If marked READY, specifically tell the Waiter panel
-            if (nextStatus === "Ready" && socket) {
+            if (socket) {
+                // Notify Tracker and Waiter
                 socket.emit("chef-ready-alert", { 
                     restaurantId: mongoId, 
                     tableNum: order.tableNum,
-                    orderId: order._id 
+                    orderId: order._id,
+                    status: nextStatus
                 });
             }
         } catch (error) { fetchData(mongoId); }
@@ -179,20 +240,21 @@ const ChefDashboard = () => {
                 </button>
             </div>
 
-            {activeTab === "orders" ? (
-                <div style={styles.grid}>
-                    {orders.length === 0 ? (
-                        <div style={styles.emptyState}><h2>No Orders</h2></div>
-                    ) : (
+            <div style={styles.grid}>
+                {activeTab === "orders" ? (
+                    orders.length === 0 ? <div style={styles.emptyState}><h2>No Pending Orders</h2></div> : (
                         orders.map((order) => (
                             <div key={order._id} style={{
                                 ...styles.card, 
-                                borderTop: order.status === 'Ready' ? '5px solid #22c55e' : (order.status === 'Cooking' ? '5px solid #eab308' : '5px solid #f97316')
+                                borderTop: order.status.toLowerCase() === 'ready' ? '5px solid #22c55e' : (order.status.toLowerCase() === 'cooking' ? '5px solid #eab308' : '5px solid #f97316')
                             }}>
                                 <div style={styles.cardHeader}>
                                     <h2 style={styles.tableNumber}>T-{order.tableNum}</h2>
-                                    <span style={{...styles.statusBadge, background: order.status === 'Ready' ? '#22c55e' : (order.status === 'Cooking' ? '#eab308' : '#374151')}}>
-                                        {order.status}
+                                    <span style={{
+                                        ...styles.statusBadge, 
+                                        background: order.status.toLowerCase() === 'ready' ? '#22c55e' : (order.status.toLowerCase() === 'cooking' ? '#eab308' : '#374151')
+                                    }}>
+                                        {order.status.toUpperCase()}
                                     </span>
                                 </div>
                                 <div style={styles.itemsContainer}>
@@ -204,36 +266,32 @@ const ChefDashboard = () => {
                                     ))}
                                 </div>
                                 <div style={styles.actionContainer}>
-                                    {order.status === "Ready" ? (
-                                        <div style={styles.readyIndicator}>
-                                            <FaCheck /> WAITING FOR WAITER
-                                        </div>
+                                    {order.status.toLowerCase() === "ready" ? (
+                                        <div style={styles.readyIndicator}><FaCheck /> SENT TO WAITER</div>
                                     ) : (
                                         <button onClick={() => advanceOrderStatus(order)} style={{
                                             ...styles.actionBtn, 
-                                            background: order.status === 'Cooking' ? '#eab308' : '#f97316',
-                                            color: order.status === 'Cooking' ? 'black' : 'white'
+                                            background: order.status.toLowerCase() === 'cooking' ? '#eab308' : '#f97316',
+                                            color: order.status.toLowerCase() === 'cooking' ? 'black' : 'white'
                                         }}>
-                                            {order.status === "Cooking" ? "MARK READY" : "START COOKING"}
+                                            {order.status.toLowerCase() === "cooking" ? "MARK READY" : "START COOKING"}
                                         </button>
                                     )}
                                 </div>
                             </div>
                         ))
-                    )}
-                </div>
-            ) : (
-                <div style={styles.grid}>
-                    {dishes.map(dish => (
+                    )
+                ) : (
+                    dishes.map(dish => (
                         <div key={dish._id} style={{...styles.stockCard, opacity: dish.isAvailable ? 1 : 0.6}}>
                             <h3 style={{ margin: 0, fontSize: '15px' }}>{dish.name}</h3>
                             <button onClick={() => toggleStock(dish._id, dish.isAvailable)} style={{...styles.stockBtn, background: dish.isAvailable ? '#ef4444' : '#22c55e'}}>
                                 {dish.isAvailable ? "OUT" : "IN"}
                             </button>
                         </div>
-                    ))}
-                </div>
-            )}
+                    ))
+                )}
+            </div>
             <style>{`.spin { animation: spin 1s linear infinite; } @keyframes spin { 100% { transform: rotate(360deg); } }`}</style>
         </div>
     );
@@ -255,7 +313,7 @@ const styles = {
     iconButtonRed: { background: '#3b0a0a', border: 'none', color: '#ef4444', padding: '10px', borderRadius: '8px' },
     tabContainer: { display: 'flex', gap: '10px', marginBottom: '15px' },
     tabButton: { flex: 1, padding: '12px', borderRadius: '10px', border: 'none', color: 'white', fontWeight: 'bold', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px' },
-    grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '12px' },
+    grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' },
     card: { background: '#111', borderRadius: '12px', border: '1px solid #222', display: 'flex', flexDirection: 'column' },
     cardHeader: { padding: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
     tableNumber: { fontSize: '20px', fontWeight: '900', margin:0 },
