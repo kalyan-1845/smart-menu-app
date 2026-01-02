@@ -31,7 +31,9 @@ if (publicKey && privateKey) {
 // --- 1. GET INBOX (Restaurant Dashboard) ---
 router.get('/inbox', async (req, res) => {
     try {
-        const { restaurantId } = req.query;
+        // ✅ FIX: Use req.query for GET requests
+        const { restaurantId } = req.query; 
+
         if (!restaurantId) return res.status(400).json({ message: "Restaurant ID required" });
         
         // Fetch orders that are NOT downloaded yet
