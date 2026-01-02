@@ -37,7 +37,6 @@ const styles = `
 .link-text { color: #3b82f6; font-size: 12px; font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; display: block; text-decoration: none; }
 `;
 
-// --- SETUP WIZARD COMPONENT (RETAINED) ---
 const SetupWizard = ({ dishesCount, pushEnabled }) => {
     const steps = [
         { id: 1, label: "Add 3 dishes", done: dishesCount >= 3, hint: "Go to Menu tab" },
@@ -52,7 +51,7 @@ const SetupWizard = ({ dishesCount, pushEnabled }) => {
 
     return (
         <div className="glass-card" style={{ borderColor: completed === 2 ? '#22c55e' : 'rgba(255,255,255,0.1)' }}>
-            <div style={{ display: 'flex', justifyBetween: 'space-between', alignItems: 'flex-end', marginBottom: '10px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '10px' }}>
                 <h2 style={{ fontSize: '14px', fontWeight: 900, textTransform: 'uppercase', margin: 0 }}><FaRocket color="#FF9933" /> Setup Progress</h2>
                 <span style={{ color: '#FF9933', fontWeight: 900, fontSize: '12px' }}>{percent}% READY</span>
             </div>
@@ -85,34 +84,28 @@ const RestaurantAdmin = () => {
     const [activeTab, setActiveTab] = useState("menu");
     const [restaurantName, setRestaurantName] = useState(id);
     const [activeAlerts, setActiveAlerts] = useState([]);
-    const [broadcast, setBroadcast] = useState(null);
     const [pushEnabled, setPushEnabled] = useState(Notification.permission === 'granted');
-    const [trialEndsAt, setTrialEndsAt] = useState(null);
-    const [isPro, setIsPro] = useState(false);
     const [dishes, setDishes] = useState([]);
-    const [inboxOrders, setInboxOrders] = useState([]); // --- NEW INBOX STATE ---
+    const [inboxOrders, setInboxOrders] = useState([]);
     const [formData, setFormData] = useState({ name: "", price: "", category: "Starters", image: "" });
 
-    // --- FETCH INBOX (NEW) ---
+    // --- 1. FETCH INBOX (FIXED: Query Param matches backend) ---
     const fetchInbox = async () => {
         const mongoId = localStorage.getItem(`owner_id_${id}`);
         if (!mongoId) return;
         try {
-            const res = await axios.get(`${API_BASE}/orders/inbox/${mongoId}`);
+            const res = await axios.get(`${API_BASE}/orders/inbox?restaurantId=${mongoId}`);
             setInboxOrders(res.data);
         } catch (err) { console.error("Inbox Error", err); }
     };
 
-    // --- PDF & CLEAR LOGIC (NEW) ---
+    // --- 2. PDF & CLEAR (FIXED: Payload matches backend PUT route) ---
     const handleDownloadAndClear = async () => {
         if (inboxOrders.length === 0) return alert("Inbox is empty!");
         const mongoId = localStorage.getItem(`owner_id_${id}`);
 
         const doc = new jsPDF();
         doc.text(`Receipt Summary - ${restaurantName}`, 14, 15);
-        doc.setFontSize(10);
-        doc.text(`Total Orders: ${inboxOrders.length}`, 14, 22);
-
         const tableData = inboxOrders.map((order, i) => [
             i + 1,
             order.tableNum,
@@ -120,17 +113,12 @@ const RestaurantAdmin = () => {
             `Rs.${order.totalAmount}`,
             new Date(order.createdAt).toLocaleTimeString()
         ]);
-
-        doc.autoTable({
-            startY: 30,
-            head: [['#', 'Table', 'Items', 'Total', 'Time']],
-            body: tableData,
-        });
-
+        doc.autoTable({ startY: 30, head: [['#', 'Table', 'Items', 'Total', 'Time']], body: tableData });
         doc.save(`Receipts_${Date.now()}.pdf`);
 
         try {
-            await axios.put(`${API_BASE}/orders/clear-inbox/${mongoId}`);
+            // Updated to match the "mark-downloaded" PUT route in backend
+            await axios.put(`${API_BASE}/orders/mark-downloaded`, { restaurantId: mongoId });
             setInboxOrders([]);
             alert("Inbox Cleared!");
         } catch (err) { alert("Error clearing database."); }
@@ -144,8 +132,6 @@ const RestaurantAdmin = () => {
             localStorage.setItem(`owner_token_${id}`, res.data.token);
             localStorage.setItem(`owner_id_${id}`, res.data._id);
             setRestaurantName(res.data.restaurantName);
-            setIsPro(res.data.isPro);
-            setTrialEndsAt(res.data.trialEndsAt);
             setIsAuthenticated(true);
             fetchData(res.data.token, res.data._id);
             fetchInbox();
@@ -171,7 +157,6 @@ const RestaurantAdmin = () => {
                 new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3").play().catch(() => {});
                 setActiveAlerts(prev => [...prev, data]);
             });
-            socket.on('new-broadcast', (data) => { setBroadcast(data); });
 
             const interval = setInterval(fetchInbox, 10000);
             return () => { socket.disconnect(); clearInterval(interval); };
@@ -180,6 +165,7 @@ const RestaurantAdmin = () => {
 
     const handleLogout = () => { setIsAuthenticated(false); localStorage.removeItem(`owner_token_${id}`); };
 
+    // --- 3. ADD DISH (Ensures UI updates and syncs with list) ---
     const handleAddDish = async (e) => {
         e.preventDefault();
         const token = localStorage.getItem(`owner_token_${id}`);
@@ -204,8 +190,8 @@ const RestaurantAdmin = () => {
     if (!isAuthenticated) return (
         <div className="admin-container">
             <style>{styles}</style>
-            <div className="lock-container">
-                <div className="lock-card">
+            <div style={{display:'flex', justifyContent:'center', alignItems:'center', height:'80vh'}}>
+                <div className="glass-card" style={{textAlign:'center', width:'100%', maxWidth:'350px'}}>
                     <FaStore size={40} color="#f97316" style={{ marginBottom: '15px' }} />
                     <h1 style={{ fontSize: '20px', fontWeight: '900' }}>ADMIN LOGIN</h1>
                     <form onSubmit={handleLogin} style={{ marginTop: '20px' }}>
@@ -241,10 +227,9 @@ const RestaurantAdmin = () => {
                     </div>
 
                     <div className="menu-link-box">
-                        <a href={publicMenuUrl} target="_blank" className="link-text">{publicMenuUrl}</a>
+                        <a href={publicMenuUrl} target="_blank" rel="noreferrer" className="link-text">{publicMenuUrl}</a>
                         <div style={{display:'flex', gap:'5px'}}>
-                            <button onClick={copyToClipboard} className="action-btn"><FaCopy /></button>
-                            <a href={publicMenuUrl} target="_blank" className="action-btn"><FaExternalLinkAlt /></a>
+                            <button onClick={copyToClipboard} className="btn-glass" style={{padding:'8px'}}><FaCopy /></button>
                         </div>
                     </div>
 
