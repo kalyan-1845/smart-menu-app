@@ -1,13 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import axios from "axios";
-import { useParams, Link } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import io from "socket.io-client";
 import confetti from "canvas-confetti";
-import jsPDF from 'jspdf';
-import 'jspdf-autotable';
 import { 
     FaPlus, FaTrash, FaUtensils, 
-    FaBell, FaCheckCircle, FaCircle, FaSignOutAlt, FaRocket, FaStore, FaExternalLinkAlt, FaCopy, FaInbox, FaDownload
+    FaBell, FaCheckCircle, FaCircle, FaSignOutAlt, FaRocket, FaStore, FaExternalLinkAlt, FaCopy
 } from "react-icons/fa";
 
 // --- STYLES ---
@@ -19,14 +17,16 @@ const styles = `
 .header-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
 .shop-title { font-size: 28px; font-weight: 900; margin: 0; letter-spacing: -1px; text-transform: uppercase; }
 .btn-glass { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); color: white; padding: 10px 16px; border-radius: 12px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: 0.2s; }
-.btn-primary { background: linear-gradient(135deg, #FF8800 0%, #FF5500 100%); border: none; color: white; width: 100%; padding: 16px; border-radius: 16px; font-size: 14px; font-weight: 700; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; box-shadow: 0 4px 15px rgba(255, 85, 0, 0.4); }
+.btn-glass:hover { background: rgba(255, 255, 255, 0.1); }
+.btn-primary { background: linear-gradient(135deg, #FF8800 0%, #FF5500 100%); border: none; color: white; width: 100%; padding: 16px; border-radius: 16px; font-size: 14px; font-weight: 700; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; box-shadow: 0 4px 15px rgba(255, 85, 0, 0.4); transition: 0.2s; }
+.btn-primary:active { transform: scale(0.98); }
 .glass-card { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); backdrop-filter: blur(12px); border-radius: 24px; padding: 24px; margin-bottom: 24px; }
 .nav-tabs { display: flex; background: rgba(0,0,0,0.3); padding: 4px; border-radius: 16px; margin-bottom: 24px; }
 .tab-btn { flex: 1; padding: 12px; background: transparent; border: none; color: #888; font-size: 11px; font-weight: 900; cursor: pointer; border-radius: 12px; text-transform: uppercase; transition: 0.3s; }
 .tab-btn.active { background: rgba(255,255,255,0.1); color: #FF9933; }
-.input-dark { width: 100%; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); padding: 14px; border-radius: 12px; color: white; margin-bottom: 15px; outline: none; }
+.input-dark { width: 100%; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); padding: 14px; border-radius: 12px; color: white; margin-bottom: 15px; outline: none; transition: 0.3s; }
+.input-dark:focus { border-color: #FF9933; background: rgba(0,0,0,0.6); }
 .dish-item { display: flex; justify-content: space-between; align-items: center; padding: 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
-.inbox-card { background: rgba(255,255,255,0.05); padding: 15px; border-radius: 15px; margin-bottom: 10px; border-left: 4px solid #FF9933; }
 .toast-container { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); width: 90%; max-width: 400px; z-index: 1000; display: flex; flex-direction: column; gap: 10px; }
 .toast-alert { background: #FF9933; color: black; padding: 15px; border-radius: 15px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
 .menu-link-box { background: rgba(0,0,0,0.3); border: 1px dashed #333; padding: 15px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
@@ -82,42 +82,7 @@ const RestaurantAdmin = () => {
     const [activeAlerts, setActiveAlerts] = useState([]);
     const [pushEnabled, setPushEnabled] = useState(Notification.permission === 'granted');
     const [dishes, setDishes] = useState([]);
-    const [inboxOrders, setInboxOrders] = useState([]);
     const [formData, setFormData] = useState({ name: "", price: "", category: "Starters", image: "" });
-
-    // ✅ FIXED: Using the new Safe Route '/admin-inbox'
-    const fetchInbox = async () => {
-        const mongoId = localStorage.getItem(`owner_id_${id}`);
-        if (!mongoId) return;
-        try {
-            const res = await axios.get(`${API_BASE}/orders/admin-inbox?restaurantId=${mongoId}`);
-            setInboxOrders(res.data);
-        } catch (err) { console.error("Inbox Error", err); }
-    };
-
-    const handleDownloadAndClear = async () => {
-        if (inboxOrders.length === 0) return alert("Inbox is empty!");
-        const mongoId = localStorage.getItem(`owner_id_${id}`);
-
-        const doc = new jsPDF();
-        doc.text(`Receipt Summary - ${restaurantName}`, 14, 15);
-        const tableData = inboxOrders.map((order, i) => [
-            i + 1,
-            order.tableNum,
-            order.items.map(item => `${item.name} x${item.quantity}`).join(", "),
-            `Rs.${order.totalAmount}`,
-            new Date(order.createdAt).toLocaleTimeString()
-        ]);
-        doc.autoTable({ startY: 30, head: [['#', 'Table', 'Items', 'Total', 'Time']], body: tableData });
-        doc.save(`Receipts_${Date.now()}.pdf`);
-
-        try {
-            
-            await axios.put(`${API_BASE}/orders/mark-downloaded`, { restaurantId: mongoId });
-            setInboxOrders([]);
-            alert("Inbox Cleared!");
-        } catch (err) { alert("Error clearing database."); }
-    };
 
     const handleLogin = async (e) => {
         e.preventDefault();
@@ -129,7 +94,6 @@ const RestaurantAdmin = () => {
             setRestaurantName(res.data.restaurantName);
             setIsAuthenticated(true);
             fetchData(res.data.token, res.data._id);
-            fetchInbox();
         } catch (err) { alert("❌ Invalid Password"); } finally { setAuthLoading(false); }
     };
 
@@ -147,15 +111,13 @@ const RestaurantAdmin = () => {
             const socket = io("https://smart-menu-backend-5ge7.onrender.com");
             socket.emit("join-restaurant", mongoId);
 
-            socket.on("new-order", () => fetchInbox());
+            // Listen ONLY for Waiter Calls (Inbox alerts removed)
             socket.on("new-waiter-call", (data) => {
                 new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3").play().catch(() => {});
                 setActiveAlerts(prev => [...prev, data]);
             });
 
-            // Polling every 15s to match backend limits
-            const interval = setInterval(fetchInbox, 15000);
-            return () => { socket.disconnect(); clearInterval(interval); };
+            return () => { socket.disconnect(); };
         }
     }, [isAuthenticated, id]);
 
@@ -164,7 +126,6 @@ const RestaurantAdmin = () => {
     const handleAddDish = async (e) => {
         e.preventDefault();
         const token = localStorage.getItem(`owner_token_${id}`);
-        // owner ID from local storage to ensure consistency
         const mongoId = localStorage.getItem(`owner_id_${id}`);
         try {
             await axios.post(`${API_BASE}/dishes`, { ...formData, owner: mongoId }, { headers: { Authorization: `Bearer ${token}` } });
@@ -202,6 +163,7 @@ const RestaurantAdmin = () => {
     return (
         <div className="admin-container">
             <style>{styles}</style>
+            
             <div className="toast-container">
                 {activeAlerts.map((alert, i) => (
                     <div key={i} className="toast-alert">
@@ -213,48 +175,34 @@ const RestaurantAdmin = () => {
                     </div>
                 ))}
             </div>
+
             <div className="max-w-wrapper">
                 <header className="admin-header">
                     <div className="header-top">
                         <h1 className="shop-title">{restaurantName}</h1>
                         <button onClick={handleLogout} className="btn-glass" style={{ color: '#ef4444' }}><FaSignOutAlt /></button>
                     </div>
+
                     <div className="menu-link-box">
                         <a href={publicMenuUrl} target="_blank" rel="noreferrer" className="link-text">{publicMenuUrl}</a>
                         <div style={{display:'flex', gap:'5px'}}>
                             <button onClick={copyToClipboard} className="btn-glass" style={{padding:'8px'}}><FaCopy /></button>
                         </div>
                     </div>
+
                     <div style={{ display: 'flex', gap: '10px' }}>
                         <Link to={`/${id}/chef`} target="_blank" style={{flex:1}}><button className="btn-glass" style={{width:'100%'}}><FaUtensils /> Chef</button></Link>
                         <Link to={`/${id}/waiter`} target="_blank" style={{flex:1}}><button className="btn-glass" style={{width:'100%'}}><FaBell /> Waiter</button></Link>
                     </div>
                 </header>
+
                 <SetupWizard dishesCount={dishes.length} pushEnabled={pushEnabled} />
+
                 <nav className="nav-tabs">
                     <button onClick={() => setActiveTab("menu")} className={`tab-btn ${activeTab === "menu" ? 'active' : ''}`}>Menu</button>
-                    <button onClick={() => setActiveTab("inbox")} className={`tab-btn ${activeTab === "inbox" ? 'active' : ''}`}>
-                        Inbox {inboxOrders.length > 0 && <span style={{background:'#FF9933', color:'black', padding:'2px 6px', borderRadius:'10px'}}>{inboxOrders.length}</span>}
-                    </button>
                     <button onClick={() => setActiveTab("settings")} className={`tab-btn ${activeTab === "settings" ? 'active' : ''}`}>Setup</button>
                 </nav>
-                {activeTab === "inbox" && (
-                    <div className="glass-card">
-                        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'20px'}}>
-                            <h2 style={{fontSize:'14px', fontWeight:900}}><FaInbox color="#FF9933"/> NEW ORDERS</h2>
-                            <button onClick={handleDownloadAndClear} className="btn-glass" style={{background:'#FF9933', color:'black', border:'none'}}><FaDownload /> PDF & Clear</button>
-                        </div>
-                        {inboxOrders.length === 0 ? <p style={{textAlign:'center', padding:'20px'}}>Inbox Empty</p> : 
-                            inboxOrders.map(order => (
-                                <div key={order._id} className="inbox-card">
-                                    <p style={{fontWeight:900, color:'#FF9933', margin:0}}>TABLE {order.tableNum}</p>
-                                    <p style={{fontSize:'12px', margin:'5px 0'}}>{order.items.map(i => `${i.name} x${i.quantity}`).join(", ")}</p>
-                                    <p style={{fontSize:'11px', fontWeight:900}}>Total: Rs.{order.totalAmount}</p>
-                                </div>
-                            ))
-                        }
-                    </div>
-                )}
+
                 {activeTab === "menu" && (
                     <div className="glass-card">
                         <h2 style={{ fontSize: '14px', fontWeight: 900, marginBottom: '20px' }}><FaPlus /> ADD ITEM</h2>
@@ -287,6 +235,7 @@ const RestaurantAdmin = () => {
                         </div>
                     </div>
                 )}
+
                 {activeTab === "settings" && (
                     <div className="glass-card">
                         <h2 style={{ fontSize: '14px', fontWeight: 900, marginBottom: '10px' }}>Staff Alerts</h2>
@@ -297,4 +246,5 @@ const RestaurantAdmin = () => {
         </div>
     );
 };
+
 export default RestaurantAdmin;
