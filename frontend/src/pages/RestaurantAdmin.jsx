@@ -5,7 +5,7 @@ import io from "socket.io-client";
 import confetti from "canvas-confetti";
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
-import SalesSummary from "./components/SalesSummary"; // ✅ ADDED: Fixes ReferenceError
+import SalesSummary from "./components/SalesSummary"; 
 import { 
     FaPlus, FaTrash, FaUtensils, 
     FaBell, FaCheckCircle, FaCircle, FaCrown, FaSignOutAlt, FaRocket, FaStore, FaExternalLinkAlt, FaCopy, FaInbox, FaDownload, FaQrcode
@@ -37,8 +37,6 @@ const styles = `
 .menu-link-box { background: rgba(0,0,0,0.3); border: 1px dashed #333; padding: 15px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 .link-text { color: #3b82f6; font-size: 12px; font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; display: block; text-decoration: none; }
 .action-btn { background: none; border: none; color: #888; cursor: pointer; padding: 5px; transition: 0.2s; }
-
-/* 🚨 Pulsing Dot */
 .pulse-dot { position: absolute; top: 8px; right: 8px; width: 8px; height: 8px; background: #FF9933; border-radius: 50%; box-shadow: 0 0 0 rgba(255, 153, 51, 0.4); animation: pulse-ring 1.5s infinite; }
 @keyframes pulse-ring { 0% { box-shadow: 0 0 0 0 rgba(255, 153, 51, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(255, 153, 51, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 153, 51, 0); } }
 `;
@@ -99,7 +97,6 @@ const RestaurantAdmin = () => {
     const [formData, setFormData] = useState({ name: "", price: "", category: "Starters", image: "" });
     const [qrRange, setQrRange] = useState({ start: 1, end: 5 });
 
-    // ✅ FIXED: Correct parameters passed to stop the 400 Bad Request error
     const fetchInbox = async () => {
         const mongoId = localStorage.getItem(`owner_id_${id}`);
         if (!mongoId || mongoId === "undefined" || mongoId === "null") return;
@@ -108,14 +105,24 @@ const RestaurantAdmin = () => {
                 params: { restaurantId: mongoId }
             });
             setInboxOrders(res.data);
-        } catch (err) { console.error("Inbox Fetch 400 Fix Log:", err); }
+        } catch (err) { console.error("Inbox Fetch Error:", err); }
+    };
+
+    const fetchData = async (token, mongoId) => {
+        if (!mongoId) return;
+        try {
+            const config = { headers: { Authorization: `Bearer ${token}` } };
+            // Using restaurantId param consistently with your backend GET route
+            const dishRes = await axios.get(`${API_BASE}/dishes?restaurantId=${mongoId}`, config);
+            setDishes(dishRes.data || []);
+        } catch (error) { console.error("Fetch Data Error:", error); }
     };
 
     useEffect(() => {
         const checkGhostSession = () => {
             const ghostToken = localStorage.getItem(`owner_token_${id}`);
             const ghostId = localStorage.getItem(`owner_id_${id}`);
-            if (ghostToken && ghostId && ghostId !== "undefined") {
+            if (ghostToken && ghostId && ghostId !== "undefined" && ghostId !== "null") {
                 setIsAuthenticated(true);
                 fetchData(ghostToken, ghostId);
                 fetchInbox();
@@ -140,26 +147,24 @@ const RestaurantAdmin = () => {
         } catch (err) { alert("❌ Invalid Password"); } finally { setAuthLoading(false); }
     };
 
-    const fetchData = async (token, mongoId) => {
-        try {
-            const config = { headers: { Authorization: `Bearer ${token}` } };
-            const dishRes = await axios.get(`${API_BASE}/dishes?restaurantId=${mongoId}`, config);
-            setDishes(dishRes.data || []);
-        } catch (error) { console.error(error); }
-    };
-
     const handleAddDish = async (e) => {
         e.preventDefault();
         const token = localStorage.getItem(`owner_token_${id}`);
         const mongoId = localStorage.getItem(`owner_id_${id}`);
+        if(!token || !mongoId) return alert("Session expired. Please login again.");
+        
         try {
+            // FIX: Ensure field matches backend expectation ('owner') if your schema requires it
             await axios.post(`${API_BASE}/dishes`, { ...formData, owner: mongoId }, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setFormData({ name: "", price: "", category: "Starters", image: "" });
             fetchData(token, mongoId);
             alert("Dish Added Successfully!");
-        } catch (err) { alert("Error adding dish"); }
+        } catch (err) { 
+            console.error("Add Dish Error:", err);
+            alert("Error adding dish. Check console."); 
+        }
     };
 
     const handleDeleteDish = async (dishId) => {
@@ -300,7 +305,6 @@ const RestaurantAdmin = () => {
 
                 <SetupWizard dishesCount={dishes.length} pushEnabled={pushEnabled} />
 
-                {/* ✅ FIXED: Live Chart Logic based on inboxOrders data */}
                 {isPro && <SalesSummary restaurants={[{ restaurantName, totalRevenue: inboxOrders.reduce((sum, o) => sum + o.totalAmount, 0) }]} />}
 
                 <nav className="nav-tabs">

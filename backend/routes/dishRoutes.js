@@ -32,12 +32,11 @@ const protect = async (req, res, next) => {
 
 /**
  * 1. GET DISHES (Public - Smart Search)
+ * Resolves Username or ObjectId and finds by "owner"
  */
 router.get('/', async (req, res) => {
     const { restaurantId } = req.query; 
     
-    console.log(`🔎 [API] Searching menu for: "${restaurantId}"`);
-
     if (!restaurantId) {
         return res.status(400).json({ message: "Restaurant ID is required." });
     }
@@ -45,21 +44,22 @@ router.get('/', async (req, res) => {
     try {
         let ownerObjectId;
 
+        // Check if input is a valid MongoDB ObjectId
         if (mongoose.Types.ObjectId.isValid(restaurantId)) {
             ownerObjectId = restaurantId;
         } else {
+            // Search for owner if input is a username string
             const owner = await Owner.findOne({ 
                 username: { $regex: new RegExp("^" + restaurantId + "$", "i") } 
             });
 
             if (!owner) {
-                console.log(`❌ [API] Owner "${restaurantId}" NOT found.`);
                 return res.status(404).json({ message: "Restaurant not found." });
             }
-            
             ownerObjectId = owner._id;
         }
 
+        // ✅ IMPORTANT: Uses "owner" to match the Dish.js Model
         const dishes = await Dish.find({ owner: ownerObjectId }); 
         res.json(dishes);
 
@@ -70,22 +70,28 @@ router.get('/', async (req, res) => {
 });
 
 /**
- * 2. ADD DISH (Protected - Owner Only)
- * ✅ FIXED: Added Socket trigger for instant menu updates
+ * 2. ADD DISH (Protected)
+ * Saves using req.user.id to ensure the dish is linked to the logged-in owner
  */
 router.post('/', protect, async (req, res) => {
     try {
         const { name, price, category, description, image } = req.body;
+        
+        // ✅ Uses "owner" to match the schema field
         const newDish = new Dish({
-            name, price, category, description, image,
+            name, 
+            price, 
+            category, 
+            description, 
+            image,
             owner: req.user.id 
         });
+        
         const savedDish = await newDish.save();
 
-        // ⚡ SOCKET TRIGGER: Notify all mobile users in this restaurant's room
+        // ⚡ Notify all clients in the restaurant room
         if (req.io) {
             req.io.to(req.user.id.toString()).emit('menu-updated');
-            console.log(`⚡ [Socket] Menu update emitted for restaurant: ${req.user.id}`);
         }
 
         res.status(201).json(savedDish);
@@ -95,8 +101,7 @@ router.post('/', protect, async (req, res) => {
 });
 
 /**
- * 3. UPDATE DISH / STOCK (Public/Chef Access)
- * ✅ FIXED: Added Socket trigger for instant stock toggling
+ * 3. UPDATE DISH / STOCK (Real-time sync)
  */
 router.put('/:id', async (req, res) => {
     try {
@@ -106,10 +111,8 @@ router.put('/:id', async (req, res) => {
             { new: true }
         );
 
-        // ⚡ SOCKET TRIGGER: Update menu instantly when stock or details change
         if (req.io && dish) {
             req.io.to(dish.owner.toString()).emit('menu-updated');
-            console.log(`⚡ [Socket] Stock/Dish update emitted for owner: ${dish.owner}`);
         }
 
         res.json(dish);
@@ -119,16 +122,16 @@ router.put('/:id', async (req, res) => {
 });
 
 /**
- * 4. DELETE DISH (Protected - Owner Only)
+ * 4. DELETE DISH
  */
 router.delete('/:id', protect, async (req, res) => {
     try {
         const dish = await Dish.findById(req.params.id);
-        const ownerId = dish ? dish.owner : null;
+        if (!dish) return res.status(404).json({ message: "Dish not found" });
 
+        const ownerId = dish.owner;
         await Dish.findByIdAndDelete(req.params.id);
 
-        // ⚡ SOCKET TRIGGER: Remove dish from user view instantly
         if (req.io && ownerId) {
             req.io.to(ownerId.toString()).emit('menu-updated');
         }

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import axios from "axios";
-import { FaSearch, FaPlus, FaMinus, FaStar, FaUtensils, FaArrowRight, FaLock, FaSyncAlt } from "react-icons/fa";
+import io from "socket.io-client";
+import { FaSearch, FaPlus, FaMinus, FaStar, FaArrowRight, FaLock, FaSyncAlt } from "react-icons/fa";
 import LoadingSpinner from "./components/LoadingSpinner";
 
 const API_BASE = window.location.hostname === "localhost" || window.location.hostname.startsWith("192.168")
@@ -23,30 +24,30 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
     const [loading, setLoading] = useState(dishes.length === 0); 
     const [error, setError] = useState(false);
     const [isSuspended, setIsSuspended] = useState(false);
-
     const [pullDistance, setPullDistance] = useState(0);
     const [refreshing, setRefreshing] = useState(false);
     const startY = useRef(0);
 
     const DEFAULT_IMG = "https://placehold.co/400x300/222/orange?text=Yummy";
 
-    // ✅ SUGGESTION: REAL-TIME STOCK INDICATOR (Heartbeat Sync)
-    // Synchronizes dish availability every 15 seconds for 100,000+ members
+    // ✅ LIVE SYNC: Refresh menu when Admin adds an item
     useEffect(() => {
         if (!currentRestId) return;
-        const stockInterval = setInterval(() => {
-            fetchMenu(true); // Background sync
-        }, 15000); 
+        const socket = io("https://smart-menu-backend-5ge7.onrender.com");
+        socket.emit("join-restaurant", currentRestId);
+        socket.on("menu-updated", () => fetchMenu(true));
+        return () => socket.disconnect();
+    }, [currentRestId]);
 
+    useEffect(() => {
+        if (!currentRestId) return;
+        const stockInterval = setInterval(() => fetchMenu(true), 15000); 
         return () => clearInterval(stockInterval);
     }, [currentRestId]);
 
-    // 🔄 MOBILE AUTO-REFRESH ON RE-ENTRY
     useEffect(() => {
         const handleVisibilityChange = () => {
-            if (document.visibilityState === "visible") {
-                fetchMenu(true); 
-            }
+            if (document.visibilityState === "visible") fetchMenu(true); 
         };
         document.addEventListener("visibilitychange", handleVisibilityChange);
         return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
@@ -73,7 +74,6 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
         try {
             if (!isManual && dishes.length === 0) setLoading(true);
             const res = await axios.get(`${API_BASE}/dishes?restaurantId=${currentRestId}`, { timeout: 8000 });
-            
             if (res.data.status === "suspended") {
                 setIsSuspended(true);
             } else {
@@ -120,17 +120,10 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
     const categories = ["All", ...new Set(dishes.map(d => d.category))];
 
     if (loading && dishes.length === 0) return <LoadingSpinner />;
-
-    if (isSuspended) return (
-        <div style={styles.center}>
-            <FaLock size={60} color="#f97316"/>
-            <h1 style={{color:'white', marginTop:20}}>SERVICE UNAVAILABLE</h1>
-        </div>
-    );
+    if (isSuspended) return (<div style={styles.center}><FaLock size={60} color="#f97316"/><h1 style={{color:'white', marginTop:20}}>SERVICE UNAVAILABLE</h1></div>);
 
     return (
         <div style={styles.container} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}>
-            
             <div style={{...styles.pullLoader, height: `${pullDistance}px`, opacity: pullDistance / 60}}>
                 <FaSyncAlt className={refreshing ? "spin" : ""} style={{color: '#f97316'}} />
             </div>
