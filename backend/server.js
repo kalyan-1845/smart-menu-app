@@ -18,7 +18,8 @@ import menuRoutes from './routes/menuRoutes.js';
 const app = express();
 
 // 🔴 CRITICAL FIX FOR RENDER: TRUST PROXY
-// This stops the Rate Limiter from crashing the server
+// This tells Express to trust the load balancer's headers.
+// It fixes the "ERR_ERL_UNEXPECTED_X_FORWARDED_FOR" crash.
 app.set('trust proxy', 1);
 
 const httpServer = createServer(app);
@@ -81,7 +82,7 @@ const limiter = rateLimit({
     max: 1000, 
     standardHeaders: true, 
     legacyHeaders: false,
-    // Fix for Render Proxy issues
+    // Fix for Render Proxy issues (silences the validation error)
     validate: { xForwardedForHeader: false } 
 });
 app.use(limiter); 
