@@ -32,7 +32,6 @@ const protect = async (req, res, next) => {
 
 /**
  * 1. GET DISHES (Public - Smart Search)
- * Fixes "Menu Failed to Load" (404) & Case Sensitivity
  */
 router.get('/', async (req, res) => {
     const { restaurantId } = req.query; 
@@ -46,11 +45,9 @@ router.get('/', async (req, res) => {
     try {
         let ownerObjectId;
 
-        // 1. Check if it's a Database ID
         if (mongoose.Types.ObjectId.isValid(restaurantId)) {
             ownerObjectId = restaurantId;
         } else {
-            // 2. Check by Username (Case Insensitive Fix)
             const owner = await Owner.findOne({ 
                 username: { $regex: new RegExp("^" + restaurantId + "$", "i") } 
             });
@@ -74,6 +71,7 @@ router.get('/', async (req, res) => {
 
 /**
  * 2. ADD DISH (Protected - Owner Only)
+ * ✅ FIXED: Added Socket trigger for instant menu updates
  */
 router.post('/', protect, async (req, res) => {
     try {
@@ -83,6 +81,13 @@ router.post('/', protect, async (req, res) => {
             owner: req.user.id 
         });
         const savedDish = await newDish.save();
+
+        // ⚡ SOCKET TRIGGER: Notify all mobile users in this restaurant's room
+        if (req.io) {
+            req.io.to(req.user.id.toString()).emit('menu-updated');
+            console.log(`⚡ [Socket] Menu update emitted for restaurant: ${req.user.id}`);
+        }
+
         res.status(201).json(savedDish);
     } catch (error) {
         res.status(400).json({ message: error.message });
@@ -91,7 +96,7 @@ router.post('/', protect, async (req, res) => {
 
 /**
  * 3. UPDATE DISH / STOCK (Public/Chef Access)
- * ✅ FIX: Removed 'protect' so Chef can toggle stock without Owner Token
+ * ✅ FIXED: Added Socket trigger for instant stock toggling
  */
 router.put('/:id', async (req, res) => {
     try {
@@ -100,6 +105,13 @@ router.put('/:id', async (req, res) => {
             { $set: req.body }, 
             { new: true }
         );
+
+        // ⚡ SOCKET TRIGGER: Update menu instantly when stock or details change
+        if (req.io && dish) {
+            req.io.to(dish.owner.toString()).emit('menu-updated');
+            console.log(`⚡ [Socket] Stock/Dish update emitted for owner: ${dish.owner}`);
+        }
+
         res.json(dish);
     } catch (error) {
         res.status(400).json({ message: error.message });
@@ -111,7 +123,16 @@ router.put('/:id', async (req, res) => {
  */
 router.delete('/:id', protect, async (req, res) => {
     try {
+        const dish = await Dish.findById(req.params.id);
+        const ownerId = dish ? dish.owner : null;
+
         await Dish.findByIdAndDelete(req.params.id);
+
+        // ⚡ SOCKET TRIGGER: Remove dish from user view instantly
+        if (req.io && ownerId) {
+            req.io.to(ownerId.toString()).emit('menu-updated');
+        }
+
         res.json({ message: 'Deleted' });
     } catch (error) {
         res.status(500).json({ message: 'Server error' });

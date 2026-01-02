@@ -1,12 +1,17 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, Link } from "react-router-dom";
 import axios from "axios";
-import { FaSearch, FaPlus, FaMinus, FaStar, FaUtensils, FaArrowRight, FaLock, FaSyncAlt } from "react-icons/fa";
+import { io } from "socket.io-client"; // ✅ Added Socket.io Client
+import { FaSearch, FaPlus, FaMinus, FaStar, FaUtensils, FaArrowRight, FaLock, FaSyncAlt, FaBell } from "react-icons/fa";
 import LoadingSpinner from "./components/LoadingSpinner";
 
 const API_BASE = window.location.hostname === "localhost" || window.location.hostname.startsWith("192.168")
     ? "http://localhost:5000/api" 
     : "https://smart-menu-backend-5ge7.onrender.com/api";
+
+const SOCKET_URL = window.location.hostname === "localhost" || window.location.hostname.startsWith("192.168")
+    ? "http://localhost:5000"
+    : "https://smart-menu-backend-5ge7.onrender.com";
 
 const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
     const params = useParams();
@@ -23,6 +28,7 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
     const [loading, setLoading] = useState(dishes.length === 0); 
     const [error, setError] = useState(false);
     const [isSuspended, setIsSuspended] = useState(false);
+    const [showToast, setShowToast] = useState(false);
 
     const [pullDistance, setPullDistance] = useState(0);
     const [refreshing, setRefreshing] = useState(false);
@@ -30,27 +36,77 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
 
     const DEFAULT_IMG = "https://placehold.co/400x300/222/orange?text=Yummy";
 
-    // ✅ SUGGESTION: REAL-TIME STOCK INDICATOR (Heartbeat Sync)
-    // Synchronizes dish availability every 15 seconds for 100,000+ members
+    // ✅ FIXED FETCH LOGIC: THETA FAST SYNC + TOAST
+    const fetchMenu = useCallback(async (isManual = false) => {
+        if (!currentRestId) return;
+        try {
+            if (!isManual && dishes.length === 0) setLoading(true);
+            const res = await axios.get(`${API_BASE}/dishes?restaurantId=${currentRestId}&t=${Date.now()}`, { timeout: 8000 });
+            
+            if (res.data.status === "suspended") {
+                setIsSuspended(true);
+            } else {
+                let dishData = Array.isArray(res.data) ? res.data : (res.data.dishes || res.data.data || []);
+
+                // ⚡ THETA SYNC: Detect if new dishes were added
+                if (dishes.length > 0 && dishData.length > dishes.length) {
+                    setShowToast(true);
+                    setTimeout(() => setShowToast(false), 4000);
+                }
+
+                setDishes(dishData);
+                setFilteredDishes(dishData);
+                localStorage.setItem(`menu_cache_${currentRestId}`, JSON.stringify(dishData));
+            }
+            setError(false);
+        } catch (err) {
+            console.error("Menu Fetch Error:", err);
+            if (dishes.length === 0) setError(true);
+        } finally {
+            setLoading(false);
+            setRefreshing(false);
+            setPullDistance(0);
+        }
+    }, [currentRestId, dishes.length]);
+
+    // 🚀 NEW: SOCKET.IO INSTANT SYNC
+    useEffect(() => {
+        if (!currentRestId) return;
+
+        const socket = io(SOCKET_URL, {
+            transports: ['websocket'], // Faster for mobile
+            reconnectionAttempts: 5
+        });
+
+        // Join a specific room for this restaurant
+        socket.emit("join-restaurant", currentRestId);
+
+        // Listen for "menu-updated" event from backend
+        socket.on("menu-updated", () => {
+            console.log("⚡ Instant Update Received via Socket");
+            fetchMenu(true);
+        });
+
+        return () => socket.disconnect();
+    }, [currentRestId, fetchMenu]);
+
+    // ✅ REAL-TIME STOCK INDICATOR (Fallback)
     useEffect(() => {
         if (!currentRestId) return;
         const stockInterval = setInterval(() => {
-            fetchMenu(true); // Background sync
-        }, 15000); 
-
+            fetchMenu(true); 
+        }, 30000); // Increased interval since we have Sockets now
         return () => clearInterval(stockInterval);
-    }, [currentRestId]);
+    }, [currentRestId, fetchMenu]);
 
     // 🔄 MOBILE AUTO-REFRESH ON RE-ENTRY
     useEffect(() => {
         const handleVisibilityChange = () => {
-            if (document.visibilityState === "visible") {
-                fetchMenu(true); 
-            }
+            if (document.visibilityState === "visible") fetchMenu(true); 
         };
         document.addEventListener("visibilitychange", handleVisibilityChange);
         return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
-    }, [currentRestId]);
+    }, [currentRestId, fetchMenu]);
 
     useEffect(() => {
         const lastTable = localStorage.getItem("last_table_scanned");
@@ -66,32 +122,9 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
         if (!currentRestId) return;
         if (setRestaurantId) setRestaurantId(currentRestId);
         if (setTableNum && currentTable) setTableNum(currentTable);
-    }, [currentRestId, currentTable]);
+    }, [currentRestId, currentTable, setRestaurantId, setTableNum]);
 
-    const fetchMenu = async (isManual = false) => {
-        if (!currentRestId) return;
-        try {
-            if (!isManual && dishes.length === 0) setLoading(true);
-            const res = await axios.get(`${API_BASE}/dishes?restaurantId=${currentRestId}`, { timeout: 8000 });
-            
-            if (res.data.status === "suspended") {
-                setIsSuspended(true);
-            } else {
-                const dishData = Array.isArray(res.data) ? res.data : (res.data.dishes || []);
-                setDishes(dishData);
-                localStorage.setItem(`menu_cache_${currentRestId}`, JSON.stringify(dishData));
-            }
-            setError(false);
-        } catch (err) {
-            if (dishes.length === 0) setError(true);
-        } finally {
-            setLoading(false);
-            setRefreshing(false);
-            setPullDistance(0);
-        }
-    };
-
-    useEffect(() => { fetchMenu(); }, [currentRestId]);
+    useEffect(() => { fetchMenu(); }, [currentRestId]); 
 
     const handleTouchStart = (e) => { if (window.scrollY === 0) startY.current = e.touches[0].pageY; };
     const handleTouchMove = (e) => {
@@ -124,13 +157,18 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
     if (isSuspended) return (
         <div style={styles.center}>
             <FaLock size={60} color="#f97316"/>
-            <h1 style={{color:'white', marginTop:20}}>SERVICE UNAVAILABLE</h1>
+            <h1 style={{color:'white', marginTop:20, fontFamily: 'sans-serif'}}>SERVICE UNAVAILABLE</h1>
         </div>
     );
 
     return (
         <div style={styles.container} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}>
             
+            {/* THETA NOTIFICATION TOAST */}
+            <div style={{...styles.toast, transform: showToast ? 'translateY(0)' : 'translateY(-100px)', opacity: showToast ? 1 : 0}}>
+                <FaBell style={{marginRight: 10}} /> NEW DISHES ADDED TO MENU!
+            </div>
+
             <div style={{...styles.pullLoader, height: `${pullDistance}px`, opacity: pullDistance / 60}}>
                 <FaSyncAlt className={refreshing ? "spin" : ""} style={{color: '#f97316'}} />
             </div>
@@ -231,6 +269,7 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
 
 const styles = {
     container: { minHeight: "100vh", background: "#09090b", color: "white", paddingBottom: "100px", fontFamily: "'Inter', sans-serif" },
+    toast: { position: 'fixed', top: '20px', left: '20px', right: '20px', background: '#f97316', color: 'white', padding: '15px', borderRadius: '15px', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '14px', transition: 'all 0.5s ease', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' },
     pullLoader: { width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
     marqueeWrapper: { background: "#f97316", padding: "8px 0", overflow: "hidden", whiteSpace: "nowrap" },
     marqueeContent: { display: "flex", width: "max-content", animation: "marquee 20s linear infinite", fontSize: "11px", fontWeight: "900", letterSpacing: "3px" },

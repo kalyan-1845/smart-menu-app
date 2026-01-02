@@ -18,10 +18,12 @@ const app = express();
 const httpServer = createServer(app);
 
 // --- 🔒 SECURITY: ALLOWED ORIGINS ---
+// Added your new Netlify preview URL to prevent "CORS Blocked" errors on mobile
 const allowedOrigins = [
     "http://localhost:5173",           
     "https://smartmenuss.netlify.app",
-    "https://694915c413d9f40008f38924--smartmenuss.netlify.app"
+    "https://694915c413d9f40008f38924--smartmenuss.netlify.app",
+    "https://6956bd4f3822d500081cba07--smartmenuss.netlify.app" 
 ];
 
 // ☢️ NUCLEAR CORS FIX (LAYER 1: MANUAL HEADERS)
@@ -50,6 +52,7 @@ const io = new Server(httpServer, {
     cors: { origin: allowedOrigins, methods: ["GET", "POST", "PUT", "DELETE"], credentials: true }
 });
 
+// ✅ KEY: This makes 'req.io' available in dishRoutes.js and orderRoutes.js
 app.use((req, res, next) => { req.io = io; next(); });
 
 // --- DATABASE ---
@@ -95,7 +98,6 @@ io.on('connection', (socket) => {
     });
 
     // 👨‍🍳 NEW: CHEF TO WAITER READY ALERT
-    // This solves the problem of waiters not getting a message when chef marks order as ready
     socket.on("chef-ready-alert", (data) => {
         if (data.restaurantId) {
             io.to(data.restaurantId.toString()).emit("chef-ready-alert", data);
