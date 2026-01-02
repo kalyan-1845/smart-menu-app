@@ -59,7 +59,7 @@ router.get('/', async (req, res) => {
 
 /**
  * 2. ADD DISH (Protected)
- * ✅ FIX: Sends data to socket
+ * ✅ FIX: Broadcasts to BOTH ID and Username (kalyanresto1)
  */
 router.post('/', protect, async (req, res) => {
     try {
@@ -72,9 +72,14 @@ router.post('/', protect, async (req, res) => {
         
         const savedDish = await newDish.save();
 
-        // ⚡ REAL-TIME UPDATE SENDING DATA
         if (req.io) {
+            // 1. Send to Owner ID (Admin Dashboard)
             req.io.to(req.user.id.toString()).emit('menu-updated', savedDish);
+            
+            // 2. Send to Username (Customer Menu: kalyanresto1)
+            if (req.user.username) {
+                req.io.to(req.user.username).emit('menu-updated', savedDish);
+            }
         }
 
         res.status(201).json(savedDish);
@@ -85,13 +90,12 @@ router.post('/', protect, async (req, res) => {
 
 /**
  * 3. UPDATE DISH (Protected)
+ * ✅ FIX: Broadcasts to BOTH
  */
 router.put('/:id', protect, async (req, res) => {
     try {
         const dish = await Dish.findById(req.params.id);
         if(!dish) return res.status(404).json({ message: "Dish not found" });
-        
-        // Security check
         if(dish.owner.toString() !== req.user.id) return res.status(401).json({ message: "Not authorized" });
 
         const updatedDish = await Dish.findByIdAndUpdate(
@@ -102,6 +106,10 @@ router.put('/:id', protect, async (req, res) => {
 
         if (req.io) {
             req.io.to(updatedDish.owner.toString()).emit('menu-updated', updatedDish);
+            
+            if (req.user.username) {
+                req.io.to(req.user.username).emit('menu-updated', updatedDish);
+            }
         }
 
         res.json(updatedDish);
@@ -112,21 +120,22 @@ router.put('/:id', protect, async (req, res) => {
 
 /**
  * 4. DELETE DISH (Protected)
+ * ✅ FIX: Broadcasts to BOTH
  */
 router.delete('/:id', protect, async (req, res) => {
     try {
         const dish = await Dish.findById(req.params.id);
         if (!dish) return res.status(404).json({ message: "Dish not found" });
-
-        // Security check
         if(dish.owner.toString() !== req.user.id) return res.status(401).json({ message: "Not authorized" });
 
         const ownerId = dish.owner;
         await Dish.findByIdAndDelete(req.params.id);
 
         if (req.io) {
-            // Send the DELETED ID so frontend knows what to remove
             req.io.to(ownerId.toString()).emit('menu-deleted', req.params.id);
+            if (req.user.username) {
+                req.io.to(req.user.username).emit('menu-deleted', req.params.id);
+            }
         }
 
         res.json({ message: 'Deleted' });
