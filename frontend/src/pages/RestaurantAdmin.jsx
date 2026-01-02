@@ -5,13 +5,12 @@ import io from "socket.io-client";
 import confetti from "canvas-confetti";
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
-import SalesSummary from "./components/SalesSummary"; // ✅ ADDED: Fixes ReferenceError
+import SalesSummary from "./components/SalesSummary"; 
 import { 
     FaPlus, FaTrash, FaUtensils, 
     FaBell, FaCheckCircle, FaCircle, FaCrown, FaSignOutAlt, FaRocket, FaStore, FaExternalLinkAlt, FaCopy, FaInbox, FaDownload, FaQrcode
 } from "react-icons/fa";
 
-// --- STYLES (Includes Pulse Animation) ---
 const styles = `
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;900&display=swap');
 .admin-container { min-height: 100vh; padding: 20px; background: radial-gradient(circle at top center, #1a0f0a 0%, #050505 60%); color: white; font-family: 'Inter', sans-serif; }
@@ -37,8 +36,6 @@ const styles = `
 .menu-link-box { background: rgba(0,0,0,0.3); border: 1px dashed #333; padding: 15px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 .link-text { color: #3b82f6; font-size: 12px; font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; display: block; text-decoration: none; }
 .action-btn { background: none; border: none; color: #888; cursor: pointer; padding: 5px; transition: 0.2s; }
-
-/* 🚨 Pulsing Dot */
 .pulse-dot { position: absolute; top: 8px; right: 8px; width: 8px; height: 8px; background: #FF9933; border-radius: 50%; box-shadow: 0 0 0 rgba(255, 153, 51, 0.4); animation: pulse-ring 1.5s infinite; }
 @keyframes pulse-ring { 0% { box-shadow: 0 0 0 0 rgba(255, 153, 51, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(255, 153, 51, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 153, 51, 0); } }
 `;
@@ -99,7 +96,6 @@ const RestaurantAdmin = () => {
     const [formData, setFormData] = useState({ name: "", price: "", category: "Starters", image: "" });
     const [qrRange, setQrRange] = useState({ start: 1, end: 5 });
 
-    // ✅ FIXED: Correct parameters passed to stop the 400 Bad Request error
     const fetchInbox = async () => {
         const mongoId = localStorage.getItem(`owner_id_${id}`);
         if (!mongoId || mongoId === "undefined" || mongoId === "null") return;
@@ -108,7 +104,7 @@ const RestaurantAdmin = () => {
                 params: { restaurantId: mongoId }
             });
             setInboxOrders(res.data);
-        } catch (err) { console.error("Inbox Fetch 400 Fix Log:", err); }
+        } catch (err) { console.error("Inbox Rejection Check:", err.response?.data || err.message); }
     };
 
     useEffect(() => {
@@ -300,7 +296,6 @@ const RestaurantAdmin = () => {
 
                 <SetupWizard dishesCount={dishes.length} pushEnabled={pushEnabled} />
 
-                {/* ✅ FIXED: Live Chart Logic based on inboxOrders data */}
                 {isPro && <SalesSummary restaurants={[{ restaurantName, totalRevenue: inboxOrders.reduce((sum, o) => sum + o.totalAmount, 0) }]} />}
 
                 <nav className="nav-tabs">
