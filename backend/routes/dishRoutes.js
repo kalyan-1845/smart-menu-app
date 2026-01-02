@@ -1,13 +1,36 @@
 import express from 'express';
 import mongoose from 'mongoose';
 import jwt from 'jsonwebtoken';
+import multer from 'multer';
+import { v2 as cloudinary } from 'cloudinary';
+import { CloudinaryStorage } from 'multer-storage-cloudinary';
+
+// --- MODELS ---
 import Dish from '../models/Dish.js';
 import Owner from '../models/Owner.js'; 
 
 const router = express.Router();
 
 // ==========================================
-// 🛡️ MIDDLEWARE
+// ☁️ CLOUDINARY CONFIG (For Image Uploads)
+// ==========================================
+cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET
+});
+
+const storage = new CloudinaryStorage({
+    cloudinary: cloudinary,
+    params: {
+        folder: 'menu-items',
+        allowed_formats: ['jpg', 'png', 'jpeg', 'webp']
+    }
+});
+const upload = multer({ storage });
+
+// ==========================================
+// 🛡️ MIDDLEWARE: PROTECT ROUTES
 // ==========================================
 const protect = async (req, res, next) => {
     let token;
@@ -33,33 +56,41 @@ const protect = async (req, res, next) => {
 /**
  * 1. GET DISHES (Public - Smart Search)
  * ✅ FIX: Handles both Username (from URL) and ObjectId (from Admin)
+ * ✅ FIX: Uses strict 24-char check to prevent "12-char username bug"
  */
 router.get('/', async (req, res) => {
-    const { restaurantId } = req.query; 
+    const { restaurantId, category } = req.query; 
     
     if (!restaurantId) {
         return res.status(400).json({ message: "Restaurant ID is required." });
     }
 
     try {
-        let ownerObjectId;
+        let ownerObjectId = restaurantId;
 
-        // 1. Check if it's a valid Database ID
-        if (mongoose.Types.ObjectId.isValid(restaurantId)) {
-            ownerObjectId = restaurantId;
-        } else {
-            // 2. Search for the owner if the ID is actually a username (e.g., KALYANRESTO1)
+        // 🛑 STRICT CHECK: Only treat as ID if it is a 24-character Hex String
+        const isValidHexId = /^[0-9a-fA-F]{24}$/.test(restaurantId);
+
+        if (!isValidHexId) {
+            // It's likely a username (e.g., "kalyanresto1"), search for it
             const owner = await Owner.findOne({ 
                 username: { $regex: new RegExp("^" + restaurantId + "$", "i") } 
             });
 
             if (!owner) {
-                return res.status(404).json({ message: "Restaurant not found." });
+                // Return empty array instead of 404 to keep frontend alive
+                return res.json([]); 
             }
             ownerObjectId = owner._id;
         }
 
-        const dishes = await Dish.find({ owner: ownerObjectId }); 
+        // Build Query
+        let query = { owner: ownerObjectId };
+        if (category && category !== "All") {
+            query.category = category;
+        }
+
+        const dishes = await Dish.find(query); 
         res.json(dishes);
 
     } catch (error) {
@@ -70,22 +101,55 @@ router.get('/', async (req, res) => {
 
 /**
  * 2. ADD DISH (Protected - Owner Only)
+ * ✅ FIXED: Uses 'upload.single' to handle Image Files
  * ✅ FIXED: Socket trigger for instant menu updates
  */
-router.post('/', protect, async (req, res) => {
+router.post('/add', protect, upload.single('image'), async (req, res) => {
     try {
-        const { name, price, category, description, image } = req.body;
+        const { name, price, category, description } = req.body;
+        
+        // Use uploaded file URL or fallback string
+        const image = req.file ? req.file.path : (req.body.image || "");
+
+        const newDish = new Dish({
+            name, 
+            price, 
+            category, 
+            description, 
+            image,
+            owner: req.user.id 
+        });
+        
+        const savedDish = await newDish.save();
+
+        // ⚡ SOCKET TRIGGER
+        if (req.io) {
+            req.io.to(req.user.id.toString()).emit('new-dish-added', savedDish);
+            req.io.to(req.user.id.toString()).emit('menu-updated');
+        }
+
+        res.status(201).json(savedDish);
+    } catch (error) {
+        res.status(400).json({ message: error.message });
+    }
+});
+
+// Alias for generic post root (compatibility)
+router.post('/', protect, upload.single('image'), async (req, res) => {
+    // Redirect logic to the handler above
+    try {
+        const { name, price, category, description } = req.body;
+        const image = req.file ? req.file.path : (req.body.image || "");
+        
         const newDish = new Dish({
             name, price, category, description, image,
             owner: req.user.id 
         });
         const savedDish = await newDish.save();
 
-        // ⚡ SOCKET TRIGGER
         if (req.io) {
             req.io.to(req.user.id.toString()).emit('menu-updated');
         }
-
         res.status(201).json(savedDish);
     } catch (error) {
         res.status(400).json({ message: error.message });
@@ -104,7 +168,9 @@ router.put('/:id', async (req, res) => {
             { new: true }
         );
 
-        if (req.io && dish) {
+        if (!dish) return res.status(404).json({ message: "Dish not found" });
+
+        if (req.io) {
             req.io.to(dish.owner.toString()).emit('menu-updated');
         }
 
@@ -115,12 +181,35 @@ router.put('/:id', async (req, res) => {
 });
 
 /**
- * 4. DELETE DISH (Protected - Owner Only)
+ * 4. TOGGLE AVAILABILITY (Specific Route)
+ */
+router.put('/:id/toggle', async (req, res) => {
+    try {
+        const dish = await Dish.findById(req.params.id);
+        if (!dish) return res.status(404).json({ message: "Dish not found" });
+
+        dish.isAvailable = !dish.isAvailable;
+        await dish.save();
+
+        if (req.io) {
+            req.io.to(dish.owner.toString()).emit('menu-updated');
+        }
+
+        res.json(dish);
+    } catch (error) {
+        res.status(500).json({ message: "Toggle failed" });
+    }
+});
+
+/**
+ * 5. DELETE DISH (Protected - Owner Only)
  */
 router.delete('/:id', protect, async (req, res) => {
     try {
         const dish = await Dish.findById(req.params.id);
-        const ownerId = dish ? dish.owner : null;
+        if (!dish) return res.status(404).json({ message: "Dish not found" });
+        
+        const ownerId = dish.owner;
 
         await Dish.findByIdAndDelete(req.params.id);
 
