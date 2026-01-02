@@ -13,94 +13,46 @@ import dishRoutes from './routes/dishRoutes.js';
 import orderRoutes from './routes/orderRoutes.js';
 import superAdminRoutes from './routes/superAdminRoutes.js';
 import broadcastRoutes from './routes/broadcastRoutes.js';
-import menuRoutes from './routes/menuRoutes.js'; 
 
 const app = express();
-
-// 🔴 FIX 1: TRUST PROXY (Critical for Render)
-// This must be set BEFORE the rate limiter to prevent the "X-Forwarded-For" crash.
-app.set('trust proxy', 1);
-
 const httpServer = createServer(app);
 
-// ==========================================
-// 🟢 CORS CONFIGURATION
-// ==========================================
+// --- 🔒 SECURITY: ALLOWED ORIGINS ---
+// Added your new Netlify preview URL to prevent "CORS Blocked" errors on mobile
 const allowedOrigins = [
     "http://localhost:5173",           
-    "http://localhost:3000",
-    "https://smartmenuss.netlify.app"
+    "https://smartmenuss.netlify.app",
+    "https://694915c413d9f40008f38924--smartmenuss.netlify.app",
+    "https://6956bd4f3822d500081cba07--smartmenuss.netlify.app" 
 ];
 
-const deployPreviewPattern = /^https:\/\/.*--smartmenuss\.netlify\.app$/;
-
-const isOriginAllowed = (origin) => {
-    // If no origin (like Postman or Health Checks), allow it
-    if (!origin) return true; 
-    return allowedOrigins.includes(origin) || deployPreviewPattern.test(origin);
-};
-
-// 1. MANUAL HEADERS (SAFE VERSION)
+// ☢️ NUCLEAR CORS FIX (LAYER 1: MANUAL HEADERS)
 app.use((req, res, next) => {
     const origin = req.headers.origin;
-    
-    // 🔴 FIX 2: PREVENT "UNDEFINED" CRASH
-    // We STRICTLY check if 'origin' exists. If it is undefined, we DO NOT set the header.
-    if (origin && isOriginAllowed(origin)) {
+    if (allowedOrigins.includes(origin)) {
         res.setHeader("Access-Control-Allow-Origin", origin);
     }
-
     res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
     res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, Origin, X-Requested-With, Accept");
     res.header("Access-Control-Allow-Credentials", "true");
-    
     if (req.method === "OPTIONS") return res.status(200).end();
     next();
 });
 
-// 2. CORS LIBRARY (Main Gatekeeper)
-app.use(cors({
-    origin: (origin, callback) => {
-        if (isOriginAllowed(origin)) {
-            callback(null, true);
-        } else {
-            console.log("🚫 Blocked by CORS:", origin);
-            callback(new Error('Not allowed by CORS'));
-        }
-    },
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
-}));
-
+// 🛡️ STANDARD CORS (LAYER 2: LIBRARY BACKUP)
+app.use(cors({ origin: allowedOrigins, credentials: true, methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"] }));
 app.use(express.json({ limit: '10mb' })); 
 
-// Rate Limiter
-const limiter = rateLimit({ 
-    windowMs: 15 * 60 * 1000, 
-    max: 1000, 
-    standardHeaders: true, 
-    legacyHeaders: false,
-    // 🔴 EXTRA SAFETY: This disables the specific validation error you are seeing in logs
-    validate: { xForwardedForHeader: false } 
-});
+// Rate Limiter - Optimized for 1000+ simultaneous users
+const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 1000, standardHeaders: true, legacyHeaders: false });
 app.use(limiter); 
 
 // Socket.io Setup
 const io = new Server(httpServer, {
-    cors: { 
-        origin: (origin, callback) => {
-            if (isOriginAllowed(origin)) {
-                callback(null, true);
-            } else {
-                callback(new Error('Not allowed by CORS'));
-            }
-        },
-        methods: ["GET", "POST", "PUT", "DELETE"], 
-        credentials: true 
-    }
+    cors: { origin: allowedOrigins, methods: ["GET", "POST", "PUT", "DELETE"], credentials: true }
 });
 
-// Make 'req.io' available in routes
+// ✅ KEY: This makes 'req.io' available in dishRoutes.js and orderRoutes.js
 app.use((req, res, next) => { req.io = io; next(); });
 
 // --- DATABASE ---
@@ -114,7 +66,6 @@ app.use('/api/dishes', dishRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/superadmin', superAdminRoutes);
 app.use('/api/broadcast', broadcastRoutes);
-app.use('/api/menu', menuRoutes);
 
 app.get('/', (req, res) => res.send('API is Running...'));
 
@@ -128,8 +79,10 @@ app.use((err, req, res, next) => {
     });
 });
 
-// --- SOCKETS ---
+// --- SOCKETS: FIXED FOR SAAS ISOLATION & MOBILE SYNC ---
 io.on('connection', (socket) => {
+    
+    // Staff and Customers join a specific restaurant room for private data
     socket.on('join-restaurant', (restaurantId) => {
         socket.join(restaurantId.toString());
         console.log(`User joined private room: ${restaurantId}`);
@@ -137,12 +90,14 @@ io.on('connection', (socket) => {
 
     socket.on('join-owner-room', (ownerId) => socket.join(ownerId.toString()));
 
+    // Waiter Call logic
     socket.on("call-waiter", (data) => {
         if(data.restaurantId) {
             io.to(data.restaurantId.toString()).emit("new-waiter-call", data);
         }
     });
 
+    // 👨‍🍳 NEW: CHEF TO WAITER READY ALERT
     socket.on("chef-ready-alert", (data) => {
         if (data.restaurantId) {
             io.to(data.restaurantId.toString()).emit("chef-ready-alert", data);
