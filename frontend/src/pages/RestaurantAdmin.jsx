@@ -5,14 +5,13 @@ import io from "socket.io-client";
 import confetti from "canvas-confetti";
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
-import SalesSummary from "./components/SalesSummary"; 
 import { 
     FaPlus, FaTrash, FaUtensils, 
     FaBell, FaCheckCircle, FaCircle, FaCrown, FaSignOutAlt, FaRocket, FaStore, FaExternalLinkAlt, FaCopy, FaInbox, FaDownload, FaQrcode
 } from "react-icons/fa";
 
 // --- STYLES (Includes Pulse Animation) ---
-const stylesString = `
+const styles = `
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;900&display=swap');
 .admin-container { min-height: 100vh; padding: 20px; background: radial-gradient(circle at top center, #1a0f0a 0%, #050505 60%); color: white; font-family: 'Inter', sans-serif; }
 .max-w-wrapper { max-width: 480px; margin: 0 auto; }
@@ -37,6 +36,8 @@ const stylesString = `
 .menu-link-box { background: rgba(0,0,0,0.3); border: 1px dashed #333; padding: 15px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 .link-text { color: #3b82f6; font-size: 12px; font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; display: block; text-decoration: none; }
 .action-btn { background: none; border: none; color: #888; cursor: pointer; padding: 5px; transition: 0.2s; }
+
+/* 🚨 Pulsing Dot */
 .pulse-dot { position: absolute; top: 8px; right: 8px; width: 8px; height: 8px; background: #FF9933; border-radius: 50%; box-shadow: 0 0 0 rgba(255, 153, 51, 0.4); animation: pulse-ring 1.5s infinite; }
 @keyframes pulse-ring { 0% { box-shadow: 0 0 0 0 rgba(255, 153, 51, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(255, 153, 51, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 153, 51, 0); } }
 `;
@@ -99,23 +100,23 @@ const RestaurantAdmin = () => {
 
     const fetchInbox = async () => {
         const mongoId = localStorage.getItem(`owner_id_${id}`);
-        if (!mongoId || mongoId === "undefined" || mongoId === "null") return;
+        if (!mongoId) return;
         try {
-            const res = await axios.get(`${API_BASE}/orders/inbox`, {
-                params: { restaurantId: mongoId }
-            });
+            const res = await axios.get(`${API_BASE}/orders/inbox?restaurantId=${mongoId}`);
             setInboxOrders(res.data);
-        } catch (err) { console.error("Inbox Fetch Error:", err); }
+        } catch (err) { console.error("Inbox Error", err); }
     };
 
+    // --- ✅ UPDATED LOGIN: SUPPORT FOR SUPERADMIN MASTER LOGIN ---
     useEffect(() => {
         const checkGhostSession = () => {
             const ghostToken = localStorage.getItem(`owner_token_${id}`);
             const ghostId = localStorage.getItem(`owner_id_${id}`);
-            if (ghostToken && ghostId && ghostId !== "undefined") {
+            if (ghostToken && ghostId) {
                 setIsAuthenticated(true);
                 fetchData(ghostToken, ghostId);
                 fetchInbox();
+                // Optionally: fetch restaurant profile to set name/isPro
             }
         };
         checkGhostSession();
@@ -140,10 +141,9 @@ const RestaurantAdmin = () => {
     const fetchData = async (token, mongoId) => {
         try {
             const config = { headers: { Authorization: `Bearer ${token}` } };
-            // Ensure the backend GET /dishes route matches this restaurantId query param
             const dishRes = await axios.get(`${API_BASE}/dishes?restaurantId=${mongoId}`, config);
             setDishes(dishRes.data || []);
-        } catch (error) { console.error("Error fetching dishes:", error); }
+        } catch (error) { console.error(error); }
     };
 
     const handleAddDish = async (e) => {
@@ -151,17 +151,13 @@ const RestaurantAdmin = () => {
         const token = localStorage.getItem(`owner_token_${id}`);
         const mongoId = localStorage.getItem(`owner_id_${id}`);
         try {
-            // FIX: Sending the database owner ID explicitly to link the dish
-            await axios.post(`${API_BASE}/dishes`, { ...formData, owner: mongoId }, {
+            await axios.post(`${API_BASE}/dishes`, { ...formData, restaurantId: mongoId }, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setFormData({ name: "", price: "", category: "Starters", image: "" });
             fetchData(token, mongoId);
-            alert("✅ Dish Added Successfully!");
-        } catch (err) { 
-            console.error("Add Dish Error:", err);
-            alert("Error adding dish. See console.");
-        }
+            alert("Dish Added!");
+        } catch (err) { alert("Error adding dish"); }
     };
 
     const handleDeleteDish = async (dishId) => {
@@ -192,6 +188,7 @@ const RestaurantAdmin = () => {
                 setActiveAlerts(prev => [...prev, data]);
             });
 
+            // --- 📢 LISTENER FOR GLOBAL CEO BROADCASTS ---
             socket.on("global-broadcast", (data) => {
                 alert(`📢 ADMIN BROADCAST: ${data.title}\n\n${data.message}`);
             });
@@ -245,7 +242,7 @@ const RestaurantAdmin = () => {
 
     if (!isAuthenticated) return (
         <div className="admin-container">
-            <style>{stylesString}</style>
+            <style>{styles}</style>
             <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <div className="glass-card" style={{ textAlign: 'center', width: '320px' }}>
                     <FaStore size={40} color="#f97316" style={{ marginBottom: '15px' }} />
@@ -261,7 +258,7 @@ const RestaurantAdmin = () => {
 
     return (
         <div className="admin-container">
-            <style>{stylesString}</style>
+            <style>{styles}</style>
             <div className="toast-container">
                 {activeAlerts.map((alert, i) => (
                     <div key={i} className="toast-alert">
@@ -302,9 +299,6 @@ const RestaurantAdmin = () => {
 
                 <SetupWizard dishesCount={dishes.length} pushEnabled={pushEnabled} />
 
-                {/* FIXED SYNTAX AT LINE 256: Added key-value labels and proper closure */}
-                {isPro && <SalesSummary restaurants={[{ restaurantName: restaurantName, totalRevenue: inboxOrders.reduce((sum, o) => sum + o.totalAmount, 0) }]} />}
-
                 <nav className="nav-tabs">
                     <button onClick={() => setActiveTab("menu")} className={`tab-btn ${activeTab === "menu" ? 'active' : ''}`}>Menu</button>
                     <button onClick={() => { setActiveTab("inbox"); setHasNewOrder(false); }} className={`tab-btn ${activeTab === "inbox" ? 'active' : ''}`}>
@@ -338,7 +332,6 @@ const RestaurantAdmin = () => {
                         <h2 style={{ fontSize: '14px', fontWeight: 900, marginBottom: '20px' }}><FaPlus /> ADD ITEM</h2>
                         <form onSubmit={handleAddDish}>
                             <input className="input-dark" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} placeholder="Dish Name" required />
-                            <input className="input-dark" value={formData.image} onChange={e => setFormData({ ...formData, image: e.target.value })} placeholder="Image URL (http://...)" />
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
                                 <input className="input-dark" type="number" value={formData.price} onChange={e => setFormData({ ...formData, price: e.target.value })} placeholder="Price ₹" required />
                                 <select className="input-dark" value={formData.category} onChange={e => setFormData({ ...formData, category: e.target.value })}>
@@ -352,7 +345,7 @@ const RestaurantAdmin = () => {
                                 <div key={dish._id} className="dish-item">
                                     <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
                                         <div style={{ width: '50px', height: '50px', borderRadius: '10px', background: '#222', overflow: 'hidden' }}>
-                                            {dish.image ? <img src={dish.image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <FaUtensils color="#333" style={{margin:'15px'}}/>}
+                                            {dish.image ? <img src={dish.image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <FaUtensils color="#333" />}
                                         </div>
                                         <div>
                                             <p style={{ fontWeight: 900, margin: 0, fontSize: '14px' }}>{dish.name}</p>
@@ -367,22 +360,52 @@ const RestaurantAdmin = () => {
                 )}
 
                 {activeTab === "settings" && (
-                    <div className="glass-card">
-                        <h2 style={{ fontSize: '14px', fontWeight: 900, marginBottom: '20px' }}>
-                            <FaQrcode color="#FF9933" /> Bulk QR Generator
-                        </h2>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '20px' }}>
-                            <div>
-                                <label style={{ fontSize: '10px', color: '#666', fontWeight: 900, display: 'block', marginBottom: '5px' }}>START TABLE</label>
-                                <input type="number" className="input-dark" value={qrRange.start} onChange={e => setQrRange({...qrRange, start: parseInt(e.target.value) || 1})} />
+                    <>
+                        <div className="glass-card">
+                            <h2 style={{ fontSize: '14px', fontWeight: 900, marginBottom: '20px' }}>
+                                <FaQrcode color="#FF9933" /> Bulk QR Generator
+                            </h2>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '20px' }}>
+                                <div>
+                                    <label style={{ fontSize: '10px', color: '#666', fontWeight: 900, display: 'block', marginBottom: '5px' }}>START TABLE</label>
+                                    <input type="number" className="input-dark" value={qrRange.start} onChange={e => setQrRange({...qrRange, start: parseInt(e.target.value) || 1})} />
+                                </div>
+                                <div>
+                                    <label style={{ fontSize: '10px', color: '#666', fontWeight: 900, display: 'block', marginBottom: '5px' }}>END TABLE</label>
+                                    <input type="number" className="input-dark" value={qrRange.end} onChange={e => setQrRange({...qrRange, end: parseInt(e.target.value) || 1})} />
+                                </div>
                             </div>
-                            <div>
-                                <label style={{ fontSize: '10px', color: '#666', fontWeight: 900, display: 'block', marginBottom: '5px' }}>END TABLE</label>
-                                <input type="number" className="input-dark" value={qrRange.end} onChange={e => setQrRange({...qrRange, end: parseInt(e.target.value) || 1})} />
-                            </div>
+                            <button onClick={generatePrintableQRs} className="btn-primary">Generate & Print QRs</button>
                         </div>
-                        <button onClick={generatePrintableQRs} className="btn-primary">Generate & Print QRs</button>
-                    </div>
+
+                        <div className="glass-card">
+                            <h2 style={{ fontSize: '14px', fontWeight: 900, marginBottom: '10px' }}>
+                                <FaBell color="#FF9933" /> Nightly Reports
+                            </h2>
+                            <p style={{ fontSize: '11px', color: '#888', marginBottom: '15px' }}>
+                                Receive a sales summary every night at 11:59 PM.
+                            </p>
+                            <input 
+                                className="input-dark" 
+                                placeholder="your@email.com" 
+                                defaultValue={ownerEmail}
+                                onBlur={async (e) => {
+                                    const email = e.target.value;
+                                    if(email) {
+                                        try {
+                                            await axios.put(`${API_BASE}/auth/update-email`, { restaurantId: id, email });
+                                            alert("Email updated!");
+                                        } catch (err) { alert("Error updating email."); }
+                                    }
+                                }}
+                            />
+                        </div>
+
+                        <div className="glass-card">
+                            <h2 style={{ fontSize: '14px', fontWeight: 900, marginBottom: '10px' }}>Staff Alerts</h2>
+                            <button onClick={() => Notification.requestPermission()} className="btn-primary">Enable Push Alerts</button>
+                        </div>
+                    </>
                 )}
             </div>
         </div>

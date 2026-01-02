@@ -22,35 +22,10 @@ const ChefDashboard = () => {
     const [isMuted, setIsMuted] = useState(false);
     const [activeTab, setActiveTab] = useState("orders");
     const [mongoId, setMongoId] = useState(null);
-    const [socket, setSocket] = useState(null); 
+    const [socket, setSocket] = useState(null); // 🟢 Store socket in state
 
     const audioRef = useRef(new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"));
     const callSound = useRef(new Audio("https://assets.mixkit.co/active_storage/sfx/2190/2190-preview.mp3"));
-
-    // 📱 MOBILE FIX: Wake up audio and request notification permissions
-    const enableMobileAlerts = async (rId) => {
-        audioRef.current.play().then(() => {
-            audioRef.current.pause();
-            audioRef.current.currentTime = 0;
-        }).catch(() => {});
-
-        if ('serviceWorker' in navigator) {
-            try {
-                const registration = await navigator.serviceWorker.ready;
-                const permission = await Notification.requestPermission();
-                if (permission === 'granted') {
-                    const subscription = await registration.pushManager.subscribe({
-                        userVisibleOnly: true,
-                        applicationServerKey: 'YOUR_PUBLIC_VAPID_KEY' 
-                    });
-                    await axios.post(`${API_BASE}/auth/save-subscription`, {
-                        restaurantId: rId,
-                        subscription: subscription
-                    });
-                }
-            } catch (e) { console.log("Notification setup skipped"); }
-        }
-    };
 
     const handleLogin = async (e) => {
         if(e) e.preventDefault();
@@ -67,7 +42,6 @@ const ChefDashboard = () => {
                 setMongoId(dbId);
                 localStorage.setItem(`chef_session_${id}`, dbId);
                 setIsAuthenticated(true);
-                enableMobileAlerts(dbId); // 📱 Trigger mobile wake-up
                 fetchData(dbId);
             } else { setError("❌ Access Denied"); }
         } catch (err) { setError("❌ Invalid PIN"); } finally { setAuthLoading(false); }
@@ -89,6 +63,7 @@ const ChefDashboard = () => {
                 axios.get(`${API_BASE}/orders?restaurantId=${rId}`),
                 axios.get(`${API_BASE}/dishes?restaurantId=${rId}`)
             ]);
+            // ✅ CHEF sees everything except what is already SERVED by the waiter
             const active = orderRes.data.filter(o => o.status !== "SERVED" && o.status !== "Served");
             setOrders(active.sort((a,b) => new Date(a.createdAt) - new Date(b.createdAt)));
             setDishes(dishRes.data);
@@ -97,19 +72,12 @@ const ChefDashboard = () => {
 
     useEffect(() => {
         if(isAuthenticated && mongoId) {
-            const newSocket = io(SERVER_URL, {
-                transports: ['websocket'],
-                reconnection: true,
-                reconnectionAttempts: Infinity,
-                timeout: 10000
-            });
-            
+            const newSocket = io(SERVER_URL);
             setSocket(newSocket);
             newSocket.emit("join-restaurant", mongoId);
 
             newSocket.on("new-order", (newOrder) => {
                 if (!isMuted) audioRef.current.play().catch(()=>{});
-                if ("vibrate" in navigator) navigator.vibrate([200, 100, 200]);
                 fetchData(mongoId);
             });
 
@@ -117,30 +85,15 @@ const ChefDashboard = () => {
 
             newSocket.on("new-waiter-call", (callData) => {
                 if (!isMuted) callSound.current.play().catch(()=>{});
-                if ("vibrate" in navigator) navigator.vibrate(500);
                 setServiceCalls(prev => [callData, ...prev]);
             });
 
+            // 📢 LISTEN FOR GLOBAL CEO BROADCASTS
             newSocket.on("global-broadcast", (data) => {
                 alert(`📢 BROADCAST: ${data.title}\n${data.message}`);
             });
 
-            // 📱 MOBILE FIX: When Chef re-opens the app/phone, force an immediate sync
-            const handleVisibilityChange = () => {
-                if (document.visibilityState === 'visible') {
-                    fetchData(mongoId);
-                    if (!newSocket.connected) newSocket.connect();
-                }
-            };
-            document.addEventListener("visibilitychange", handleVisibilityChange);
-
-            const mobileSync = setInterval(() => fetchData(mongoId), 20000);
-
-            return () => {
-                newSocket.disconnect();
-                clearInterval(mobileSync);
-                document.removeEventListener("visibilitychange", handleVisibilityChange);
-            };
+            return () => newSocket.disconnect();
         }
     }, [isAuthenticated, mongoId, isMuted]);
 
@@ -148,11 +101,18 @@ const ChefDashboard = () => {
         let nextStatus = "";
         if (order.status === "Pending" || order.status === "PLACED") nextStatus = "Cooking";
         else if (order.status === "Cooking") nextStatus = "Ready";
+
+        // If it's already "Ready", the Chef stops here. The Waiter must take over.
         if (order.status === "Ready") return; 
 
         try {
+            // Optimistic UI update
             setOrders(prev => prev.map(o => o._id === order._id ? { ...o, status: nextStatus } : o));
+            
+            // API Update
             await axios.put(`${API_BASE}/orders/${order._id}`, { status: nextStatus });
+            
+            // ✅ EMIT TO WAITER: If marked READY, specifically tell the Waiter panel
             if (nextStatus === "Ready" && socket) {
                 socket.emit("chef-ready-alert", { 
                     restaurantId: mongoId, 
@@ -219,9 +179,11 @@ const ChefDashboard = () => {
                 </button>
             </div>
 
-            <div style={styles.grid}>
-                {activeTab === "orders" ? (
-                    orders.length === 0 ? <div style={styles.emptyState}><h2>No Orders</h2></div> : (
+            {activeTab === "orders" ? (
+                <div style={styles.grid}>
+                    {orders.length === 0 ? (
+                        <div style={styles.emptyState}><h2>No Orders</h2></div>
+                    ) : (
                         orders.map((order) => (
                             <div key={order._id} style={{
                                 ...styles.card, 
@@ -243,7 +205,9 @@ const ChefDashboard = () => {
                                 </div>
                                 <div style={styles.actionContainer}>
                                     {order.status === "Ready" ? (
-                                        <div style={styles.readyIndicator}><FaCheck /> WAITING FOR WAITER</div>
+                                        <div style={styles.readyIndicator}>
+                                            <FaCheck /> WAITING FOR WAITER
+                                        </div>
                                     ) : (
                                         <button onClick={() => advanceOrderStatus(order)} style={{
                                             ...styles.actionBtn, 
@@ -256,18 +220,20 @@ const ChefDashboard = () => {
                                 </div>
                             </div>
                         ))
-                    )
-                ) : (
-                    dishes.map(dish => (
+                    )}
+                </div>
+            ) : (
+                <div style={styles.grid}>
+                    {dishes.map(dish => (
                         <div key={dish._id} style={{...styles.stockCard, opacity: dish.isAvailable ? 1 : 0.6}}>
                             <h3 style={{ margin: 0, fontSize: '15px' }}>{dish.name}</h3>
                             <button onClick={() => toggleStock(dish._id, dish.isAvailable)} style={{...styles.stockBtn, background: dish.isAvailable ? '#ef4444' : '#22c55e'}}>
                                 {dish.isAvailable ? "OUT" : "IN"}
                             </button>
                         </div>
-                    ))
-                )}
-            </div>
+                    ))}
+                </div>
+            )}
             <style>{`.spin { animation: spin 1s linear infinite; } @keyframes spin { 100% { transform: rotate(360deg); } }`}</style>
         </div>
     );
@@ -289,7 +255,7 @@ const styles = {
     iconButtonRed: { background: '#3b0a0a', border: 'none', color: '#ef4444', padding: '10px', borderRadius: '8px' },
     tabContainer: { display: 'flex', gap: '10px', marginBottom: '15px' },
     tabButton: { flex: 1, padding: '12px', borderRadius: '10px', border: 'none', color: 'white', fontWeight: 'bold', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px' },
-    grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' },
+    grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '12px' },
     card: { background: '#111', borderRadius: '12px', border: '1px solid #222', display: 'flex', flexDirection: 'column' },
     cardHeader: { padding: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
     tableNumber: { fontSize: '20px', fontWeight: '900', margin:0 },
