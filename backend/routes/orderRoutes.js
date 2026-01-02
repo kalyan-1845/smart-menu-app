@@ -23,19 +23,19 @@ if (publicKey && privateKey) {
         console.error("❌ VAPID Config Error:", err.message);
     }
 } else {
-    console.warn("⚠️ PUSH DISABLED: Environment variables VAPID_PUBLIC_KEY or VAPID_PRIVATE_KEY are missing.");
+    console.warn("⚠️ PUSH DISABLED: VAPID keys missing in environment variables.");
 }
 
 // ==========================================
-// 📥 STATIC ROUTES (MUST BE ABOVE /:id)
+// 📥 SPECIFIC ROUTES (MUST BE AT THE TOP)
 // ==========================================
 
-// --- 6. GET INBOX (FIXED PRECEDEDENCE) ---
+// --- 6. GET INBOX (FIXED: Moved up to prevent 400 errors) ---
 router.get('/inbox', async (req, res) => {
     try {
         const { restaurantId } = req.query;
         if (!restaurantId || !mongoose.Types.ObjectId.isValid(restaurantId)) {
-            return res.status(400).json({ message: "Valid 24-char restaurantId required" });
+            return res.status(400).json({ message: "A valid 24-character Restaurant ID is required." });
         }
         const orders = await Order.find({ restaurantId, isDownloaded: false }).sort({ createdAt: -1 });
         res.json(orders);
@@ -102,7 +102,7 @@ router.post('/call-waiter', async (req, res) => {
 });
 
 // ==========================================
-// 🆔 DYNAMIC ID ROUTES (MUST BE BELOW STATIC ROUTES)
+// 🆔 DYNAMIC ROUTES (MUST BE BELOW SPECIFIC ROUTES)
 // ==========================================
 
 // --- PLACE ORDER ---
@@ -111,7 +111,6 @@ router.post('/', async (req, res) => {
         const { customerName, items, totalAmount, paymentMethod, tableNum, tableNumber, restaurantId, owner, status } = req.body;
         const finalTableNum = tableNum || tableNumber;
         let finalRestaurantId = restaurantId || owner;
-        const finalStatus = status || "Pending"; 
 
         if (!finalRestaurantId || !finalTableNum) return res.status(400).json({ message: "ID and Table required" });
 
@@ -123,7 +122,7 @@ router.post('/', async (req, res) => {
 
         const newOrder = new Order({ 
             customerName, tableNum: finalTableNum, restaurantId: finalRestaurantId, 
-            items, totalAmount, paymentMethod, status: finalStatus, isDownloaded: false 
+            items, totalAmount, paymentMethod, status: status || "Pending", isDownloaded: false 
         });
 
         const savedOrder = await newOrder.save();
@@ -169,33 +168,17 @@ router.put('/:id', async (req, res) => {
         if (req.body.status === "Served" || req.body.status === "SERVED") {
             await Owner.findByIdAndUpdate(order.restaurantId, { $inc: { totalRevenue: order.totalAmount } });
         }
-
-        if ((req.body.status === "Ready" || req.body.status === "READY") && publicKey) {
-            const restaurant = await Owner.findById(order.restaurantId);
-            if (restaurant && restaurant.pushSubscriptions?.length > 0) {
-                const payload = JSON.stringify({
-                    title: "🍱 ORDER READY",
-                    body: `Table ${order.tableNum} is ready!`,
-                    url: `/waiter/${restaurant.username}`
-                });
-                restaurant.pushSubscriptions.forEach(sub => webpush.sendNotification(sub, payload).catch(() => {}));
-            }
-        }
         if (req.io) req.io.to(order.restaurantId.toString()).emit('order-updated', order);
         res.json(order);
-    } catch (error) {
-        res.status(400).json({ message: error.message });
-    }
+    } catch (error) { res.status(400).json({ message: error.message }); }
 });
 
 // --- DELETE ORDER ---
 router.delete('/:id', async (req, res) => {
     try {
         await Order.findByIdAndDelete(req.params.id);
-        res.json({ success: true, message: "Order deleted" });
-    } catch (error) {
-        res.status(500).json({ message: "Delete failed" });
-    }
+        res.json({ success: true, message: "Deleted" });
+    } catch (error) { res.status(500).json({ message: "Delete failed" }); }
 });
 
 // --- DELETE CALL ---
@@ -204,7 +187,7 @@ router.delete('/calls/:callId', async (req, res) => {
         await Call.findByIdAndDelete(req.params.callId);
         res.json({ success: true });
     } catch (error) {
-        res.status(500).json({ message: "Failed to delete call" });
+        res.status(500).json({ message: "Failed delete" });
     }
 });
 
