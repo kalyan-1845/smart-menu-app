@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-import { Link, useParams } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import io from "socket.io-client";
 import confetti from "canvas-confetti";
 import { 
@@ -17,15 +17,12 @@ const styles = `
 .header-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
 .shop-title { font-size: 28px; font-weight: 900; margin: 0; letter-spacing: -1px; text-transform: uppercase; }
 .btn-glass { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); color: white; padding: 10px 16px; border-radius: 12px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: 0.2s; }
-.btn-glass:hover { background: rgba(255, 255, 255, 0.1); }
-.btn-primary { background: linear-gradient(135deg, #FF8800 0%, #FF5500 100%); border: none; color: white; width: 100%; padding: 16px; border-radius: 16px; font-size: 14px; font-weight: 700; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; box-shadow: 0 4px 15px rgba(255, 85, 0, 0.4); transition: 0.2s; }
-.btn-primary:active { transform: scale(0.98); }
+.btn-primary { background: linear-gradient(135deg, #FF8800 0%, #FF5500 100%); border: none; color: white; width: 100%; padding: 16px; border-radius: 16px; font-size: 14px; font-weight: 700; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; box-shadow: 0 4px 15px rgba(255, 85, 0, 0.4); }
 .glass-card { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); backdrop-filter: blur(12px); border-radius: 24px; padding: 24px; margin-bottom: 24px; }
 .nav-tabs { display: flex; background: rgba(0,0,0,0.3); padding: 4px; border-radius: 16px; margin-bottom: 24px; }
 .tab-btn { flex: 1; padding: 12px; background: transparent; border: none; color: #888; font-size: 11px; font-weight: 900; cursor: pointer; border-radius: 12px; text-transform: uppercase; transition: 0.3s; }
 .tab-btn.active { background: rgba(255,255,255,0.1); color: #FF9933; }
-.input-dark { width: 100%; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); padding: 14px; border-radius: 12px; color: white; margin-bottom: 15px; outline: none; transition: 0.3s; }
-.input-dark:focus { border-color: #FF9933; background: rgba(0,0,0,0.6); }
+.input-dark { width: 100%; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); padding: 14px; border-radius: 12px; color: white; margin-bottom: 15px; outline: none; }
 .dish-item { display: flex; justify-content: space-between; align-items: center; padding: 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
 .toast-container { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); width: 90%; max-width: 400px; z-index: 1000; display: flex; flex-direction: column; gap: 10px; }
 .toast-alert { background: #FF9933; color: black; padding: 15px; border-radius: 15px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
@@ -84,6 +81,7 @@ const RestaurantAdmin = () => {
     const [dishes, setDishes] = useState([]);
     const [formData, setFormData] = useState({ name: "", price: "", category: "Starters", image: "" });
 
+    // --- LOGIN ---
     const handleLogin = async (e) => {
         e.preventDefault();
         setAuthLoading(true);
@@ -97,6 +95,7 @@ const RestaurantAdmin = () => {
         } catch (err) { alert("❌ Invalid Password"); } finally { setAuthLoading(false); }
     };
 
+    // --- FETCH DISHES (No Inbox) ---
     const fetchData = async (token, mongoId) => {
         try {
             const config = { headers: { Authorization: `Bearer ${token}` } };
@@ -105,13 +104,13 @@ const RestaurantAdmin = () => {
         } catch (error) { console.error(error); }
     };
 
+    // --- REAL-TIME ALERTS (Waiters Only) ---
     useEffect(() => {
         if (isAuthenticated) {
             const mongoId = localStorage.getItem(`owner_id_${id}`);
             const socket = io("https://smart-menu-backend-5ge7.onrender.com");
             socket.emit("join-restaurant", mongoId);
 
-            // Listen ONLY for Waiter Calls (Inbox alerts removed)
             socket.on("new-waiter-call", (data) => {
                 new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3").play().catch(() => {});
                 setActiveAlerts(prev => [...prev, data]);
@@ -200,6 +199,7 @@ const RestaurantAdmin = () => {
 
                 <nav className="nav-tabs">
                     <button onClick={() => setActiveTab("menu")} className={`tab-btn ${activeTab === "menu" ? 'active' : ''}`}>Menu</button>
+                    {/* INBOX TAB REMOVED */}
                     <button onClick={() => setActiveTab("settings")} className={`tab-btn ${activeTab === "settings" ? 'active' : ''}`}>Setup</button>
                 </nav>
 
