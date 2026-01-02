@@ -13,9 +13,14 @@ import dishRoutes from './routes/dishRoutes.js';
 import orderRoutes from './routes/orderRoutes.js';
 import superAdminRoutes from './routes/superAdminRoutes.js';
 import broadcastRoutes from './routes/broadcastRoutes.js';
-import menuRoutes from './routes/menuRoutes.js'; // Kept as requested
+import menuRoutes from './routes/menuRoutes.js'; 
 
 const app = express();
+
+// 🔴 CRITICAL FIX FOR RENDER: TRUST PROXY
+// This fixes the "ERR_ERL_UNEXPECTED_X_FORWARDED_FOR" crash
+app.set('trust proxy', 1);
+
 const httpServer = createServer(app);
 
 // ==========================================
@@ -27,7 +32,7 @@ const allowedOrigins = [
     "https://smartmenuss.netlify.app"
 ];
 
-// Regex to match ANY Netlify deploy preview (e.g., https://123abc--smartmenuss.netlify.app)
+// Regex to match ANY Netlify deploy preview
 const deployPreviewPattern = /^https:\/\/.*--smartmenuss\.netlify\.app$/;
 
 const isOriginAllowed = (origin) => {
@@ -35,13 +40,11 @@ const isOriginAllowed = (origin) => {
     return allowedOrigins.includes(origin) || deployPreviewPattern.test(origin);
 };
 
-// 1. MANUAL HEADERS (CRASH FIX APPLIED HERE)
+// 1. MANUAL HEADERS (SAFE MODE)
 app.use((req, res, next) => {
     const origin = req.headers.origin;
     
-    // 🛑 CRITICAL FIX: 
-    // We strictly check if 'origin' exists (is not undefined) before setting the header.
-    // If 'origin' is undefined, we simply skip setting this specific header.
+    // 🛑 Strictly check if origin exists before setting it
     if (origin && isOriginAllowed(origin)) {
         res.setHeader("Access-Control-Allow-Origin", origin);
     }
@@ -54,7 +57,7 @@ app.use((req, res, next) => {
     next();
 });
 
-// 2. CORS LIBRARY (The main gatekeeper)
+// 2. CORS LIBRARY
 app.use(cors({
     origin: (origin, callback) => {
         if (isOriginAllowed(origin)) {
@@ -70,8 +73,14 @@ app.use(cors({
 
 app.use(express.json({ limit: '10mb' })); 
 
-// Rate Limiter
-const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 1000, standardHeaders: true, legacyHeaders: false });
+// Rate Limiter (Now safe with trust proxy enabled)
+const limiter = rateLimit({ 
+    windowMs: 15 * 60 * 1000, 
+    max: 1000, 
+    standardHeaders: true, 
+    legacyHeaders: false,
+    validate: { xForwardedForHeader: false } // Extra safety to silence proxy warnings
+});
 app.use(limiter); 
 
 // Socket.io Setup
@@ -103,7 +112,7 @@ app.use('/api/dishes', dishRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/superadmin', superAdminRoutes);
 app.use('/api/broadcast', broadcastRoutes);
-app.use('/api/menu', menuRoutes); // Kept as requested
+app.use('/api/menu', menuRoutes);
 
 app.get('/', (req, res) => res.send('API is Running...'));
 
