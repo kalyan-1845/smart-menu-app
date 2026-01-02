@@ -6,7 +6,7 @@ import {
 } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-import RevenueStats from '../components/RevenueStats'; // Ensure this matches your filename
+import RevenueStats from '../components/StatsBoard'; // Ensure this matches your filename
 import InstallButton from "../components/InstallButton";
 
 const API_URL = "https://smart-menu-backend-5ge7.onrender.com"; 
