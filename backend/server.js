@@ -40,8 +40,8 @@ app.use((req, res, next) => {
     const origin = req.headers.origin;
     
     // 🛑 CRITICAL FIX: 
-    // We strictly check if 'origin' exists before setting the header.
-    // If 'origin' is undefined, we simply skip setting this header.
+    // We strictly check if 'origin' exists (is not undefined) before setting the header.
+    // If 'origin' is undefined, we simply skip setting this specific header.
     if (origin && isOriginAllowed(origin)) {
         res.setHeader("Access-Control-Allow-Origin", origin);
     }
