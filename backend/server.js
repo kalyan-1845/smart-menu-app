@@ -13,23 +13,32 @@ import dishRoutes from './routes/dishRoutes.js';
 import orderRoutes from './routes/orderRoutes.js';
 import superAdminRoutes from './routes/superAdminRoutes.js';
 import broadcastRoutes from './routes/broadcastRoutes.js';
+import menuRoutes from './routes/menuRoutes.js'; // Ensure this is imported if you use it
 
 const app = express();
 const httpServer = createServer(app);
 
-// --- 🔒 SECURITY: ALLOWED ORIGINS ---
-// Added your new Netlify preview URL to prevent "CORS Blocked" errors on mobile
+// ==========================================
+// 🟢 CORS FIX: ALLOW ALL NETLIFY PREVIEWS
+// ==========================================
 const allowedOrigins = [
     "http://localhost:5173",           
-    "https://smartmenuss.netlify.app",
-    "https://694915c413d9f40008f38924--smartmenuss.netlify.app",
-    "https://6956bd4f3822d500081cba07--smartmenuss.netlify.app" 
+    "http://localhost:3000",
+    "https://smartmenuss.netlify.app"
 ];
 
-// ☢️ NUCLEAR CORS FIX (LAYER 1: MANUAL HEADERS)
+// Regex to match ANY Netlify deploy preview (e.g., https://123abc--smartmenuss.netlify.app)
+const deployPreviewPattern = /^https:\/\/.*--smartmenuss\.netlify\.app$/;
+
+const isOriginAllowed = (origin) => {
+    if (!origin) return true; // Allow backend-to-backend calls
+    return allowedOrigins.includes(origin) || deployPreviewPattern.test(origin);
+};
+
+// 1. MANUAL HEADERS (For strict browsers/mobiles)
 app.use((req, res, next) => {
     const origin = req.headers.origin;
-    if (allowedOrigins.includes(origin)) {
+    if (isOriginAllowed(origin)) {
         res.setHeader("Access-Control-Allow-Origin", origin);
     }
     res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
@@ -39,20 +48,42 @@ app.use((req, res, next) => {
     next();
 });
 
-// 🛡️ STANDARD CORS (LAYER 2: LIBRARY BACKUP)
-app.use(cors({ origin: allowedOrigins, credentials: true, methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"] }));
+// 2. CORS LIBRARY (The main gatekeeper)
+app.use(cors({
+    origin: (origin, callback) => {
+        if (isOriginAllowed(origin)) {
+            callback(null, true);
+        } else {
+            console.log("🚫 Blocked by CORS:", origin);
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+}));
+
 app.use(express.json({ limit: '10mb' })); 
 
-// Rate Limiter - Optimized for 1000+ simultaneous users
+// Rate Limiter
 const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 1000, standardHeaders: true, legacyHeaders: false });
 app.use(limiter); 
 
 // Socket.io Setup
 const io = new Server(httpServer, {
-    cors: { origin: allowedOrigins, methods: ["GET", "POST", "PUT", "DELETE"], credentials: true }
+    cors: { 
+        origin: (origin, callback) => {
+            if (isOriginAllowed(origin)) {
+                callback(null, true);
+            } else {
+                callback(new Error('Not allowed by CORS'));
+            }
+        },
+        methods: ["GET", "POST", "PUT", "DELETE"], 
+        credentials: true 
+    }
 });
 
-// ✅ KEY: This makes 'req.io' available in dishRoutes.js and orderRoutes.js
+// Make 'req.io' available in routes
 app.use((req, res, next) => { req.io = io; next(); });
 
 // --- DATABASE ---
@@ -66,6 +97,7 @@ app.use('/api/dishes', dishRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/superadmin', superAdminRoutes);
 app.use('/api/broadcast', broadcastRoutes);
+// app.use('/api/menu', menuRoutes); // Uncomment if you have this file
 
 app.get('/', (req, res) => res.send('API is Running...'));
 
@@ -79,10 +111,8 @@ app.use((err, req, res, next) => {
     });
 });
 
-// --- SOCKETS: FIXED FOR SAAS ISOLATION & MOBILE SYNC ---
+// --- SOCKETS ---
 io.on('connection', (socket) => {
-    
-    // Staff and Customers join a specific restaurant room for private data
     socket.on('join-restaurant', (restaurantId) => {
         socket.join(restaurantId.toString());
         console.log(`User joined private room: ${restaurantId}`);
@@ -90,14 +120,12 @@ io.on('connection', (socket) => {
 
     socket.on('join-owner-room', (ownerId) => socket.join(ownerId.toString()));
 
-    // Waiter Call logic
     socket.on("call-waiter", (data) => {
         if(data.restaurantId) {
             io.to(data.restaurantId.toString()).emit("new-waiter-call", data);
         }
     });
 
-    // 👨‍🍳 NEW: CHEF TO WAITER READY ALERT
     socket.on("chef-ready-alert", (data) => {
         if (data.restaurantId) {
             io.to(data.restaurantId.toString()).emit("chef-ready-alert", data);
