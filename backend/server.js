@@ -80,7 +80,7 @@ const limiter = rateLimit({
     max: 1000, 
     standardHeaders: true, 
     legacyHeaders: false,
-    // 🔴 EXTRA SAFETY: This disables the specific validation error you are seeing
+    // 🔴 EXTRA SAFETY: This disables the specific validation error you are seeing in logs
     validate: { xForwardedForHeader: false } 
 });
 app.use(limiter); 
