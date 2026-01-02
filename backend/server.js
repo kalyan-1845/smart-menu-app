@@ -92,6 +92,7 @@ app.use('/api/dishes', dishRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/superadmin', superAdminRoutes);
 app.use('/api/broadcast', broadcastRoutes);
+app.use('/api/menu', dishRoutes);
 
 app.get('/', (req, res) => res.send('API is Running...'));
 
