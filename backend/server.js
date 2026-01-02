@@ -17,9 +17,8 @@ import menuRoutes from './routes/menuRoutes.js';
 
 const app = express();
 
-// 🔴 CRITICAL FIX FOR RENDER: TRUST PROXY
-// This tells Express to trust the load balancer's headers.
-// It fixes the "ERR_ERL_UNEXPECTED_X_FORWARDED_FOR" crash.
+// 🔴 FIX 1: TRUST PROXY (Solves the "X-Forwarded-For" Rate Limit Crash)
+// This tells Express to trust Render's load balancer.
 app.set('trust proxy', 1);
 
 const httpServer = createServer(app);
@@ -45,9 +44,8 @@ const isOriginAllowed = (origin) => {
 app.use((req, res, next) => {
     const origin = req.headers.origin;
     
-    // 🛑 CRITICAL SAFETY CHECK:
-    // Only set the header if 'origin' actually exists.
-    // This prevents the "Invalid value undefined" crash.
+    // 🔴 FIX 2: PREVENT UNDEFINED HEADER CRASH
+    // We strictly check if 'origin' exists before setting the header.
     if (origin && isOriginAllowed(origin)) {
         res.setHeader("Access-Control-Allow-Origin", origin);
     }
@@ -82,7 +80,7 @@ const limiter = rateLimit({
     max: 1000, 
     standardHeaders: true, 
     legacyHeaders: false,
-    // Fix for Render Proxy issues (silences the validation error)
+    // 🔴 EXTRA SAFETY: Disables the specific validation error you are seeing
     validate: { xForwardedForHeader: false } 
 });
 app.use(limiter); 
