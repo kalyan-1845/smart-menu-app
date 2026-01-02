@@ -210,14 +210,15 @@ router.get('/inbox', async (req, res) => {
     try {
         const { restaurantId } = req.query;
 
-        // 🛡️ ENHANCED VALIDATION: Prevents the 400 error
+        // 🛡️ ENHANCED VALIDATION: Prevents the 400 Bad Request error
         if (!restaurantId || !mongoose.Types.ObjectId.isValid(restaurantId)) {
+            console.error("❌ Inbox Failed: Missing or Invalid restaurantId:", restaurantId);
             return res.status(400).json({ 
-                message: "A valid 24-character Restaurant ID is required." 
+                message: "A valid 24-character Restaurant ID query parameter is required." 
             });
         }
 
-        // Search specifically for orders belonging to this ID that aren't downloaded
+        // Fetch orders belonging to this restaurant that have not been cleared (isDownloaded: false)
         const orders = await Order.find({ 
             restaurantId: restaurantId, 
             isDownloaded: false 
@@ -225,7 +226,7 @@ router.get('/inbox', async (req, res) => {
 
         res.json(orders);
     } catch (error) {
-        console.error("Inbox API Error:", error.message);
+        console.error("🔥 Inbox API Internal Error:", error.message);
         res.status(500).json({ message: "Internal Server Error" });
     }
 });
