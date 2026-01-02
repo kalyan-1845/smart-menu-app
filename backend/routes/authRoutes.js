@@ -12,8 +12,8 @@ const router = express.Router();
 // These should ideally be in your .env file
 webpush.setVapidDetails(
     'mailto:support@bitebox.com',
-    process.env.PUBLIC_VAPID_KEY,
-    process.env.PRIVATE_VAPID_KEY
+    process.env.VAPID_PUBLIC_KEY,
+    process.env.VAPID_PRIVATE_KEY
 );
 
 const generateToken = (id) => {

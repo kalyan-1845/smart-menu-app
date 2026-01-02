@@ -8,8 +8,8 @@ const router = express.Router();
 // --- 🔑 WEB PUSH CONFIG ---
 webpush.setVapidDetails(
     'mailto:support@bitebox.com',
-    process.env.PUBLIC_VAPID_KEY,
-    process.env.PRIVATE_VAPID_KEY
+    process.env.VAPID_PUBLIC_KEY,
+    process.env.VAPID_PRIVATE_KEY
 );
 
 /**
