@@ -67,4 +67,4 @@ const SalesSummary = ({ restaurants }) => {
     );
 };
 
-export default SalesSummary;
+export default RevenueStats;
