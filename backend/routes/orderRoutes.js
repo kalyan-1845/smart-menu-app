@@ -7,12 +7,25 @@ import Owner from '../models/Owner.js';
 
 const router = express.Router();
 
-// --- 🔑 WEB PUSH CONFIGURATION ---
-webpush.setVapidDetails(
-    'mailto:support@bitebox.com',
-    process.env.PUBLIC_VAPID_KEY,
-    process.env.PRIVATE_VAPID_KEY
-);
+// --- 🔑 SAFE WEB PUSH CONFIGURATION ---
+// Matching your .env names: VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY
+const publicKey = process.env.VAPID_PUBLIC_KEY;
+const privateKey = process.env.VAPID_PRIVATE_KEY;
+
+if (publicKey && privateKey) {
+    try {
+        webpush.setVapidDetails(
+            'mailto:support@bitebox.com',
+            publicKey,
+            privateKey
+        );
+        console.log("✅ Push Notifications Initialized Successfully");
+    } catch (err) {
+        console.error("❌ VAPID Config Error:", err.message);
+    }
+} else {
+    console.warn("⚠️ PUSH DISABLED: Environment variables VAPID_PUBLIC_KEY or VAPID_PRIVATE_KEY are missing.");
+}
 
 // --- 1. PLACE ORDER ---
 router.post('/', async (req, res) => {
@@ -49,20 +62,23 @@ router.post('/', async (req, res) => {
             req.io.to(finalRestaurantId.toString()).emit('new-order', savedOrder);
         }
 
-        try {
-            const restaurant = await Owner.findById(finalRestaurantId);
-            if (restaurant && restaurant.pushSubscriptions && restaurant.pushSubscriptions.length > 0) {
-                const payload = JSON.stringify({
-                    title: "🛎️ NEW ORDER RECEIVED",
-                    body: `Table ${finalTableNum}: ₹${totalAmount}`,
-                    url: `/chef/${restaurant.username}` 
-                });
+        // Send Notification only if VAPID is configured
+        if (publicKey && privateKey) {
+            try {
+                const restaurant = await Owner.findById(finalRestaurantId);
+                if (restaurant && restaurant.pushSubscriptions && restaurant.pushSubscriptions.length > 0) {
+                    const payload = JSON.stringify({
+                        title: "🛎️ NEW ORDER RECEIVED",
+                        body: `Table ${finalTableNum}: ₹${totalAmount}`,
+                        url: `/chef/${restaurant.username}` 
+                    });
 
-                restaurant.pushSubscriptions.forEach(sub => {
-                    webpush.sendNotification(sub, payload).catch(e => console.error("Push failed for device"));
-                });
-            }
-        } catch (pushErr) { console.error("Notification trigger failed"); }
+                    restaurant.pushSubscriptions.forEach(sub => {
+                        webpush.sendNotification(sub, payload).catch(e => console.error("Push failed"));
+                    });
+                }
+            } catch (pushErr) { console.error("Notification trigger failed"); }
+        }
 
         res.status(201).json(savedOrder);
     } catch (error) {
@@ -71,8 +87,7 @@ router.post('/', async (req, res) => {
     }
 });
 
-// ✅ --- NEW: GET ALL WAITER CALLS (HISTORY) ---
-// This must sit ABOVE the router.get('/:id') to avoid 400 errors
+// ✅ --- GET ALL WAITER CALLS ---
 router.get('/calls', async (req, res) => {
     try {
         const { restaurantId } = req.query;
@@ -86,7 +101,7 @@ router.get('/calls', async (req, res) => {
     }
 });
 
-// ✅ --- NEW: DELETE/RESOLVE WAITER CALL ---
+// ✅ --- DELETE/RESOLVE WAITER CALL ---
 router.delete('/calls/:callId', async (req, res) => {
     try {
         await Call.findByIdAndDelete(req.params.callId);
@@ -96,7 +111,7 @@ router.delete('/calls/:callId', async (req, res) => {
     }
 });
 
-// --- 2. GET SINGLE ORDER (CUSTOMER TRACKER) ---
+// --- 2. GET SINGLE ORDER ---
 router.get('/:id', async (req, res) => {
     try {
         if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
@@ -110,7 +125,7 @@ router.get('/:id', async (req, res) => {
     }
 });
 
-// --- 3. GET ALL ORDERS (CHEF/WAITER VIEW) ---
+// --- 3. GET ALL ORDERS ---
 router.get('/', async (req, res) => {
     try {
         const { restaurantId } = req.query;
@@ -122,7 +137,7 @@ router.get('/', async (req, res) => {
     }
 });
 
-// --- 4. UPDATE STATUS (CHEF ACTIONS) ---
+// --- 4. UPDATE STATUS ---
 router.put('/:id', async (req, res) => {
     try {
         const order = await Order.findByIdAndUpdate(
@@ -139,7 +154,7 @@ router.put('/:id', async (req, res) => {
             });
         }
 
-        if (req.body.status === "Ready" || req.body.status === "READY") {
+        if ((req.body.status === "Ready" || req.body.status === "READY") && publicKey) {
             const restaurant = await Owner.findById(order.restaurantId);
             if (restaurant && restaurant.pushSubscriptions?.length > 0) {
                 const payload = JSON.stringify({
@@ -172,17 +187,19 @@ router.post('/call-waiter', async (req, res) => {
             req.io.to(restaurantId.toString()).emit('new-waiter-call', newCall);
         }
 
-        try {
-            const restaurant = await Owner.findById(restaurantId);
-            if (restaurant && restaurant.pushSubscriptions && restaurant.pushSubscriptions.length > 0) {
-                const payload = JSON.stringify({
-                    title: "🛎️ ASSISTANCE NEEDED",
-                    body: `Table ${tableNumber} is calling for help!`,
-                    url: `/waiter/${restaurant.username}` 
-                });
-                restaurant.pushSubscriptions.forEach(sub => webpush.sendNotification(sub, payload).catch(()=>{}));
-            }
-        } catch (e) {}
+        if (publicKey) {
+            try {
+                const restaurant = await Owner.findById(restaurantId);
+                if (restaurant && restaurant.pushSubscriptions && restaurant.pushSubscriptions.length > 0) {
+                    const payload = JSON.stringify({
+                        title: "🛎️ ASSISTANCE NEEDED",
+                        body: `Table ${tableNumber} is calling for help!`,
+                        url: `/waiter/${restaurant.username}` 
+                    });
+                    restaurant.pushSubscriptions.forEach(sub => webpush.sendNotification(sub, payload).catch(()=>{}));
+                }
+            } catch (e) {}
+        }
         
         res.status(201).json(newCall);
     } catch (error) {
@@ -202,7 +219,7 @@ router.get('/inbox', async (req, res) => {
     }
 });
 
-// --- 7. CLEAR INBOX ---
+// --- 7. MARK DOWNLOADED ---
 router.put('/mark-downloaded', async (req, res) => {
     try {
         const { restaurantId } = req.body;
@@ -214,7 +231,7 @@ router.put('/mark-downloaded', async (req, res) => {
     }
 });
 
-// ✅ --- NEW: DELETE ORDER (CANCELLATIONS) ---
+// --- 8. DELETE ORDER ---
 router.delete('/:id', async (req, res) => {
     try {
         await Order.findByIdAndDelete(req.params.id);

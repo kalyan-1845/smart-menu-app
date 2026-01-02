@@ -33,6 +33,38 @@ const generateToken = (id) => {
     return jwt.sign({ id }, process.env.JWT_SECRET || 'fallback_secret', { expiresIn: '30d' });
 };
 
+// --- 📥 NEW: INBOX ROUTE (Fixes frontend 500 error) ---
+router.get('/inbox', async (req, res) => {
+    try {
+        const { restaurantId } = req.query;
+        if (!restaurantId) return res.status(400).json({ message: "Restaurant ID is required" });
+
+        const orders = await Order.find({ restaurantId }).sort({ createdAt: -1 });
+        res.json(orders);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+// --- 📊 NEW: SALES SUMMARY ROUTE ---
+router.get('/sales-summary', async (req, res) => {
+    try {
+        const { restaurantId } = req.query;
+        if (!restaurantId) return res.status(400).json({ message: "Restaurant ID is required" });
+
+        const orders = await Order.find({ restaurantId, status: 'Completed' });
+        const totalRevenue = orders.reduce((acc, order) => acc + (order.totalAmount || 0), 0);
+        
+        res.json({
+            totalRevenue,
+            totalOrders: orders.length,
+            recentOrders: orders.slice(0, 5)
+        });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
 // --- 📲 NEW: SAVE PUSH SUBSCRIPTION ---
 router.post('/save-subscription', async (req, res) => {
     const { restaurantId, subscription } = req.body;
