@@ -1,8 +1,8 @@
-import React from "react";
+import React from "react"; // ✅ Clean and Simple
 import { FaTools, FaClock, FaBox } from "react-icons/fa";
 
 const Maintenance = () => {
-  // ✅ Moving styles INSIDE the function is the only way to stop the ReferenceError
+  // Styles are perfect inside the function now!
   const styles = {
     container: { 
       height: "100vh", 
@@ -13,7 +13,8 @@ const Maintenance = () => {
       alignItems: "center", 
       fontFamily: "'Inter', sans-serif", 
       textAlign: "center", 
-      padding: "20px" 
+      padding: "20px",
+      position: 'relative'
     },
     content: { maxWidth: "450px" },
     iconWrapper: { marginBottom: "30px" },
