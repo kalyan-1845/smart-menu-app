@@ -6,7 +6,6 @@ const LandingPage = () => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [showPopup, setShowPopup] = useState(false);
 
-  // Trigger pop-up on page load
   useEffect(() => {
     const timer = setTimeout(() => {
       setShowPopup(true);
@@ -14,9 +13,19 @@ const LandingPage = () => {
     return () => clearTimeout(timer);
   }, []);
 
+  // ✅ SCOPED STYLES OBJECT FOR THE NEW LINKS
+  const styles = {
+    footerLink: {
+      color: '#666',
+      textDecoration: 'none',
+      fontSize: '12px',
+      fontWeight: 700,
+      transition: '0.2s'
+    }
+  };
+
   return (
     <div className="landing-container">
-      {/* --- INTERNAL CSS --- */}
       <style>{`
         :root {
           --primary: #f97316;
@@ -29,7 +38,6 @@ const LandingPage = () => {
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
         body { background-color: var(--bg); color: var(--text); overflow-x: hidden; }
 
-        /* ANIMATIONS */
         @keyframes fadeInUp {
           from { opacity: 0; transform: translateY(20px); }
           to { opacity: 1; transform: translateY(0); }
@@ -84,22 +92,17 @@ const LandingPage = () => {
         .hero h1 { font-size: clamp(40px, 8vw, 72px); line-height: 1.1; font-weight: 900; margin-bottom: 25px; letter-spacing: -2px; }
         .hero p { color: var(--text-muted); font-size: 18px; max-width: 650px; margin: 0 auto 45px; line-height: 1.7; }
         
-        /* BUTTONS */
         .btn-primary {
           background: var(--primary); color: white; padding: 16px 32px;
           border-radius: 14px; font-weight: 800; text-decoration: none;
           display: inline-flex; align-items: center; gap: 10px; transition: 0.3s; border: none;
         }
-        .btn-primary:hover { transform: translateY(-3px); box-shadow: 0 10px 30px rgba(249, 115, 22, 0.3); }
-
         .btn-outline {
           background: #111; color: white; padding: 15px 30px;
           border: 1px solid #222; border-radius: 14px; font-weight: 700;
           text-decoration: none; margin-left: 15px; transition: 0.2s;
         }
-        .btn-outline:hover { background: #1a1a1a; border-color: #444; }
 
-        /* FEATURES */
         .features-grid {
           display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
           gap: 20px; padding: 60px 5%; max-width: 1300px; margin: 0 auto;
@@ -114,15 +117,9 @@ const LandingPage = () => {
           color: var(--primary); display: flex; align-items: center;
           justify-content: center; border-radius: 14px; font-size: 24px; margin-bottom: 25px;
         }
-        .feature-title { font-size: 22px; font-weight: 800; margin-bottom: 15px; }
-        .feature-desc { color: #71717a; font-size: 15px; line-height: 1.7; }
-
-        /* MOBILE MENU */
-        .mobile-toggle { display: none; background: none; border: none; color: white; font-size: 24px; }
 
         @media (max-width: 768px) {
           .nav-links { display: none; }
-          .mobile-toggle { display: block; }
           .hero { padding: 80px 20px; }
           .btn-outline { margin-left: 0; margin-top: 15px; display: block; }
         }
@@ -150,15 +147,10 @@ const LandingPage = () => {
         <Link to="/" className="brand">
           <FaBox color="#f97316" /> BiteBox<span>.</span>
         </Link>
-        
         <div className="nav-links">
           <Link to="/login">Partner Login</Link>
           <Link to="/register" className="btn-primary" style={{padding:'10px 20px', borderRadius:'10px', fontSize:'13px'}}>Create Account</Link>
         </div>
-
-        <button className="mobile-toggle" onClick={() => setMenuOpen(!menuOpen)}>
-          {menuOpen ? <FaTimes /> : <FaBars />}
-        </button>
       </nav>
 
       {/* --- HERO SECTION --- */}
@@ -184,17 +176,15 @@ const LandingPage = () => {
           <h3 className="feature-title">Scan & Order</h3>
           <p className="feature-desc">Give your customers a premium digital experience. No app downloads required. Just scan, pick, and pay.</p>
         </div>
-
         <div className="feature-card animate-in" style={{animationDelay: '0.4s'}}>
           <div className="icon-box"><FaUtensils /></div>
           <h3 className="feature-title">Kitchen OS</h3>
-          <p className="feature-desc">Real-time KDS (Kitchen Display System) that connects Chefs and Waiters instantly. Zero delay, zero errors.</p>
+          <p className="feature-desc">Real-time KDS that connects Chefs and Waiters instantly. Zero delay, zero errors.</p>
         </div>
-
         <div className="feature-card animate-in" style={{animationDelay: '0.5s'}}>
           <div className="icon-box"><FaGlobe /></div>
           <h3 className="feature-title">Global Cloud</h3>
-          <p className="feature-desc">Manage your restaurant from your phone, laptop, or tablet anywhere in the world. 100% uptime guaranteed.</p>
+          <p className="feature-desc">Manage your restaurant from anywhere in the world. 100% uptime guaranteed.</p>
         </div>
       </section>
 
@@ -206,17 +196,14 @@ const LandingPage = () => {
         <p style={{color: '#444', fontSize: '13px', marginBottom: '30px'}}>© {new Date().getFullYear()} BiteBox SaaS Cloud. Built for Industrial Scale.</p>
         
         <div style={{display:'flex', justifyContent:'center', gap:'40px'}}>
-            <Link to="/login" style={{color:'#666', textDecoration:'none', fontSize:'12px', fontWeight: 700}}>LOGIN</Link>
-            <Link to="/register" style={{color:'#666', textDecoration:'none', fontSize:'12px', fontWeight: 700}}>REGISTER</Link>
-            <Link to="/super-login" style={{color:'#666', textDecoration:'none', fontSize:'12px', fontWeight: 700}}>NETWORK CONTROL</Link>
+            <Link to="/login" style={styles.footerLink}>LOGIN</Link>
+            <Link to="/register" style={styles.footerLink}>REGISTER</Link>
+            <Link to="/terms" style={styles.footerLink}>TERMS & PRIVACY</Link>
+            <Link to="/super-login" style={styles.footerLink}>NETWORK CONTROL</Link>
         </div>
       </footer>
     </div>
   );
 };
-<div style={{display:'flex', justifyContent:'center', gap:'40px'}}>
-    <Link to="/login" style={styles.footerLink}>LOGIN</Link>
-    <Link to="/register" style={styles.footerLink}>REGISTER</Link>
-    <Link to="/terms" style={styles.footerLink}>TERMS & PRIVACY</Link> {/* ✅ Add this */}
-</div>
+
 export default LandingPage;
