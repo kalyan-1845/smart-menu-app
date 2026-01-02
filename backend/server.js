@@ -19,7 +19,7 @@ const app = express();
 const httpServer = createServer(app);
 
 // ==========================================
-// 🟢 CORS FIX: ALLOW ALL NETLIFY PREVIEWS
+// 🟢 CORS CONFIGURATION
 // ==========================================
 const allowedOrigins = [
     "http://localhost:5173",           
@@ -31,16 +31,17 @@ const allowedOrigins = [
 const deployPreviewPattern = /^https:\/\/.*--smartmenuss\.netlify\.app$/;
 
 const isOriginAllowed = (origin) => {
-    if (!origin) return true; // Allow backend-to-backend calls
+    if (!origin) return true; // Allow backend-to-backend calls (no origin)
     return allowedOrigins.includes(origin) || deployPreviewPattern.test(origin);
 };
 
-// 1. MANUAL HEADERS (Fixed to prevent "undefined" crash)
+// 1. MANUAL HEADERS (CRASH FIX APPLIED HERE)
 app.use((req, res, next) => {
     const origin = req.headers.origin;
     
-    // 🛑 FIX: We only set the header if 'origin' actually exists.
-    // This stops the "Invalid value undefined" error log.
+    // 🛑 CRITICAL FIX: 
+    // We strictly check if 'origin' exists before setting the header.
+    // If 'origin' is undefined, we simply skip setting this header.
     if (origin && isOriginAllowed(origin)) {
         res.setHeader("Access-Control-Allow-Origin", origin);
     }
@@ -102,7 +103,7 @@ app.use('/api/dishes', dishRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/superadmin', superAdminRoutes);
 app.use('/api/broadcast', broadcastRoutes);
-// app.use('/api/menu', menuRoutes); // Kept commented out to prevent crashes if you haven't set it up fully yet
+app.use('/api/menu', menuRoutes); // Kept as requested
 
 app.get('/', (req, res) => res.send('API is Running...'));
 
