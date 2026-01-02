@@ -8,13 +8,103 @@ import Owner from '../models/Owner.js';
 const router = express.Router();
 
 // --- 🔑 WEB PUSH CONFIGURATION ---
-webpush.setVapidDetails(
-    'mailto:support@bitebox.com',
-    process.env.PUBLIC_VAPID_KEY,
-    process.env.PRIVATE_VAPID_KEY
-);
+// Ensure keys exist to prevent crash
+if (process.env.PUBLIC_VAPID_KEY && process.env.PRIVATE_VAPID_KEY) {
+    webpush.setVapidDetails(
+        'mailto:support@bitebox.com',
+        process.env.PUBLIC_VAPID_KEY,
+        process.env.PRIVATE_VAPID_KEY
+    );
+}
 
-// --- 1. PLACE ORDER ---
+// ==========================================
+// 🚀 SPECIFIC ROUTES (MUST BE AT THE TOP)
+// ==========================================
+
+// --- 1. GET INBOX (MOVED UP) ---
+// Kept at top so "inbox" isn't treated as an ID
+router.get('/inbox', async (req, res) => {
+    try {
+        const { restaurantId } = req.query;
+        if (!restaurantId) return res.status(400).json({ message: "Restaurant ID required" });
+        
+        const orders = await Order.find({ restaurantId, isDownloaded: false }).sort({ createdAt: -1 });
+        res.json(orders);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+// --- 2. GET WAITER CALLS (HISTORY) ---
+router.get('/calls', async (req, res) => {
+    try {
+        const { restaurantId } = req.query;
+        if (!restaurantId || !mongoose.Types.ObjectId.isValid(restaurantId)) {
+            return res.status(400).json({ message: "Invalid Restaurant ID format" });
+        }
+        const calls = await Call.find({ restaurantId }).sort({ createdAt: -1 });
+        res.json(calls);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+// --- 3. DELETE WAITER CALL ---
+router.delete('/calls/:callId', async (req, res) => {
+    try {
+        await Call.findByIdAndDelete(req.params.callId);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ message: "Failed to delete call" });
+    }
+});
+
+// --- 4. CLEAR INBOX ---
+router.put('/mark-downloaded', async (req, res) => {
+    try {
+        const { restaurantId } = req.body;
+        if (!restaurantId) return res.status(400).json({ message: "Restaurant ID required" });
+        await Order.updateMany({ restaurantId, isDownloaded: false }, { $set: { isDownloaded: true } });
+        res.status(200).json({ message: "Inbox cleared successfully" });
+    } catch (error) {
+        res.status(500).json({ error: "Failed to clear inbox" });
+    }
+});
+
+// --- 5. CALL WAITER (POST) ---
+router.post('/call-waiter', async (req, res) => {
+    try {
+        const { restaurantId, tableNumber, type } = req.body; 
+        const newCall = await Call.create({ restaurantId, tableNumber, type: type || 'help' });
+        
+        if (req.io) {
+            req.io.to(restaurantId.toString()).emit('new-waiter-call', newCall);
+        }
+
+        try {
+            const restaurant = await Owner.findById(restaurantId);
+            if (restaurant && restaurant.pushSubscriptions && restaurant.pushSubscriptions.length > 0) {
+                const payload = JSON.stringify({
+                    title: "🛎️ ASSISTANCE NEEDED",
+                    body: `Table ${tableNumber} is calling for help!`,
+                    url: `/waiter/${restaurant.username}` 
+                });
+                restaurant.pushSubscriptions.forEach(sub => webpush.sendNotification(sub, payload).catch(()=>{}));
+            }
+        } catch (e) {}
+        
+        res.status(201).json(newCall);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+
+// ==========================================
+// ⚡ GENERAL ROUTES (MUST BE AT THE BOTTOM)
+// ==========================================
+
+// --- 6. PLACE ORDER ---
 router.post('/', async (req, res) => {
     try {
         const { customerName, items, totalAmount, paymentMethod, tableNum, tableNumber, restaurantId, owner, status } = req.body;
@@ -71,32 +161,8 @@ router.post('/', async (req, res) => {
     }
 });
 
-// ✅ --- NEW: GET ALL WAITER CALLS (HISTORY) ---
-// This must sit ABOVE the router.get('/:id') to avoid 400 errors
-router.get('/calls', async (req, res) => {
-    try {
-        const { restaurantId } = req.query;
-        if (!restaurantId || !mongoose.Types.ObjectId.isValid(restaurantId)) {
-            return res.status(400).json({ message: "Invalid Restaurant ID format" });
-        }
-        const calls = await Call.find({ restaurantId }).sort({ createdAt: -1 });
-        res.json(calls);
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
-});
-
-// ✅ --- NEW: DELETE/RESOLVE WAITER CALL ---
-router.delete('/calls/:callId', async (req, res) => {
-    try {
-        await Call.findByIdAndDelete(req.params.callId);
-        res.json({ success: true });
-    } catch (error) {
-        res.status(500).json({ message: "Failed to delete call" });
-    }
-});
-
-// --- 2. GET SINGLE ORDER (CUSTOMER TRACKER) ---
+// --- 7. GET SINGLE ORDER (DYNAMIC ID ROUTE) ---
+// ⚠️ This matches anything after /, so it must stay below /inbox and /calls
 router.get('/:id', async (req, res) => {
     try {
         if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
@@ -110,7 +176,7 @@ router.get('/:id', async (req, res) => {
     }
 });
 
-// --- 3. GET ALL ORDERS (CHEF/WAITER VIEW) ---
+// --- 8. GET ALL ORDERS ---
 router.get('/', async (req, res) => {
     try {
         const { restaurantId } = req.query;
@@ -122,7 +188,7 @@ router.get('/', async (req, res) => {
     }
 });
 
-// --- 4. UPDATE STATUS (CHEF ACTIONS) ---
+// --- 9. UPDATE STATUS ---
 router.put('/:id', async (req, res) => {
     try {
         const order = await Order.findByIdAndUpdate(
@@ -162,59 +228,7 @@ router.put('/:id', async (req, res) => {
     }
 });
 
-// --- 5. CALL WAITER ---
-router.post('/call-waiter', async (req, res) => {
-    try {
-        const { restaurantId, tableNumber, type } = req.body; 
-        const newCall = await Call.create({ restaurantId, tableNumber, type: type || 'help' });
-        
-        if (req.io) {
-            req.io.to(restaurantId.toString()).emit('new-waiter-call', newCall);
-        }
-
-        try {
-            const restaurant = await Owner.findById(restaurantId);
-            if (restaurant && restaurant.pushSubscriptions && restaurant.pushSubscriptions.length > 0) {
-                const payload = JSON.stringify({
-                    title: "🛎️ ASSISTANCE NEEDED",
-                    body: `Table ${tableNumber} is calling for help!`,
-                    url: `/waiter/${restaurant.username}` 
-                });
-                restaurant.pushSubscriptions.forEach(sub => webpush.sendNotification(sub, payload).catch(()=>{}));
-            }
-        } catch (e) {}
-        
-        res.status(201).json(newCall);
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
-});
-
-// --- 6. GET INBOX ---
-router.get('/inbox', async (req, res) => {
-    try {
-        const { restaurantId } = req.query;
-        if (!restaurantId) return res.status(400).json({ message: "Restaurant ID required" });
-        const orders = await Order.find({ restaurantId, isDownloaded: false }).sort({ createdAt: -1 });
-        res.json(orders);
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
-});
-
-// --- 7. CLEAR INBOX ---
-router.put('/mark-downloaded', async (req, res) => {
-    try {
-        const { restaurantId } = req.body;
-        if (!restaurantId) return res.status(400).json({ message: "Restaurant ID required" });
-        await Order.updateMany({ restaurantId, isDownloaded: false }, { $set: { isDownloaded: true } });
-        res.status(200).json({ message: "Inbox cleared successfully" });
-    } catch (error) {
-        res.status(500).json({ error: "Failed to clear inbox" });
-    }
-});
-
-// ✅ --- NEW: DELETE ORDER (CANCELLATIONS) ---
+// --- 10. DELETE ORDER ---
 router.delete('/:id', async (req, res) => {
     try {
         await Order.findByIdAndDelete(req.params.id);
