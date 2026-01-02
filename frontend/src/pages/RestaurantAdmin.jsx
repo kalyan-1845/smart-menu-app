@@ -4,6 +4,8 @@ import { Link, useParams } from "react-router-dom";
 import io from "socket.io-client";
 import confetti from "canvas-confetti";
 import jsPDF from 'jspdf';
+// Add this at the top of your file (adjust the path to your actual component location)
+import SalesSummary from './components/SalesSummary';
 import 'jspdf-autotable';
 import { 
     FaPlus, FaTrash, FaUtensils, 

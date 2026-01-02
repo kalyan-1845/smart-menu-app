@@ -7,7 +7,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import io from "socket.io-client";
-import SalesSummary from "../components/SalesSummary"; 
+import SalesSummary from "./components/SalesSummary"; 
 
 const API_URL = "https://smart-menu-backend-5ge7.onrender.com"; 
 
