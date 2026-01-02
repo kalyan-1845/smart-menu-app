@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import axios from "axios";
 import { FaSearch, FaPlus, FaMinus, FaStar, FaUtensils, FaArrowRight, FaLock, FaSyncAlt } from "react-icons/fa";
-import LoadingSpinner from "./components/LoadingSpinner";
+import LoadingSpinner from "../components/LoadingSpinner";
 
 const API_BASE = window.location.hostname === "localhost" || window.location.hostname.startsWith("192.168")
     ? "http://localhost:5000/api" 
