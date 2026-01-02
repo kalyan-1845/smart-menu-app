@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, Link } from "react-router-dom";
 import axios from "axios";
 import { io } from "socket.io-client"; // ✅ Added Socket.io Client
-import { FaSearch, FaPlus, FaMinus, FaStar, FaUtensils, FaArrowRight, FaLock, FaSyncAlt, FaBell } from "react-icons/fa";
+import { FaSearch, FaPlus, FaMinus, FaStar, FaUtensils, FaArrowRight, FaLock, FaSyncAlt, FaBell, FaRedo } from "react-icons/fa";
 import LoadingSpinner from "./components/LoadingSpinner";
 
 const API_BASE = window.location.hostname === "localhost" || window.location.hostname.startsWith("192.168")
@@ -186,7 +186,13 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
                         <h1 style={styles.restName}>{currentRestId?.toUpperCase()}</h1>
                         <p style={styles.restSub}>Premium Food & Drinks</p>
                     </div>
-                    <div style={styles.ratingBadge}><FaStar color="#fbbf24"/> 4.8</div>
+                    <div style={{display:'flex', gap: '10px', alignItems: 'center'}}>
+                         {/* ✅ SUGGESTION: Quick Refresh Button for Mobile Speed */}
+                         <button onClick={() => { setRefreshing(true); fetchMenu(true); }} style={styles.iconBtn}>
+                            <FaRedo size={14} className={refreshing ? "spin" : ""} />
+                         </button>
+                         <div style={styles.ratingBadge}><FaStar color="#fbbf24"/> 4.8</div>
+                    </div>
                 </div>
                 <div style={styles.searchContainer}>
                     <FaSearch style={styles.searchIcon} />
@@ -202,7 +208,9 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
                                 ...styles.catBtn, 
                                 background: activeCategory === cat ? '#f97316' : '#18181b', 
                                 color: activeCategory === cat ? 'white' : '#a1a1aa',
-                                boxShadow: activeCategory === cat ? '0 0 20px rgba(249, 115, 22, 0.5)' : 'none'
+                                boxShadow: activeCategory === cat ? '0 0 20px rgba(249, 115, 22, 0.5)' : 'none',
+                                // ✅ SUGGESTION: Pulse effect for categories if menu updated
+                                border: (showToast && cat === "All") ? '2px solid #f97316' : '1px solid #333'
                             }}>
                             {cat}
                         </button>
@@ -275,16 +283,17 @@ const styles = {
     marqueeContent: { display: "flex", width: "max-content", animation: "marquee 20s linear infinite", fontSize: "11px", fontWeight: "900", letterSpacing: "3px" },
     center: { height: "100vh", display: "flex", flexDirection:'column', justifyContent: "center", alignItems: "center", background: "#09090b" },
     hero: { padding: "20px 20px 10px", background: "linear-gradient(to bottom, #111, #09090b)", borderBottom: '1px solid #27272a' },
-    heroContent: { display: "flex", justifyContent: "space-between" },
+    heroContent: { display: "flex", justifyContent: "space-between", alignItems: 'center' },
     restName: { fontSize: "26px", fontWeight: "900", margin: 0, letterSpacing: "-1px" },
     restSub: { fontSize: "12px", color: "#a1a1aa" },
     ratingBadge: { background: "#18181b", padding: "6px 12px", borderRadius: "12px", fontSize: "12px", border: "1px solid #27272a" },
+    iconBtn: { background: "#18181b", border: "1px solid #27272a", color: "#f97316", padding: "8px", borderRadius: "10px", display: 'flex', alignItems: 'center', justifyContent: 'center' },
     searchContainer: { position: "relative", marginTop: 15 },
     searchIcon: { position: "absolute", left: "15px", top: "14px", color: "#71717a" },
     searchInput: { width: "100%", padding: "12px 12px 12px 45px", borderRadius: "12px", background: "#18181b", border: "1px solid #27272a", color: "white", fontSize: "16px", outline: "none" },
     stickyNav: { position: "sticky", top: 0, background: "rgba(9, 9, 11, 0.9)", backdropFilter: "blur(15px)", padding: "12px 0", zIndex: 10, borderBottom: "1px solid rgba(255,255,255,0.05)" },
     catScroll: { display: "flex", gap: "10px", padding: "0 20px", overflowX: "auto" },
-    catBtn: { padding: "10px 20px", borderRadius: "25px", fontSize: "13px", fontWeight: "700", whiteSpace: "nowrap", border: '1px solid #333', transition: "0.4s cubic-bezier(0.4, 0, 0.2, 1)" },
+    catBtn: { padding: "10px 20px", borderRadius: "25px", fontSize: "13px", fontWeight: "700", whiteSpace: "nowrap", transition: "0.4s cubic-bezier(0.4, 0, 0.2, 1)" },
     grid: { padding: "20px", display: "grid", gap: "16px" },
     card: { background: "#111113", borderRadius: "20px", overflow: "hidden", border: "1px solid #27272a", display: 'flex', height: '130px', boxShadow: "0 4px 20px rgba(0,0,0,0.4)" },
     imgWrapper: { width: "120px", height: "100%", position: "relative" },

@@ -8,7 +8,6 @@ import Owner from '../models/Owner.js';
 const router = express.Router();
 
 // --- 🔑 SAFE WEB PUSH CONFIGURATION ---
-// Matching your .env names: VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY
 const publicKey = process.env.VAPID_PUBLIC_KEY;
 const privateKey = process.env.VAPID_PRIVATE_KEY;
 
@@ -62,7 +61,6 @@ router.post('/', async (req, res) => {
             req.io.to(finalRestaurantId.toString()).emit('new-order', savedOrder);
         }
 
-        // Send Notification only if VAPID is configured
         if (publicKey && privateKey) {
             try {
                 const restaurant = await Owner.findById(finalRestaurantId);
@@ -207,15 +205,28 @@ router.post('/call-waiter', async (req, res) => {
     }
 });
 
-// --- 6. GET INBOX ---
+// --- 6. GET INBOX (FIXED) ---
 router.get('/inbox', async (req, res) => {
     try {
         const { restaurantId } = req.query;
-        if (!restaurantId) return res.status(400).json({ message: "Restaurant ID required" });
-        const orders = await Order.find({ restaurantId, isDownloaded: false }).sort({ createdAt: -1 });
+
+        // 🛡️ ENHANCED VALIDATION: Prevents the 400 error
+        if (!restaurantId || !mongoose.Types.ObjectId.isValid(restaurantId)) {
+            return res.status(400).json({ 
+                message: "A valid 24-character Restaurant ID is required." 
+            });
+        }
+
+        // Search specifically for orders belonging to this ID that aren't downloaded
+        const orders = await Order.find({ 
+            restaurantId: restaurantId, 
+            isDownloaded: false 
+        }).sort({ createdAt: -1 });
+
         res.json(orders);
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        console.error("Inbox API Error:", error.message);
+        res.status(500).json({ message: "Internal Server Error" });
     }
 });
 
@@ -223,7 +234,9 @@ router.get('/inbox', async (req, res) => {
 router.put('/mark-downloaded', async (req, res) => {
     try {
         const { restaurantId } = req.body;
-        if (!restaurantId) return res.status(400).json({ message: "Restaurant ID required" });
+        if (!restaurantId || !mongoose.Types.ObjectId.isValid(restaurantId)) {
+            return res.status(400).json({ message: "Valid Restaurant ID required" });
+        }
         await Order.updateMany({ restaurantId, isDownloaded: false }, { $set: { isDownloaded: true } });
         res.status(200).json({ message: "Inbox cleared successfully" });
     } catch (error) {
