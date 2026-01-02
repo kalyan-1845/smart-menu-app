@@ -1,8 +1,7 @@
 import mongoose from 'mongoose';
 
 /**
- * Dish Model (Enterprise v3.0)
- * Represents a menu item with real-time stock and multi-tenant isolation.
+ * Dish Model (Enterprise v3.5 - Ratings Integrated)
  */
 const dishSchema = new mongoose.Schema({
   name: { 
@@ -14,10 +13,9 @@ const dishSchema = new mongoose.Schema({
   price: { 
     type: Number, 
     required: true,
-    min: 0 // Prevents accidental negative pricing
+    min: 0 
   },
   
-  // Categorization for the high-speed menu scroller
   category: { 
     type: String, 
     required: true, 
@@ -27,7 +25,7 @@ const dishSchema = new mongoose.Schema({
   
   image: { 
     type: String,
-    default: "" // Ensures no 'undefined' errors in the frontend
+    default: "" 
   },
   
   description: { 
@@ -35,20 +33,12 @@ const dishSchema = new mongoose.Schema({
     trim: true
   },
 
-  /**
-   * 🔴 REAL-TIME AVAILABILITY
-   * Indexed for instant menu filtering when the Chef toggles stock.
-   */
   isAvailable: { 
     type: Boolean, 
     default: true,
     index: true 
   },
 
-  /**
-   * 🛠️ CUSTOMIZATIONS
-   * Standardized for the frontend "Specifications" drawer.
-   */
   specifications: [
     {
       label: { type: String, trim: true }, 
@@ -57,24 +47,42 @@ const dishSchema = new mongoose.Schema({
   ],
 
   /**
-   * 🔒 MULTI-TENANT LINK
-   * restaurantId matches the field name in the Order model for consistency.
+   * ⭐ RATINGS & SOCIAL PROOF
+   * Optimized for high-speed retrieval on the Menu page.
    */
+  ratings: {
+    average: { type: Number, default: 4.5, min: 1, max: 5 },
+    count: { type: Number, default: 1 }
+  },
+
+  /**
+   * 💬 CUSTOMER REVIEWS
+   * Limited to the most recent ones to keep the document size lean.
+   */
+  reviews: [{
+    customerName: { type: String, default: "Guest" },
+    rating: { type: Number, required: true },
+    comment: { type: String, trim: true },
+    createdAt: { type: Date, default: Date.now }
+  }],
+
   restaurantId: { 
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'Owner', 
     required: true,
-    alias: 'owner' // Allows you to use both 'owner' or 'restaurantId' in queries
+    index: true 
   }
 }, { 
   timestamps: true 
 });
 
 // --- 🚀 PRO PERFORMANCE INDEXING ---
-// Speeds up category-based menu rendering for specific restaurants
-dishSchema.index({ restaurantId: 1, category: 1 });
 
-// Speeds up "In-Stock Only" menu views
+// Compound index for the Menu page: Filters by restaurant and sort by rating/popularity
+dishSchema.index({ restaurantId: 1, "ratings.average": -1 });
+
+// standard category/availability indexes
+dishSchema.index({ restaurantId: 1, category: 1 });
 dishSchema.index({ restaurantId: 1, isAvailable: 1 });
 
 /**

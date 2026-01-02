@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { FaUtensils, FaQrcode, FaChartLine, FaBars, FaTimes, FaArrowRight, FaBox } from "react-icons/fa";
+import { FaUtensils, FaQrcode, FaChartLine, FaBars, FaTimes, FaArrowRight, FaBox, FaShieldAlt, FaGlobe } from "react-icons/fa";
 
 const LandingPage = () => {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -10,7 +10,7 @@ const LandingPage = () => {
   useEffect(() => {
     const timer = setTimeout(() => {
       setShowPopup(true);
-    }, 500); // Small delay for effect
+    }, 500); 
     return () => clearTimeout(timer);
   }, []);
 
@@ -21,137 +21,125 @@ const LandingPage = () => {
         :root {
           --primary: #f97316;
           --bg: #050505;
-          --card-bg: #121212;
+          --card-bg: #0c0c0c;
           --text: #ffffff;
-          --text-muted: #a1a1aa;
+          --text-muted: #71717a;
         }
         
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
         body { background-color: var(--bg); color: var(--text); overflow-x: hidden; }
 
-        /* WELCOME POPUP STYLES */
+        /* ANIMATIONS */
+        @keyframes fadeInUp {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+
+        .animate-in { animation: fadeInUp 0.8s ease forwards; }
+
+        /* WELCOME POPUP */
         .popup-overlay {
           position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-          background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(10px);
+          background: rgba(0, 0, 0, 0.9); backdrop-filter: blur(15px);
           display: flex; justify-content: center; align-items: center;
-          z-index: 1000; transition: opacity 0.3s ease;
+          z-index: 1000;
         }
         .popup-content {
-          background: var(--card-bg); padding: 40px; border-radius: 32px;
+          background: var(--card-bg); padding: 50px 30px; border-radius: 40px;
           border: 1px solid #222; text-align: center;
-          box-shadow: 0 0 50px rgba(249, 115, 22, 0.15);
-          max-width: 90%; width: 420px; position: relative;
-          animation: popIn 0.6s cubic-bezier(0.26, 0.53, 0.74, 1.48);
+          max-width: 90%; width: 400px;
         }
-        @keyframes popIn {
-          from { transform: scale(0.8); opacity: 0; }
-          to { transform: scale(1); opacity: 1; }
-        }
-        .popup-logo {
-          font-size: 50px; color: var(--primary); margin-bottom: 15px;
-          filter: drop-shadow(0 0 10px rgba(249, 115, 22, 0.3));
-        }
-        .popup-text {
-          font-size: 36px; font-weight: 900; color: #fff;
-          margin-bottom: 10px; letter-spacing: -1px;
-        }
-        .popup-subtext {
-          font-size: 20px; color: var(--primary); font-weight: 800;
-          margin-bottom: 25px; text-transform: uppercase; letter-spacing: 2px;
-        }
-        .popup-close {
-          background: var(--primary); color: white; border: none;
-          padding: 12px 35px; border-radius: 12px; font-weight: 800;
-          cursor: pointer; transition: 0.2s; font-size: 15px;
-        }
-        .popup-close:hover { transform: scale(1.05); background: #ea580c; box-shadow: 0 5px 15px rgba(249, 115, 22, 0.4); }
+        .popup-logo { font-size: 50px; color: var(--primary); margin-bottom: 20px; }
+        .popup-text { font-size: 32px; font-weight: 900; margin-bottom: 5px; }
+        .popup-subtext { color: var(--primary); font-weight: 800; font-size: 14px; letter-spacing: 3px; margin-bottom: 30px; }
 
-        /* HEADER */
+        /* NAVBAR */
         .navbar {
           display: flex; justify-content: space-between; align-items: center;
-          padding: 15px 25px; background: rgba(5, 5, 5, 0.8);
-          backdrop-filter: blur(10px); position: sticky; top: 0; z-index: 100;
-          border-bottom: 1px solid #1a1a1a;
+          padding: 20px 5%; background: rgba(5, 5, 5, 0.8);
+          backdrop-filter: blur(12px); position: sticky; top: 0; z-index: 100;
+          border-bottom: 1px solid #111;
         }
-        .brand { 
-          font-size: 24px; font-weight: 900; letter-spacing: -1.5px; 
-          display: flex; align-items: center; gap: 10px; color: #fff;
-          text-decoration: none;
-        }
-        .brand .logo-icon { color: var(--primary); }
+        .brand { font-size: 22px; font-weight: 900; display: flex; align-items: center; gap: 10px; color: #fff; text-decoration: none; }
         .brand span { color: var(--primary); }
         
-        .nav-links { display: flex; gap: 25px; align-items: center; }
-        .nav-links a { text-decoration: none; color: white; font-weight: 600; font-size: 14px; transition: 0.2s; }
+        .nav-links { display: flex; gap: 30px; align-items: center; }
+        .nav-links a { text-decoration: none; color: #a1a1aa; font-weight: 600; font-size: 14px; transition: 0.2s; }
         .nav-links a:hover { color: var(--primary); }
         
-        .btn-primary {
-          background: var(--primary); color: white; padding: 12px 24px;
-          border-radius: 10px; font-weight: 700; text-decoration: none;
-          transition: 0.2s; display: inline-block; border: none;
+        /* HERO */
+        .hero {
+          text-align: center; padding: 120px 20px;
+          background: radial-gradient(circle at top, rgba(249,115,22,0.12) 0%, rgba(5,5,5,1) 60%);
         }
-        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(249, 115, 22, 0.3); }
+        .live-badge {
+            background: rgba(34, 197, 94, 0.1); color: #22c55e;
+            padding: 6px 15px; border-radius: 50px; font-size: 12px;
+            font-weight: 800; display: inline-flex; align-items: center; gap: 8px;
+            margin-bottom: 25px; border: 1px solid rgba(34, 197, 94, 0.2);
+        }
+        .dot { width: 8px; height: 8px; background: #22c55e; border-radius: 50%; animation: blink 1.5s infinite; }
+        @keyframes blink { 0% { opacity: 0.3; } 50% { opacity: 1; } 100% { opacity: 0.3; } }
+
+        .hero h1 { font-size: clamp(40px, 8vw, 72px); line-height: 1.1; font-weight: 900; margin-bottom: 25px; letter-spacing: -2px; }
+        .hero p { color: var(--text-muted); font-size: 18px; max-width: 650px; margin: 0 auto 45px; line-height: 1.7; }
+        
+        /* BUTTONS */
+        .btn-primary {
+          background: var(--primary); color: white; padding: 16px 32px;
+          border-radius: 14px; font-weight: 800; text-decoration: none;
+          display: inline-flex; align-items: center; gap: 10px; transition: 0.3s; border: none;
+        }
+        .btn-primary:hover { transform: translateY(-3px); box-shadow: 0 10px 30px rgba(249, 115, 22, 0.3); }
 
         .btn-outline {
-          background: transparent; color: white; padding: 11px 23px;
-          border: 1px solid #333; border-radius: 10px; font-weight: 700;
-          text-decoration: none; margin-left: 10px; transition: 0.2s;
+          background: #111; color: white; padding: 15px 30px;
+          border: 1px solid #222; border-radius: 14px; font-weight: 700;
+          text-decoration: none; margin-left: 15px; transition: 0.2s;
         }
-        .btn-outline:hover { background: #111; border-color: #555; }
+        .btn-outline:hover { background: #1a1a1a; border-color: #444; }
 
-        /* HERO SECTION */
-        .hero {
-          text-align: center; padding: 100px 20px;
-          background: radial-gradient(circle at top, rgba(249,115,22,0.15) 0%, rgba(5,5,5,1) 70%);
-        }
-        .hero h1 { font-size: 54px; line-height: 1; font-weight: 900; margin-bottom: 20px; letter-spacing: -2px; }
-        .hero p { color: var(--text-muted); font-size: 18px; max-width: 600px; margin: 0 auto 40px; line-height: 1.6; }
-        
-        /* GRID LAYOUT */
+        /* FEATURES */
         .features-grid {
-          display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-          gap: 25px; padding: 40px 20px; max-width: 1200px; margin: 0 auto;
+          display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+          gap: 20px; padding: 60px 5%; max-width: 1300px; margin: 0 auto;
         }
         .feature-card {
-          background: #0a0a0a; padding: 35px; border-radius: 24px;
-          border: 1px solid #1a1a1a; transition: all 0.3s ease;
-          display: flex; flex-direction: column; align-items: flex-start;
+          background: var(--card-bg); padding: 40px; border-radius: 30px;
+          border: 1px solid #111; transition: 0.4s;
         }
-        .feature-card:hover { transform: translateY(-10px); border-color: var(--primary); background: #0f0f0f; }
+        .feature-card:hover { border-color: #333; transform: translateY(-10px); background: #111; }
         .icon-box {
-          width: 60px; height: 60px; background: rgba(249, 115, 22, 0.1);
+          width: 55px; height: 55px; background: rgba(249, 115, 22, 0.1);
           color: var(--primary); display: flex; align-items: center;
-          justify-content: center; border-radius: 16px; font-size: 28px;
-          margin-bottom: 20px;
+          justify-content: center; border-radius: 14px; font-size: 24px; margin-bottom: 25px;
         }
-        .feature-title { font-size: 20px; font-weight: 800; margin-bottom: 12px; color: #fff; }
-        .feature-desc { color: var(--text-muted); font-size: 15px; line-height: 1.6; }
+        .feature-title { font-size: 22px; font-weight: 800; margin-bottom: 15px; }
+        .feature-desc { color: #71717a; font-size: 15px; line-height: 1.7; }
 
-        /* FOOTER */
-        footer {
-          border-top: 1px solid #1a1a1a; padding: 60px 20px;
-          text-align: center; margin-top: 60px; color: #444; font-size: 14px;
-        }
+        /* MOBILE MENU */
+        .mobile-toggle { display: none; background: none; border: none; color: white; font-size: 24px; }
 
         @media (max-width: 768px) {
-          .hero h1 { font-size: 38px; }
           .nav-links { display: none; }
-          .features-grid { grid-template-columns: 1fr; }
+          .mobile-toggle { display: block; }
+          .hero { padding: 80px 20px; }
+          .btn-outline { margin-left: 0; margin-top: 15px; display: block; }
         }
       `}</style>
 
       {/* --- WELCOME POPUP --- */}
       {showPopup && (
         <div className="popup-overlay">
-          <div className="popup-content">
+          <div className="popup-content animate-in">
             <div className="popup-logo"><FaBox /></div>
             <h2 className="popup-text">Jai Shree Ram</h2>
-            <div className="popup-subtext">BiteBox Kitchen</div>
-            <p style={{ color: 'var(--text-muted)', marginBottom: '30px', lineHeight: '1.5' }}>
-              Experience the future of smart dining <br/> with Smart Menu Cloud.
+            <div className="popup-subtext">SMART MENU v2.0</div>
+            <p style={{ color: 'var(--text-muted)', marginBottom: '30px', fontSize: '15px' }}>
+              Scale your restaurant with the world's <br/> most powerful cloud OS.
             </p>
-            <button className="popup-close" onClick={() => setShowPopup(false)}>
-              Launch Dashboard
+            <button className="btn-primary" style={{width: '100%', justifyContent:'center'}} onClick={() => setShowPopup(false)}>
+              Launch Experience
             </button>
           </div>
         </div>
@@ -160,69 +148,75 @@ const LandingPage = () => {
       {/* --- NAVBAR --- */}
       <nav className="navbar">
         <Link to="/" className="brand">
-          <FaBox className="logo-icon" size={26} />
-          BiteBox<span>.</span>
+          <FaBox color="#f97316" /> BiteBox<span>.</span>
         </Link>
+        
         <div className="nav-links">
-          <Link to="/login">Login</Link>
-          <Link to="/register" className="btn-primary">Get Started</Link>
+          <Link to="/login">Partner Login</Link>
+          <Link to="/register" className="btn-primary" style={{padding:'10px 20px', borderRadius:'10px', fontSize:'13px'}}>Create Account</Link>
         </div>
+
+        <button className="mobile-toggle" onClick={() => setMenuOpen(!menuOpen)}>
+          {menuOpen ? <FaTimes /> : <FaBars />}
+        </button>
       </nav>
 
       {/* --- HERO SECTION --- */}
       <section className="hero">
-        <div style={{color: 'var(--primary)', fontWeight: '800', marginBottom: '15px', letterSpacing: '2px'}}>POWERED BY BITEBOX AI</div>
-        <h1>Run Your Restaurant <br /><span style={{color: '#f97316'}}>Without The Chaos.</span></h1>
-        <p>
-          Digital QR Menus, Kitchen Displays, and Profit Analytics. 
-          The all-in-one OS for modern food businesses.
+        <div className="live-badge animate-in">
+            <div className="dot"></div> BITEBOX NETWORK IS LIVE
+        </div>
+        <h1 className="animate-in">Modernize Your <br /><span style={{color: 'var(--primary)'}}>Restaurant Growth.</span></h1>
+        <p className="animate-in" style={{animationDelay: '0.1s'}}>
+          Stop using paper. Start using data. BiteBox provides QR ordering, 
+          live kitchen tracking, and CEO-level analytics for smart food owners.
         </p>
-        <div>
-          <Link to="/register" className="btn-primary">Start 60-Day Free Trial <FaArrowRight style={{marginLeft: 8, fontSize: '12px'}} /></Link>
-          <Link to="/login" className="btn-outline">Partner Login</Link>
+        <div className="animate-in" style={{animationDelay: '0.2s'}}>
+          <Link to="/register" className="btn-primary">Get Started Free <FaArrowRight size={12} /></Link>
+          <Link to="/login" className="btn-outline">Watch Demo</Link>
         </div>
       </section>
 
       {/* --- FEATURES GRID --- */}
       <section className="features-grid">
-        <div className="feature-card">
+        <div className="feature-card animate-in" style={{animationDelay: '0.3s'}}>
           <div className="icon-box"><FaQrcode /></div>
-          <div className="feature-title">Smart QR Ordering</div>
-          <div className="feature-desc">
-            Customers scan, order, and pay at the table. Reduce wait times by 40% and eliminate order errors entirely.
-          </div>
+          <h3 className="feature-title">Scan & Order</h3>
+          <p className="feature-desc">Give your customers a premium digital experience. No app downloads required. Just scan, pick, and pay.</p>
         </div>
 
-        <div className="feature-card">
+        <div className="feature-card animate-in" style={{animationDelay: '0.4s'}}>
           <div className="icon-box"><FaUtensils /></div>
-          <div className="feature-title">Next-Gen KDS</div>
-          <div className="feature-desc">
-            A high-speed Kitchen Display System with live sync. Keep your chefs organized and your service lightning fast.
-          </div>
+          <h3 className="feature-title">Kitchen OS</h3>
+          <p className="feature-desc">Real-time KDS (Kitchen Display System) that connects Chefs and Waiters instantly. Zero delay, zero errors.</p>
         </div>
 
-        <div className="feature-card">
-          <div className="icon-box"><FaChartLine /></div>
-          <div className="feature-title">Revenue Analytics</div>
-          <div className="feature-desc">
-            Track daily sales, top-selling items, and customer feedback from your master command center.
-          </div>
+        <div className="feature-card animate-in" style={{animationDelay: '0.5s'}}>
+          <div className="icon-box"><FaGlobe /></div>
+          <h3 className="feature-title">Global Cloud</h3>
+          <p className="feature-desc">Manage your restaurant from your phone, laptop, or tablet anywhere in the world. 100% uptime guaranteed.</p>
         </div>
       </section>
 
       {/* --- FOOTER --- */}
-      <footer>
-        <div style={{display:'flex', alignItems:'center', justifyContent:'center', gap:'8px', marginBottom: '20px', color: '#fff', fontWeight: '800'}}>
-            <FaBox color="#f97316"/> BITEBOX KITCHEN
+      <footer style={{padding: '80px 20px', textAlign: 'center', borderTop: '1px solid #111'}}>
+        <div style={{display:'flex', alignItems:'center', justifyContent:'center', gap:'10px', marginBottom: '20px'}}>
+            <FaBox color="#f97316" size={24}/> <span style={{fontWeight: 900, fontSize: '20px'}}>BiteBox</span>
         </div>
-        <p>&copy; {new Date().getFullYear()} Smart Menu Cloud. All rights reserved.</p>
-        <div style={{ marginTop: '20px', display: 'flex', gap: '20px', justifyContent: 'center' }}>
-          <Link to="/login" style={{ color: '#666', textDecoration: 'none' }}>Partner Login</Link>
-          <Link to="/register" style={{ color: '#666', textDecoration: 'none' }}>Join Network</Link>
+        <p style={{color: '#444', fontSize: '13px', marginBottom: '30px'}}>© {new Date().getFullYear()} BiteBox SaaS Cloud. Built for Industrial Scale.</p>
+        
+        <div style={{display:'flex', justifyContent:'center', gap:'40px'}}>
+            <Link to="/login" style={{color:'#666', textDecoration:'none', fontSize:'12px', fontWeight: 700}}>LOGIN</Link>
+            <Link to="/register" style={{color:'#666', textDecoration:'none', fontSize:'12px', fontWeight: 700}}>REGISTER</Link>
+            <Link to="/super-login" style={{color:'#666', textDecoration:'none', fontSize:'12px', fontWeight: 700}}>NETWORK CONTROL</Link>
         </div>
       </footer>
     </div>
   );
 };
-
+<div style={{display:'flex', justifyContent:'center', gap:'40px'}}>
+    <Link to="/login" style={styles.footerLink}>LOGIN</Link>
+    <Link to="/register" style={styles.footerLink}>REGISTER</Link>
+    <Link to="/terms" style={styles.footerLink}>TERMS & PRIVACY</Link> {/* ✅ Add this */}
+</div>
 export default LandingPage;

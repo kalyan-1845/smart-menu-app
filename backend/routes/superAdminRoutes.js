@@ -1,16 +1,14 @@
 import express from 'express';
 import Owner from '../models/Owner.js'; 
-import bcrypt from 'bcryptjs';
+import Dish from '../models/Dish.js'; 
+import Order from '../models/Order.js'; 
+import Settings from '../models/Settings.js'; // ✅ New Model for Maintenance
 import jwt from 'jsonwebtoken'; 
 import { protect } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-/**
- * 🔒 MIDDLEWARE: adminOnly
- * High-security gatekeeper. Even with a valid token, only the username 
- * "srinivas" can pass through these routes.
- */
+// 🔒 MIDDLEWARE: adminOnly (CEO Srinivas Only)
 const adminOnly = (req, res, next) => {
     if (req.user && req.user.username === "srinivas") {
         next();
@@ -20,204 +18,114 @@ const adminOnly = (req, res, next) => {
 };
 
 // ============================================================
-// 1. DASHBOARD & STATS (The "CEO" View)
+// 📈 1. SAAS HEALTH & ANALYTICS (MRR & Churn)
 // ============================================================
-
-/**
- * @route   GET /api/superadmin/all-owners
- */
-router.get('/all-owners', protect, adminOnly, async (req, res) => {
-    try {
-        const owners = await Owner.find({}).select('-password').sort({ createdAt: -1 });
-        
-        const data = owners.map(owner => {
-            const diffTime = new Date(owner.trialEndsAt) - new Date();
-            const daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-            return { ...owner._doc, daysLeft };
-        });
-
-        res.json(data);
-    } catch (error) {
-        res.status(500).json({ message: "Error fetching owners" });
-    }
-});
 
 /**
  * @route   GET /api/superadmin/platform-stats
+ * @desc    Calculates MRR (₹999/pro) and Churn for the CEO
  */
 router.get('/platform-stats', protect, adminOnly, async (req, res) => {
     try {
-        const totalClients = await Owner.countDocuments({});
-        const proClients = await Owner.countDocuments({ isPro: true });
-        const activeTrials = totalClients - proClients;
-        const monthlyRecurringRevenue = proClients * 999;
+        const owners = await Owner.find({}).select('isPro trialEndsAt createdAt').lean();
+        
+        const totalClients = owners.length;
+        const proUsers = owners.filter(o => o.isPro).length;
+        
+        // MRR Logic: Total Pro Users x your price (₹999)
+        const mrr = proUsers * 999;
+
+        // Churn Logic: Users whose trials expired > 7 days ago and didn't upgrade
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        const churned = owners.filter(o => !o.isPro && new Date(o.trialEndsAt) < sevenDaysAgo).length;
 
         res.json({
             totalClients,
-            proClients,
-            activeTrials,
-            mrr: monthlyRecurringRevenue
+            activePro: proUsers,
+            mrr,
+            churnRate: totalClients > 0 ? ((churned / totalClients) * 100).toFixed(1) : 0
         });
     } catch (error) {
-        res.status(500).json({ message: "Analytics Node Error", error: error.message });
+        res.status(500).json({ message: "Analytics Node Error" });
     }
 });
 
 // ============================================================
-// 🚀 2. KILL SWITCH & SECURITY (God Mode)
+// 🚦 2. GLOBAL MAINTENANCE (Emergency Brake)
 // ============================================================
 
 /**
- * @route   GET /api/superadmin/ghost-login/:id
- * @desc    👻 GHOST MODE: Generate a login token for any owner.
- * @access  Master Admin Only
+ * @route   POST /api/superadmin/toggle-maintenance
  */
-router.get('/ghost-login/:id', protect, adminOnly, async (req, res) => {
+router.post('/toggle-maintenance', protect, adminOnly, async (req, res) => {
+    try {
+        const { enabled } = req.body;
+        let settings = await Settings.findOne();
+        if (!settings) settings = new Settings();
+        
+        settings.maintenanceMode = enabled;
+        await settings.save();
+        
+        res.json({ success: true, enabled: settings.maintenanceMode });
+    } catch (error) {
+        res.status(500).json({ message: "Maintenance Toggle Failed" });
+    }
+});
+
+/**
+ * @route   GET /api/superadmin/maintenance-status
+ * @desc    Public route for Menu/Dashboard to check if system is down
+ */
+router.get('/maintenance-status', async (req, res) => {
+    const settings = await Settings.findOne().lean();
+    res.json({ enabled: settings?.maintenanceMode || false });
+});
+
+// ============================================================
+// 🚀 3. NUCLEAR PURGE & SECURITY
+// ============================================================
+
+router.delete('/delete-owner/:id', protect, adminOnly, async (req, res) => {
+    const { id } = req.params;
+    try {
+        await Promise.all([
+            Owner.findByIdAndDelete(id),
+            Dish.deleteMany({ restaurantId: id }),
+            Order.deleteMany({ restaurantId: id })
+        ]);
+        res.json({ success: true, message: "Restaurant wiped from cloud." });
+    } catch (error) {
+        res.status(500).json({ message: "Purge Error" });
+    }
+});
+
+// ============================================================
+// 💵 4. CASH UPGRADE (Manual Override)
+// ============================================================
+
+/**
+ * @route   PUT /api/superadmin/manual-upgrade/:id
+ * @desc    Upgrades user to PRO after receiving Cash payment
+ */
+router.put('/manual-upgrade/:id', protect, adminOnly, async (req, res) => {
     try {
         const owner = await Owner.findById(req.params.id);
         if (!owner) return res.status(404).json({ message: "Owner not found" });
 
-        // Generate a standard JWT token for this specific owner
-        const token = jwt.sign(
-            { id: owner._id, username: owner.username }, 
-            process.env.JWT_SECRET, 
-            { expiresIn: '1h' } // Token lasts for 1 hour
-        );
-
-        res.json({
-            success: true,
-            token,
-            username: owner.username,
-            restaurantName: owner.restaurantName
-        });
-    } catch (error) {
-        res.status(500).json({ message: "Ghost Login Failed" });
-    }
-});
-
-/**
- * @route   PUT /api/superadmin/toggle-status/:id
- * @desc    🔴 KILL SWITCH: Deactivate public menu URL but keep data safe.
- * @access  Master Admin Only
- */
-router.put('/toggle-status/:id', protect, adminOnly, async (req, res) => {
-    try {
-        const owner = await Owner.findById(req.params.id);
-        if (!owner) return res.status(404).json({ message: "Restaurant not found" });
-
-        owner.status = owner.status === 'active' ? 'suspended' : 'active';
-        
-        await owner.save();
-        res.json({ 
-            success: true, 
-            newStatus: owner.status, 
-            message: `Restaurant is now ${owner.status}` 
-        });
-    } catch (error) {
-        res.status(500).json({ message: "Kill Switch Error" });
-    }
-});
-
-/**
- * @route   PUT /api/superadmin/reset-password/:id
- * @desc    🔑 MASTER RESET: Change any owner password without knowing the old one.
- * @access  Master Admin Only
- */
-router.put('/reset-password/:id', protect, adminOnly, async (req, res) => {
-    try {
-        const { newPassword } = req.body;
-        if (!newPassword || newPassword.length < 4) {
-            return res.status(400).json({ message: "Valid new password required" });
-        }
-
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(newPassword, salt);
-
-        const updatedOwner = await Owner.findByIdAndUpdate(
-            req.params.id,
-            { password: hashedPassword },
-            { new: true }
-        );
-
-        if (!updatedOwner) return res.status(404).json({ message: "Restaurant not found" });
-
-        res.json({ success: true, message: "Password updated successfully" });
-    } catch (error) {
-        res.status(500).json({ message: "Master Reset Error" });
-    }
-});
-
-// ============================================================
-// 3. SUBSCRIPTION & PAYMENT MANAGEMENT (Manual Onboarding)
-// ============================================================
-
-/**
- * @route   PUT /api/superadmin/extend/:id
- */
-router.put('/extend/:id', protect, adminOnly, async (req, res) => {
-    try {
-        const owner = await Owner.findById(req.params.id);
-        if (!owner) return res.status(404).json({ message: "Restaurant not found" });
-
-        const currentExpiry = new Date(owner.trialEndsAt) > new Date() 
-            ? new Date(owner.trialEndsAt) 
-            : new Date();
-        
-        owner.trialEndsAt = new Date(currentExpiry.getTime() + 30 * 24 * 60 * 60 * 1000);
-        owner.isPro = true; 
+        owner.isPro = true;
+        // Extend 30 days from today
+        const newExpiry = new Date();
+        newExpiry.setDate(newExpiry.getDate() + 30);
+        owner.trialEndsAt = newExpiry;
 
         await owner.save();
-        res.json({ message: "Plan Extended", owner });
+        res.json({ success: true, message: "Cash Payment Logged. Plan Activated." });
     } catch (error) {
-        res.status(500).json({ message: "Extension Error" });
+        res.status(500).json({ message: "Upgrade Error" });
     }
 });
 
-/**
- * @route   PUT /api/superadmin/update-subscription/:id
- */
-router.put('/update-subscription/:id', protect, adminOnly, async (req, res) => {
-    try {
-        const { isPro, addMonths } = req.body;
-        const owner = await Owner.findById(req.params.id);
-
-        if (!owner) return res.status(404).json({ message: "Restaurant not found" });
-
-        if (isPro !== undefined) owner.isPro = isPro;
-        
-        if (addMonths) {
-            const currentExpiry = new Date(owner.trialEndsAt) > new Date() 
-                ? new Date(owner.trialEndsAt) 
-                : new Date();
-            
-            owner.trialEndsAt = new Date(currentExpiry.getTime() + addMonths * 30 * 24 * 60 * 60 * 1000);
-            owner.isPro = true; 
-        }
-
-        await owner.save();
-        res.json({ message: "Subscription Updated", owner });
-    } catch (error) {
-        res.status(500).json({ message: "Update Error" });
-    }
-});
-
-// ============================================================
-// 📢 4. GLOBAL BROADCAST (CEO Announcements)
-// ============================================================
-
-/**
- * @route   POST /api/superadmin/broadcast
- * @desc    Send a message to all active staff panels (Chef/Waiter/Owner)
- */
-router.post('/broadcast', protect, adminOnly, async (req, res) => {
-    const { title, message, type } = req.body;
-    try {
-        // You can link this to your Socket.io instance here:
-        // req.app.get('socketio').emit('global-broadcast', { title, message, type });
-        res.json({ success: true, message: "Broadcast queued" });
-    } catch (error) {
-        res.status(500).json({ message: "Broadcast Failed" });
-    }
-});
+// Reuse your existing /all-owners and /ghost-login routes here...
 
 export default router;

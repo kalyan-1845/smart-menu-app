@@ -18,7 +18,10 @@ const Register = () => {
     username: "", 
     password: ""
   });
-
+<p style={{ fontSize: '11px', color: '#444', marginTop: '15px', textAlign: 'center' }}>
+  By registering, you agree to our 
+  <Link to="/terms" style={{ color: '#f97316', marginLeft: '4px' }}>Terms & Privacy Policy</Link>
+</p>
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
@@ -170,5 +173,9 @@ const styles = {
   footer: { marginTop: "20px", textAlign: "center", fontSize: "13px", color: "#666" },
   link: { color: "#f97316", textDecoration: "none", fontWeight: "bold" }
 };
+<p style={{ fontSize: '11px', color: '#444', marginTop: '15px', textAlign: 'center' }}>
+  By registering, you agree to our 
+  <Link to="/terms" style={{ color: '#f97316', marginLeft: '4px' }}>Terms & Privacy Policy</Link>
+</p>
 
 export default Register;

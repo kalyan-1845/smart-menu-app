@@ -61,13 +61,25 @@ const orderSchema = new mongoose.Schema({
   }
 
 }, { 
-  timestamps: true 
+  timestamps: true // This automatically creates 'createdAt' and 'updatedAt'
 });
 
-// --- 🚀 PRO SPEED OPTIMIZATION ---
-// This index specifically helps the Restaurant Admin Dashboard
-// when calculating revenue or fetching active orders.
+// ============================================================
+// 🚀 PRO SPEED & AUTO-CLEANUP OPTIMIZATIONS
+// ============================================================
+
+// 🔥 1. THE AUTO-DELETE ENGINE (TTL INDEX)
+// Automatically deletes orders 30 days after creation to keep the DB lean.
+// 30 days = 2,592,000 seconds.
+orderSchema.index({ createdAt: 1 }, { expireAfterSeconds: 2592000 });
+
+// ⚡ 2. COMPOUND INDEX FOR ADMIN/CHEF DASHBOARD
+// This handles the "Show me all active orders for My Restaurant, newest first" query.
 orderSchema.index({ restaurantId: 1, status: 1, createdAt: -1 });
+
+// 🎯 3. INBOX SEARCH OPTIMIZATION
+// Specifically for the "Download PDF & Clear" feature.
+orderSchema.index({ restaurantId: 1, isDownloaded: 1 });
 
 /**
  * 2. Export the Model

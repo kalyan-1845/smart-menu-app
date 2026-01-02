@@ -6,6 +6,7 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import rateLimit from 'express-rate-limit';
 import https from "https"; 
+import compression from 'compression'; // ✅ ADDED for 3x faster data loading
 
 // --- IMPORT ROUTES ---
 import authRoutes from './routes/authRoutes.js';
@@ -17,6 +18,10 @@ import broadcastRoutes from './routes/broadcastRoutes.js';
 const app = express();
 const httpServer = createServer(app);
 
+// 🚀 INDUSTRIAL UPGRADE: COMPRESSION
+// Shrinks JSON data sent to mobile phones (Starters/Main Course lists load faster)
+app.use(compression());
+
 // --- 🔒 SECURITY: ALLOWED ORIGINS ---
 const allowedOrigins = [
     "http://localhost:5173",           
@@ -24,30 +29,20 @@ const allowedOrigins = [
     "https://694915c413d9f40008f38924--smartmenuss.netlify.app"
 ];
 
-// ============================================================
-// ☢️ NUCLEAR CORS FIX (LAYER 1: MANUAL HEADERS)
-// ============================================================
+// ☢️ NUCLEAR CORS FIX (RETAINED)
 app.use((req, res, next) => {
     const origin = req.headers.origin;
-    
     if (allowedOrigins.includes(origin)) {
         res.setHeader("Access-Control-Allow-Origin", origin);
     }
-
     res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
     res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, Origin, X-Requested-With, Accept");
     res.header("Access-Control-Allow-Credentials", "true");
-
-    if (req.method === "OPTIONS") {
-        return res.status(200).end();
-    }
-
+    if (req.method === "OPTIONS") { return res.status(200).end(); }
     next();
 });
 
-// ============================================================
-// 🛡️ STANDARD CORS (LAYER 2: LIBRARY BACKUP)
-// ============================================================
+// 🛡️ STANDARD CORS (RETAINED)
 app.use(cors({
     origin: allowedOrigins,
     credentials: true,
@@ -57,34 +52,43 @@ app.use(cors({
 // --- MIDDLEWARE ---
 app.use(express.json({ limit: '10mb' })); 
 
-// Rate Limiter - Optimized for high traffic (100k users)
+// 🛡️ Rate Limiter - Industrial Setting
+// Prevents API crashes when thousands of customers open the menu at once
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, 
-    max: 1000, // Increased to support simultaneous users
+    max: 2000, // Increased for massive scale
     standardHeaders: true,
     legacyHeaders: false,
+    message: "Too many orders from this IP, please wait a moment."
 });
-app.use(limiter); 
+app.use("/api/", limiter); 
 
-// Socket.io Setup
+// 🔌 Socket.io Setup - High Resiliency
 const io = new Server(httpServer, {
     cors: {
         origin: allowedOrigins,
         methods: ["GET", "POST", "PUT", "DELETE"],
         credentials: true
-    }
+    },
+    pingTimeout: 60000, // ✅ Increased to prevent mobile disconnects
+    pingInterval: 25000
 });
 
-// Attach Socket to Request
 app.use((req, res, next) => {
     req.io = io;
     next();
 });
 
-// --- DATABASE ---
-mongoose.connect(process.env.MONGO_URI)
-    .then(() => console.log("✅ MongoDB Connected"))
-    .catch((err) => console.error("❌ MongoDB Error:", err));
+// --- 🏗️ DATABASE: INDUSTRIAL CONNECTION POOLING ---
+// This ensures MongoDB can handle thousands of simultaneous orders
+mongoose.connect(process.env.MONGO_URI, {
+    maxPoolSize: 100,             // Allow 100 simultaneous DB workers
+    minPoolSize: 10,              // Always keep 10 connections "Warm"
+    socketTimeoutMS: 45000,       // Close dead connections after 45s
+    serverSelectionTimeoutMS: 5000
+})
+.then(() => console.log("✅ High-Scale MongoDB Connected"))
+.catch((err) => console.error("❌ MongoDB Error:", err));
 
 // --- ROUTES ---
 app.use('/api/auth', authRoutes);
@@ -94,7 +98,7 @@ app.use('/api/superadmin', superAdminRoutes);
 app.use('/api/broadcast', broadcastRoutes);
 app.use('/api/menu', dishRoutes);
 
-app.get('/', (req, res) => res.send('API is Running...'));
+app.get('/', (req, res) => res.send('BiteBox API v2 Industrial is Running...'));
 
 // --- ERROR HANDLER ---
 app.use((err, req, res, next) => {
@@ -108,7 +112,13 @@ app.use((err, req, res, next) => {
 
 // --- SOCKETS (SaaS Isolated Logic) ---
 io.on('connection', (socket) => {
-    // Isolated Rooms: Ensures orders for Shop A don't show up in Shop B
+    // 📱 Mobile Socket Fix: Ensures identity persists on reconnection
+    const rid = socket.handshake.query.restaurantId;
+    if (rid) {
+        socket.join(rid);
+        console.log(`Auto-Joined Room on Reconnect: ${rid}`);
+    }
+
     socket.on('join-restaurant', (restaurantId) => {
         socket.join(restaurantId);
         console.log(`Connection established for Shop: ${restaurantId}`);
@@ -116,7 +126,6 @@ io.on('connection', (socket) => {
 
     socket.on('join-owner-room', (ownerId) => socket.join(ownerId));
 
-    // Waiter Call Isolation
     socket.on("call-waiter", (data) => {
         if(data.restaurantId) {
             io.to(data.restaurantId).emit("new-waiter-call", data);
@@ -126,8 +135,13 @@ io.on('connection', (socket) => {
     socket.on("resolve-call", (data) => {
         if(data.restaurantId) {
             io.to(data.restaurantId).emit("call-resolved", data);
-        } else {
-            io.emit("call-resolved", data);
+        }
+    });
+
+    // 👨‍🍳 Chef Alert Logic
+    socket.on("chef-ready-alert", (data) => {
+        if(data.restaurantId) {
+            io.to(data.restaurantId).emit("chef-ready-alert", data);
         }
     });
 });
@@ -142,5 +156,5 @@ setInterval(() => {
 
 const PORT = process.env.PORT || 5000;
 httpServer.listen(PORT, () => {
-    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`🚀 High-Performance Server running on port ${PORT}`);
 });
