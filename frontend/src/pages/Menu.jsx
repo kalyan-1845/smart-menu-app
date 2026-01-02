@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, Link } from "react-router-dom";
 import axios from "axios";
-import { io } from "socket.io-client"; // ✅ Added Socket.io Client
+import { io } from "socket.io-client"; 
 import { FaSearch, FaPlus, FaMinus, FaStar, FaUtensils, FaArrowRight, FaLock, FaSyncAlt, FaBell, FaRedo } from "react-icons/fa";
 import LoadingSpinner from "./components/LoadingSpinner";
 
@@ -13,11 +13,13 @@ const SOCKET_URL = window.location.hostname === "localhost" || window.location.h
     ? "http://localhost:5000"
     : "https://smart-menu-backend-5ge7.onrender.com";
 
-const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
+// ✅ FIX 1: Default cart to [] to prevent crashes
+const Menu = ({ cart = [], addToCart, setRestaurantId, setTableNum, setCart }) => {
     const params = useParams();
     const currentRestId = params.restaurantId || params.id;
     const currentTable = params.table;
 
+    // State
     const [dishes, setDishes] = useState(() => {
         const cached = localStorage.getItem(`menu_cache_${currentRestId}`);
         return cached ? JSON.parse(cached) : [];
@@ -30,13 +32,17 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
     const [isSuspended, setIsSuspended] = useState(false);
     const [showToast, setShowToast] = useState(false);
 
+    // Pull to Refresh State
     const [pullDistance, setPullDistance] = useState(0);
     const [refreshing, setRefreshing] = useState(false);
     const startY = useRef(0);
+    
+    // ✅ FIX 2: Use Ref to track previous count to avoid useEffect loops
+    const prevDishCount = useRef(dishes.length);
 
     const DEFAULT_IMG = "https://placehold.co/400x300/222/orange?text=Yummy";
 
-    // ✅ FIXED FETCH LOGIC: THETA FAST SYNC + TOAST
+    // ⚡ FETCH MENU LOGIC
     const fetchMenu = useCallback(async (isManual = false) => {
         if (!currentRestId) return;
         try {
@@ -48,14 +54,19 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
             } else {
                 let dishData = Array.isArray(res.data) ? res.data : (res.data.dishes || res.data.data || []);
 
-                // ⚡ THETA SYNC: Detect if new dishes were added
-                if (dishes.length > 0 && dishData.length > dishes.length) {
+                // ⚡ THETA SYNC: Detect if new dishes were added using Ref
+                if (prevDishCount.current > 0 && dishData.length > prevDishCount.current) {
                     setShowToast(true);
                     setTimeout(() => setShowToast(false), 4000);
                 }
+                
+                prevDishCount.current = dishData.length; // Update ref
 
                 setDishes(dishData);
-                setFilteredDishes(dishData);
+                // Don't overwrite filteredDishes immediately if searching
+                if (!searchTerm && activeCategory === "All") {
+                   setFilteredDishes(dishData);
+                }
                 localStorage.setItem(`menu_cache_${currentRestId}`, JSON.stringify(dishData));
             }
             setError(false);
@@ -67,21 +78,19 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
             setRefreshing(false);
             setPullDistance(0);
         }
-    }, [currentRestId, dishes.length]);
+    }, [currentRestId, searchTerm, activeCategory]); // Removed dishes.length dependency
 
-    // 🚀 NEW: SOCKET.IO INSTANT SYNC
+    // 🚀 SOCKET.IO CONNECTION
     useEffect(() => {
         if (!currentRestId) return;
 
         const socket = io(SOCKET_URL, {
-            transports: ['websocket'], // Faster for mobile
+            transports: ['websocket'], 
             reconnectionAttempts: 5
         });
 
-        // Join a specific room for this restaurant
         socket.emit("join-restaurant", currentRestId);
 
-        // Listen for "menu-updated" event from backend
         socket.on("menu-updated", () => {
             console.log("⚡ Instant Update Received via Socket");
             fetchMenu(true);
@@ -90,16 +99,16 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
         return () => socket.disconnect();
     }, [currentRestId, fetchMenu]);
 
-    // ✅ REAL-TIME STOCK INDICATOR (Fallback)
+    // 🔄 STOCK CHECKER (Fallback)
     useEffect(() => {
         if (!currentRestId) return;
         const stockInterval = setInterval(() => {
             fetchMenu(true); 
-        }, 30000); // Increased interval since we have Sockets now
+        }, 30000); 
         return () => clearInterval(stockInterval);
     }, [currentRestId, fetchMenu]);
 
-    // 🔄 MOBILE AUTO-REFRESH ON RE-ENTRY
+    // 📱 VISIBILITY REFRESH
     useEffect(() => {
         const handleVisibilityChange = () => {
             if (document.visibilityState === "visible") fetchMenu(true); 
@@ -108,6 +117,7 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
         return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
     }, [currentRestId, fetchMenu]);
 
+    // ⚙️ INITIAL SETUP
     useEffect(() => {
         const lastTable = localStorage.getItem("last_table_scanned");
         const lastRest = localStorage.getItem("last_rest_scanned");
@@ -126,6 +136,7 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
 
     useEffect(() => { fetchMenu(); }, [currentRestId]); 
 
+    // 👆 TOUCH HANDLERS
     const handleTouchStart = (e) => { if (window.scrollY === 0) startY.current = e.touches[0].pageY; };
     const handleTouchMove = (e) => {
         const diff = e.touches[0].pageY - startY.current;
@@ -141,6 +152,7 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
         addToCart(val === -1 ? {...dish, quantity: -1} : dish);
     };
 
+    // 🔍 SEARCH & FILTER
     useEffect(() => {
         let result = dishes;
         if (activeCategory !== "All") result = result.filter(d => d.category === activeCategory);
@@ -148,8 +160,10 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
         setFilteredDishes(result);
     }, [searchTerm, activeCategory, dishes]);
 
-    const totalQty = cart.reduce((acc, item) => acc + item.quantity, 0);
-    const totalPrice = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+    const totalQty = cart ? cart.reduce((acc, item) => acc + item.quantity, 0) : 0;
+    const totalPrice = cart ? cart.reduce((acc, item) => acc + (item.price * item.quantity), 0) : 0;
+    
+    // ✅ FIX 3: Categories is defined HERE, ensuring no ReferenceError
     const categories = ["All", ...new Set(dishes.map(d => d.category))];
 
     if (loading && dishes.length === 0) return <LoadingSpinner />;
@@ -187,7 +201,6 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
                         <p style={styles.restSub}>Premium Food & Drinks</p>
                     </div>
                     <div style={{display:'flex', gap: '10px', alignItems: 'center'}}>
-                         {/* ✅ SUGGESTION: Quick Refresh Button for Mobile Speed */}
                          <button onClick={() => { setRefreshing(true); fetchMenu(true); }} style={styles.iconBtn}>
                             <FaRedo size={14} className={refreshing ? "spin" : ""} />
                          </button>
@@ -209,7 +222,6 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
                                 background: activeCategory === cat ? '#f97316' : '#18181b', 
                                 color: activeCategory === cat ? 'white' : '#a1a1aa',
                                 boxShadow: activeCategory === cat ? '0 0 20px rgba(249, 115, 22, 0.5)' : 'none',
-                                // ✅ SUGGESTION: Pulse effect for categories if menu updated
                                 border: (showToast && cat === "All") ? '2px solid #f97316' : '1px solid #333'
                             }}>
                             {cat}
@@ -220,7 +232,7 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
 
             <div style={styles.grid}>
                 {filteredDishes.map(dish => {
-                    const item = cart.find(i => i._id === dish._id);
+                    const item = cart ? cart.find(i => i._id === dish._id) : null;
                     const qty = item ? item.quantity : 0;
                     return (
                         <div key={dish._id} style={styles.card}>
