@@ -81,17 +81,31 @@ router.get('/', async (req, res) => {
 // --- 4. UPDATE STATUS (CHEF ACTIONS) ---
 router.put('/:id', async (req, res) => {
     try {
+        const { status } = req.body;
+        
+        // 1. Update the order
         const order = await Order.findByIdAndUpdate(
             req.params.id, 
-            { status: req.body.status }, 
+            { status: status }, 
             { new: true }
         );
         
-        if (req.io && order) {
+        if (!order) return res.status(404).json({ message: "Order not found" });
+
+        // 2. REVENUE LOGIC: If order is marked "Served", increment owner's revenue
+        if (status === "Served") {
+            await Owner.findByIdAndUpdate(order.restaurantId, {
+                $inc: { totalRevenue: order.totalAmount }
+            });
+        }
+
+        // 3. Real-time notifications
+        if (req.io) {
              // Notify both the Restaurant Staff and the Customer Tracker
              req.io.to(order.restaurantId.toString()).emit('order-updated', order);
              req.io.emit('order-updated', order); 
         }
+
         res.json(order);
     } catch (error) {
         res.status(400).json({ message: error.message });
@@ -131,12 +145,7 @@ router.get('/inbox', async (req, res) => {
         res.status(500).json({ message: error.message });
     }
 });
-// Inside your Order Status Update Route
-if (req.body.status === "Served") {
-    await Owner.findByIdAndUpdate(order.restaurantId, {
-        $inc: { totalRevenue: order.totalAmount }
-    });
-}
+
 // --- 7. CLEAR INBOX (Mark as downloaded after PDF export) ---
 router.put('/mark-downloaded', async (req, res) => {
     try {
