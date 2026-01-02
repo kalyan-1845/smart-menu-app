@@ -1,21 +1,14 @@
 {
   "short_name": "BiteBox",
   "name": "BiteBox Smart Menu",
+  "id": "/bitebox-pwa",
   "description": "Next-Gen QR Ordering & Kitchen Display System",
-  "start_url": "/", 
+  "start_url": ".",
   "display": "standalone",
   "orientation": "portrait",
-  "theme_color": "#000000",
-  "background_color": "#000000",
+  "theme_color": "#f97316",
+  "background_color": "#050505",
   "categories": ["food", "business", "productivity"],
-  "screenshots": [
-    {
-      "src": "screenshot1.png",
-      "type": "image/png",
-      "sizes": "1080x1920",
-      "form_factor": "narrow"
-    }
-  ],
   "icons": [
     {
       "src": "favicon.ico",
@@ -26,13 +19,19 @@
       "src": "logo192.png",
       "type": "image/png",
       "sizes": "192x192",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "logo192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "maskable"
     },
     {
       "src": "logo512.png",
       "type": "image/png",
       "sizes": "512x512",
-      "purpose": "any maskable"
+      "purpose": "any"
     }
   ]
 }

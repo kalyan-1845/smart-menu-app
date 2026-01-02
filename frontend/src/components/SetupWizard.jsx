@@ -1,12 +1,12 @@
 import React, { useEffect } from "react";
-import confetti from "canvas-confetti"; // Make sure to: npm install canvas-confetti
+import confetti from "canvas-confetti";
 import { 
     FaCheckCircle, FaCircle, FaUtensils, 
-    FaWallet, FaBell, FaRocket 
+    FaBell, FaRocket 
 } from "react-icons/fa";
 
-const SetupWizard = ({ dishesCount, upiId, pushEnabled }) => {
-    // 1. Define the steps and their logic
+const SetupWizard = ({ dishesCount, pushEnabled }) => {
+    // 1. Define the updated steps (Payment removed)
     const steps = [
         { 
             id: 1, 
@@ -17,13 +17,6 @@ const SetupWizard = ({ dishesCount, upiId, pushEnabled }) => {
         },
         { 
             id: 2, 
-            label: "Configure Payments", 
-            done: !!upiId, 
-            icon: <FaWallet />, 
-            hint: "Enter your UPI ID in Settings to receive money." 
-        },
-        { 
-            id: 3, 
             label: "Enable Live Alerts", 
             done: pushEnabled, 
             icon: <FaBell />, 
@@ -31,13 +24,14 @@ const SetupWizard = ({ dishesCount, upiId, pushEnabled }) => {
         }
     ];
 
-    // 2. Calculate progress
+    // 2. Calculate progress (Now out of 2 steps)
     const completedCount = steps.filter(s => s.done).length;
-    const progressPercent = Math.round((completedCount / steps.length) * 100);
+    const totalSteps = steps.length;
+    const progressPercent = Math.round((completedCount / totalSteps) * 100);
 
-    // 3. Trigger Confetti when 100% complete
+    // 3. Trigger Confetti when ALL (2/2) steps are complete
     useEffect(() => {
-        if (completedCount === 3) {
+        if (completedCount === totalSteps && totalSteps > 0) {
             confetti({
                 particleCount: 150,
                 spread: 70,
@@ -45,15 +39,15 @@ const SetupWizard = ({ dishesCount, upiId, pushEnabled }) => {
                 colors: ['#FF9933', '#ffffff', '#00ff00']
             });
         }
-    }, [completedCount]);
+    }, [completedCount, totalSteps]);
 
-    // 4. If all steps are done, show a "Success Banner" instead of the checklist
-    if (completedCount === 3) {
+    // 4. Success Banner
+    if (completedCount === totalSteps && totalSteps > 0) {
         return (
             <div className="bg-green-500/10 border-2 border-green-500/20 p-8 rounded-[40px] mb-10 flex items-center justify-between shadow-2xl animate-in zoom-in duration-500">
                 <div>
                     <h2 className="text-2xl font-black text-green-500 uppercase tracking-tighter">Your Shop is Live! 🎉</h2>
-                    <p className="text-sm text-gray-400 font-bold uppercase mt-1">Ready to receive orders and payments.</p>
+                    <p className="text-sm text-gray-400 font-bold uppercase mt-1">Ready to receive orders and manage your kitchen.</p>
                 </div>
                 <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center shadow-lg shadow-green-500/20">
                     <FaCheckCircle className="text-white text-3xl" />
@@ -64,7 +58,6 @@ const SetupWizard = ({ dishesCount, upiId, pushEnabled }) => {
 
     return (
         <div className="bg-[#111] border border-gray-800 rounded-[45px] p-10 mb-10 shadow-2xl relative overflow-hidden">
-            {/* Background Glow */}
             <div className="absolute -top-24 -right-24 w-64 h-64 bg-[#FF9933]/5 blur-[100px] rounded-full"></div>
 
             <div className="flex justify-between items-end mb-8">
@@ -80,7 +73,6 @@ const SetupWizard = ({ dishesCount, upiId, pushEnabled }) => {
                 </div>
             </div>
 
-            {/* Progress Bar */}
             <div className="w-full bg-gray-900 h-2 rounded-full mb-10 overflow-hidden border border-gray-800">
                 <div 
                     className="bg-[#FF9933] h-full transition-all duration-1000 ease-out shadow-[0_0_20px_rgba(255,153,51,0.4)]" 
@@ -88,8 +80,8 @@ const SetupWizard = ({ dishesCount, upiId, pushEnabled }) => {
                 ></div>
             </div>
 
-            {/* Steps Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Steps Grid (Now shows 2 columns on medium screens) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {steps.map((step) => (
                     <div 
                         key={step.id} 

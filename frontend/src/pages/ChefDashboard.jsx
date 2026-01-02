@@ -2,11 +2,12 @@ import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { useParams, useNavigate } from "react-router-dom";
 import io from "socket.io-client";
+import InstallButton from "../components/InstallButton";
 import { 
     FaUtensils, FaVolumeUp, FaVolumeMute, FaCheck, FaBell, 
     FaSignOutAlt, FaSpinner, FaBoxOpen, FaClipboardList 
 } from "react-icons/fa";
-
+ 
 const SERVER_URL = "https://smart-menu-backend-5ge7.onrender.com";
 const API_BASE = `${SERVER_URL}/api`;
 
@@ -173,7 +174,6 @@ const ChefDashboard = () => {
             await axios.put(`${API_BASE}/orders/${order._id}`, { status: nextStatus });
             
             if (socket) {
-                // Notify Tracker and Waiter
                 socket.emit("chef-ready-alert", { 
                     restaurantId: mongoId, 
                     tableNum: order.tableNum,
@@ -219,13 +219,15 @@ const ChefDashboard = () => {
                     </div>
                 ))}
             </div>
-
+              
             <header style={styles.header}>
                 <div style={styles.headerLeft}>
                     <h1 style={styles.headerTitle}>KDS PANEL</h1>
                     <div style={styles.statusDot}></div>
                 </div>
                 <div style={styles.headerRight}>
+                    {/* 🚀 Install Button Integrated for Mobile PWA Support */}
+                    <InstallButton />
                     <button onClick={() => setIsMuted(!isMuted)} style={styles.iconButton}>{isMuted ? <FaVolumeMute /> : <FaVolumeUp />}</button>
                     <button onClick={() => {localStorage.removeItem(`chef_session_${id}`); window.location.reload();}} style={styles.iconButtonRed}><FaSignOutAlt/></button>
                 </div>
@@ -239,7 +241,7 @@ const ChefDashboard = () => {
                     <FaBoxOpen /> STOCK
                 </button>
             </div>
-
+                    
             <div style={styles.grid}>
                 {activeTab === "orders" ? (
                     orders.length === 0 ? <div style={styles.emptyState}><h2>No Pending Orders</h2></div> : (
@@ -296,7 +298,7 @@ const ChefDashboard = () => {
         </div>
     );
 };
-
+      
 const styles = {
     dashboardContainer: { minHeight: '100vh', background: '#050505', color: 'white', padding: '15px', fontFamily: 'Inter, sans-serif' },
     lockContainer: { minHeight: '100vh', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' },
@@ -304,15 +306,15 @@ const styles = {
     lockTitle: { color: 'white', fontSize: '24px', fontWeight: '900', margin: '0 0 10px 0' },
     input: { width: '100%', background: '#000', border: '1px solid #333', padding: '15px', borderRadius: '12px', color: 'white', marginBottom: '15px', textAlign: 'center', fontSize:'20px', outline:'none' },
     loginBtn: { width: '100%', background: '#f97316', color: 'white', border: 'none', padding: '15px', borderRadius: '12px', fontWeight: 'bold' },
-    header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: '#111', borderRadius: '12px', marginBottom: '15px' },
+    header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: '#111', borderRadius: '12px', marginBottom: '15px', flexWrap: 'wrap', gap: '10px' },
     headerLeft: { display: 'flex', alignItems: 'center', gap: '10px' },
     headerTitle: { fontSize: '18px', fontWeight: '900', margin: 0 },
     statusDot: { width:'8px', height:'8px', background:'#22c55e', borderRadius:'50%' },
-    headerRight: { display: 'flex', gap: '10px' },
-    iconButton: { background: '#1f2937', border: 'none', color: 'white', padding: '10px', borderRadius: '8px' },
-    iconButtonRed: { background: '#3b0a0a', border: 'none', color: '#ef4444', padding: '10px', borderRadius: '8px' },
+    headerRight: { display: 'flex', gap: '8px', alignItems: 'center' },
+    iconButton: { background: '#1f2937', border: 'none', color: 'white', padding: '12px', borderRadius: '12px', display: 'flex', alignItems: 'center' },
+    iconButtonRed: { background: '#3b0a0a', border: 'none', color: '#ef4444', padding: '12px', borderRadius: '12px', display: 'flex', alignItems: 'center' },
     tabContainer: { display: 'flex', gap: '10px', marginBottom: '15px' },
-    tabButton: { flex: 1, padding: '12px', borderRadius: '10px', border: 'none', color: 'white', fontWeight: 'bold', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px' },
+    tabButton: { flex: 1, padding: '15px', borderRadius: '12px', border: 'none', color: 'white', fontWeight: 'bold', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px', fontSize: '14px' },
     grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' },
     card: { background: '#111', borderRadius: '12px', border: '1px solid #222', display: 'flex', flexDirection: 'column' },
     cardHeader: { padding: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
@@ -323,10 +325,10 @@ const styles = {
     itemQuantity: { color: '#f97316', fontWeight: '900' },
     itemName: { fontSize: '15px' },
     actionContainer: { padding: '12px' },
-    actionBtn: { width: '100%', border: 'none', padding: '12px', borderRadius: '8px', fontWeight: '900' },
-    readyIndicator: { textAlign: 'center', color: '#22c55e', fontSize: '12px', fontWeight: '900', background: 'rgba(34, 197, 94, 0.1)', padding: '10px', borderRadius: '8px', border: '1px dashed #22c55e' },
-    stockCard: { background: '#111', padding: '12px', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border:'1px solid #222' },
-    stockBtn: { padding: '6px 12px', borderRadius: '6px', border: 'none', color: 'white', fontWeight: 'bold' },
+    actionBtn: { width: '100%', border: 'none', padding: '18px', borderRadius: '12px', fontWeight: '900', fontSize: '14px' },
+    readyIndicator: { textAlign: 'center', color: '#22c55e', fontSize: '12px', fontWeight: '900', background: 'rgba(34, 197, 94, 0.1)', padding: '15px', borderRadius: '12px', border: '1px dashed #22c55e' },
+    stockCard: { background: '#111', padding: '15px', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border:'1px solid #222' },
+    stockBtn: { padding: '10px 15px', borderRadius: '10px', border: 'none', color: 'white', fontWeight: 'bold' },
     emptyState: { gridColumn: '1/-1', textAlign: 'center', padding: '50px', color:'#666' },
     alertWrapper: { position: 'fixed', top: '10px', left: '50%', transform: 'translateX(-50%)', zIndex: 100, width: '90%', maxWidth:'400px' },
     alertBanner: { background: '#ef4444', padding: '12px', borderRadius: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom:'5px' },
