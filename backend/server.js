@@ -13,7 +13,7 @@ import dishRoutes from './routes/dishRoutes.js';
 import orderRoutes from './routes/orderRoutes.js';
 import superAdminRoutes from './routes/superAdminRoutes.js';
 import broadcastRoutes from './routes/broadcastRoutes.js';
-import menuRoutes from './routes/menuRoutes.js'; // Ensure this is imported if you use it
+import menuRoutes from './routes/menuRoutes.js'; // Kept as requested
 
 const app = express();
 const httpServer = createServer(app);
@@ -35,15 +35,20 @@ const isOriginAllowed = (origin) => {
     return allowedOrigins.includes(origin) || deployPreviewPattern.test(origin);
 };
 
-// 1. MANUAL HEADERS (For strict browsers/mobiles)
+// 1. MANUAL HEADERS (Fixed to prevent "undefined" crash)
 app.use((req, res, next) => {
     const origin = req.headers.origin;
-    if (isOriginAllowed(origin)) {
+    
+    // 🛑 FIX: We only set the header if 'origin' actually exists.
+    // This stops the "Invalid value undefined" error log.
+    if (origin && isOriginAllowed(origin)) {
         res.setHeader("Access-Control-Allow-Origin", origin);
     }
+
     res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
     res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, Origin, X-Requested-With, Accept");
     res.header("Access-Control-Allow-Credentials", "true");
+    
     if (req.method === "OPTIONS") return res.status(200).end();
     next();
 });
@@ -97,7 +102,7 @@ app.use('/api/dishes', dishRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/superadmin', superAdminRoutes);
 app.use('/api/broadcast', broadcastRoutes);
-// app.use('/api/menu', menuRoutes); // Uncomment if you have this file
+// app.use('/api/menu', menuRoutes); // Kept commented out to prevent crashes if you haven't set it up fully yet
 
 app.get('/', (req, res) => res.send('API is Running...'));
 
