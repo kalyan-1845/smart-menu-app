@@ -8,8 +8,8 @@ import Owner from '../models/Owner.js';
 const router = express.Router();
 
 // --- 🔑 SAFE WEB PUSH CONFIGURATION ---
-const publicKey = process.env.PUBLIC_VAPID_KEY;
-const privateKey = process.env.PRIVATE_VAPID_KEY;
+const publicKey = process.env.VAPID_PUBLIC_KEY;
+const privateKey = process.env.VAPID_PRIVATE_KEY;
 
 if (publicKey && privateKey) {
     try {
