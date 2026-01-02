@@ -1,17 +1,17 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import axios from "axios";
+import io from "socket.io-client"; // ✅ IMPORT SOCKET.IO
 import { FaSearch, FaPlus, FaMinus, FaStar, FaUtensils, FaArrowRight, FaLock, FaSyncAlt } from "react-icons/fa";
 import LoadingSpinner from "./components/LoadingSpinner";
 
-// ✅ FIXED API_BASE LOGIC
-const API_BASE = window.location.hostname === "localhost" || window.location.hostname.startsWith("192.168")
-    ? "http://localhost:5000/api" 
-    : "https://smart-menu-backend-5ge7.onrender.com/api";
+// ✅ DYNAMIC API & SOCKET URL
+const isLocal = window.location.hostname === "localhost" || window.location.hostname.startsWith("192.168");
+const API_BASE = isLocal ? "http://localhost:5000/api" : "https://smart-menu-backend-5ge7.onrender.com/api";
+const SOCKET_URL = isLocal ? "http://localhost:5000" : "https://smart-menu-backend-5ge7.onrender.com";
 
 const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
     const params = useParams();
-    // ✅ Supports both /menu/:id and /menu/:restaurantId
     const currentRestId = params.restaurantId || params.id;
     const currentTable = params.table;
 
@@ -32,13 +32,11 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
 
     const DEFAULT_IMG = "https://placehold.co/400x300/222/orange?text=Yummy";
 
-    // ✅ FIXED FETCHMENU: Handles the 400 Bad Request by ensuring currentRestId is passed correctly
     const fetchMenu = async (isManual = false) => {
         if (!currentRestId) return;
         try {
             if (!isManual && dishes.length === 0) setLoading(true);
             
-            // Sending restaurantId as a query parameter as expected by the backend
             const res = await axios.get(`${API_BASE}/dishes`, { 
                 params: { restaurantId: currentRestId },
                 timeout: 8000 
@@ -66,14 +64,57 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
         fetchMenu();
     }, [currentRestId]);
 
-    // Background Sync for Stock Levels
+    // =========================================================
+    // ✅ REAL-TIME MENU UPDATES (SOCKET.IO)
+    // =========================================================
+    useEffect(() => {
+        const socket = io(SOCKET_URL);
+
+        if (currentRestId) {
+            // Join the specific restaurant room
+            socket.emit("join-restaurant", currentRestId);
+        }
+
+        // 1. Listen for New or Updated Dishes
+        socket.on('menu-updated', (updatedDish) => {
+            // console.log("Real-time update received:", updatedDish);
+            setDishes((prev) => {
+                const exists = prev.find(d => d._id === updatedDish._id);
+                let newDishes;
+                if (exists) {
+                    // Update existing dish
+                    newDishes = prev.map(d => d._id === updatedDish._id ? updatedDish : d);
+                } else {
+                    // Add new dish
+                    newDishes = [...prev, updatedDish];
+                }
+                // Update Cache immediately
+                localStorage.setItem(`menu_cache_${currentRestId}`, JSON.stringify(newDishes));
+                return newDishes;
+            });
+        });
+
+        // 2. Listen for Deleted Dishes
+        socket.on('menu-deleted', (deletedId) => {
+            setDishes((prev) => {
+                const newDishes = prev.filter(d => d._id !== deletedId);
+                // Update Cache immediately
+                localStorage.setItem(`menu_cache_${currentRestId}`, JSON.stringify(newDishes));
+                return newDishes;
+            });
+        });
+
+        return () => socket.disconnect();
+    }, [currentRestId]);
+    // =========================================================
+
+    // Background Sync (Fallback if socket fails)
     useEffect(() => {
         if (!currentRestId) return;
         const stockInterval = setInterval(() => fetchMenu(true), 15000); 
         return () => clearInterval(stockInterval);
     }, [currentRestId]);
 
-    // Cart Logic & Visibility Listeners
     useEffect(() => {
         const handleVisibilityChange = () => {
             if (document.visibilityState === "visible") fetchMenu(true); 
@@ -98,7 +139,6 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
         if (setTableNum && currentTable) setTableNum(currentTable);
     }, [currentRestId, currentTable]);
 
-    // Handlers
     const handleTouchStart = (e) => { if (window.scrollY === 0) startY.current = e.touches[0].pageY; };
     const handleTouchMove = (e) => {
         const diff = e.touches[0].pageY - startY.current;
@@ -142,7 +182,7 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
 
             <div style={styles.marqueeWrapper}>
                 <div style={styles.marqueeContent}>
-                    <span>JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • </span>
+                    <span>JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM •JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • </span>
                     <span>JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • </span>
                 </div>
             </div>
