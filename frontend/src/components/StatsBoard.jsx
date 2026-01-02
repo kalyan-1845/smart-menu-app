@@ -1,7 +1,7 @@
 import React from "react";
 import { FaChartBar, FaTrophy, FaCoins } from "react-icons/fa";
 
-const SalesSummary = ({ restaurants }) => {
+const RevenueStats = ({ restaurants }) => {
     // Logic to find top earning restaurants
     const sortedPerformers = [...restaurants]
         .sort((a, b) => (b.totalRevenue || 0) - (a.totalRevenue || 0))
@@ -67,4 +67,4 @@ const SalesSummary = ({ restaurants }) => {
     );
 };
 
-export default StatsBoard;
+export default RevenueStats;
