@@ -13,17 +13,19 @@ const SOCKET_URL = window.location.hostname === "localhost" || window.location.h
     ? "http://localhost:5000"
     : "https://smart-menu-backend-5ge7.onrender.com";
 
-// ✅ FIX 1: Default cart to [] to prevent crashes
 const Menu = ({ cart = [], addToCart, setRestaurantId, setTableNum, setCart }) => {
     const params = useParams();
     const currentRestId = params.restaurantId || params.id;
     const currentTable = params.table;
 
-    // State
+    // 🟢 FIX 1: Initialize State, but don't trust cache blindly
     const [dishes, setDishes] = useState(() => {
-        const cached = localStorage.getItem(`menu_cache_${currentRestId}`);
-        return cached ? JSON.parse(cached) : [];
+        try {
+            const cached = localStorage.getItem(`menu_cache_${currentRestId}`);
+            return cached ? JSON.parse(cached) : [];
+        } catch (e) { return []; }
     });
+
     const [filteredDishes, setFilteredDishes] = useState(dishes);
     const [activeCategory, setActiveCategory] = useState("All");
     const [searchTerm, setSearchTerm] = useState("");
@@ -36,38 +38,45 @@ const Menu = ({ cart = [], addToCart, setRestaurantId, setTableNum, setCart }) =
     const [pullDistance, setPullDistance] = useState(0);
     const [refreshing, setRefreshing] = useState(false);
     const startY = useRef(0);
-    
-    // ✅ FIX 2: Use Ref to track previous count to avoid useEffect loops
     const prevDishCount = useRef(dishes.length);
 
     const DEFAULT_IMG = "https://placehold.co/400x300/222/orange?text=Yummy";
 
-    // ⚡ FETCH MENU LOGIC
+    // ⚡ FIX 2: FORCE FETCH FUNCTION (Bypasses Cache)
     const fetchMenu = useCallback(async (isManual = false) => {
         if (!currentRestId) return;
         try {
             if (!isManual && dishes.length === 0) setLoading(true);
-            const res = await axios.get(`${API_BASE}/dishes?restaurantId=${currentRestId}&t=${Date.now()}`, { timeout: 8000 });
+
+            // 🟢 Add random timestamp to URL to force mobile browser to fetch fresh data
+            const res = await axios.get(`${API_BASE}/dishes?restaurantId=${currentRestId}&_t=${Date.now()}`, { timeout: 8000 });
             
             if (res.data.status === "suspended") {
                 setIsSuspended(true);
             } else {
                 let dishData = Array.isArray(res.data) ? res.data : (res.data.dishes || res.data.data || []);
 
-                // ⚡ THETA SYNC: Detect if new dishes were added using Ref
+                // ⚡ Socket/Toast Logic
                 if (prevDishCount.current > 0 && dishData.length > prevDishCount.current) {
                     setShowToast(true);
                     setTimeout(() => setShowToast(false), 4000);
                 }
-                
-                prevDishCount.current = dishData.length; // Update ref
+                prevDishCount.current = dishData.length;
 
+                // 🟢 FIX: Update State & LocalStorage Immediately
                 setDishes(dishData);
-                // Don't overwrite filteredDishes immediately if searching
+                localStorage.setItem(`menu_cache_${currentRestId}`, JSON.stringify(dishData));
+                
+                // Only reset filter if user isn't searching
                 if (!searchTerm && activeCategory === "All") {
                    setFilteredDishes(dishData);
+                } else {
+                   // Re-apply filters to new data if searching
+                   let result = dishData;
+                   if (activeCategory !== "All") result = result.filter(d => d.category === activeCategory);
+                   if (searchTerm) result = result.filter(d => d.name.toLowerCase().includes(searchTerm.toLowerCase()));
+                   setFilteredDishes(result);
                 }
-                localStorage.setItem(`menu_cache_${currentRestId}`, JSON.stringify(dishData));
             }
             setError(false);
         } catch (err) {
@@ -78,7 +87,7 @@ const Menu = ({ cart = [], addToCart, setRestaurantId, setTableNum, setCart }) =
             setRefreshing(false);
             setPullDistance(0);
         }
-    }, [currentRestId, searchTerm, activeCategory]); // Removed dishes.length dependency
+    }, [currentRestId, searchTerm, activeCategory]); // Removed 'dishes' dependency to avoid loops
 
     // 🚀 SOCKET.IO CONNECTION
     useEffect(() => {
@@ -91,13 +100,26 @@ const Menu = ({ cart = [], addToCart, setRestaurantId, setTableNum, setCart }) =
 
         socket.emit("join-restaurant", currentRestId);
 
+        // 🟢 FIX: When socket says "menu-updated", force fetch immediately
         socket.on("menu-updated", () => {
             console.log("⚡ Instant Update Received via Socket");
-            fetchMenu(true);
+            fetchMenu(true); 
+        });
+
+        // 🟢 NEW: Also listen for 'new-dish-added' event specifically
+        socket.on("new-dish-added", () => {
+             console.log("⚡ New Dish Added Event");
+             fetchMenu(true);
         });
 
         return () => socket.disconnect();
     }, [currentRestId, fetchMenu]);
+
+    // 🟢 FIX 3: Force Initial Fetch on Mount (Even if cache exists)
+    // This ensures that if the admin added an item 1 min ago, we see it now.
+    useEffect(() => {
+        fetchMenu(false);
+    }, [fetchMenu]);
 
     // 🔄 STOCK CHECKER (Fallback)
     useEffect(() => {
@@ -108,7 +130,7 @@ const Menu = ({ cart = [], addToCart, setRestaurantId, setTableNum, setCart }) =
         return () => clearInterval(stockInterval);
     }, [currentRestId, fetchMenu]);
 
-    // 📱 VISIBILITY REFRESH
+    // 📱 VISIBILITY REFRESH (When user switches tabs back)
     useEffect(() => {
         const handleVisibilityChange = () => {
             if (document.visibilityState === "visible") fetchMenu(true); 
@@ -117,7 +139,7 @@ const Menu = ({ cart = [], addToCart, setRestaurantId, setTableNum, setCart }) =
         return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
     }, [currentRestId, fetchMenu]);
 
-    // ⚙️ INITIAL SETUP
+    // ⚙️ SETUP IDS
     useEffect(() => {
         const lastTable = localStorage.getItem("last_table_scanned");
         const lastRest = localStorage.getItem("last_rest_scanned");
@@ -134,9 +156,7 @@ const Menu = ({ cart = [], addToCart, setRestaurantId, setTableNum, setCart }) =
         if (setTableNum && currentTable) setTableNum(currentTable);
     }, [currentRestId, currentTable, setRestaurantId, setTableNum]);
 
-    useEffect(() => { fetchMenu(); }, [currentRestId]); 
-
-    // 👆 TOUCH HANDLERS
+    // 👆 TOUCH HANDLERS (Pull to Refresh)
     const handleTouchStart = (e) => { if (window.scrollY === 0) startY.current = e.touches[0].pageY; };
     const handleTouchMove = (e) => {
         const diff = e.touches[0].pageY - startY.current;
@@ -152,7 +172,7 @@ const Menu = ({ cart = [], addToCart, setRestaurantId, setTableNum, setCart }) =
         addToCart(val === -1 ? {...dish, quantity: -1} : dish);
     };
 
-    // 🔍 SEARCH & FILTER
+    // 🔍 SEARCH & FILTER LOGIC
     useEffect(() => {
         let result = dishes;
         if (activeCategory !== "All") result = result.filter(d => d.category === activeCategory);
@@ -163,7 +183,6 @@ const Menu = ({ cart = [], addToCart, setRestaurantId, setTableNum, setCart }) =
     const totalQty = cart ? cart.reduce((acc, item) => acc + item.quantity, 0) : 0;
     const totalPrice = cart ? cart.reduce((acc, item) => acc + (item.price * item.quantity), 0) : 0;
     
-    // ✅ FIX 3: Categories is defined HERE, ensuring no ReferenceError
     const categories = ["All", ...new Set(dishes.map(d => d.category))];
 
     if (loading && dishes.length === 0) return <LoadingSpinner />;
@@ -180,7 +199,7 @@ const Menu = ({ cart = [], addToCart, setRestaurantId, setTableNum, setCart }) =
             
             {/* THETA NOTIFICATION TOAST */}
             <div style={{...styles.toast, transform: showToast ? 'translateY(0)' : 'translateY(-100px)', opacity: showToast ? 1 : 0}}>
-                <FaBell style={{marginRight: 10}} /> NEW DISHES ADDED TO MENU!
+                <FaBell style={{marginRight: 10}} /> NEW DISHES ADDED! REFRESHING...
             </div>
 
             <div style={{...styles.pullLoader, height: `${pullDistance}px`, opacity: pullDistance / 60}}>
@@ -201,6 +220,7 @@ const Menu = ({ cart = [], addToCart, setRestaurantId, setTableNum, setCart }) =
                         <p style={styles.restSub}>Premium Food & Drinks</p>
                     </div>
                     <div style={{display:'flex', gap: '10px', alignItems: 'center'}}>
+                         {/* 🟢 Manual Refresh Button for Mobile Users */}
                          <button onClick={() => { setRefreshing(true); fetchMenu(true); }} style={styles.iconBtn}>
                             <FaRedo size={14} className={refreshing ? "spin" : ""} />
                          </button>
