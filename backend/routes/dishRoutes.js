@@ -32,12 +32,11 @@ const protect = async (req, res, next) => {
 
 /**
  * 1. GET DISHES (Public - Smart Search)
+ * ✅ FIX: Handles both Username (from URL) and ObjectId (from Admin)
  */
 router.get('/', async (req, res) => {
     const { restaurantId } = req.query; 
     
-    console.log(`🔎 [API] Searching menu for: "${restaurantId}"`);
-
     if (!restaurantId) {
         return res.status(400).json({ message: "Restaurant ID is required." });
     }
@@ -45,18 +44,18 @@ router.get('/', async (req, res) => {
     try {
         let ownerObjectId;
 
+        // 1. Check if it's a valid Database ID
         if (mongoose.Types.ObjectId.isValid(restaurantId)) {
             ownerObjectId = restaurantId;
         } else {
+            // 2. Search for the owner if the ID is actually a username (e.g., KALYANRESTO1)
             const owner = await Owner.findOne({ 
                 username: { $regex: new RegExp("^" + restaurantId + "$", "i") } 
             });
 
             if (!owner) {
-                console.log(`❌ [API] Owner "${restaurantId}" NOT found.`);
                 return res.status(404).json({ message: "Restaurant not found." });
             }
-            
             ownerObjectId = owner._id;
         }
 
@@ -71,7 +70,7 @@ router.get('/', async (req, res) => {
 
 /**
  * 2. ADD DISH (Protected - Owner Only)
- * ✅ FIXED: Added Socket trigger for instant menu updates
+ * ✅ FIXED: Socket trigger for instant menu updates
  */
 router.post('/', protect, async (req, res) => {
     try {
@@ -82,10 +81,9 @@ router.post('/', protect, async (req, res) => {
         });
         const savedDish = await newDish.save();
 
-        // ⚡ SOCKET TRIGGER: Notify all mobile users in this restaurant's room
+        // ⚡ SOCKET TRIGGER
         if (req.io) {
             req.io.to(req.user.id.toString()).emit('menu-updated');
-            console.log(`⚡ [Socket] Menu update emitted for restaurant: ${req.user.id}`);
         }
 
         res.status(201).json(savedDish);
@@ -96,7 +94,7 @@ router.post('/', protect, async (req, res) => {
 
 /**
  * 3. UPDATE DISH / STOCK (Public/Chef Access)
- * ✅ FIXED: Added Socket trigger for instant stock toggling
+ * ✅ FIXED: Added Socket trigger for instant toggling
  */
 router.put('/:id', async (req, res) => {
     try {
@@ -106,10 +104,8 @@ router.put('/:id', async (req, res) => {
             { new: true }
         );
 
-        // ⚡ SOCKET TRIGGER: Update menu instantly when stock or details change
         if (req.io && dish) {
             req.io.to(dish.owner.toString()).emit('menu-updated');
-            console.log(`⚡ [Socket] Stock/Dish update emitted for owner: ${dish.owner}`);
         }
 
         res.json(dish);
@@ -128,7 +124,6 @@ router.delete('/:id', protect, async (req, res) => {
 
         await Dish.findByIdAndDelete(req.params.id);
 
-        // ⚡ SOCKET TRIGGER: Remove dish from user view instantly
         if (req.io && ownerId) {
             req.io.to(ownerId.toString()).emit('menu-updated');
         }

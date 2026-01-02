@@ -5,6 +5,7 @@ import io from "socket.io-client";
 import confetti from "canvas-confetti";
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
+import SalesSummary from "./components/SalesSummary"; // ✅ ADDED: Fixes ReferenceError
 import { 
     FaPlus, FaTrash, FaUtensils, 
     FaBell, FaCheckCircle, FaCircle, FaCrown, FaSignOutAlt, FaRocket, FaStore, FaExternalLinkAlt, FaCopy, FaInbox, FaDownload, FaQrcode
@@ -98,25 +99,26 @@ const RestaurantAdmin = () => {
     const [formData, setFormData] = useState({ name: "", price: "", category: "Starters", image: "" });
     const [qrRange, setQrRange] = useState({ start: 1, end: 5 });
 
+    // ✅ FIXED FETCH INBOX: Prevents 400 error by ensuring valid restaurantId
     const fetchInbox = async () => {
         const mongoId = localStorage.getItem(`owner_id_${id}`);
-        if (!mongoId) return;
+        if (!mongoId || mongoId === "undefined") return;
         try {
-            const res = await axios.get(`${API_BASE}/orders/inbox?restaurantId=${mongoId}`);
+            const res = await axios.get(`${API_BASE}/orders/inbox`, {
+                params: { restaurantId: mongoId }
+            });
             setInboxOrders(res.data);
         } catch (err) { console.error("Inbox Error", err); }
     };
 
-    // --- ✅ UPDATED LOGIN: SUPPORT FOR SUPERADMIN MASTER LOGIN ---
     useEffect(() => {
         const checkGhostSession = () => {
             const ghostToken = localStorage.getItem(`owner_token_${id}`);
             const ghostId = localStorage.getItem(`owner_id_${id}`);
-            if (ghostToken && ghostId) {
+            if (ghostToken && ghostId && ghostId !== "undefined") {
                 setIsAuthenticated(true);
                 fetchData(ghostToken, ghostId);
                 fetchInbox();
-                // Optionally: fetch restaurant profile to set name/isPro
             }
         };
         checkGhostSession();
@@ -146,18 +148,19 @@ const RestaurantAdmin = () => {
         } catch (error) { console.error(error); }
     };
 
+    // ✅ FIXED ADD DISH: Ensures image and owner linking are robust
     const handleAddDish = async (e) => {
         e.preventDefault();
         const token = localStorage.getItem(`owner_token_${id}`);
         const mongoId = localStorage.getItem(`owner_id_${id}`);
         try {
-            await axios.post(`${API_BASE}/dishes`, { ...formData, restaurantId: mongoId }, {
+            await axios.post(`${API_BASE}/dishes`, { ...formData, owner: mongoId }, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setFormData({ name: "", price: "", category: "Starters", image: "" });
             fetchData(token, mongoId);
-            alert("Dish Added!");
-        } catch (err) { alert("Error adding dish"); }
+            alert("Dish Added Successfully!");
+        } catch (err) { alert("Error adding dish. Check image URL format."); }
     };
 
     const handleDeleteDish = async (dishId) => {
@@ -188,7 +191,6 @@ const RestaurantAdmin = () => {
                 setActiveAlerts(prev => [...prev, data]);
             });
 
-            // --- 📢 LISTENER FOR GLOBAL CEO BROADCASTS ---
             socket.on("global-broadcast", (data) => {
                 alert(`📢 ADMIN BROADCAST: ${data.title}\n\n${data.message}`);
             });
@@ -299,6 +301,9 @@ const RestaurantAdmin = () => {
 
                 <SetupWizard dishesCount={dishes.length} pushEnabled={pushEnabled} />
 
+                {/* ✅ ADDED: Performance Analytics Section */}
+                {isPro && <SalesSummary restaurants={[{ restaurantName, totalRevenue: inboxOrders.reduce((sum, o) => sum + o.totalAmount, 0) }]} />}
+
                 <nav className="nav-tabs">
                     <button onClick={() => setActiveTab("menu")} className={`tab-btn ${activeTab === "menu" ? 'active' : ''}`}>Menu</button>
                     <button onClick={() => { setActiveTab("inbox"); setHasNewOrder(false); }} className={`tab-btn ${activeTab === "inbox" ? 'active' : ''}`}>
@@ -332,6 +337,7 @@ const RestaurantAdmin = () => {
                         <h2 style={{ fontSize: '14px', fontWeight: 900, marginBottom: '20px' }}><FaPlus /> ADD ITEM</h2>
                         <form onSubmit={handleAddDish}>
                             <input className="input-dark" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} placeholder="Dish Name" required />
+                            <input className="input-dark" value={formData.image} onChange={e => setFormData({ ...formData, image: e.target.value })} placeholder="Image URL (http://...)" />
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
                                 <input className="input-dark" type="number" value={formData.price} onChange={e => setFormData({ ...formData, price: e.target.value })} placeholder="Price ₹" required />
                                 <select className="input-dark" value={formData.category} onChange={e => setFormData({ ...formData, category: e.target.value })}>
@@ -345,7 +351,7 @@ const RestaurantAdmin = () => {
                                 <div key={dish._id} className="dish-item">
                                     <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
                                         <div style={{ width: '50px', height: '50px', borderRadius: '10px', background: '#222', overflow: 'hidden' }}>
-                                            {dish.image ? <img src={dish.image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <FaUtensils color="#333" />}
+                                            {dish.image ? <img src={dish.image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <FaUtensils color="#333" style={{margin:'15px'}}/>}
                                         </div>
                                         <div>
                                             <p style={{ fontWeight: 900, margin: 0, fontSize: '14px' }}>{dish.name}</p>
@@ -391,9 +397,10 @@ const RestaurantAdmin = () => {
                                 defaultValue={ownerEmail}
                                 onBlur={async (e) => {
                                     const email = e.target.value;
-                                    if(email) {
+                                    const mongoId = localStorage.getItem(`owner_id_${id}`);
+                                    if(email && mongoId) {
                                         try {
-                                            await axios.put(`${API_BASE}/auth/update-email`, { restaurantId: id, email });
+                                            await axios.put(`${API_BASE}/auth/update-email`, { restaurantId: mongoId, email });
                                             alert("Email updated!");
                                         } catch (err) { alert("Error updating email."); }
                                     }
