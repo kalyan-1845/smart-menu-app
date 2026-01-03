@@ -3,42 +3,27 @@ import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
 import { Toaster } from 'react-hot-toast';
 
-// --- 🛠️ EMERGENCY CACHE CLEAR & SERVICE WORKER ---
-// This kills broken cached versions on customers' phones and registers a fresh worker
+// --- 🛠️ STABLE INDUSTRIAL SERVICE WORKER ---
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    // 1. Force unregister any existing broken workers first
-    navigator.serviceWorker.getRegistrations().then((registrations) => {
-      for (let registration of registrations) {
-        registration.unregister();
-      }
-    });
-
-    // 2. Register fresh Service Worker
+    // 1. Clean registration of the Service Worker
     navigator.serviceWorker.register('/sw.js')
       .then(reg => {
         console.log('✅ BiteBox OS Active:', reg.scope);
 
+        // 2. Handle background updates properly without force-reloading URLs
         reg.onupdatefound = () => {
           const installingWorker = reg.installing;
           if (installingWorker == null) return;
           installingWorker.onstatechange = () => {
             if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              // Automatically reload to apply the fix for the customer
-              console.log('🚀 Update found! Applying system fix...');
-              window.location.reload();
+              console.log('🚀 System update ready. Refresh to apply.');
             }
           };
         };
       })
       .catch(err => console.error('❌ Sync Failed:', err));
   });
-
-  // 3. One-time URL bypass to kill "MIME type" browser caching
-  if (!window.location.search.includes('v=2.1')) {
-    const newUrl = window.location.href + (window.location.search ? '&' : '?') + 'v=2.1';
-    window.location.replace(newUrl);
-  }
 }
 
 // Render the application root
