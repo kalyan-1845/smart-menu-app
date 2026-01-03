@@ -7,8 +7,6 @@ import { Server } from 'socket.io';
 import rateLimit from 'express-rate-limit';
 import https from "https"; 
 import compression from 'compression'; // ✅ ADDED for 3x faster data loading
-// Add this with the other imports
-import { getDishes } from './controllers/dishController.js';
 // --- IMPORT ROUTES ---
 import authRoutes from './routes/authRoutes.js';
 import dishRoutes from './routes/dishRoutes.js';
