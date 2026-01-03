@@ -9,7 +9,7 @@ import InstallButton from "../components/InstallButton";
 import { 
     FaTrash, FaUtensils, FaBell, FaCheckCircle, FaCircle, FaCrown, 
     FaSignOutAlt, FaRocket, FaStore, FaExternalLinkAlt, FaCopy, 
-    FaInbox, FaDownload, FaQrcode, FaPlus
+    FaInbox, FaDownload, FaQrcode, FaPlus, FaImage
 } from "react-icons/fa";
 import { toast } from "react-hot-toast";
 
@@ -76,7 +76,6 @@ const RestaurantAdmin = () => {
     const API_BASE = `${SERVER_URL}/api`;
     const publicMenuUrl = `${window.location.origin}/menu/${id}`;
 
-    // States
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [password, setPassword] = useState("");
     const [activeTab, setActiveTab] = useState("menu");
@@ -89,7 +88,6 @@ const RestaurantAdmin = () => {
     const [formData, setFormData] = useState({ name: "", price: "", category: "Starters", image: "" });
     const [qrRange, setQrRange] = useState({ start: 1, end: 5 });
 
-    // 🔄 AGGRESSIVE SYNC ENGINE (Integrated Inbox Logic)
     const refreshData = useCallback(async (mongoId) => {
         if (!mongoId || mongoId === "undefined") return;
         try {
@@ -104,7 +102,6 @@ const RestaurantAdmin = () => {
         }
     }, [API_BASE]);
 
-    // 🔐 AUTH BOOTSTRAP
     useEffect(() => {
         const token = localStorage.getItem(`owner_token_${id}`);
         const savedId = localStorage.getItem(`owner_id_${id}`);
@@ -114,7 +111,6 @@ const RestaurantAdmin = () => {
         }
     }, [id, refreshData]);
 
-    // 📡 REAL-TIME ENGINE (Integrated socket management)
     useEffect(() => {
         const mongoId = localStorage.getItem(`owner_id_${id}`);
         if (isAuthenticated && mongoId) {
@@ -256,7 +252,11 @@ const RestaurantAdmin = () => {
                 {activeTab === "menu" && (
                     <div className="glass-card">
                         <form onSubmit={handleAddDish}>
-                            <input className="input-dark" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} placeholder="Dish Name" required />
+                            <input className="input-dark" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} placeholder="Dish Name (e.g. Burger)" required />
+                            
+                            {/* ✅ IMAGE URL FIELD ADDED BACK */}
+                            <input className="input-dark" value={formData.image} onChange={e => setFormData({ ...formData, image: e.target.value })} placeholder="Dish Image URL (Optional)" />
+                            
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                                 <input className="input-dark" type="number" value={formData.price} onChange={e => setFormData({ ...formData, price: e.target.value })} placeholder="Price ₹" required />
                                 <select className="input-dark" value={formData.category} onChange={e => setFormData({ ...formData, category: e.target.value })}>
@@ -269,7 +269,14 @@ const RestaurantAdmin = () => {
                             {dishes.map(dish => (
                                 <div key={dish._id} className="dish-item">
                                     <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                                        <div style={{ width: '40px', height: '40px', background: '#111', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><FaUtensils color="#333"/></div>
+                                        {/* ✅ DISPLAY THE DISH IMAGE OR A FALLBACK ICON */}
+                                        <div style={{ width: '45px', height: '45px', background: '#111', borderRadius: '12px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                            {dish.image ? (
+                                                <img src={dish.image} alt="" style={{width: '100%', height: '100%', objectFit: 'cover'}} />
+                                            ) : (
+                                                <FaUtensils color="#333"/>
+                                            )}
+                                        </div>
                                         <div><p style={{ fontWeight: 900, margin: 0, fontSize: '13px' }}>{dish.name}</p><p style={{ margin: 0, fontSize: '10px', color: '#FF9933' }}>₹{dish.price}</p></div>
                                     </div>
                                     <button onClick={() => handleDeleteDish(dish._id)} className="btn-glass" style={{ color: '#ef4444' }}><FaTrash /></button>
