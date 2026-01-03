@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import io from "socket.io-client";
@@ -6,8 +6,9 @@ import { generateCustomerReceipt } from "../utils/ReceiptGenerator";
 import { 
     FaCheck, FaUtensils, FaConciergeBell, FaFlagCheckered,
     FaArrowLeft, FaPhoneAlt, FaDownload, FaSpinner, FaReceipt, FaLock,
-    FaShieldAlt, FaWallet, FaStar, FaTimes
+    FaShieldAlt, FaWallet, FaStar, FaTimes, FaBell, FaCashRegister
 } from "react-icons/fa";
+import { toast } from "react-hot-toast";
 
 const SERVER_URL = "https://smart-menu-backend-5ge7.onrender.com";
 const API_BASE = `${SERVER_URL}/api`;
@@ -15,14 +16,13 @@ const API_BASE = `${SERVER_URL}/api`;
 const OrderTracker = () => {
     const { id } = useParams(); 
     const navigate = useNavigate();
+    const socketRef = useRef(null);
     
     const [order, setOrder] = useState(null);
     const [restaurant, setRestaurant] = useState(null);
-    const [callStatus, setCallStatus] = useState("Call Waiter"); 
     const [isCalling, setIsCalling] = useState(false);
     const [hasDownloaded, setHasDownloaded] = useState(false);
     
-    // Feedback State
     const [showFeedback, setShowFeedback] = useState(false);
     const [rating, setRating] = useState(0);
     const [submitted, setSubmitted] = useState(false);
@@ -46,50 +46,63 @@ const OrderTracker = () => {
                 const resInfo = await axios.get(`${API_BASE}/auth/restaurant/${res.data.restaurantId}`);
                 setRestaurant(resInfo.data);
             }
-        } catch (e) { console.error("Fetch Error:", e); }
+        } catch (e) { console.error("Sync Error"); }
     }, [id, restaurant]);
 
     useEffect(() => {
         fetchOrderData();
-        const socket = io(SERVER_URL, { transports: ['websocket'] });
-
-        socket.on("connect", () => {
-            socket.emit('join-restaurant', id); 
+        
+        // Setup Socket
+        socketRef.current = io(SERVER_URL, { transports: ['websocket'] });
+        socketRef.current.on("connect", () => {
+            socketRef.current.emit('join-restaurant', id); 
         });
 
-        socket.on("chef-ready-alert", (data) => {
+        socketRef.current.on("chef-ready-alert", (data) => {
             if (data.orderId === id) fetchOrderData(); 
         });
 
         const interval = setInterval(fetchOrderData, 8000); 
-        return () => { socket.disconnect(); clearInterval(interval); };
+        return () => { 
+            if(socketRef.current) socketRef.current.disconnect(); 
+            clearInterval(interval); 
+        };
     }, [id, fetchOrderData]);
 
-    // 🧾 AUTO-DOWNLOAD & FEEDBACK TRIGGER
+    // 🛎️ CALL WAITER ACTION
+    const handleCallWaiter = () => {
+        if (!order || isCalling) return;
+        setIsCalling(true);
+        if ("vibrate" in navigator) navigator.vibrate(100);
+
+        socketRef.current.emit("call-waiter", {
+            restaurantId: order.restaurantId,
+            tableNumber: order.tableNum,
+            _id: Date.now().toString()
+        });
+
+        toast.success("Staff Notified!");
+        setTimeout(() => setIsCalling(false), 10000); // 10s cooldown
+    };
+
     useEffect(() => {
-        const triggerSequence = async () => {
-            if (order && (order.status.toLowerCase() === "served" || order.status.toLowerCase() === "completed")) {
-                if (!hasDownloaded && restaurant) {
-                    setTimeout(async () => {
-                        await generateCustomerReceipt(order, restaurant);
-                        setHasDownloaded(true);
-                        
-                        // 🌟 Show feedback pop-up 1.5s after download
-                        setTimeout(() => setShowFeedback(true), 1500);
-                    }, 1200);
-                }
+        if (order && (order.status.toLowerCase() === "served" || order.status.toLowerCase() === "completed")) {
+            if (!hasDownloaded && restaurant) {
+                setTimeout(async () => {
+                    await generateCustomerReceipt(order, restaurant);
+                    setHasDownloaded(true);
+                    setTimeout(() => setShowFeedback(true), 1500);
+                }, 1200);
             }
-        };
-        triggerSequence();
+        }
     }, [order?.status, hasDownloaded, restaurant, order]);
 
     const handleRating = (val) => {
         setRating(val);
-        // You can add an axios.post here to save ratings to your DB
         setTimeout(() => {
             setSubmitted(true);
             setTimeout(() => setShowFeedback(false), 2000);
-        }, 5000);
+        }, 1500);
     };
 
     const currentStep = order ? getStepIndex(order.status) : 0;
@@ -102,17 +115,29 @@ const OrderTracker = () => {
             <div style={styles.header}>
                 <button onClick={() => navigate(-1)} style={styles.backBtn}><FaArrowLeft /></button>
                 <div style={{ flex: 1 }}>
-                    <h1 style={styles.title}>Track Order</h1>
+                    <h1 style={styles.title}>Live Tracker</h1>
                     <p style={styles.sub}>ORDER #{id.slice(-4).toUpperCase()}</p>
                 </div>
-                <img src="/logo192.png" alt="BiteBox" style={styles.smallLogo} />
+                <button 
+                    onClick={handleCallWaiter} 
+                    disabled={isCalling} 
+                    style={{...styles.callBtn, opacity: isCalling ? 0.5 : 1}}
+                >
+                    <FaBell />
+                </button>
+            </div>
+
+            {/* 🚩 PAYMENT ALERT BANNER */}
+            <div style={styles.payBanner}>
+                <FaCashRegister />
+                <span>Payment: <b>{order.paymentMethod}</b>. Please pay at the counter.</span>
             </div>
 
             <div style={styles.statusCard}>
                 <h2 style={styles.statusTitle}>
                     {currentStep === 0 ? "Order Received" : 
-                     currentStep === 1 ? "Chef Cooking..." : 
-                     currentStep === 2 ? "Ready to Pickup" : "ORDER SERVED!"}
+                     currentStep === 1 ? "Chef is Cooking..." : 
+                     currentStep === 2 ? "Ready to Enjoy!" : "ORDER SERVED!"}
                 </h2>
                 <div style={styles.statusBarContainer}>
                     <div style={styles.lineBase}></div>
@@ -129,9 +154,9 @@ const OrderTracker = () => {
             <div style={styles.receiptCard}>
                 <div style={styles.receiptHeader}>
                     <div style={{display:'flex', alignItems:'center', gap:'8px'}}>
-                        <FaReceipt color="#f97316" /> <span style={{letterSpacing:'1px', fontWeight:'900'}}>ORDER SUMMARY</span>
+                        <FaReceipt color="#f97316" /> <span style={{letterSpacing:'1px', fontWeight:'900'}}>YOUR ITEMS</span>
                     </div>
-                    <span style={{fontSize:'10px', color:'#555', fontWeight: 'bold'}}>TABLE {order.tableNum}</span>
+                    <span style={{fontSize:'12px', color:'#f97316', fontWeight: '900'}}>TABLE {order.tableNum}</span>
                 </div>
                 <div style={styles.itemList}>
                     {order.items.map((item, i) => (
@@ -142,7 +167,7 @@ const OrderTracker = () => {
                     ))}
                 </div>
                 <div style={styles.divider}></div>
-                <div style={styles.totalRow}><span>Grand Total</span><span style={styles.totalPrice}>₹{order.totalAmount}</span></div>
+                <div style={styles.totalRow}><span>Total Payable</span><span style={styles.totalPrice}>₹{order.totalAmount}</span></div>
             </div>
 
             {/* ⭐ FEEDBACK MODAL */}
@@ -152,25 +177,18 @@ const OrderTracker = () => {
                         {!submitted ? (
                             <>
                                 <button onClick={() => setShowFeedback(false)} style={styles.closeBtn}><FaTimes/></button>
-                                <h3 style={{margin:'0 0 10px 0'}}>Rate your Meal!</h3>
-                                <p style={{fontSize:'12px', color:'#666', marginBottom:'20px'}}>How was the food and service at {restaurant?.restaurantName}?</p>
+                                <h3 style={{margin:'0 0 10px 0'}}>How was it?</h3>
+                                <p style={{fontSize:'12px', color:'#666', marginBottom:'20px'}}>Rate your experience at {restaurant?.restaurantName}</p>
                                 <div style={{display:'flex', gap:'10px', justifyContent:'center'}}>
                                     {[1,2,3,4,5].map(num => (
-                                        <FaStar 
-                                            key={num} 
-                                            size={30} 
-                                            color={rating >= num ? "#f97316" : "#333"} 
-                                            onClick={() => handleRating(num)}
-                                            style={{cursor:'pointer', transition:'0.2s'}}
-                                        />
+                                        <FaStar key={num} size={35} color={rating >= num ? "#f97316" : "#eee"} onClick={() => handleRating(num)} style={{cursor:'pointer'}} />
                                     ))}
                                 </div>
                             </>
                         ) : (
-                            <div style={{textAlign:'center', padding:'20px'}}>
+                            <div style={{padding:'20px'}}>
                                 <FaCheck color="#22c55e" size={40}/>
                                 <h3 style={{marginTop:'15px'}}>Thank you!</h3>
-                                <p style={{fontSize:'12px', color:'#888'}}>Your feedback helps us improve.</p>
                             </div>
                         )}
                     </div>
@@ -178,14 +196,14 @@ const OrderTracker = () => {
             )}
 
             <div style={styles.footer}>
-                <button onClick={() => { if(isServed) generateCustomerReceipt(order, restaurant); }} 
-                    disabled={!isServed} 
-                    style={{...styles.solidBtn, background: isServed ? '#f97316' : '#222', color: isServed ? 'white' : '#555'}}
+                <button 
+                    onClick={() => generateCustomerReceipt(order, restaurant)} 
+                    style={{...styles.solidBtn, background: '#f97316'}}
                 >
-                    {isServed ? <><FaDownload /> Download Bill</> : <><FaLock /> Receipt Locked</>}
+                    <FaDownload /> Download Receipt
                 </button>
             </div>
-            <style>{`.spin { animation: spin 1s linear infinite; } @keyframes spin { 100% { transform: rotate(360deg); } } .pop-in { animation: pop 0.4s cubic-bezier(0.17, 0.89, 0.32, 1.49); } @keyframes pop { from { opacity:0; transform: scale(0.8) translateY(20px); } to { opacity:1; transform: scale(1) translateY(0); } }`}</style>
+            <style>{`.spin { animation: spin 1s linear infinite; } @keyframes spin { 100% { transform: rotate(360deg); } } .pop-in { animation: pop 0.4s cubic-bezier(0.17, 0.89, 0.32, 1.49); }`}</style>
         </div>
     );
 };
@@ -200,11 +218,12 @@ const StepIcon = ({ icon, label, active }) => (
 const styles = {
     container: { minHeight: "100vh", background: "#050505", color: "white", padding: "20px", paddingBottom: "120px", fontFamily: "'Inter', sans-serif" },
     center: { height: "100vh", display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#050505' },
-    header: { display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '30px' },
+    header: { display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '20px' },
     backBtn: { width: '45px', height: '45px', background: '#111', border: '1px solid #222', borderRadius: '15px', color: 'white' },
-    title: { margin: 0, fontSize: '22px', fontWeight: '900' },
-    sub: { margin: 0, color: '#555', fontSize: '11px', fontWeight: '900' },
-    smallLogo: { width: '35px', height: '35px', borderRadius: '8px', objectFit: 'contain', background: 'white', padding: '2px' },
+    callBtn: { width: '45px', height: '45px', background: '#ef4444', border: 'none', borderRadius: '15px', color: 'white' },
+    payBanner: { background: 'rgba(34, 197, 94, 0.1)', border: '1px solid rgba(34, 197, 94, 0.2)', padding: '12px', borderRadius: '15px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '10px', color: '#22c55e', marginBottom: '20px' },
+    title: { margin: 0, fontSize: '20px', fontWeight: '900' },
+    sub: { margin: 0, color: '#555', fontSize: '10px', fontWeight: '900' },
     statusCard: { background: '#0a0a0a', borderRadius: '28px', padding: '30px 20px', border: '1px solid #111', marginBottom: '20px', textAlign: 'center' },
     statusTitle: { margin: '0 0 35px 0', color: '#f97316', fontSize: '24px', fontWeight: '900' },
     statusBarContainer: { position: 'relative', marginTop: '10px' },
@@ -223,7 +242,7 @@ const styles = {
     totalRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '20px', fontWeight: '900' },
     totalPrice: { color: '#22c55e' },
     footer: { position: 'fixed', bottom: 0, left: 0, right: 0, padding: '20px', background: 'rgba(5,5,5,0.8)', backdropFilter: 'blur(20px)', zIndex: 100 },
-    solidBtn: { width: '100%', height: '58px', border: 'none', borderRadius: '18px', fontWeight: '900', fontSize:'14px', display:'flex', alignItems:'center', justifyContent:'center', gap:'10px' },
+    solidBtn: { width: '100%', height: '58px', border: 'none', borderRadius: '18px', fontWeight: '900', fontSize:'14px', display:'flex', alignItems:'center', justifyContent:'center', gap:'10px', color: 'white' },
     feedbackOverlay: { position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', zIndex:2000, display:'flex', alignItems:'center', justifyContent:'center', padding:'20px' },
     feedbackCard: { background:'white', color:'black', borderRadius:'28px', padding:'30px', width:'100%', maxWidth:'320px', position:'relative', textAlign:'center' },
     closeBtn: { position:'absolute', top:'15px', right:'15px', background:'none', border:'none', color:'#ccc', fontSize:'20px' }

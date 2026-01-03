@@ -15,16 +15,14 @@ const Cart = ({ cart, clearCart, removeFromCart, restaurantId, tableNum, setTabl
     const [tempTable, setTempTable] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [orderSuccess, setOrderSuccess] = useState(false); 
+    const [paymentChosen, setPaymentChosen] = useState(""); // Track for success message
     const [callLoading, setCallLoading] = useState(false);
     const socketRef = useRef(null); 
 
-    // ✅ RECOVERY LOGIC: Ensure we don't lose the ID on refresh
     const finalRestaurantId = restaurantId || localStorage.getItem("last_rest_scanned");
     const finalTableNum = tableNum || localStorage.getItem("last_table_scanned");
-
     const totalPrice = cart.reduce((total, item) => total + (item.price * (item.quantity || 1)), 0);
 
-    // ✅ 1. PERSISTENT SOCKET ENGINE
     useEffect(() => {
         if (finalRestaurantId) {
             socketRef.current = io(SERVER_URL, { 
@@ -38,7 +36,6 @@ const Cart = ({ cart, clearCart, removeFromCart, restaurantId, tableNum, setTabl
         };
     }, [finalRestaurantId]);
 
-    // ✅ 2. TABLE MANAGEMENT
     useEffect(() => {
         if (!finalTableNum) setShowTableModal(true);
     }, [finalTableNum]);
@@ -52,29 +49,25 @@ const Cart = ({ cart, clearCart, removeFromCart, restaurantId, tableNum, setTabl
         if ("vibrate" in navigator) navigator.vibrate(50);
     };
 
-    // ✅ 3. OPTIMIZED WAITER CALL
     const handleCallWaiter = async () => {
         if (!finalTableNum) return setShowTableModal(true);
         setCallLoading(true);
         if ("vibrate" in navigator) navigator.vibrate(100);
-
         try {
-            // Emit through persistent socket for instant staff alert
             socketRef.current.emit("call-waiter", {
                 restaurantId: finalRestaurantId,
                 tableNumber: finalTableNum,
                 _id: Date.now().toString()
             });
-
             toast.success("🛎️ Waiter notified!");
         } catch (err) {
-            toast.error("Call failed. Try again.");
+            toast.error("Call failed.");
         } finally {
             setCallLoading(false);
         }
     };
 
-    // ✅ 4. INDUSTRIAL ORDER PROCESSING
+    // ✅ UPDATED: Unified Order Processing
     const processOrder = async (paymentType) => {
         if (isSubmitting) return;
         if (!customerName.trim()) return toast.error("Please enter your name!");
@@ -83,12 +76,12 @@ const Cart = ({ cart, clearCart, removeFromCart, restaurantId, tableNum, setTabl
 
         if ("vibrate" in navigator) navigator.vibrate(50);
         setIsSubmitting(true);
+        setPaymentChosen(paymentType);
 
         try {
             const payload = {
                 customerName,
                 tableNum: finalTableNum.toString(),
-                // 🔥 Added dishId for better backend data tracking
                 items: cart.map(i => ({ 
                     dishId: i._id, 
                     name: i.name, 
@@ -102,54 +95,49 @@ const Cart = ({ cart, clearCart, removeFromCart, restaurantId, tableNum, setTabl
             };
 
             const res = await axios.post(`${API_BASE}/orders?t=${Date.now()}`, payload);
-            
-            // Trigger instant alert in Kitchen/Chef Dashboard
             socketRef.current.emit("new-order", res.data);
 
             setOrderSuccess(true);
             
             setTimeout(() => {
                 clearCart();
+                // Redirect to track page
                 navigate(`/track/${res.data._id}`); 
-            }, 1500); 
+            }, 2500); // Slightly longer to let them read the "Pay at Counter" note
 
         } catch (err) {
-            toast.error("Order failed. Check internet.");
+            toast.error("Order failed.");
             setIsSubmitting(false);
         }
     };
 
     return (
         <div style={styles.container}>
-            {/* MANDATORY TABLE MODAL */}
+            {/* TABLE MODAL */}
             {showTableModal && (
                 <div style={styles.overlay}>
                     <div style={styles.tableCard} className="pop-in">
                         <FaChair size={40} color="#f97316" style={{marginBottom: 15}}/>
                         <h2 style={{margin: '0 0 10px 0', fontSize: '20px'}}>Table Identification</h2>
                         <form onSubmit={handleTableSubmit}>
-                            <input 
-                                style={styles.tableInput} 
-                                type="number" 
-                                placeholder="Enter Table Number" 
-                                value={tempTable} 
-                                onChange={(e) => setTempTable(e.target.value)} 
-                                autoFocus 
-                                required
-                            />
+                            <input style={styles.tableInput} type="number" placeholder="Table Number" value={tempTable} onChange={(e) => setTempTable(e.target.value)} autoFocus required />
                             <button type="submit" style={styles.confirmBtn}>Confirm Table</button>
                         </form>
                     </div>
                 </div>
             )}
 
-            {/* SUCCESS SCREEN */}
+            {/* ✅ UPDATED: SUCCESS SCREEN WITH COUNTER INSTRUCTION */}
             {orderSuccess && (
                 <div style={styles.overlay}>
                     <div style={styles.successCard} className="pop-in">
                         <FaCheckCircle size={80} color="#22c55e" className="checkmark-anim" />
                         <h2 style={styles.successTitle}>Order Sent!</h2>
-                        <p style={styles.successSub}>Chef is starting your meal now.</p>
+                        <p style={styles.counterNote}>
+                            Selected: <strong>{paymentChosen}</strong><br/>
+                            Please pay at the counter/cashier.
+                        </p>
+                        <p style={styles.successSub}>Redirecting to status tracker...</p>
                         <div style={styles.loaderLine}></div>
                     </div>
                 </div>
@@ -167,7 +155,7 @@ const Cart = ({ cart, clearCart, removeFromCart, restaurantId, tableNum, setTabl
 
             <div style={styles.infoCard}>
                 <div onClick={() => setShowTableModal(true)} style={styles.infoRow}>
-                    <p style={{margin: 0, fontSize: '14px'}}>Sitting at Table: <span style={{color: '#f97316', fontWeight: '900'}}>{finalTableNum || "Select"}</span></p>
+                    <p style={{margin: 0, fontSize: '14px'}}>Table: <span style={{color: '#f97316', fontWeight: '900'}}>{finalTableNum || "Select"}</span></p>
                     <button style={styles.changeBtn}>Edit</button>
                 </div>
                 <input style={styles.input} placeholder="Your Name" value={customerName} onChange={e => setCustomerName(e.target.value)} />
@@ -199,8 +187,9 @@ const Cart = ({ cart, clearCart, removeFromCart, restaurantId, tableNum, setTabl
                     <span>Total Amount</span>
                     <span style={{color: '#f97316'}}>₹{totalPrice}</span>
                 </div>
+                {/* BOTH BUTTONS PROCESS THE ORDER LOCALLY */}
                 <div style={styles.btnRow}>
-                    <button onClick={() => processOrder("CASH")} disabled={isSubmitting} style={styles.cashBtn}>Pay with Cash</button>
+                    <button onClick={() => processOrder("CASH")} disabled={isSubmitting} style={styles.cashBtn}>Pay Cash</button>
                     <button onClick={() => processOrder("ONLINE")} disabled={isSubmitting} style={styles.onlineBtn}>Pay Online</button>
                 </div>
             </div>
@@ -211,8 +200,7 @@ const Cart = ({ cart, clearCart, removeFromCart, restaurantId, tableNum, setTabl
                 @keyframes checkBounce { 0% { transform: scale(0); } 50% { transform: scale(1.2); } 100% { transform: scale(1); } }
                 .pop-in { animation: scaleUp 0.3s ease-out; }
                 .checkmark-anim { animation: checkBounce 0.5s ease-out forwards; }
-                .loaderLine { height: 3px; background: #22c55e; width: 100%; margin: 20px auto 0; border-radius: 10px; animation: loadingBar 1.5s linear forwards; }
-                * { -webkit-tap-highlight-color: transparent; }
+                .loaderLine { height: 3px; background: #22c55e; width: 100%; margin: 20px auto 0; border-radius: 10px; animation: loadingBar 2.5s linear forwards; }
             `}</style>
         </div>
     );
@@ -226,7 +214,8 @@ const styles = {
     confirmBtn: { width: '100%', padding: '15px', background: '#f97316', color: 'white', border: 'none', borderRadius: '12px', fontWeight: 'bold' },
     successCard: { background: '#111', padding: '40px 30px', borderRadius: '32px', textAlign: 'center', border: '1px solid #22c55e', width: '85%', maxWidth: '320px' },
     successTitle: { fontSize: '24px', fontWeight: '900', margin: '15px 0 5px' },
-    successSub: { color: '#888', fontSize: '14px', margin: 0 },
+    counterNote: { color: '#22c55e', fontSize: '15px', margin: '10px 0', lineHeight: '1.5', fontWeight: '600' },
+    successSub: { color: '#666', fontSize: '12px', margin: 0 },
     header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '25px' },
     backBtn: { background: '#1a1a1a', border: '1px solid #333', color: 'white', padding: '12px', borderRadius: '12px', display:'flex' },
     callBtn: { background: '#ef4444', color: 'white', border: 'none', padding: '10px 15px', borderRadius: '12px', fontSize: '11px', fontWeight: '900', display: 'flex', alignItems: 'center' },
@@ -242,7 +231,7 @@ const styles = {
     totalRow: { display: 'flex', justifyContent: 'space-between', marginBottom: '20px', fontSize: '18px', fontWeight: '900' },
     btnRow: { display: 'flex', gap: '10px' },
     onlineBtn: { flex: 1, height: '55px', background: '#111', color: 'white', border: '1px solid #333', borderRadius: '15px', fontWeight: 'bold' },
-    cashBtn: { flex: 1.5, height: '55px', background: '#f97316', color: 'white', border: 'none', borderRadius: '15px', fontWeight: '900' }
+    cashBtn: { flex: 1, height: '55px', background: '#f97316', color: 'white', border: 'none', borderRadius: '15px', fontWeight: '900' }
 };
 
 export default Cart;
