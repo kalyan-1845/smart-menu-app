@@ -38,17 +38,23 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
             // ✅ SYNC NODE: Fetches real-time availability and ratings
             const res = await axios.get(`${API_BASE}/dishes?restaurantId=${currentRestId}&t=${Date.now()}`);
             
-            // Handle maintenance mode
-            if (res.data.status === "maintenance" || res.data.status === "suspended") {
+            // Success: Parse Data
+            const dishData = Array.isArray(res.data) ? res.data : (res.data.dishes || []);
+            setDishes(dishData);
+            
+            // Update Cache & Reset Suspension
+            localStorage.setItem(`menu_cache_${currentRestId}`, JSON.stringify(dishData));
+            setIsSuspended(false);
+
+        } catch (err) { 
+            // 🛑 KILL SWITCH DETECTION (Critical Fix)
+            // If the CEO turned off the menu, the backend sends 503. We catch it here.
+            if (err.response && err.response.status === 503) {
+                console.warn("⛔ MENU KILLED BY ADMIN");
                 setIsSuspended(true);
             } else {
-                const dishData = Array.isArray(res.data) ? res.data : (res.data.dishes || []);
-                setDishes(dishData);
-                // Update Cache for next visit
-                localStorage.setItem(`menu_cache_${currentRestId}`, JSON.stringify(dishData));
+                console.error("Cloud Sync Error", err); 
             }
-        } catch (err) { 
-            console.error("Cloud Sync Error"); 
         } finally { 
             setLoading(false); 
             setRefreshing(false); 
@@ -87,7 +93,15 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
     const totalPrice = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
 
     if (loading && dishes.length === 0) return <LoadingSpinner />;
-    if (isSuspended) return <div style={styles.center}><FaLock size={60} color="#f97316"/><h1 style={{color:'white', marginTop:20}}>UNDER MAINTENANCE</h1></div>;
+    
+    // 🔒 THE MAINTENANCE SCREEN (Shows if isSuspended is true)
+    if (isSuspended) return (
+        <div style={styles.center}>
+            <FaLock size={60} color="#f97316"/>
+            <h1 style={{color:'white', marginTop:20, fontSize: '24px', fontWeight: '900'}}>UNDER MAINTENANCE</h1>
+            <p style={{color: '#666', marginTop: 10}}>Service temporarily suspended by admin.</p>
+        </div>
+    );
 
     return (
         <div style={styles.container} onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
