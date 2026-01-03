@@ -8,8 +8,8 @@ import rateLimit from 'express-rate-limit';
 import https from "https"; 
 import compression from 'compression'; 
 
-// --- IMPORT MODELS (Needed for Debugging) ---
-import Owner from './models/Owner.js'; // ✅ ADDED THIS
+// --- IMPORT MODELS ---
+import Owner from './models/Owner.js'; 
 
 // --- IMPORT ROUTES ---
 import authRoutes from './routes/authRoutes.js';
@@ -19,6 +19,10 @@ import superAdminRoutes from './routes/superAdminRoutes.js';
 import broadcastRoutes from './routes/broadcastRoutes.js';
 
 const app = express();
+
+// ✅ FIX: TRUST RENDER PROXY (Solves the Rate Limit Error)
+app.set('trust proxy', 1); 
+
 const httpServer = createServer(app);
 
 // 🚀 INDUSTRIAL UPGRADE: COMPRESSION
@@ -92,7 +96,7 @@ mongoose.connect(process.env.MONGO_URI, {
 
 
 // =============================================================
-// 🛑 DEBUG ROUTE: CHECK DATABASE (ADDED HERE)
+// 🛑 DEBUG ROUTE: CHECK DATABASE
 // =============================================================
 app.get('/api/check-db', async (req, res) => {
     try {
@@ -116,7 +120,7 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/superadmin', superAdminRoutes);
 app.use('/api/broadcast', broadcastRoutes);
 
-app.get('/', (req, res) => res.send('BiteBox API v4 (Debug Mode) is Running...'));
+app.get('/', (req, res) => res.send('BiteBox API v5 (Proxy Fixed) is Running...'));
 
 // --- ERROR HANDLER ---
 app.use((err, req, res, next) => {
