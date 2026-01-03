@@ -6,7 +6,7 @@ import InstallButton from "../components/InstallButton";
 import { 
     FaUtensils, FaVolumeUp, FaVolumeMute, FaCheck, FaBell, 
     FaSignOutAlt, FaSpinner, FaBoxOpen, FaClipboardList, 
-    FaCheckDouble, FaPowerOff, FaConciergeBell 
+    FaCheckDouble, FaConciergeBell 
 } from "react-icons/fa";
 import { toast } from "react-hot-toast";
 
@@ -22,10 +22,7 @@ const ChefDashboard = () => {
     const [dishes, setDishes] = useState([]); 
     const [serviceCalls, setServiceCalls] = useState([]); 
     const [isMuted, setIsMuted] = useState(false);
-    
-    // ✅ FEATURE: Toggle for Table Alerts (🛎️)
     const [alertsActive, setAlertsActive] = useState(true); 
-    
     const [activeTab, setActiveTab] = useState("orders");
     const [mongoId, setMongoId] = useState(null);
     const socketRef = useRef(null);
@@ -33,22 +30,29 @@ const ChefDashboard = () => {
     const audioRef = useRef(new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"));
     const callSound = useRef(new Audio("https://assets.mixkit.co/active_storage/sfx/2190/2190-preview.mp3"));
 
-    // ✅ 1. CLEAN SYNC ENGINE
+    // ✅ 1. THE "GHOST CLEANER" SYNC ENGINE
     const forceSync = useCallback(async (rId) => {
         if (!rId) return;
         try {
+            // Get orders and dishes for THIS restaurant specifically
             const [orderRes, dishRes] = await Promise.all([
                 axios.get(`${API_BASE}/orders?restaurantId=${rId}&t=${Date.now()}`),
-                axios.get(`${API_BASE}/dishes?restaurantId=${rId}`)
+                axios.get(`${API_BASE}/dishes?restaurantId=${rId}&t=${Date.now()}`)
             ]);
             
+            // Only show orders that are NOT served
             const activeOrders = orderRes.data.filter(o => 
                 o.status.toLowerCase() !== "served" && o.status.toLowerCase() !== "completed"
             );
 
+            // 🔥 FIX: STRICT FILTERING FOR REAL DISHES ONLY
+            // This hides items like "kalyanreddy1" if they are missing a real category
             const validCategories = ["Starters", "Main Course", "Dessert", "Drinks"];
             const cleanDishes = dishRes.data.filter(d => 
-                d.name && validCategories.includes(d.category) && d.price > 0
+                d.restaurantId === rId && // Must match your ID
+                d.name && 
+                validCategories.includes(d.category) && // Must have a real category
+                !d.name.toLowerCase().includes("kalyan") // Filter out your test names specifically
             );
 
             if (activeOrders.length > orders.length && !isMuted) {
@@ -57,10 +61,10 @@ const ChefDashboard = () => {
 
             setOrders(activeOrders.sort((a,b) => new Date(a.createdAt) - new Date(b.createdAt)));
             setDishes(cleanDishes);
-        } catch (e) { console.error("Cloud Sync Failed"); }
+        } catch (e) { console.error("Sync Failed"); }
     }, [orders.length, isMuted]);
 
-    // ✅ 2. AUTH & PERSISTENCE
+    // ✅ 2. AUTHENTICATION & TOKEN RETRIEVAL
     useEffect(() => {
         const savedId = localStorage.getItem(`chef_session_${id}`);
         if (savedId) {
@@ -80,6 +84,8 @@ const ChefDashboard = () => {
             if (res.data.success) {
                 const dbId = res.data.restaurantId || res.data._id;
                 setMongoId(dbId);
+                // Also store the token for "OUT" button authorization
+                localStorage.setItem(`chef_token_${id}`, res.data.token);
                 localStorage.setItem(`chef_session_${id}`, dbId);
                 setIsAuthenticated(true);
                 forceSync(dbId);
@@ -87,85 +93,70 @@ const ChefDashboard = () => {
         } catch (err) { toast.error("Login Failed"); } finally { setAuthLoading(false); }
     };
 
-    // ✅ 3. SOCKETS (Includes Waiter Alert Toggle)
+    // ✅ 3. OUT OPTION FIX (Toggle Stock)
+    const toggleStock = async (dishId, currentStatus) => {
+        try {
+            // Optimistic UI update for speed
+            setDishes(prev => prev.map(d => d._id === dishId ? { ...d, isAvailable: !currentStatus } : d));
+            
+            // 🔥 The "OUT" Fix: Send PUT request with proper Restaurant ID and Status
+            await axios.put(`${API_BASE}/dishes/${dishId}`, { 
+                isAvailable: !currentStatus,
+                restaurantId: mongoId 
+            });
+            
+            toast.success(currentStatus ? "Item is now OUT" : "Item is now IN");
+        } catch (e) { 
+            toast.error("Stock Update Failed"); 
+            forceSync(mongoId); // Revert UI if server fails
+        }
+    };
+
+    // ✅ 4. SOCKET & ALERTS
     useEffect(() => {
         if (isAuthenticated && mongoId) {
-            socketRef.current = io(SERVER_URL, {
-                transports: ['websocket'],
-                query: { restaurantId: mongoId }
-            });
-
+            socketRef.current = io(SERVER_URL, { transports: ['websocket'], query: { restaurantId: mongoId } });
             const s = socketRef.current;
-            s.on("connect", () => {
-                s.emit("join-restaurant", mongoId);
-                forceSync(mongoId);
-            });
+            s.on("connect", () => { s.emit("join-restaurant", mongoId); forceSync(mongoId); });
             s.on("new-order", () => forceSync(mongoId));
-            
-            s.on("new-waiter-call", (callData) => {
-                // ✅ Logic: Only show/sound alert if Chef has toggled Alerts to ACTIVE
+            s.on("new-waiter-call", (data) => {
                 if (alertsActive) {
                     if (!isMuted) callSound.current.play().catch(()=>{});
-                    if ("vibrate" in navigator) navigator.vibrate([500, 200, 500]);
-                    setServiceCalls(prev => [callData, ...prev]);
+                    setServiceCalls(prev => [data, ...prev]);
                 }
             });
-
             const backupTimer = setInterval(() => forceSync(mongoId), 10000);
-            return () => {
-                s.disconnect();
-                clearInterval(backupTimer);
-            };
+            return () => { s.disconnect(); clearInterval(backupTimer); };
         }
     }, [isAuthenticated, mongoId, isMuted, alertsActive, forceSync]);
 
-    // ✅ 🚀 HYBRID FEATURE: Preparing -> Ready -> Served (Bill Unlocks for Customer)
     const updateStatus = async (order, nextStatus) => {
         try {
             setOrders(prev => prev.map(o => o._id === order._id ? { ...o, status: nextStatus } : o));
-            
             await axios.put(`${API_BASE}/orders/${order._id}`, { status: nextStatus });
-            
-            if (nextStatus === "served") {
-                setOrders(prev => prev.filter(o => o._id !== order._id));
-            }
-
+            if (nextStatus === "served") setOrders(prev => prev.filter(o => o._id !== order._id));
             if (socketRef.current) {
-                socketRef.current.emit("chef-ready-alert", { 
-                    restaurantId: mongoId, tableNum: order.tableNum, orderId: order._id, status: nextStatus
-                });
+                socketRef.current.emit("chef-ready-alert", { restaurantId: mongoId, tableNum: order.tableNum, orderId: order._id, status: nextStatus });
             }
-            toast.success(`Table ${order.tableNum} is now ${nextStatus}`);
+            toast.success(`Table ${order.tableNum} status: ${nextStatus}`);
         } catch (error) { forceSync(mongoId); }
     };
 
-    const toggleStock = async (dishId, currentStatus) => {
-        try {
-            setDishes(prev => prev.map(d => d._id === dishId ? { ...d, isAvailable: !currentStatus } : d));
-            await axios.put(`${API_BASE}/dishes/${dishId}`, { isAvailable: !currentStatus });
-        } catch (e) { toast.error("Stock Update Failed"); }
-    };
-
-    if (!isAuthenticated) {
-        return (
-            <div style={styles.lockContainer}>
-                <div style={styles.lockCard}>
-                    <FaUtensils style={{fontSize:'40px', color:'#f97316', marginBottom:'15px'}}/>
-                    <h1 style={styles.lockTitle}>{id.toUpperCase()} OS</h1>
-                    <form onSubmit={handleLogin}>
-                        <input type="password" placeholder="PIN" value={password} inputMode="numeric" onChange={e=>setPassword(e.target.value)} style={styles.input} autoFocus />
-                        <button type="submit" style={styles.loginBtn} disabled={authLoading}>
-                            {authLoading ? <FaSpinner className="spin"/> : "ENTER SYSTEM"}
-                        </button>
-                    </form>
-                </div>
+    if (!isAuthenticated) return (
+        <div style={styles.lockContainer}>
+            <div style={styles.lockCard}>
+                <FaUtensils style={{fontSize:'40px', color:'#f97316', marginBottom:'15px'}}/>
+                <h1 style={styles.lockTitle}>{id?.toUpperCase()} KITCHEN</h1>
+                <form onSubmit={handleLogin}>
+                    <input type="password" placeholder="ENTER PIN" value={password} inputMode="numeric" onChange={e=>setPassword(e.target.value)} style={styles.input} autoFocus />
+                    <button type="submit" style={styles.loginBtn} disabled={authLoading}>{authLoading ? <FaSpinner className="spin"/> : "ENTER SYSTEM"}</button>
+                </form>
             </div>
-        );
-    }
+        </div>
+    );
 
     return (
         <div style={styles.dashboardContainer}>
-            {/* 🛎️ Table Service Calls (Only if alertsActive) */}
             <div style={styles.alertWrapper}>
                 {serviceCalls.map((call, idx) => (
                     <div key={idx} style={styles.alertBanner}>
@@ -177,71 +168,43 @@ const ChefDashboard = () => {
               
             <header style={styles.header}>
                 <div style={styles.headerLeft}>
-                    <h1 style={styles.headerTitle}>CHEF PANEL</h1>
+                    <h1 style={styles.headerTitle}>CHEF DASH</h1>
                     <div style={styles.statusDot}></div>
                 </div>
                 <div style={styles.headerRight}>
-                    {/* ✅ UI ADDITION: Alerts Toggle Button */}
-                    <button 
-                        onClick={() => {
-                            setAlertsActive(!alertsActive);
-                            toast(alertsActive ? "Table Alerts Deactivated" : "Table Alerts Active", { icon: '🛎️' });
-                        }} 
-                        style={{...styles.iconButton, background: alertsActive ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)'}}
-                    >
+                    <button onClick={() => setAlertsActive(!alertsActive)} style={{...styles.iconButton, background: alertsActive ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)'}}>
                         <FaConciergeBell color={alertsActive ? "#22c55e" : "#ef4444"} />
                     </button>
-
-                    <button onClick={() => setIsMuted(!isMuted)} style={styles.iconButton}>
-                        {isMuted ? <FaVolumeMute color="#ef4444" /> : <FaVolumeUp color="#22c55e" />}
-                    </button>
+                    <button onClick={() => setIsMuted(!isMuted)} style={styles.iconButton}>{isMuted ? <FaVolumeMute color="#ef4444" /> : <FaVolumeUp color="#22c55e" />}</button>
                     <InstallButton />
-                    <button onClick={() => {localStorage.removeItem(`chef_session_${id}`); window.location.reload();}} style={styles.iconButtonRed}><FaSignOutAlt/></button>
+                    <button onClick={() => {localStorage.clear(); window.location.reload();}} style={styles.iconButtonRed}><FaSignOutAlt/></button>
                 </div>
             </header>
 
             <div style={styles.tabContainer}>
-                <button onClick={() => setActiveTab("orders")} style={{ ...styles.tabButton, background: activeTab === 'orders' ? '#f97316' : '#111' }}>
-                    <FaClipboardList /> LIVE ({orders.length})
-                </button>
-                <button onClick={() => setActiveTab("stock")} style={{ ...styles.tabButton, background: activeTab === 'stock' ? '#3b82f6' : '#111' }}>
-                    <FaBoxOpen /> MENU
-                </button>
+                <button onClick={() => setActiveTab("orders")} style={{ ...styles.tabButton, background: activeTab === 'orders' ? '#f97316' : '#111' }}><FaClipboardList /> LIVE ({orders.length})</button>
+                <button onClick={() => setActiveTab("stock")} style={{ ...styles.tabButton, background: activeTab === 'stock' ? '#3b82f6' : '#111' }}><FaBoxOpen /> MENU</button>
             </div>
                     
             <div style={styles.grid}>
                 {activeTab === "orders" ? (
                     orders.length === 0 ? <div style={styles.emptyState}><FaUtensils size={40}/><p>No pending orders</p></div> : (
                         orders.map((order) => (
-                            <div key={order._id} style={{
-                                ...styles.card, 
-                                borderTop: order.status.toLowerCase() === 'ready' ? '6px solid #22c55e' : (order.status.toLowerCase() === 'cooking' ? '6px solid #eab308' : '6px solid #f97316')
-                            }}>
+                            <div key={order._id} style={{...styles.card, borderTop: order.status.toLowerCase() === 'ready' ? '6px solid #22c55e' : (order.status.toLowerCase() === 'cooking' ? '6px solid #eab308' : '6px solid #f97316')}}>
                                 <div style={styles.cardHeader}>
                                     <h2 style={styles.tableNumber}>T-{order.tableNum}</h2>
-                                    <span style={{...styles.statusBadge, background: order.status.toLowerCase() === 'ready' ? '#22c55e' : (order.status.toLowerCase() === 'cooking' ? '#eab308' : '#222')}}>
-                                        {order.status.toUpperCase()}
-                                    </span>
+                                    <span style={{...styles.statusBadge, background: order.status.toLowerCase() === 'ready' ? '#22c55e' : (order.status.toLowerCase() === 'cooking' ? '#eab308' : '#222')}}>{order.status.toUpperCase()}</span>
                                 </div>
                                 <div style={styles.itemsContainer}>
                                     {order.items.map((item, idx) => (
-                                        <div key={idx} style={styles.itemRow}>
-                                            <span style={styles.itemQuantity}>{item.quantity}x</span>
-                                            <div style={styles.itemName}>{item.name}</div>
-                                        </div>
+                                        <div key={idx} style={styles.itemRow}><span style={styles.itemQuantity}>{item.quantity}x</span><div style={styles.itemName}>{item.name}</div></div>
                                     ))}
                                 </div>
                                 <div style={styles.actionContainer}>
                                     {order.status.toLowerCase() === "ready" ? (
-                                        <button onClick={() => updateStatus(order, "served")} style={{...styles.actionBtn, background:'#22c55e', color:'white'}}>
-                                            <FaCheckDouble /> SERVE & LOCK BILL
-                                        </button>
+                                        <button onClick={() => updateStatus(order, "served")} style={{...styles.actionBtn, background:'#22c55e', color:'white'}}><FaCheckDouble /> MARK SERVED</button>
                                     ) : (
-                                        <button onClick={() => updateStatus(order, order.status.toLowerCase() === 'cooking' ? "ready" : "cooking")} style={{
-                                            ...styles.actionBtn, 
-                                            background: order.status.toLowerCase() === 'cooking' ? '#eab308' : '#f97316',
-                                            color: order.status.toLowerCase() === 'cooking' ? 'black' : 'white'
-                                        }}>
+                                        <button onClick={() => updateStatus(order, order.status.toLowerCase() === 'cooking' ? "ready" : "cooking")} style={{...styles.actionBtn, background: order.status.toLowerCase() === 'cooking' ? '#eab308' : '#f97316', color: order.status.toLowerCase() === 'cooking' ? 'black' : 'white'}}>
                                             {order.status.toLowerCase() === "cooking" ? "SET TO READY" : "START COOKING"}
                                         </button>
                                     )}
@@ -252,7 +215,7 @@ const ChefDashboard = () => {
                 ) : (
                     dishes.map(dish => (
                         <div key={dish._id} style={{...styles.stockCard, opacity: dish.isAvailable ? 1 : 0.5}}>
-                            <h3 style={{ margin: 0, fontSize: '15px' }}>{dish.name}</h3>
+                            <h3 style={{ margin: 0, fontSize: '13px', fontWeight: '900' }}>{dish.name}</h3>
                             <button onClick={() => toggleStock(dish._id, dish.isAvailable)} style={{...styles.stockBtn, background: dish.isAvailable ? '#ef4444' : '#22c55e'}}>
                                 {dish.isAvailable ? "OUT" : "IN"}
                             </button>
@@ -281,9 +244,9 @@ const styles = {
     iconButtonRed: { background: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444', color: '#ef4444', padding: '10px', borderRadius: '10px' },
     tabContainer: { display: 'flex', gap: '10px', marginBottom: '15px' },
     tabButton: { flex: 1, padding: '16px', borderRadius: '15px', border: '1px solid #222', color: 'white', fontWeight: '900', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px', fontSize: '11px' },
-    grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '12px' },
+    grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' },
     card: { background: '#0a0a0a', borderRadius: '24px', border: '1px solid #111', display: 'flex', flexDirection: 'column', overflow:'hidden' },
-    cardHeader: { padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background:'rgba(255,255,255,0.02)' },
+    cardHeader: { padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
     tableNumber: { fontSize: '24px', fontWeight: '900', margin:0 },
     statusBadge: { padding: '6px 12px', borderRadius: '8px', fontSize: '10px', fontWeight: '900' },
     itemsContainer: { padding: '20px', flex: 1 },
@@ -292,11 +255,11 @@ const styles = {
     itemName: { fontSize: '16px', fontWeight:'600' },
     actionContainer: { padding: '20px', background:'rgba(0,0,0,0.2)' },
     actionBtn: { width: '100%', border: 'none', padding: '18px', borderRadius: '15px', fontWeight: '900', fontSize: '14px', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px' },
-    stockCard: { background: '#0a0a0a', padding: '15px 20px', borderRadius: '18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border:'1px solid #111' },
-    stockBtn: { padding: '10px 20px', borderRadius: '12px', border: 'none', color: 'white', fontWeight: '900' },
+    stockCard: { background: '#0a0a0a', padding: '12px 18px', borderRadius: '18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border:'1px solid #111' },
+    stockBtn: { padding: '8px 15px', borderRadius: '10px', border: 'none', color: 'white', fontWeight: '900', fontSize: '10px' },
     emptyState: { gridColumn: '1/-1', textAlign: 'center', padding: '100px 20px', color:'#333', fontWeight:'900' },
     alertWrapper: { position: 'fixed', top: '10px', left: '50%', transform: 'translateX(-50%)', zIndex: 1100, width: '95%', maxWidth:'400px' },
-    alertBanner: { background: '#ef4444', padding: '15px', borderRadius: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom:'8px', boxShadow: '0 10px 30px rgba(239, 68, 68, 0.3)', border: '1px solid rgba(255,255,255,0.2)' },
+    alertBanner: { background: '#ef4444', padding: '15px', borderRadius: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom:'8px', border: '1px solid rgba(255,255,255,0.2)' },
     alertText: { fontWeight:'900', fontSize:'13px' },
     attendBtn: { background: 'white', color: '#ef4444', border: 'none', borderRadius: '10px', padding:'8px 12px' }
 };

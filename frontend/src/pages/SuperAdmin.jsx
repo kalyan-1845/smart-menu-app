@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { 
     FaTrash, FaSearch, FaSignOutAlt, FaBroadcastTower, FaShieldAlt,
-    FaClock, FaSpinner, FaTools, FaCrown, FaMoneyBillWave, FaChartBar
+    FaClock, FaSpinner, FaTools, FaCrown, FaMoneyBillWave, FaChartBar, FaGhost
 } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -18,8 +18,9 @@ const SuperAdmin = () => {
     const [searchTerm, setSearchTerm] = useState("");
     const [selectedClient, setSelectedClient] = useState(null);
     const [broadcastMsg, setBroadcastMsg] = useState("");
+    const [isCleaning, setIsCleaning] = useState(false);
 
-    // ✅ FORCE SYNC: Fetches all critical SaaS data at once
+    // ✅ FORCE SYNC: Fetches all critical SaaS data
     const forceSync = useCallback(async () => {
         try {
             const token = localStorage.getItem('admin_token');
@@ -27,7 +28,7 @@ const SuperAdmin = () => {
                 axios.get(`${API_URL}/api/superadmin/all-owners?t=${Date.now()}`, {
                     headers: { Authorization: `Bearer ${token}` }
                 }),
-                axios.get(`${API_URL}/api/orders/all-count?t=${Date.now()}`),
+                axios.get(`${API_BASE}/orders/all-count?t=${Date.now()}`),
                 axios.get(`${API_URL}/api/superadmin/maintenance-status`)
             ]);
             setRestaurants(ownerRes.data);
@@ -42,11 +43,29 @@ const SuperAdmin = () => {
 
     useEffect(() => {
         forceSync();
-        const ticker = setInterval(forceSync, 30000); // Auto-refresh every 30s
+        const ticker = setInterval(forceSync, 30000);
         return () => clearInterval(ticker);
     }, [forceSync]);
 
-    // 📊 SaaS Health Intelligence
+    // ✅ NEW: GHOST DATA PURGE LOGIC
+    const handleGhostPurge = async () => {
+        const confirm = window.confirm("PURGE GHOST DATA?\nThis will delete all dishes not linked to owners and all test items (kalyanreddy, akkajj, etc).");
+        if (!confirm) return;
+
+        setIsCleaning(true);
+        try {
+            const res = await axios.post(`${API_URL}/api/superadmin/cleanup-ghost-data`, {}, {
+                headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` }
+            });
+            toast.success(`PURGE COMPLETE: ${res.data.deletedCount} ghost items destroyed.`);
+            forceSync();
+        } catch (e) {
+            toast.error("Purge Failed");
+        } finally {
+            setIsCleaning(false);
+        }
+    };
+
     const metrics = useMemo(() => {
         const totalMRR = restaurants.filter(r => r.isPro).length * 999;
         return {
@@ -62,21 +81,21 @@ const SuperAdmin = () => {
             await axios.post(`${API_URL}/api/superadmin/broadcast`, { message: broadcastMsg }, {
                 headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` }
             });
-            toast.success("Global Message Broadcasted!");
+            toast.success("Broadcast Sent!");
             setBroadcastMsg("");
-        } catch (e) { toast.error("Broadcast failed."); }
+        } catch (e) { toast.error("Failed"); }
     };
 
     const toggleMaintenance = async () => {
-        const confirm = window.confirm("Toggle Global Maintenance Mode?");
+        const confirm = window.confirm("Toggle Global Maintenance?");
         if (!confirm) return;
         try {
             await axios.post(`${API_URL}/api/superadmin/toggle-maintenance`, { enabled: !isMaintenance }, {
                 headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` }
             });
             setIsMaintenance(!isMaintenance);
-            toast.success("System Status Updated");
-        } catch (e) { toast.error("Action failed."); }
+            toast.success("Status Updated");
+        } catch (e) { toast.error("Failed"); }
     };
 
     const handleManualUpgrade = async (ownerId) => {
@@ -84,10 +103,10 @@ const SuperAdmin = () => {
             await axios.put(`${API_URL}/api/superadmin/manual-upgrade/${ownerId}`, {}, {
                 headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` }
             });
-            toast.success("Account Promoted to PRO");
+            toast.success("Upgraded to PRO");
             forceSync();
             setSelectedClient(null);
-        } catch (err) { toast.error("Upgrade failed."); }
+        } catch (err) { toast.error("Failed"); }
     };
 
     const filteredList = restaurants.filter(r => 
@@ -99,15 +118,23 @@ const SuperAdmin = () => {
         <div style={styles.container}>
             <header style={styles.header}>
                 <h1 style={styles.logo}><FaShieldAlt color="#f97316" /> SaaS MASTER</h1>
-                <div style={{display:'flex', gap:'10px'}}>
+                <div style={{display:'flex', gap:'8px'}}>
+                    {/* ✅ GHOST PURGE BUTTON */}
+                    <button 
+                        onClick={handleGhostPurge} 
+                        disabled={isCleaning}
+                        style={{...styles.iconBtnHeader, background: '#3b0a0a', border: '1px solid #ef4444'}}
+                    >
+                        {isCleaning ? <FaSpinner className="spin"/> : <FaGhost color="#ef4444"/>}
+                    </button>
+
                     <button onClick={toggleMaintenance} style={{...styles.maintBtn, background: isMaintenance ? '#ef4444' : '#111'}}>
-                        <FaTools /> {isMaintenance ? "OFFLINE" : "LIVE"}
+                        <FaTools /> {isMaintenance ? "OFF" : "LIVE"}
                     </button>
                     <button onClick={() => { localStorage.clear(); navigate("/super-login"); }} style={styles.logoutBtn}><FaSignOutAlt/></button>
                 </div>
             </header>
 
-            {/* 📈 REAL-TIME GLOBAL METRICS */}
             <div style={styles.metricsGrid}>
                 <div style={styles.metricCard}>
                     <p style={styles.metricLabel}>TOTAL NETWORK ORDERS</p>
@@ -124,17 +151,17 @@ const SuperAdmin = () => {
             </div>
 
             <div style={styles.broadcastBox}>
-                <input style={styles.broadcastInput} placeholder="Push notification to all staff..." value={broadcastMsg} onChange={(e) => setBroadcastMsg(e.target.value)} />
+                <input style={styles.broadcastInput} placeholder="Broadcast to all panels..." value={broadcastMsg} onChange={(e) => setBroadcastMsg(e.target.value)} />
                 <button onClick={handleBroadcast} style={styles.broadcastBtn}><FaBroadcastTower /></button>
             </div>
 
             <div style={styles.searchWrapper}>
                 <FaSearch style={styles.searchIcon} />
-                <input placeholder="Search restaurants..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={styles.searchInput} />
+                <input placeholder="Search network..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={styles.searchInput} />
             </div>
 
             <div style={styles.list}>
-                {loading ? <div style={styles.centerText}><FaSpinner className="spin"/> SYNCING NODES...</div> : 
+                {loading ? <div style={styles.centerText}><FaSpinner className="spin"/> SYNCING...</div> : 
                     filteredList.map(r => (
                         <div key={r._id} style={{...styles.item, borderLeft: `4px solid ${r.isPro ? '#f97316' : '#333'}`}}>
                             <div style={{ flex: 1 }}>
@@ -153,17 +180,16 @@ const SuperAdmin = () => {
                 }
             </div>
 
-            {/* 🛠️ CLIENT MANAGEMENT MODAL */}
             {selectedClient && (
                 <div style={styles.modalOverlay} onClick={() => setSelectedClient(null)}>
                     <div style={styles.modalCard} onClick={e => e.stopPropagation()}>
                         <h2 style={{marginBottom:'10px'}}>Manage {selectedClient.username}</h2>
                         <div style={styles.infoBox}>
-                            <p>Current Revenue: <b>₹{selectedClient.totalRevenue || 0}</b></p>
-                            <p>Status: <b>{selectedClient.isPro ? 'PREMIUM' : 'FREE TRIAL'}</b></p>
+                            <p>Revenue: <b>₹{selectedClient.totalRevenue || 0}</b></p>
+                            <p>Status: <b>{selectedClient.isPro ? 'PRO' : 'TRIAL'}</b></p>
                         </div>
                         <div style={{display:'flex', gap:'10px', marginTop:'20px'}}>
-                            <button onClick={() => handleManualUpgrade(selectedClient._id)} style={{...styles.modalActionBtn, background:'#22c55e'}}>UPGRADE TO PRO</button>
+                            <button onClick={() => handleManualUpgrade(selectedClient._id)} style={{...styles.modalActionBtn, background:'#22c55e'}}>UPGRADE</button>
                             <button onClick={() => setSelectedClient(null)} style={{...styles.modalActionBtn, background:'#333'}}>CLOSE</button>
                         </div>
                     </div>
@@ -177,13 +203,14 @@ const SuperAdmin = () => {
 const styles = {
     container: { minHeight: "100vh", background: "#050505", color: "white", padding: "15px", fontFamily: "'Inter', sans-serif" },
     header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "25px" },
-    logo: { fontSize: '12px', fontWeight: '900', letterSpacing:'1px' },
-    maintBtn: { border: '1px solid #222', color: 'white', padding: '10px', borderRadius: '12px', fontSize: '10px', fontWeight: '800', display:'flex', alignItems:'center', gap:'8px', cursor:'pointer' },
+    logo: { fontSize: '10px', fontWeight: '900', letterSpacing:'1px' },
+    iconBtnHeader: { padding:'10px', borderRadius:'12px', cursor:'pointer', display:'flex', alignItems:'center' },
+    maintBtn: { border: '1px solid #222', color: 'white', padding: '10px', borderRadius: '12px', fontSize: '10px', fontWeight: '800', display:'flex', alignItems:'center', gap:'8px' },
     logoutBtn: { background: "#ef4444", border: "none", color: "white", padding: '10px', borderRadius: "12px" },
     metricsGrid: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginBottom: '20px' },
     metricCard: { background: '#0a0a0a', border: '1px solid #111', padding: '12px', borderRadius: '16px' },
-    metricLabel: { margin: 0, fontSize: '7px', color: '#444', fontWeight: '900' },
-    metricValue: { margin: 0, fontSize: '14px', fontWeight: '900', marginTop: '4px' },
+    metricLabel: { margin: 0, fontSize: '6px', color: '#444', fontWeight: '900' },
+    metricValue: { margin: 0, fontSize: '12px', fontWeight: '900', marginTop: '4px' },
     broadcastBox: { display: 'flex', gap: '10px', marginBottom: '20px', background: '#0a0a0a', padding: '8px', borderRadius: '15px', border: '1px solid #111' },
     broadcastInput: { flex: 1, background: 'transparent', border: 'none', color: 'white', outline: 'none', fontSize: '12px', paddingLeft:'10px' },
     broadcastBtn: { background: '#f97316', border: 'none', color: 'white', padding: '10px 15px', borderRadius: '10px' },
@@ -195,7 +222,7 @@ const styles = {
     itemName: { fontSize: '13px', fontWeight: '800' },
     metaRow: { display:'flex', gap:'12px', marginTop: '4px' },
     metaItem: { fontSize: '9px', color: '#444', fontWeight:'700', display:'flex', alignItems:'center', gap:'4px' },
-    actionBtn: { background: 'none', border: 'none', padding: '10px', cursor:'pointer' },
+    actionBtn: { background: 'none', border: 'none', padding: '10px' },
     modalOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.95)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter:'blur(10px)' },
     modalCard: { background: '#0a0a0a', borderRadius: '28px', width: '90%', maxWidth: '350px', padding: '25px', border: '1px solid #222' },
     infoBox: { background: '#000', padding: '15px', borderRadius: '16px', fontSize: '13px', lineHeight: '1.8' },

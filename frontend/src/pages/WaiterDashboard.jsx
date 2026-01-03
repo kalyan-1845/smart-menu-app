@@ -9,7 +9,6 @@ import {
 } from "react-icons/fa";
 import { toast } from "react-hot-toast";
 
-// --- PREMIUM STYLES (Ultra-Responsive & App Feel) ---
 const styles = {
     container: { minHeight: "100vh", background: "radial-gradient(circle at top center, #1a0f0a 0%, #050505 60%)", color: "white", padding: "15px", fontFamily: "'Inter', sans-serif" },
     lockOverlay: { height: '100vh', background: '#000', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px' },
@@ -44,7 +43,7 @@ const WaiterDashboard = () => {
 
     const dingRef = useRef(new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"));
 
-    // ✅ 1. AGGRESSIVE SYNC (Handles Chef Updates & Table Calls)
+    // ✅ 1. AGGRESSIVE SYNC ENGINE
     const forceSync = useCallback(async (rId) => {
         if (!rId || !isAuthenticated) return;
         try {
@@ -55,7 +54,6 @@ const WaiterDashboard = () => {
             
             const pickupReady = orderRes.data.filter(o => o.status?.toLowerCase() === "ready");
             
-            // Sound logic for new ready orders
             if (pickupReady.length > readyOrders.length && !isMuted) {
                 dingRef.current.play().catch(() => {});
             }
@@ -63,17 +61,22 @@ const WaiterDashboard = () => {
             setReadyOrders(pickupReady);
             setServiceCalls(callRes.data || []);
             setLoading(false);
-        } catch (e) { console.error("Waiter Sync Failed"); }
+        } catch (e) { 
+            console.error("Waiter Sync Failed"); 
+        }
     }, [readyOrders.length, isMuted, isAuthenticated, API_BASE]);
 
-    // ✅ 2. AUTH & BOOTSTRAP
+    // ✅ 2. AUTH & BOOTSTRAP (FIXED: Added Cache Buster for ID Fetch)
     const handleLogin = (e) => {
         if(e) e.preventDefault();
+        // Updated Master PIN for Waiter terminals
         if (password === "bitebox18") {
             setIsAuthenticated(true);
             localStorage.setItem(`waiter_auth_${id}`, "true");
             toast.success("Access Granted");
-        } else { toast.error("Invalid Security Key"); }
+        } else { 
+            toast.error("Invalid Security Key"); 
+        }
     };
 
     useEffect(() => {
@@ -85,12 +88,19 @@ const WaiterDashboard = () => {
         if(!isAuthenticated) return;
         const init = async () => {
             try {
-                const res = await axios.get(`${API_BASE}/auth/restaurant/${id}`); 
+                // 🔥 FIX: Using Cache Buster (?t=) ensures we bypass the 404 if the restaurant was recently created
+                const res = await axios.get(`${API_BASE}/auth/restaurant/${id}?t=${Date.now()}`); 
                 if (res.data?._id) {
                     setMongoId(res.data._id);
                     forceSync(res.data._id);
+                } else {
+                    toast.error("Restaurant Data Not Found.");
+                    setLoading(false);
                 }
-            } catch (e) { setLoading(false); }
+            } catch (e) { 
+                setLoading(false); 
+                toast.error(`Terminal Error: Could not find '${id}'`);
+            }
         };
         init();
     }, [id, forceSync, isAuthenticated, API_BASE]);
@@ -109,13 +119,17 @@ const WaiterDashboard = () => {
             forceSync(mongoId);
         });
 
+        // Listen for Chef status changes
         socket.on("chef-ready-alert", () => forceSync(mongoId));
+        socket.on("order-updated", () => forceSync(mongoId));
+
+        // Listen for Customer Table Calls
         socket.on("new-waiter-call", () => {
             if(!isMuted) dingRef.current.play().catch(()=>{});
             forceSync(mongoId);
         });
 
-        const backupTimer = setInterval(() => forceSync(mongoId), 10000);
+        const backupTimer = setInterval(() => forceSync(mongoId), 15000);
         return () => {
             socket.disconnect();
             clearInterval(backupTimer);
@@ -123,26 +137,39 @@ const WaiterDashboard = () => {
     }, [mongoId, forceSync, isAuthenticated, isMuted, SERVER_URL]);
 
     const handleServe = async (orderId) => {
+        // Optimistic UI update
         setReadyOrders(prev => prev.filter(o => o._id !== orderId));
         try {
             await axios.put(`${API_BASE}/orders/${orderId}`, { status: "Served" });
-            toast.success("Order Served");
-        } catch (e) { forceSync(mongoId); }
+            toast.success("Table Served!");
+        } catch (e) { 
+            forceSync(mongoId); 
+            toast.error("Cloud update failed");
+        }
     };
 
     const resolveCall = async (callId) => {
         setServiceCalls(prev => prev.filter(c => c._id !== callId));
-        try { await axios.delete(`${API_BASE}/orders/calls/${callId}`); } catch (e) {}
+        try { 
+            await axios.delete(`${API_BASE}/orders/calls/${callId}`); 
+        } catch (e) {}
     };
 
     if (!isAuthenticated) return (
         <div style={styles.lockOverlay}>
             <div style={styles.lockCard}>
                 <FaLock size={40} color="#f97316" style={{marginBottom:'20px'}}/>
-                <h1 style={styles.title}>WAITER DASHBOARD</h1>
+                <h1 style={styles.title}>WAITER TERMINAL</h1>
                 <form onSubmit={handleLogin} style={{width:'100%', marginTop:'20px'}}>
-                    <input type="password" placeholder="PIN" value={password} onChange={(e) => setPassword(e.target.value)} style={styles.lockInput} autoFocus />
-                    <button type="submit" style={styles.lockBtn}>UNLOCK</button>
+                    <input 
+                        type="password" 
+                        placeholder="SECURITY PIN" 
+                        value={password} 
+                        onChange={(e) => setPassword(e.target.value)} 
+                        style={styles.lockInput} 
+                        autoFocus 
+                    />
+                    <button type="submit" style={styles.lockBtn}>UNLOCK SYSTEM</button>
                 </form>
             </div>
         </div>
@@ -158,9 +185,9 @@ const WaiterDashboard = () => {
                     <div key={call._id} style={styles.alertCard} className="pulse-red">
                         <div style={{display:'flex', alignItems:'center', gap:'12px'}}>
                             <span style={styles.tableBadge}>{call.tableNumber}</span>
-                            <span style={{fontWeight:'900'}}>CALLING WAITER!</span>
+                            <span style={{fontWeight:'900', fontSize:'13px'}}>CALLING FOR HELP!</span>
                         </div>
-                        <button onClick={() => resolveCall(call._id)} style={{background:'white', color:'#ef4444', border:'none', borderRadius:'50%', width:'40px', height:'40px'}}><FaCheck/></button>
+                        <button onClick={() => resolveCall(call._id)} style={{background:'white', color:'#ef4444', border:'none', borderRadius:'50%', width:'40px', height:'40px', cursor:'pointer'}}><FaCheck/></button>
                     </div>
                 ))}
             </div>
@@ -168,7 +195,7 @@ const WaiterDashboard = () => {
             <header style={styles.header}>
                 <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
                     <FaUserTie size={20} color="#FF9933"/>
-                    <h1 style={styles.title}>TERMINAL</h1>
+                    <h1 style={styles.title}>{id.toUpperCase()}</h1>
                 </div>
                 <div style={{display:'flex', gap:'8px'}}>
                     <button onClick={() => setIsMuted(!isMuted)} style={styles.iconBtn}>
@@ -184,7 +211,7 @@ const WaiterDashboard = () => {
             {readyOrders.length === 0 ? (
                 <div style={{textAlign:'center', marginTop:'80px', opacity:0.2}}>
                     <FaTruckLoading size={50}/>
-                    <p style={{fontWeight:'900', marginTop:'15px'}}>WAITING FOR CHEF...</p>
+                    <p style={{fontWeight:'900', marginTop:'15px'}}>KITCHEN IS CLEAR</p>
                 </div>
             ) : (
                 readyOrders.map(order => (

@@ -1,15 +1,17 @@
-// frontend/vite.config.js
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-// SIMPLE VERSION THAT WORKS
 export default defineConfig({
   plugins: [react()],
+  // ✅ ADD THIS: Forces scripts to load from the root domain
+  base: '/', 
   server: {
     port: 3000
   },
   build: {
     outDir: 'dist',
-    emptyOutDir: true  // This clears dist before building
+    emptyOutDir: true,
+    // ✅ ADD THIS: Organizes assets clearly
+    assetsDir: 'assets', 
   }
 });

@@ -9,7 +9,6 @@ const router = express.Router();
 
 // 🔒 MIDDLEWARE: adminOnly (CEO Logic)
 const adminOnly = (req, res, next) => {
-    // Only allow the Master Admin username you chose during setup
     if (req.user && req.user.username === "srinivas") {
         next();
     } else {
@@ -21,10 +20,6 @@ const adminOnly = (req, res, next) => {
 // 📈 1. PLATFORM VISIBILITY
 // ============================================================
 
-/**
- * @route   GET /api/superadmin/all-owners
- * @desc    Fetch every restaurant in the network for surveillance
- */
 router.get('/all-owners', protect, adminOnly, async (req, res) => {
     try {
         const owners = await Owner.find({}).sort({ createdAt: -1 });
@@ -34,10 +29,6 @@ router.get('/all-owners', protect, adminOnly, async (req, res) => {
     }
 });
 
-/**
- * @route   GET /api/superadmin/platform-stats
- * @desc    Calculates MRR (₹999/pro) and Churn for the CEO
- */
 router.get('/platform-stats', protect, adminOnly, async (req, res) => {
     try {
         const owners = await Owner.find({}).select('isPro trialEndsAt createdAt').lean();
@@ -61,8 +52,29 @@ router.get('/platform-stats', protect, adminOnly, async (req, res) => {
 });
 
 // ============================================================
-// 🚦 2. GLOBAL MAINTENANCE (Emergency Brake)
+// 🚦 2. GLOBAL MAINTENANCE & CLEANUP
 // ============================================================
+
+// ✅ EMERGENCY CLEANUP: Deletes all dishes that don't belong to a real restaurant
+router.post('/cleanup-ghost-data', protect, adminOnly, async (req, res) => {
+    try {
+        const validOwners = await Owner.find().select('_id');
+        const validIds = validOwners.map(o => o._id.toString());
+
+        // Delete dishes with no restaurantId or test names like 'kalyanreddy1'
+        const result = await Dish.deleteMany({
+            $or: [
+                { restaurantId: { $nin: validIds } },
+                { name: { $in: ["kalyanreddy1", "akkajj", "jjanz", "kalyan"] } },
+                { category: { $exists: false } }
+            ]
+        });
+
+        res.json({ success: true, deletedCount: result.deletedCount });
+    } catch (error) {
+        res.status(500).json({ message: "Cleanup Failed" });
+    }
+});
 
 router.post('/toggle-maintenance', protect, adminOnly, async (req, res) => {
     try {
@@ -107,7 +119,7 @@ router.delete('/delete-owner/:id', protect, adminOnly, async (req, res) => {
 });
 
 // ============================================================
-// 💵 4. CASH UPGRADE (Manual Override)
+// 💵 4. CASH UPGRADE
 // ============================================================
 
 router.put('/manual-upgrade/:id', protect, adminOnly, async (req, res) => {
