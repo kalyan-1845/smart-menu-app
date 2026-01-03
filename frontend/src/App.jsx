@@ -11,7 +11,7 @@ import OwnerLogin from "./pages/OwnerLogin";
 import Register from "./pages/Register"; 
 import SuperLogin from "./pages/SuperLogin"; 
 import Terms from './pages/Terms';
-import Maintenance from './pages/Maintenance'; // ✅ Import Maintenance
+import Maintenance from './pages/Maintenance'; 
 import NotFound from './pages/NotFound';
 
 // --- STAFF PANELS ---
@@ -44,10 +44,21 @@ const GlobalStyles = () => (
 );
 
 function App() {
-  const [cart, setCart] = useState(() => JSON.parse(localStorage.getItem("smartMenu_Cart") || "[]"));
+  // 🛑 FIX 1: SAFE CART INITIALIZATION (Prevents White Screen Crash)
+  const [cart, setCart] = useState(() => {
+    try {
+        const saved = localStorage.getItem("smartMenu_Cart");
+        return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+        console.error("⚠️ Cart corrupted, resetting to empty.");
+        localStorage.removeItem("smartMenu_Cart"); // Auto-fix
+        return [];
+    }
+  });
+
   const [restaurantId, setRestaurantId] = useState(localStorage.getItem("smartMenu_RestaurantId") || null);
   const [tableNum, setTableNum] = useState(localStorage.getItem("last_table_num") || "");
-  const [isMaintenance, setIsMaintenance] = useState(false); // ✅ Global Maintenance State
+  const [isMaintenance, setIsMaintenance] = useState(false); 
 
   // ✅ 1. MAINTENANCE ENGINE
   useEffect(() => {
@@ -58,7 +69,7 @@ function App() {
       } catch (e) { console.error("System Status Check Failed"); }
     };
     checkSystemStatus();
-    const interval = setInterval(checkSystemStatus, 60000); // Re-check every minute
+    const interval = setInterval(checkSystemStatus, 60000); 
     return () => clearInterval(interval);
   }, []);
 
@@ -69,6 +80,9 @@ function App() {
   // --- CART ACTIONS ---
   const addToCart = (dish) => {
     setCart((prev) => {
+      // 🛑 FIX 2: PREVENT CRASH IF PREV IS NOT ARRAY
+      if (!Array.isArray(prev)) return [{ ...dish, quantity: dish.quantity || 1 }];
+
       const exists = prev.find((item) => item._id === dish._id);
       if (exists) return prev.map((i) => i._id === dish._id ? { ...i, quantity: i.quantity + (dish.quantity || 1) } : i);
       return [...prev, { ...dish, quantity: dish.quantity || 1 }];
@@ -95,10 +109,11 @@ function App() {
         <Route path="/login" element={<OwnerLogin />} />
         <Route path="/register" element={<Register />} />
         <Route path="/terms" element={<Terms />} />
-         
+          
         {/* --- CUSTOMER MENU --- */}
         <Route path="/menu/:restaurantId" element={
             <div className="page-transition">
+              {/* Passed props safely */}
               <Menu cart={cart} addToCart={addToCart} setRestaurantId={setRestaurantId} setTableNum={setTableNum} setCart={setCart} />
             </div>
         } />
