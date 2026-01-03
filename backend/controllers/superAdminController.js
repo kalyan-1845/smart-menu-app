@@ -1,101 +1,77 @@
 import Owner from '../models/Owner.js';
-import Dish from '../models/Dish.js';
 import Order from '../models/Order.js';
-import Settings from '../models/Settings.js';
+import Dish from '../models/Dish.js';
+import jwt from 'jsonwebtoken';
 
-/**
- * 📊 1. SAAS HEALTH & MRR ANALYTICS
- * Calculates earnings and churn for the CEO dashboard.
- */
-export const getPlatformStats = async (req, res) => {
+// 🚀 MASTER SYNC: Gets All Data + Calculates Health
+export const getCEOStats = async (req, res) => {
     try {
-        const owners = await Owner.find({}).select('isPro trialEndsAt createdAt').lean();
+        const owners = await Owner.find().sort({ createdAt: -1 }).lean();
         
-        const proUsers = owners.filter(o => o.isPro).length;
-        const totalUsers = owners.length;
+        // Enrich data with Health Status based on ORDERS
+        const richData = await Promise.all(owners.map(async (owner) => {
+            const lastOrder = await Order.findOne({ restaurantId: owner._id }).sort({ createdAt: -1 }).lean();
+            
+            // 🏥 HEALTH ALGORITHM
+            let health = "🔴 At Risk"; // Default: No orders ever
+            let lastActive = "Never";
+            
+            if (lastOrder) {
+                lastActive = new Date(lastOrder.createdAt).toLocaleDateString();
+                const hoursSince = (new Date() - new Date(lastOrder.createdAt)) / (1000 * 60 * 60);
+                
+                if (hoursSince < 24) health = "🟢 Healthy";       // Ordered today
+                else if (hoursSince < 72) health = "🟡 Attention"; // Ordered recently
+            }
+
+            return { 
+                ...owner, 
+                health, 
+                lastActive 
+            };
+        }));
+
+        res.json(richData);
+    } catch (error) {
+        res.status(500).json({ message: "CEO Sync Failed" });
+    }
+};
+
+// ⚡ KILL SWITCH TOGGLE
+export const toggleFeature = async (req, res) => {
+    try {
+        const { ownerId } = req.params;
+        const { field, value } = req.body; // e.g., 'settings.menuActive'
         
-        // Churn Logic: Users with expired trials in the last 7 days who didn't upgrade
-        const weekAgo = new Date();
-        weekAgo.setDate(weekAgo.getDate() - 7);
-        const churned = owners.filter(o => !o.isPro && new Date(o.trialEndsAt) < weekAgo).length;
-
-        res.json({
-            totalClients: totalUsers,
-            activePro: proUsers,
-            mrr: proUsers * 999, // Monthly Recurring Revenue
-            churnRate: totalUsers > 0 ? ((churned / totalUsers) * 100).toFixed(1) : 0
-        });
-    } catch (error) {
-        res.status(500).json({ message: "Analytics Node Error" });
-    }
+        // Dynamic update using $set
+        await Owner.findByIdAndUpdate(ownerId, { $set: { [field]: value } });
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ message: "Toggle Failed" }); }
 };
 
-/**
- * 🚦 2. GLOBAL MAINTENANCE TOGGLE
- * Controls the "Emergency Brake" for the entire platform.
- */
-export const toggleMaintenance = async (req, res) => {
+// 📝 SAVE NOTES
+export const updateNotes = async (req, res) => {
     try {
-        const { enabled } = req.body;
-        let settings = await Settings.findOne();
-        
-        if (!settings) {
-            settings = new Settings({ maintenanceMode: enabled });
-        } else {
-            settings.maintenanceMode = enabled;
-        }
-
-        await settings.save();
-        res.json({ success: true, maintenanceMode: settings.maintenanceMode });
-    } catch (error) {
-        res.status(500).json({ message: "Maintenance toggle failed" });
-    }
+        await Owner.findByIdAndUpdate(req.params.ownerId, { ceoNotes: req.body.notes });
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ message: "Save Failed" }); }
 };
 
-export const getMaintenanceStatus = async (req, res) => {
+// 👻 GOD MODE LOGIN
+export const ghostLogin = async (req, res) => {
     try {
-        const settings = await Settings.findOne().lean();
-        res.json({ enabled: settings?.maintenanceMode || false });
-    } catch (e) { res.json({ enabled: false }); }
+        const owner = await Owner.findById(req.params.ownerId);
+        if (!owner) return res.status(404).json({ message: "Not Found" });
+        const token = jwt.sign({ id: owner._id }, process.env.JWT_SECRET, { expiresIn: '2h' });
+        res.json({ success: true, token, username: owner.username });
+    } catch (e) { res.status(500).json({ message: "Ghost Login Failed" }); }
 };
 
-/**
- * 💵 3. MANUAL SUBSCRIPTION (Cash Payment Override)
- * Manually upgrades a user after receiving cash.
- */
-export const manualUpgrade = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const owner = await Owner.findById(id);
-        if (!owner) return res.status(404).json({ message: "Owner not found" });
-
-        // Set to Pro and extend by 30 days from today
-        owner.isPro = true;
-        const newExpiry = new Date();
-        newExpiry.setDate(newExpiry.getDate() + 30);
-        owner.trialEndsAt = newExpiry;
-
-        await owner.save();
-        res.json({ success: true, message: "Manual Cash Payment Recorded. Account Pro." });
-    } catch (error) {
-        res.status(500).json({ message: "Upgrade failed" });
+// 📢 BROADCAST
+export const sendBroadcast = async (req, res) => {
+    if (req.io) {
+        req.io.emit('superadmin-broadcast', { message: req.body.message, date: new Date() });
+        return res.json({ success: true });
     }
-};
-
-/**
- * 🔥 4. NUCLEAR PURGE
- * Wipes a restaurant and all its history from the cloud.
- */
-export const deleteOwnerPermanently = async (req, res) => {
-    try {
-        const { id } = req.params;
-        await Promise.all([
-            Owner.findByIdAndDelete(id),
-            Dish.deleteMany({ restaurantId: id }),
-            Order.deleteMany({ restaurantId: id })
-        ]);
-        res.json({ success: true, message: "Purged forever." });
-    } catch (error) {
-        res.status(500).json({ message: "Purge Error" });
-    }
+    res.status(500).json({ message: "Socket Offline" });
 };

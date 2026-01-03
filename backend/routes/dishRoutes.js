@@ -1,14 +1,20 @@
 import express from 'express';
-import { getDishes, addDishReview, createDish, updateDish, deleteDish } from '../controllers/dishController.js';
+import { 
+    getDishes, 
+    addDishReview, 
+    createDish, 
+    updateDish, 
+    deleteDish 
+} from '../controllers/dishController.js';
 import { protect } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-// 🌐 Public
+// 🌐 Public: Accessible by customers (High Speed)
 router.get('/', getDishes); 
 router.post('/rate/:dishId', addDishReview);
 
-// 🏗️ Admin (Protected)
+// 🏗️ Admin: Accessible only by Owners (Security Protected)
 router.post('/', protect, createDish);
 router.put('/:id', protect, updateDish);
 router.delete('/:id', protect, deleteDish);

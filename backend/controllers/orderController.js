@@ -1,65 +1,169 @@
-import Call from '../models/Call.js';
+import express from 'express';
+import mongoose from 'mongoose'; 
+import webpush from 'web-push'; 
+import Order from '../models/Order.js';
+import Call from '../models/Call.js'; 
+import Owner from '../models/Owner.js'; 
 
-// @desc    Create a new waiter call/request
-// @route   POST /api/orders/call-waiter
-export const createCall = async (req, res) => {
+const router = express.Router();
+
+// --- 🔑 WEB PUSH CONFIG ---
+const publicKey = process.env.PUBLIC_VAPID_KEY;
+const privateKey = process.env.PRIVATE_VAPID_KEY;
+
+if (publicKey && privateKey) {
     try {
-        const { restaurantId, tableNumber, type } = req.body;
-        
-        const newCall = new Call({
-            restaurantId,
-            tableNumber,
-            type: type || "help"
-        });
-        
-        await newCall.save();
+        webpush.setVapidDetails('mailto:support@bitebox.com', publicKey, privateKey);
+    } catch (err) { console.error("Push Init Error"); }
+}
 
-        // 🔔 Notify the Waiter/Chef Dashboard in real-time via Socket.io
-        if (req.io) {
-            // Join specific restaurant room for targeted notification
-            req.io.to(restaurantId.toString()).emit('new-waiter-call', newCall);
-            // Fallback for global broadcast if rooms aren't used
-            req.io.emit('new-waiter-call', newCall);
+// ============================================================
+// 1. PLACE ORDER (Menu Flow)
+// ============================================================
+router.post('/', async (req, res) => {
+    try {
+        let { restaurantId, owner, tableNum, tableNumber, items, totalAmount, paymentMethod, status } = req.body;
+        
+        let finalRestaurantId = restaurantId || owner;
+        const finalTableNum = tableNum || tableNumber;
+
+        if (!finalRestaurantId) return res.status(400).json({ message: "ID required" });
+
+        // Resolve Username to ID
+        if (!mongoose.Types.ObjectId.isValid(finalRestaurantId)) {
+            const restaurantOwner = await Owner.findOne({ username: finalRestaurantId.toLowerCase() });
+            if (!restaurantOwner) return res.status(404).json({ message: "Restaurant not found" });
+            finalRestaurantId = restaurantOwner._id;
         }
 
-        res.status(201).json(newCall);
-    } catch (error) {
-        res.status(500).json({ message: "Call request failed", error: error.message });
-    }
-};
+        const newOrder = new Order({ 
+            ...req.body, 
+            restaurantId: finalRestaurantId, 
+            tableNum: finalTableNum,
+            status: status || "Pending" 
+        });
 
-// @desc    Get all active calls for a restaurant
-// @route   GET /api/orders/calls
-export const getCalls = async (req, res) => {
+        const savedOrder = await newOrder.save();
+
+        if (req.io) req.io.to(finalRestaurantId.toString()).emit('new-order', savedOrder);
+
+        res.status(201).json(savedOrder);
+    } catch (error) {
+        res.status(400).json({ message: error.message });
+    }
+});
+
+// ============================================================
+// 2. GET ORDERS (Dashboard Sync - WITH KILL SWITCH)
+// ============================================================
+router.get('/', async (req, res) => {
     try {
         const { restaurantId } = req.query;
-        const calls = await Call.find({ restaurantId }).sort({ createdAt: -1 });
+        
+        // 🛡️ CRITICAL: Stop the crash if ID is invalid
+        if (!restaurantId || !mongoose.Types.ObjectId.isValid(restaurantId)) {
+            return res.json([]); 
+        }
+
+        // 🛑 KITCHEN KILL SWITCH ENFORCEMENT 🛑
+        // This stops the kitchen from working if you turned it OFF in God Mode
+        const owner = await Owner.findById(restaurantId).select('settings').lean();
+        if (owner && owner.settings && owner.settings.chefActive === false) {
+             // Return a special error that the frontend can show as a "Lock Screen"
+             return res.status(403).json({ message: "🔒 KITCHEN LOCKED BY CEO" });
+        }
+
+        const orders = await Order.find({ restaurantId }).sort({ createdAt: -1 }).lean();
+        res.json(orders);
+    } catch (error) {
+        res.status(500).json({ message: "Sync Error" });
+    }
+});
+
+// ============================================================
+// 3. GET WAITER CALLS
+// ============================================================
+router.get('/calls', async (req, res) => {
+    try {
+        const { restaurantId } = req.query;
+        if (!restaurantId || !mongoose.Types.ObjectId.isValid(restaurantId)) {
+            return res.json([]); 
+        }
+        const calls = await Call.find({ restaurantId }).sort({ createdAt: -1 }).lean();
         res.json(calls);
     } catch (error) {
-        res.status(500).json({ message: "Error fetching calls" });
+        res.status(500).json({ message: "Calls Error" });
     }
-};
+});
 
-// @desc    Delete/Resolve a call (When staff clicks "Done")
-// @route   DELETE /api/orders/calls/:id
-export const resolveCall = async (req, res) => {
+// ============================================================
+// 4. UPDATE STATUS & REVENUE
+// ============================================================
+router.put('/:id', async (req, res) => {
     try {
-        const call = await Call.findById(req.params.id);
-        if (!call) return res.status(404).json({ message: "Call not found" });
+        const oldOrder = await Order.findById(req.params.id);
+        if (!oldOrder) return res.status(404).json({ message: "Order not found" });
 
-        await Call.findByIdAndDelete(req.params.id);
+        const order = await Order.findByIdAndUpdate(
+            req.params.id, 
+            { status: req.body.status }, 
+            { new: true }
+        );
 
-        // 🔌 Notify other staff that this call is handled
-        if (req.io) {
-            req.io.emit("call-resolved", { 
-                id: req.params.id, 
-                tableNumber: call.tableNumber,
-                restaurantId: call.restaurantId 
+        // 💰 Revenue logic
+        if (req.body.status.toLowerCase() === "served" && oldOrder.status.toLowerCase() !== "served") {
+            await Owner.findByIdAndUpdate(order.restaurantId, {
+                $inc: { totalRevenue: order.totalAmount }
             });
         }
 
-        res.json({ message: "Call resolved and removed" });
+        if (req.io) req.io.to(order.restaurantId.toString()).emit('order-updated', order);
+        res.json(order);
     } catch (error) {
-        res.status(500).json({ message: "Error resolving call" });
+        res.status(400).json({ message: "Update failed" });
     }
-};
+});
+
+// ============================================================
+// 5. CALL WAITER & UTILS
+// ============================================================
+router.post('/call-waiter', async (req, res) => {
+    try {
+        const { restaurantId, tableNumber, type } = req.body; 
+        const newCall = await Call.create({ restaurantId, tableNumber, type: type || 'help' });
+        if (req.io) req.io.to(restaurantId.toString()).emit('new-waiter-call', newCall);
+        res.status(201).json(newCall);
+    } catch (error) {
+        res.status(500).json({ message: "Call failed" });
+    }
+});
+
+router.put('/mark-downloaded', async (req, res) => {
+    try {
+        const { restaurantId } = req.body;
+        await Order.updateMany({ restaurantId, isDownloaded: false }, { $set: { isDownloaded: true } });
+        res.json({ message: "Cleared" });
+    } catch (error) {
+        res.status(500).json({ error: "Clear failed" });
+    }
+});
+
+router.delete('/calls/:callId', async (req, res) => {
+    try {
+        await Call.findByIdAndDelete(req.params.callId);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ message: "Failed" });
+    }
+});
+
+router.delete('/:id', async (req, res) => {
+    try {
+        await Order.findByIdAndDelete(req.params.id);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ message: "Delete failed" });
+    }
+});
+
+export default router;

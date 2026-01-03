@@ -1,233 +1,248 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { 
-    FaTrash, FaSearch, FaSignOutAlt, FaBroadcastTower, FaShieldAlt,
-    FaClock, FaSpinner, FaTools, FaCrown, FaMoneyBillWave, FaChartBar, FaGhost
+    FaShieldAlt, FaPhone, FaCalendarAlt, FaUtensils, FaUserTie, 
+    FaGhost, FaSave, FaSearch, FaDownload, FaExclamationTriangle, FaCheckCircle
 } from "react-icons/fa";
-import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { toast } from "react-hot-toast";
 
-const API_URL = "https://smart-menu-backend-5ge7.onrender.com"; 
+const API_URL = "https://smart-menu-backend-5ge7.onrender.com";
 
 const SuperAdmin = () => {
-    const navigate = useNavigate();
-    const [restaurants, setRestaurants] = useState([]);
-    const [globalOrderCount, setGlobalOrderCount] = useState(0);
-    const [isMaintenance, setIsMaintenance] = useState(false);
+    const [clients, setClients] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [selected, setSelected] = useState(null); // The client currently open in modal
+    const [noteDraft, setNoteDraft] = useState("");
     const [searchTerm, setSearchTerm] = useState("");
-    const [selectedClient, setSelectedClient] = useState(null);
-    const [broadcastMsg, setBroadcastMsg] = useState("");
-    const [isCleaning, setIsCleaning] = useState(false);
+    const [deferredPrompt, setDeferredPrompt] = useState(null);
 
-    // ✅ FORCE SYNC: Fetches all critical SaaS data
-    const forceSync = useCallback(async () => {
-        try {
-            const token = localStorage.getItem('admin_token');
-            const [ownerRes, statsRes, maintRes] = await Promise.all([
-                axios.get(`${API_URL}/api/superadmin/all-owners?t=${Date.now()}`, {
-                    headers: { Authorization: `Bearer ${token}` }
-                }),
-                axios.get(`${API_BASE}/orders/all-count?t=${Date.now()}`),
-                axios.get(`${API_URL}/api/superadmin/maintenance-status`)
-            ]);
-            setRestaurants(ownerRes.data);
-            setGlobalOrderCount(statsRes.data.count || 0);
-            setIsMaintenance(maintRes.data.enabled);
-        } catch (error) {
-            console.error("Master Sync Failure");
-        } finally {
-            setLoading(false);
-        }
+    // 📱 PWA INSTALL LOGIC
+    useEffect(() => {
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            setDeferredPrompt(e);
+        });
+        refreshData();
     }, []);
 
-    useEffect(() => {
-        forceSync();
-        const ticker = setInterval(forceSync, 30000);
-        return () => clearInterval(ticker);
-    }, [forceSync]);
-
-    // ✅ NEW: GHOST DATA PURGE LOGIC
-    const handleGhostPurge = async () => {
-        const confirm = window.confirm("PURGE GHOST DATA?\nThis will delete all dishes not linked to owners and all test items (kalyanreddy, akkajj, etc).");
-        if (!confirm) return;
-
-        setIsCleaning(true);
-        try {
-            const res = await axios.post(`${API_URL}/api/superadmin/cleanup-ghost-data`, {}, {
-                headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` }
-            });
-            toast.success(`PURGE COMPLETE: ${res.data.deletedCount} ghost items destroyed.`);
-            forceSync();
-        } catch (e) {
-            toast.error("Purge Failed");
-        } finally {
-            setIsCleaning(false);
+    const handleInstall = async () => {
+        if (deferredPrompt) {
+            deferredPrompt.prompt();
+            setDeferredPrompt(null);
+        } else {
+            toast("Install option not available on this device.");
         }
     };
 
+    // 🔄 MASTER SYNC
+    const refreshData = async () => {
+        try {
+            const token = localStorage.getItem('admin_token');
+            if (!token) return window.location.href = "/super-login";
+            
+            const res = await axios.get(`${API_URL}/api/superadmin/ceo-sync`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setClients(res.data);
+            setLoading(false);
+        } catch (e) {
+            console.error(e);
+            toast.error("Sync Failed");
+        }
+    };
+
+    // ⚡ ACTION HANDLERS
+    const toggleSwitch = async (id, field, currentVal) => {
+        try {
+            await axios.put(`${API_URL}/api/superadmin/control/${id}`, 
+                { field, value: !currentVal },
+                { headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` } }
+            );
+            toast.success("Updated");
+            refreshData();
+            // Update local state immediately for speed
+            if (selected) setSelected(prev => ({ 
+                ...prev, 
+                settings: { ...prev.settings, [field.split('.')[1]]: !currentVal } 
+            }));
+        } catch (e) { toast.error("Failed"); }
+    };
+
+    const saveNotes = async (id) => {
+        await axios.put(`${API_URL}/api/superadmin/notes/${id}`, { notes: noteDraft }, {
+            headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` }
+        });
+        toast.success("Intelligence Saved");
+        refreshData();
+    };
+
+    const enterGodMode = async (id, username) => {
+        try {
+            const res = await axios.get(`${API_URL}/api/superadmin/ghost-login/${id}`, {
+                headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` }
+            });
+            localStorage.setItem(`owner_token_${username}`, res.data.token);
+            window.open(`/${username}/admin`, '_blank');
+        } catch (e) { toast.error("Ghost Login Failed"); }
+    };
+
+    // 📊 CALCULATED METRICS (Money View)
     const metrics = useMemo(() => {
-        const totalMRR = restaurants.filter(r => r.isPro).length * 999;
-        return {
-            mrr: totalMRR,
-            proCount: restaurants.filter(r => r.isPro).length,
-            trialCount: restaurants.filter(r => !r.isPro).length
-        };
-    }, [restaurants]);
+        const total = clients.length;
+        const active = clients.filter(c => c.health.includes("Healthy")).length;
+        const paid = clients.filter(c => c.settings?.isPro).length;
+        const mrr = paid * 999;
+        return { total, active, paid, mrr };
+    }, [clients]);
 
-    const handleBroadcast = async () => {
-        if (!broadcastMsg) return;
-        try {
-            await axios.post(`${API_URL}/api/superadmin/broadcast`, { message: broadcastMsg }, {
-                headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` }
-            });
-            toast.success("Broadcast Sent!");
-            setBroadcastMsg("");
-        } catch (e) { toast.error("Failed"); }
-    };
-
-    const toggleMaintenance = async () => {
-        const confirm = window.confirm("Toggle Global Maintenance?");
-        if (!confirm) return;
-        try {
-            await axios.post(`${API_URL}/api/superadmin/toggle-maintenance`, { enabled: !isMaintenance }, {
-                headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` }
-            });
-            setIsMaintenance(!isMaintenance);
-            toast.success("Status Updated");
-        } catch (e) { toast.error("Failed"); }
-    };
-
-    const handleManualUpgrade = async (ownerId) => {
-        try {
-            await axios.put(`${API_URL}/api/superadmin/manual-upgrade/${ownerId}`, {}, {
-                headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` }
-            });
-            toast.success("Upgraded to PRO");
-            forceSync();
-            setSelectedClient(null);
-        } catch (err) { toast.error("Failed"); }
-    };
-
-    const filteredList = restaurants.filter(r => 
-        r.restaurantName?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-        r.username?.toLowerCase().includes(searchTerm.toLowerCase())
+    const filtered = clients.filter(c => 
+        c.restaurantName.toLowerCase().includes(searchTerm.toLowerCase()) || 
+        c.phoneNumber.includes(searchTerm)
     );
 
     return (
         <div style={styles.container}>
-            <header style={styles.header}>
-                <h1 style={styles.logo}><FaShieldAlt color="#f97316" /> SaaS MASTER</h1>
-                <div style={{display:'flex', gap:'8px'}}>
-                    {/* ✅ GHOST PURGE BUTTON */}
-                    <button 
-                        onClick={handleGhostPurge} 
-                        disabled={isCleaning}
-                        style={{...styles.iconBtnHeader, background: '#3b0a0a', border: '1px solid #ef4444'}}
-                    >
-                        {isCleaning ? <FaSpinner className="spin"/> : <FaGhost color="#ef4444"/>}
-                    </button>
-
-                    <button onClick={toggleMaintenance} style={{...styles.maintBtn, background: isMaintenance ? '#ef4444' : '#111'}}>
-                        <FaTools /> {isMaintenance ? "OFF" : "LIVE"}
-                    </button>
-                    <button onClick={() => { localStorage.clear(); navigate("/super-login"); }} style={styles.logoutBtn}><FaSignOutAlt/></button>
+            {/* --- HEADER --- */}
+            <div style={styles.header}>
+                <div>
+                    <h1 style={styles.title}><FaShieldAlt color="#f97316"/> CEO DASHBOARD</h1>
+                    <p style={styles.sub}>Master Control Center</p>
                 </div>
-            </header>
-
-            <div style={styles.metricsGrid}>
-                <div style={styles.metricCard}>
-                    <p style={styles.metricLabel}>TOTAL NETWORK ORDERS</p>
-                    <h2 style={styles.metricValue}>{globalOrderCount.toLocaleString()}</h2>
-                </div>
-                <div style={styles.metricCard}>
-                    <p style={styles.metricLabel}>EST. MRR</p>
-                    <h2 style={{...styles.metricValue, color:'#22c55e'}}>₹{metrics.mrr.toLocaleString()}</h2>
-                </div>
-                <div style={styles.metricCard}>
-                    <p style={styles.metricLabel}>PRO / TRIAL</p>
-                    <h2 style={styles.metricValue}>{metrics.proCount} / {metrics.trialCount}</h2>
+                <div style={styles.headerActions}>
+                    <button onClick={handleInstall} style={styles.installBtn}><FaDownload/> APP</button>
+                    <input 
+                        style={styles.search} 
+                        placeholder="Search Client..." 
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                    />
                 </div>
             </div>
 
-            <div style={styles.broadcastBox}>
-                <input style={styles.broadcastInput} placeholder="Broadcast to all panels..." value={broadcastMsg} onChange={(e) => setBroadcastMsg(e.target.value)} />
-                <button onClick={handleBroadcast} style={styles.broadcastBtn}><FaBroadcastTower /></button>
+            {/* --- MONEY VIEW & KPI --- */}
+            <div style={styles.statsRow}>
+                <div style={styles.statCard}>
+                    <span>TOTAL CLIENTS</span>
+                    <h2>{metrics.total}</h2>
+                </div>
+                <div style={styles.statCard}>
+                    <span>ACTIVE (Daily)</span>
+                    <h2 style={{color:'#22c55e'}}>{metrics.active}</h2>
+                </div>
+                <div style={styles.statCard}>
+                    <span>PAID USERS</span>
+                    <h2>{metrics.paid}</h2>
+                </div>
+                <div style={styles.statCard}>
+                    <span>EST. MRR</span>
+                    <h2 style={{color:'#f97316'}}>₹{metrics.mrr.toLocaleString()}</h2>
+                </div>
             </div>
 
-            <div style={styles.searchWrapper}>
-                <FaSearch style={styles.searchIcon} />
-                <input placeholder="Search network..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={styles.searchInput} />
-            </div>
-
-            <div style={styles.list}>
-                {loading ? <div style={styles.centerText}><FaSpinner className="spin"/> SYNCING...</div> : 
-                    filteredList.map(r => (
-                        <div key={r._id} style={{...styles.item, borderLeft: `4px solid ${r.isPro ? '#f97316' : '#333'}`}}>
-                            <div style={{ flex: 1 }}>
-                                <div style={{display:'flex', alignItems:'center', gap:'8px'}}>
-                                    <span style={styles.itemName}>{r.restaurantName}</span>
-                                    {r.isPro && <FaCrown color="#f97316" size={10}/>}
-                                </div>
-                                <div style={styles.metaRow}>
-                                    <span style={styles.metaItem}><FaClock/> {new Date(r.createdAt).toLocaleDateString()}</span>
-                                    <span style={styles.metaItem}><FaChartBar/> ₹{r.totalRevenue || 0}</span>
-                                </div>
-                            </div>
-                            <button onClick={() => setSelectedClient(r)} style={styles.actionBtn}><FaMoneyBillWave color="#22c55e" /></button>
+            {/* --- CLIENT GRID --- */}
+            <div style={styles.grid}>
+                {loading ? <p>Syncing...</p> : filtered.map(c => (
+                    <div key={c._id} style={styles.card} onClick={() => { setSelected(c); setNoteDraft(c.ceoNotes); }}>
+                        <div style={styles.cardHeader}>
+                            <h3>{c.restaurantName}</h3>
+                            <span style={{
+                                ...styles.badge, 
+                                background: c.health.includes("Healthy") ? '#064e3b' : c.health.includes("Risk") ? '#450a0a' : '#713f12',
+                                color: c.health.includes("Healthy") ? '#4ade80' : c.health.includes("Risk") ? '#f87171' : '#facc15'
+                            }}>
+                                {c.health === "🟢 Healthy" ? <FaCheckCircle/> : <FaExclamationTriangle/>} {c.health}
+                            </span>
                         </div>
-                    ))
-                }
+                        <div style={styles.cardBody}>
+                            <p><strong>Last Active:</strong> {c.lastActive}</p>
+                            <p><strong>Plan:</strong> {c.settings?.isPro ? "👑 PRO" : "TRIAL"}</p>
+                            <p><strong>Expires:</strong> {new Date(c.subscriptionExpires).toLocaleDateString()}</p>
+                        </div>
+                    </div>
+                ))}
             </div>
 
-            {selectedClient && (
-                <div style={styles.modalOverlay} onClick={() => setSelectedClient(null)}>
-                    <div style={styles.modalCard} onClick={e => e.stopPropagation()}>
-                        <h2 style={{marginBottom:'10px'}}>Manage {selectedClient.username}</h2>
+            {/* --- MODAL: COMMAND CENTER --- */}
+            {selected && (
+                <div style={styles.overlay}>
+                    <div style={styles.modal}>
+                        <div style={styles.modalTop}>
+                            <h2>Control: {selected.restaurantName}</h2>
+                            <button onClick={() => setSelected(null)} style={styles.closeBtn}>CLOSE</button>
+                        </div>
+
+                        {/* KILL SWITCHES */}
+                        <div style={styles.switchGrid}>
+                            <button onClick={() => toggleSwitch(selected._id, 'settings.menuActive', selected.settings?.menuActive)}
+                                style={{...styles.swBtn, background: selected.settings?.menuActive ? '#111' : '#450a0a', border: selected.settings?.menuActive ? '1px solid #333' : '1px solid #f00'}}>
+                                <FaUtensils color={selected.settings?.menuActive ? '#22c55e' : '#666'} /> 
+                                {selected.settings?.menuActive ? "MENU LIVE" : "MENU KILLED"}
+                            </button>
+                            
+                            <button onClick={() => toggleSwitch(selected._id, 'settings.chefActive', selected.settings?.chefActive)}
+                                style={{...styles.swBtn, background: selected.settings?.chefActive ? '#111' : '#450a0a', border: selected.settings?.chefActive ? '1px solid #333' : '1px solid #f00'}}>
+                                <FaUserTie color={selected.settings?.chefActive ? '#22c55e' : '#666'} /> 
+                                {selected.settings?.chefActive ? "CHEF LIVE" : "CHEF KILLED"}
+                            </button>
+                            
+                            <button onClick={() => toggleSwitch(selected._id, 'settings.isPro', selected.settings?.isPro)}
+                                style={{...styles.swBtn, border: '1px solid #f97316'}}>
+                                {selected.settings?.isPro ? "⬇️ DOWNGRADE TO TRIAL" : "👑 UPGRADE TO PRO"}
+                            </button>
+
+                            <button onClick={() => enterGodMode(selected._id, selected.username)} style={{...styles.swBtn, background:'#f97316', color:'black'}}>
+                                <FaGhost /> ENTER GOD MODE
+                            </button>
+                        </div>
+
+                        {/* CONTACT INFO */}
                         <div style={styles.infoBox}>
-                            <p>Revenue: <b>₹{selectedClient.totalRevenue || 0}</b></p>
-                            <p>Status: <b>{selectedClient.isPro ? 'PRO' : 'TRIAL'}</b></p>
+                            <p><FaPhone/> {selected.phoneNumber || "No Phone"}</p>
+                            <p>Revenue: ₹{selected.totalRevenue}</p>
                         </div>
-                        <div style={{display:'flex', gap:'10px', marginTop:'20px'}}>
-                            <button onClick={() => handleManualUpgrade(selectedClient._id)} style={{...styles.modalActionBtn, background:'#22c55e'}}>UPGRADE</button>
-                            <button onClick={() => setSelectedClient(null)} style={{...styles.modalActionBtn, background:'#333'}}>CLOSE</button>
+
+                        {/* CEO NOTES */}
+                        <div style={styles.notesSection}>
+                            <label>📓 PRIVATE NOTES</label>
+                            <textarea value={noteDraft} onChange={(e) => setNoteDraft(e.target.value)} style={styles.textarea}/>
+                            <button onClick={() => saveNotes(selected._id)} style={styles.saveBtn}><FaSave/> SAVE NOTES</button>
                         </div>
                     </div>
                 </div>
             )}
-            <style>{`.spin { animation: spin 1s linear infinite; } @keyframes spin { 100% { transform: rotate(360deg); } }`}</style>
         </div>
     );
 };
 
 const styles = {
-    container: { minHeight: "100vh", background: "#050505", color: "white", padding: "15px", fontFamily: "'Inter', sans-serif" },
-    header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "25px" },
-    logo: { fontSize: '10px', fontWeight: '900', letterSpacing:'1px' },
-    iconBtnHeader: { padding:'10px', borderRadius:'12px', cursor:'pointer', display:'flex', alignItems:'center' },
-    maintBtn: { border: '1px solid #222', color: 'white', padding: '10px', borderRadius: '12px', fontSize: '10px', fontWeight: '800', display:'flex', alignItems:'center', gap:'8px' },
-    logoutBtn: { background: "#ef4444", border: "none", color: "white", padding: '10px', borderRadius: "12px" },
-    metricsGrid: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginBottom: '20px' },
-    metricCard: { background: '#0a0a0a', border: '1px solid #111', padding: '12px', borderRadius: '16px' },
-    metricLabel: { margin: 0, fontSize: '6px', color: '#444', fontWeight: '900' },
-    metricValue: { margin: 0, fontSize: '12px', fontWeight: '900', marginTop: '4px' },
-    broadcastBox: { display: 'flex', gap: '10px', marginBottom: '20px', background: '#0a0a0a', padding: '8px', borderRadius: '15px', border: '1px solid #111' },
-    broadcastInput: { flex: 1, background: 'transparent', border: 'none', color: 'white', outline: 'none', fontSize: '12px', paddingLeft:'10px' },
-    broadcastBtn: { background: '#f97316', border: 'none', color: 'white', padding: '10px 15px', borderRadius: '10px' },
-    searchWrapper: { position: 'relative', marginBottom: '20px' },
-    searchIcon: { position: 'absolute', left: '15px', top: '15px', color: '#444' },
-    searchInput: { width: '100%', padding: '15px 15px 15px 40px', background: '#0a0a0a', border: '1px solid #222', borderRadius: '14px', color: 'white', outline: 'none' },
-    list: { display: 'flex', flexDirection: 'column', gap: '8px' },
-    item: { background: '#0a0a0a', padding: '15px', borderRadius: '18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border:'1px solid #111' },
-    itemName: { fontSize: '13px', fontWeight: '800' },
-    metaRow: { display:'flex', gap:'12px', marginTop: '4px' },
-    metaItem: { fontSize: '9px', color: '#444', fontWeight:'700', display:'flex', alignItems:'center', gap:'4px' },
-    actionBtn: { background: 'none', border: 'none', padding: '10px' },
-    modalOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.95)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter:'blur(10px)' },
-    modalCard: { background: '#0a0a0a', borderRadius: '28px', width: '90%', maxWidth: '350px', padding: '25px', border: '1px solid #222' },
-    infoBox: { background: '#000', padding: '15px', borderRadius: '16px', fontSize: '13px', lineHeight: '1.8' },
-    modalActionBtn: { flex: 1, color: 'white', border: 'none', padding: '15px', borderRadius: '14px', fontWeight: '900', fontSize: '11px' },
-    centerText: { textAlign: 'center', color: '#333', marginTop: '50px', fontWeight:'900', fontSize:'12px' }
+    container: { background: '#050505', minHeight: '100vh', padding: '20px', color: '#fff', fontFamily: 'Inter, sans-serif' },
+    header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', flexWrap: 'wrap', gap:'10px' },
+    title: { fontSize: '20px', fontWeight: '900', margin: 0, display:'flex', alignItems:'center', gap:'10px' },
+    sub: { fontSize: '12px', color: '#666', margin: 0 },
+    headerActions: { display: 'flex', gap: '10px' },
+    installBtn: { background: '#22c55e', color: '#000', border: 'none', padding: '10px 15px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' },
+    search: { background: '#111', border: '1px solid #333', padding: '10px', borderRadius: '8px', color: '#fff', width: '200px' },
+    
+    statsRow: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px', marginBottom: '30px' },
+    statCard: { background: '#0a0a0a', border: '1px solid #1a1a1a', padding: '15px', borderRadius: '12px' },
+    
+    grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '15px' },
+    card: { background: '#0a0a0a', border: '1px solid #1a1a1a', padding: '20px', borderRadius: '16px', cursor: 'pointer' },
+    cardHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' },
+    badge: { fontSize: '10px', padding: '4px 8px', borderRadius: '6px', fontWeight: 'bold', display:'flex', alignItems:'center', gap:'5px' },
+    cardBody: { fontSize: '12px', color: '#888', lineHeight: '1.6' },
+    
+    overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.95)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '10px', zIndex: 999 },
+    modal: { background: '#0a0a0a', border: '1px solid #333', borderRadius: '20px', padding: '25px', width: '100%', maxWidth: '500px', maxHeight: '90vh', overflowY: 'auto' },
+    modalTop: { display: 'flex', justifyContent: 'space-between', marginBottom: '20px' },
+    closeBtn: { background: '#333', border: 'none', color: '#fff', padding: '5px 15px', borderRadius: '6px', cursor: 'pointer' },
+    
+    switchGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '20px' },
+    swBtn: { padding: '15px', borderRadius: '10px', cursor: 'pointer', color: '#fff', fontWeight: 'bold', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', fontSize: '10px' },
+    
+    infoBox: { background: '#111', padding: '15px', borderRadius: '10px', marginBottom: '20px', fontSize: '12px' },
+    notesSection: { borderTop: '1px solid #222', paddingTop: '15px' },
+    textarea: { width: '100%', height: '100px', background: '#000', border: '1px solid #333', color: '#fff', padding: '10px', marginTop: '10px', borderRadius: '8px' },
+    saveBtn: { background: '#f97316', border: 'none', color: '#fff', width: '100%', padding: '12px', marginTop: '10px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }
 };
 
 export default SuperAdmin;

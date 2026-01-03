@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 
 /**
  * Dish Model (Enterprise v3.5 - Ratings Integrated)
+ * This schema handles food items, pricing, availability, and social proof.
  */
 const dishSchema = new mongoose.Schema({
   name: { 
@@ -66,6 +67,10 @@ const dishSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now }
   }],
 
+  /**
+   * 🏢 RESTAURANT LINK
+   * This field is critical. It connects this dish to a specific Owner.
+   */
   restaurantId: { 
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'Owner', 
@@ -78,15 +83,16 @@ const dishSchema = new mongoose.Schema({
 
 // --- 🚀 PRO PERFORMANCE INDEXING ---
 
-// Compound index for the Menu page: Filters by restaurant and sort by rating/popularity
+// Compound index for the Menu page: Filter by restaurant and sort by rating
 dishSchema.index({ restaurantId: 1, "ratings.average": -1 });
 
-// standard category/availability indexes
+// Speed up category and availability filters
 dishSchema.index({ restaurantId: 1, category: 1 });
 dishSchema.index({ restaurantId: 1, isAvailable: 1 });
 
 /**
  * 🏗️ EXPORT MODEL
+ * Prevents re-compilation errors in development.
  */
 const Dish = mongoose.models.Dish || mongoose.model('Dish', dishSchema);
 export default Dish;
