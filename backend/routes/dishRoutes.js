@@ -31,51 +31,58 @@ const protect = async (req, res, next) => {
 // ==========================================
 
 /**
- * 1. GET DISHES (Public - GUARANTEED SEARCH)
- * ✅ FIX: Finds Owner by Username/ID -> Then finds Dishes by restaurantId OR owner field
+ * 1. GET DISHES (Public - BRUTE FORCE FIX)
+ * ✅ FIX: Strips quotes, checks exact username, then checks case-insensitive.
  */
 const getDishesLogic = async (req, res) => {
-    let searchInput = req.query.restaurantId || req.params.restaurantId;
+    let rawInput = req.query.restaurantId || req.params.restaurantId;
     
-    // Cleanup input
-    if (!searchInput) return res.status(400).json({ message: "Restaurant ID is required." });
-    searchInput = searchInput.trim();
+    if (!rawInput) return res.status(400).json({ message: "Restaurant ID is required." });
 
-    console.log(`🔎 [API] Searching menu for: "${searchInput}"`);
+    // 🧹 CLEANUP: Remove quotes and spaces (Fixes "kalyanresto1" issue)
+    let searchInput = rawInput.replace(/['"]+/g, '').trim();
+
+    console.log(`🔎 [API] Raw: "${rawInput}" | Cleaned: "${searchInput}"`);
 
     try {
         let owner;
 
-        // A. Check if it is a direct Database ID (e.g. 6954ca...)
+        // A. Check if it is a direct Database ID
         if (mongoose.Types.ObjectId.isValid(searchInput)) {
             owner = await Owner.findById(searchInput);
-        } else {
-            // B. SUPER SEARCH: Look in Username OR Email OR Name
-            const regex = new RegExp("^" + searchInput + "$", "i");
-            owner = await Owner.findOne({
-                $or: [
-                    { username: regex },
-                    { email: regex },
-                    { restaurantName: regex }
-                ]
-            });
+        } 
+
+        // B. BRUTE FORCE SEARCH (If ID didn't work)
+        if (!owner) {
+            // 1. Try EXACT Username match (Fastest)
+            owner = await Owner.findOne({ username: searchInput });
+            
+            // 2. If failed, try EXACT Restaurant Name
+            if (!owner) owner = await Owner.findOne({ restaurantName: searchInput });
+
+            // 3. If failed, try Case-Insensitive Regex (Last Resort)
+            if (!owner) {
+                const regex = new RegExp("^" + searchInput + "$", "i");
+                owner = await Owner.findOne({
+                    $or: [{ username: regex }, { restaurantName: regex }]
+                });
+            }
         }
 
+        // ❌ IF STILL NOT FOUND
         if (!owner) {
-            console.log(`❌ [API] Owner "${searchInput}" NOT found in DB.`);
+            console.log(`❌ [API] FAILED to find owner: "${searchInput}"`);
             return res.status(404).json({ message: "Restaurant not found" });
         }
 
-        // C. SAFETY CHECK: Check if Menu is Active
+        // C. SAFETY CHECK
         if (owner.settings && owner.settings.menuActive === false) {
              return res.status(503).json({ message: "Menu is currently offline." });
         }
             
         console.log(`✅ [API] Owner Found: ${owner.username} (${owner._id})`);
 
-        // D. HYBRID DISH SEARCH (The "Catch-All" Fix)
-        // This looks for dishes linked via 'restaurantId' OR 'owner'
-        // This prevents empty menus if your Dish Model schema is different.
+        // D. FETCH DISHES (Using both ID links)
         const dishes = await Dish.find({
             $or: [
                 { restaurantId: owner._id },
@@ -83,7 +90,7 @@ const getDishesLogic = async (req, res) => {
             ]
         }); 
         
-        console.log(`📦 [API] Found ${dishes.length} dishes.`);
+        console.log(`📦 [API] Found ${dishes.length} dishes for ${owner.username}`);
         res.json(dishes);
 
     } catch (error) {
@@ -105,10 +112,11 @@ router.get('/:restaurantId', getDishesLogic);
 router.post('/', protect, async (req, res) => {
     try {
         const { name, price, category, description, image } = req.body;
+        // Save with BOTH fields to guarantee future searches work
         const newDish = new Dish({
             name, price, category, description, image,
-            restaurantId: req.user.id, // Primary link
-            owner: req.user.id         // Backup link
+            restaurantId: req.user.id, 
+            owner: req.user.id         
         });
         const savedDish = await newDish.save();
         res.status(201).json(savedDish);
