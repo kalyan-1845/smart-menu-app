@@ -92,10 +92,10 @@ const RestaurantAdmin = () => {
         return "Main Course"; 
     };
 
-    // ✅ FIXED REFRESH ENGINE: Accepts a manual ID to bypass state delays
-    const refreshData = useCallback(async (targetMongoId) => {
-        const fetchId = targetMongoId || mongoId || localStorage.getItem(`owner_id_${id}`);
-        if (!fetchId) return;
+    // ✅ REFRESH ENGINE: Direct fetch bypasses state lag
+    const refreshData = useCallback(async (manualId) => {
+        const fetchId = manualId || mongoId || localStorage.getItem(`owner_id_${id}`);
+        if (!fetchId || fetchId === "undefined") return;
 
         try {
             const [dishRes, orderRes] = await Promise.all([
@@ -147,13 +147,16 @@ const RestaurantAdmin = () => {
         window.location.reload();
     };
 
-    // ✅ FIXED BULK INSERTER: Forces Refresh with Active ID
+    // ✅ FIXED BULK INSERTER: Uses local variables to prevent state loss
     const handleBulkInsert = async () => {
         const lines = bulkText.split("\n").filter(l => l.trim() !== "");
         const token = localStorage.getItem(`owner_token_${id}`);
-        const activeId = mongoId || localStorage.getItem(`owner_id_${id}`);
+        const activeId = localStorage.getItem(`owner_id_${id}`); // Get ID directly from storage
 
-        if (!activeId) return toast.error("Shop ID not found. Please re-login.");
+        if (!activeId || activeId === "undefined") {
+            return toast.error("Critical: Shop ID not found. Please logout & login again.");
+        }
+        
         if (!lines.length) return toast.error("Enter items first");
 
         setIsLoading(true);
@@ -168,7 +171,7 @@ const RestaurantAdmin = () => {
                         price: parseFloat(price),
                         image: img || "",
                         category: autoCategory(name),
-                        restaurantId: activeId,
+                        restaurantId: activeId, // Use the direct ID variable
                         isAvailable: true 
                     }, { headers: { Authorization: `Bearer ${token}` } });
                 }
@@ -176,10 +179,10 @@ const RestaurantAdmin = () => {
             toast.dismiss(t);
             toast.success("All Items Live!");
             setBulkText("");
-            refreshData(activeId); // 🚀 Force refresh with the specific ID
+            await refreshData(activeId); // Force the list to update immediately
         } catch (err) {
             toast.dismiss(t);
-            toast.error("Failed to add items");
+            toast.error("Failed to sync some items");
         } finally {
             setIsLoading(false);
         }
@@ -188,7 +191,7 @@ const RestaurantAdmin = () => {
     const handleDeleteDish = async (dishId) => {
         if (!window.confirm("Delete this dish?")) return;
         const token = localStorage.getItem(`owner_token_${id}`);
-        const activeId = mongoId || localStorage.getItem(`owner_id_${id}`);
+        const activeId = localStorage.getItem(`owner_id_${id}`);
         try {
             await axios.delete(`${API_BASE}/dishes/${dishId}`, {
                 headers: { Authorization: `Bearer ${token}` }
@@ -201,7 +204,7 @@ const RestaurantAdmin = () => {
     const handleDownloadAndClear = async () => {
         if (inboxOrders.length === 0) return toast.error("No data to export");
         const doc = new jsPDF();
-        const activeId = mongoId || localStorage.getItem(`owner_id_${id}`);
+        const activeId = localStorage.getItem(`owner_id_${id}`);
         doc.text(`Sales Report - ${restaurantName}`, 14, 15);
         const tableData = inboxOrders.map((order, i) => [
             i + 1, order.tableNum, order.items.map(item => `${item.name} x${item.quantity}`).join(", "),

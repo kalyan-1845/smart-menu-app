@@ -3,8 +3,6 @@ import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
 import webpush from 'web-push'; 
 import Owner from '../models/Owner.js'; 
-import Dish from '../models/Dish.js'; 
-import Order from '../models/Order.js'; 
 
 const router = express.Router();
 
@@ -93,7 +91,6 @@ router.post('/verify-role', async (req, res) => {
         
         if (!user) return res.status(404).json({ message: "Not found" });
 
-        // Uses "bitebox18" as default if PIN isn't set in DB
         const validPass = role === 'chef' ? (user.chefPassword || "bitebox18") : (user.waiterPassword || "bitebox18"); 
 
         if (password === validPass) {
@@ -101,15 +98,33 @@ router.post('/verify-role', async (req, res) => {
                 success: true, 
                 role, 
                 restaurantId: user._id,
-                token: generateToken(user._id) // Provide token for "OUT" button authorization
+                token: generateToken(user._id)
             });
         } else { return res.status(401).json({ message: "Wrong PIN" }); }
     } catch (error) { res.status(401).json({ message: "Invalid" }); }
 });
 
+// ============================================================
+// 🎯 CRITICAL FIX: OWNER-ID LOOKUP (For Menu.jsx Sync)
+// ============================================================
+router.get('/owner-id/:username', async (req, res) => {
+    try {
+        const owner = await Owner.findOne({ 
+            username: req.params.username.toLowerCase() 
+        }).select('_id');
+
+        if (!owner) {
+            return res.status(404).json({ message: "Restaurant not found" });
+        }
+        // This returns the 24-character ID that Menu.jsx needs to find dishes
+        res.json({ id: owner._id }); 
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
 // --- 🌐 PUBLIC RESTAURANT LOOKUP (Anti-Cache) ---
 router.get('/restaurant/:id', async (req, res) => {
-    // Force browser to fetch fresh data every time
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     
     try {
@@ -124,15 +139,6 @@ router.get('/restaurant/:id', async (req, res) => {
 
         if (!owner) return res.status(404).json({ message: 'Not found' });
         res.json(owner);
-    } catch (error) { res.status(500).json({ message: error.message }); }
-});
-
-// --- 👻 CEO GHOST LOGIN ---
-router.get('/ghost-login/:id', async (req, res) => {
-    try {
-        const owner = await Owner.findById(req.params.id);
-        if (!owner) return res.status(404).json({ message: "Not found" });
-        res.json({ success: true, token: generateToken(owner._id), _id: owner._id });
     } catch (error) { res.status(500).json({ message: error.message }); }
 });
 
