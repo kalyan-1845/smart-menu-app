@@ -1,7 +1,7 @@
 import express from 'express';
 import { 
     getDishes, 
-    addDishReview, 
+    addDishReview,   // <--- This must match the controller export
     createDish, 
     updateDish, 
     deleteDish 
@@ -10,11 +10,10 @@ import { protect } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-// 🌐 Public: Accessible by customers (High Speed)
 router.get('/', getDishes); 
-router.post('/rate/:dishId', addDishReview);
+router.post('/rate/:dishId', addDishReview); // Used for ratings
 
-// 🏗️ Admin: Accessible only by Owners (Security Protected)
+// Admin Routes
 router.post('/', protect, createDish);
 router.put('/:id', protect, updateDish);
 router.delete('/:id', protect, deleteDish);
