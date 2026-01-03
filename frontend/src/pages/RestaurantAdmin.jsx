@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import axios from "axios";
 import { Link, useParams } from "react-router-dom";
 import io from "socket.io-client";
@@ -13,7 +13,6 @@ import {
 } from "react-icons/fa";
 import { toast } from "react-hot-toast";
 
-// --- PREMIUM BITEBOX STYLES (Ultra-Fast & Mobile-First) ---
 const styles = `
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;900&display=swap');
 .admin-container { min-height: 100vh; padding: 15px; background: radial-gradient(circle at top center, #1a0f0a 0%, #050505 60%); color: white; font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
@@ -35,7 +34,6 @@ const styles = `
 @keyframes pulse-ring { 0% { box-shadow: 0 0 0 0 rgba(255, 153, 51, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(255, 153, 51, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 153, 51, 0); } }
 `;
 
-// --- SETUP WIZARD COMPONENT ---
 const SetupWizard = ({ dishesCount, pushEnabled }) => {
     const steps = [
         { id: 1, label: "Add 3 dishes", done: dishesCount >= 3 },
@@ -69,7 +67,6 @@ const SetupWizard = ({ dishesCount, pushEnabled }) => {
     );
 };
 
-// --- MAIN RESTAURANT ADMIN ---
 const RestaurantAdmin = () => {
     const { id } = useParams();
     const SERVER_URL = "https://smart-menu-backend-5ge7.onrender.com";
@@ -87,6 +84,10 @@ const RestaurantAdmin = () => {
     const [isPro, setIsPro] = useState(false);
     const [formData, setFormData] = useState({ name: "", price: "", category: "Starters", image: "" });
     const [qrRange, setQrRange] = useState({ start: 1, end: 5 });
+
+    // ✅ OPTIMIZED: Track tab without re-rendering socket effect
+    const activeTabRef = useRef(activeTab);
+    useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
 
     const refreshData = useCallback(async (mongoId) => {
         if (!mongoId || mongoId === "undefined") return;
@@ -116,14 +117,17 @@ const RestaurantAdmin = () => {
         if (isAuthenticated && mongoId) {
             const socket = io(SERVER_URL, { query: { restaurantId: mongoId } });
             socket.emit("join-restaurant", mongoId);
+            
             socket.on("new-order", () => {
                 refreshData(mongoId);
-                if (activeTab !== "inbox") setHasNewOrder(true);
+                // ✅ SOCKET FIX: Uses Ref instead of state to avoid disconnects
+                if (activeTabRef.current !== "inbox") setHasNewOrder(true);
                 toast.success("New Order Received!");
             });
+            
             return () => socket.disconnect();
         }
-    }, [isAuthenticated, id, activeTab, refreshData, SERVER_URL]);
+    }, [isAuthenticated, id, refreshData, SERVER_URL]); 
 
     const handleLogin = async (e) => {
         e.preventDefault();
@@ -253,8 +257,6 @@ const RestaurantAdmin = () => {
                     <div className="glass-card">
                         <form onSubmit={handleAddDish}>
                             <input className="input-dark" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} placeholder="Dish Name (e.g. Burger)" required />
-                            
-                            {/* ✅ IMAGE URL FIELD ADDED BACK */}
                             <input className="input-dark" value={formData.image} onChange={e => setFormData({ ...formData, image: e.target.value })} placeholder="Dish Image URL (Optional)" />
                             
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
@@ -269,7 +271,6 @@ const RestaurantAdmin = () => {
                             {dishes.map(dish => (
                                 <div key={dish._id} className="dish-item">
                                     <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                                        {/* ✅ DISPLAY THE DISH IMAGE OR A FALLBACK ICON */}
                                         <div style={{ width: '45px', height: '45px', background: '#111', borderRadius: '12px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                             {dish.image ? (
                                                 <img src={dish.image} alt="" style={{width: '100%', height: '100%', objectFit: 'cover'}} />

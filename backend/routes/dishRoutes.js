@@ -1,20 +1,14 @@
 import express from 'express';
-import { 
-    getDishes, 
-    addDishReview,   // <--- MUST MATCH EXACTLY with the controller you just sent
-    createDish, 
-    updateDish, 
-    deleteDish 
-} from '../controllers/dishController.js';
-import { protect } from '../middleware/authMiddleware.js';
+import { getDishes, addDishReview, createDish, updateDish, deleteDish } from '../controllers/dishController.js';
+import { protect } from '../middleware/authMiddleware.js'; // Assuming you have this
 
 const router = express.Router();
 
-// Public
-router.get('/', getDishes); 
-router.post('/rate/:dishId', addDishReview); // <--- Matches the import
+// Public Routes
+router.get('/:restaurantId', getDishes); // This handles /api/menu/kalyanresto1
+router.post('/:dishId/review', addDishReview);
 
-// Admin (Protected)
+// Protected Routes (Needs Login)
 router.post('/', protect, createDish);
 router.put('/:id', protect, updateDish);
 router.delete('/:id', protect, deleteDish);

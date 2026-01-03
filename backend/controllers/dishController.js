@@ -6,10 +6,11 @@ import mongoose from 'mongoose';
 // 1. PUBLIC: FETCH MENU (The Engine)
 // ============================================================
 export const getDishes = async (req, res) => {
-    const { restaurantId } = req.query; 
+    // 🔥 FIX: Check both URL params (/:id) and Query string (?id=)
+    const restaurantId = req.query.restaurantId || req.params.restaurantId;
 
     try {
-        if (!restaurantId) return res.status(400).json({ message: "ID required" });
+        if (!restaurantId) return res.status(400).json({ message: "Restaurant ID or Username required" });
 
         let owner;
         
@@ -23,10 +24,10 @@ export const getDishes = async (req, res) => {
         }
 
         // Safety: If no owner found, return empty array (Don't crash)
-        if (!owner) return res.json([]); 
+        if (!owner) return res.status(404).json({ message: "Restaurant not found" }); 
 
         // 🛑 KILL SWITCH ENFORCEMENT (Crucial for God Mode)
-        // If CEO turned off menu, this sends 503. The frontend catches this to show "Locked" screen.
+        // If Owner turned off menu, this sends 503. Frontend shows "Locked" screen.
         if (owner.settings && owner.settings.menuActive === false) {
             return res.status(503).json({ message: "❌ SERVICE SUSPENDED BY ADMIN" });
         }
@@ -52,7 +53,7 @@ export const addDishReview = async (req, res) => {
     const { rating, comment, customerName } = req.body;
 
     try {
-        if (!rating || rating < 1 || rating > 5) return res.status(400).json({ message: "1-5 required" });
+        if (!rating || rating < 1 || rating > 5) return res.status(400).json({ message: "Rating 1-5 required" });
 
         const dish = await Dish.findById(dishId);
         if (!dish) return res.status(404).json({ message: "Dish not found" });
@@ -61,6 +62,8 @@ export const addDishReview = async (req, res) => {
         const currentCount = dish.ratings?.count || 0;
         const currentAvg = dish.ratings?.average || 0;
         const newCount = currentCount + 1;
+        
+        // Math: ((Old Avg * Old Count) + New Rating) / New Count
         const newAverage = ((currentAvg * currentCount) + Number(rating)) / newCount;
 
         dish.ratings = { 
@@ -82,6 +85,7 @@ export const addDishReview = async (req, res) => {
         await dish.save();
         res.status(200).json({ success: true, average: dish.ratings.average });
     } catch (error) {
+        console.error("Review Error:", error);
         res.status(500).json({ message: "Rating failed" });
     }
 };
@@ -96,6 +100,7 @@ export const createDish = async (req, res) => {
         const dish = await Dish.create(dishData);
         res.status(201).json(dish);
     } catch (error) {
+        console.error("Create Dish Error:", error);
         res.status(400).json({ message: "Creation failed" });
     }
 };
@@ -107,7 +112,7 @@ export const updateDish = async (req, res) => {
             req.body, 
             { new: true }
         );
-        if (!updated) return res.status(403).json({ message: "Unauthorized" });
+        if (!updated) return res.status(403).json({ message: "Unauthorized or Dish not found" });
         res.status(200).json(updated);
     } catch (error) {
         res.status(400).json({ message: "Update failed" });
@@ -120,7 +125,7 @@ export const deleteDish = async (req, res) => {
             _id: req.params.id, 
             restaurantId: req.user._id 
         });
-        if (!deleted) return res.status(403).json({ message: "Forbidden" });
+        if (!deleted) return res.status(403).json({ message: "Forbidden or Dish not found" });
         res.status(200).json({ message: "PURGED" });
     } catch (error) {
         res.status(400).json({ message: "Delete failed" });
