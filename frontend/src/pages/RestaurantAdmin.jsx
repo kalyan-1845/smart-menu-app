@@ -5,6 +5,7 @@ import io from "socket.io-client";
 import confetti from "canvas-confetti";
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
+import SetupWizard from "../components/SetupWizard";
 import InstallButton from "../components/InstallButton";
 import { 
     FaPlus, FaTrash, FaUtensils, FaLink,
