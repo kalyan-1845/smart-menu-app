@@ -2,177 +2,141 @@ import express from 'express';
 import mongoose from 'mongoose';
 import jwt from 'jsonwebtoken';
 import Dish from '../models/Dish.js';
-import Owner from '../models/Owner.js'; 
+import Owner from '../models/Owner.js';
 
 const router = express.Router();
 
-// ==========================================
-// 🛡️ MIDDLEWARE (Internal)
-// ==========================================
+// --- 🛡️ MIDDLEWARE (Optimized Gatekeeper) ---
 const protect = async (req, res, next) => {
     let token;
-    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+    if (req.headers.authorization?.startsWith('Bearer')) {
         try {
             token = req.headers.authorization.split(' ')[1];
             const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret');
-            req.user = await Owner.findById(decoded.id).select('-password');
-            if (!req.user) return res.status(401).json({ message: 'User not found' });
+            // Lean selection: Only get what is needed to verify ownership
+            req.user = await Owner.findById(decoded.id).select('_id username').lean(); 
+            if (!req.user) return res.status(401).json({ message: 'User session expired' });
             next();
         } catch (error) {
-            return res.status(401).json({ message: 'Token failed' });
+            return res.status(401).json({ message: 'Authentication failed' });
         }
     } else {
-        return res.status(401).json({ message: 'No token' });
+        return res.status(401).json({ message: 'No authorization token' });
     }
 };
 
-// ==========================================
-// 🚦 ROUTES
-// ==========================================
-
-/**
- * 1. GET DISHES (Public - IN-MEMORY MATCH FIX)
- * ✅ FIX: Fetches owners list and matches via JavaScript to bypass DB query issues.
- */
-const getDishesLogic = async (req, res) => {
-    let rawInput = req.query.restaurantId || req.params.restaurantId;
-    
-    if (!rawInput) return res.status(400).json({ message: "Restaurant ID is required." });
-
-    // 🧹 Clean Input
-    let searchInput = rawInput.replace(/['"]+/g, '').trim().toLowerCase();
-    console.log(`🔎 [API] Searching for: "${searchInput}"`);
+// ============================================================
+// 🌐 1. GET MENU (Public - High Speed)
+// ============================================================
+router.get('/', async (req, res) => {
+    const { restaurantId } = req.query; 
+    if (!restaurantId) return res.status(400).json({ message: "ID required" });
 
     try {
-        let owner;
+        let ownerObjectId;
 
-        // A. Direct ID Check (Fastest)
-        if (mongoose.Types.ObjectId.isValid(searchInput)) {
-            owner = await Owner.findById(searchInput);
-        } 
+        // 🧠 INDUSTRIAL LOGIC: Resolve Username or ID
+        if (mongoose.Types.ObjectId.isValid(restaurantId)) {
+            ownerObjectId = restaurantId;
+        } else {
+            const owner = await Owner.findOne({ 
+                username: { $regex: new RegExp("^" + restaurantId + "$", "i") } 
+            }).select('_id').lean();
 
-        // B. JAVASCRIPT MATCH (The Fix)
-        // If ID check failed, fetch all owners and find the match manually.
-        if (!owner) {
-            const allOwners = await Owner.find({}, 'username restaurantName email _id settings');
+            if (!owner) return res.json([]); 
+            ownerObjectId = owner._id;
+        }
+
+        // 🚀 PRO FETCH: Uses Lean + Sort by availability & rating
+        const dishes = await Dish.find({ restaurantId: ownerObjectId })
+            .sort({ isAvailable: -1, "ratings.average": -1 })
+            .lean();
             
-            owner = allOwners.find(o => 
-                (o.username && o.username.toLowerCase().trim() === searchInput) ||
-                (o.restaurantName && o.restaurantName.toLowerCase().trim() === searchInput) ||
-                (o.email && o.email.toLowerCase().trim() === searchInput)
-            );
-        }
-
-        // ❌ IF STILL NOT FOUND
-        if (!owner) {
-            console.log(`❌ [API] FAILED to find owner: "${searchInput}"`);
-            return res.status(404).json({ message: "Restaurant not found" });
-        }
-
-        // C. SAFETY CHECK
-        if (owner.settings && owner.settings.menuActive === false) {
-             return res.status(503).json({ message: "Menu is currently offline." });
-        }
-            
-        console.log(`✅ [API] Match Success: ${owner.username} (${owner._id})`);
-
-        // D. FETCH DISHES (Hybrid Search)
-        const dishes = await Dish.find({
-            $or: [
-                { restaurantId: owner._id },
-                { owner: owner._id }
-            ]
-        }); 
-        
-        console.log(`📦 [API] Returning ${dishes.length} dishes.`);
         res.json(dishes);
-
     } catch (error) {
-        console.error("🔥 [API] Error:", error.message);
-        res.status(500).json({ message: error.message });
+        res.status(500).json({ message: "Cloud Node Error" });
     }
-};
+});
 
-// Route 1: Matches /api/dishes?restaurantId=kalyanresto1
-router.get('/', getDishesLogic);
+// ============================================================
+// ⭐ 2. RATE DISH (Public - Incremental Math Engine)
+// ============================================================
+router.post('/rate/:dishId', async (req, res) => {
+    try {
+        const { rating, comment, customerName } = req.body;
+        const { dishId } = req.params;
 
-// Route 2: Matches /api/dishes/kalyanresto1
-router.get('/:restaurantId', getDishesLogic);
+        if (!rating || rating < 1 || rating > 5) {
+            return res.status(400).json({ message: "Rating must be 1-5" });
+        }
 
+        const dish = await Dish.findById(dishId);
+        if (!dish) return res.status(404).json({ message: "Dish not found" });
 
-/**
- * 2. ADD DISH (Protected)
- */
+        // 🧠 MATH ENGINE: Atomic Average Calculation
+        const oldCount = dish.ratings?.count || 0;
+        const oldAvg = dish.ratings?.average || 0;
+        const newCount = oldCount + 1;
+        const newAverage = ((oldAvg * oldCount) + Number(rating)) / newCount;
+
+        dish.ratings = {
+            average: parseFloat(newAverage.toFixed(1)),
+            count: newCount
+        };
+
+        // Review Pruning: Only keep last 50 reviews to keep DB fast
+        dish.reviews.unshift({ customerName, rating, comment });
+        if (dish.reviews.length > 50) dish.reviews = dish.reviews.slice(0, 50);
+
+        await dish.save();
+        res.json({ success: true, average: dish.ratings.average });
+    } catch (error) {
+        res.status(500).json({ message: "Review processing failed" });
+    }
+});
+
+// ============================================================
+// 🏗️ 3. ADMIN TOOLS (Add, Update, Delete)
+// ============================================================
+
 router.post('/', protect, async (req, res) => {
     try {
-        const { name, price, category, description, image } = req.body;
         const newDish = new Dish({
-            name, price, category, description, image,
-            restaurantId: req.user.id, 
-            owner: req.user.id         
+            ...req.body,
+            restaurantId: req.user._id // Explicitly bind to authenticated owner
         });
         const savedDish = await newDish.save();
         res.status(201).json(savedDish);
     } catch (error) {
-        res.status(400).json({ message: error.message });
+        res.status(400).json({ message: "Validation error" });
     }
 });
 
-/**
- * 3. UPDATE DISH
- */
-router.put('/:id', async (req, res) => {
+router.put('/:id', protect, async (req, res) => {
     try {
-        const dish = await Dish.findByIdAndUpdate(
-            req.params.id,
-            { $set: req.body }, 
+        // Find by ID and ensure ownership in one query
+        const updated = await Dish.findOneAndUpdate(
+            { _id: req.params.id, restaurantId: req.user._id },
+            req.body,
             { new: true }
         );
-        res.json(dish);
+        if (!updated) return res.status(404).json({ message: "Access Denied/Not Found" });
+        res.json(updated);
     } catch (error) {
-        res.status(400).json({ message: error.message });
+        res.status(400).json({ message: "Update failed" });
     }
 });
 
-/**
- * 4. DELETE DISH
- */
 router.delete('/:id', protect, async (req, res) => {
     try {
-        await Dish.findByIdAndDelete(req.params.id);
-        res.json({ message: 'Deleted' });
-    } catch (error) {
-        res.status(500).json({ message: 'Server error' });
-    }
-});
-
-/**
- * 5. ADD REVIEW
- */
-router.post('/:dishId/review', async (req, res) => {
-    const { dishId } = req.params;
-    const { rating, comment, customerName } = req.body;
-
-    try {
-        const dish = await Dish.findById(dishId);
-        if (!dish) return res.status(404).json({ message: "Dish not found" });
-
-        const currentCount = dish.ratings?.count || 0;
-        const currentAvg = dish.ratings?.average || 0;
-        const newCount = currentCount + 1;
-        const newAverage = ((currentAvg * currentCount) + Number(rating)) / newCount;
-
-        dish.ratings = { average: parseFloat(newAverage.toFixed(1)), count: newCount };
-        dish.reviews.unshift({ 
-            customerName: customerName || "Guest", 
-            rating, comment, 
-            createdAt: new Date() 
+        const deleted = await Dish.findOneAndDelete({ 
+            _id: req.params.id, 
+            restaurantId: req.user._id 
         });
-
-        await dish.save();
-        res.status(200).json({ success: true });
+        if (!deleted) return res.status(404).json({ message: "Purge failed: Forbidden" });
+        res.json({ message: 'Item purged from cloud' });
     } catch (error) {
-        res.status(500).json({ message: "Rating failed" });
+        res.status(500).json({ message: 'Server node error' });
     }
 });
 

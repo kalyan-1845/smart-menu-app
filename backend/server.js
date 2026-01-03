@@ -9,7 +9,7 @@ import https from "https";
 import compression from 'compression'; 
 
 // --- IMPORT MODELS ---
-import Owner from './models/Owner.js'; 
+import Owner from './models/Owner.js'; // Ensure this is imported if used in debug routes
 
 // --- IMPORT ROUTES ---
 import authRoutes from './routes/authRoutes.js';
@@ -21,6 +21,7 @@ import broadcastRoutes from './routes/broadcastRoutes.js';
 const app = express();
 
 // ✅ FIX: TRUST RENDER PROXY (Solves the Rate Limit Error)
+// This is the specific line that fixes "ERR_ERL_UNEXPECTED_X_FORWARDED_FOR"
 app.set('trust proxy', 1); 
 
 const httpServer = createServer(app);
@@ -94,24 +95,22 @@ mongoose.connect(process.env.MONGO_URI, {
 .then(() => console.log("✅ High-Scale MongoDB Connected"))
 .catch((err) => console.error("❌ MongoDB Error:", err));
 
-
 // =============================================================
-// 🛑 DEBUG ROUTE: CHECK DATABASE
+// 🛑 DEBUG ROUTE: CHECK DATABASE (Optional but good for testing)
 // =============================================================
 app.get('/api/check-db', async (req, res) => {
     try {
-        const users = await Owner.find({});
-        res.json({
-            count: users.length,
-            message: "Here is the raw data from MongoDB",
-            users: users
-        });
+        // Only works if Owner model is imported
+        if(Owner) {
+            const users = await Owner.find({});
+            res.json({ count: users.length, message: "DB Connection OK", users: users });
+        } else {
+             res.json({ message: "DB Connection OK" });
+        }
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
-// =============================================================
-
 
 // --- ROUTES ---
 app.use('/api/auth', authRoutes);
@@ -119,6 +118,7 @@ app.use('/api/dishes', dishRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/superadmin', superAdminRoutes);
 app.use('/api/broadcast', broadcastRoutes);
+// app.use('/api/menu', dishRoutes); // Removed duplicate route to avoid confusion
 
 app.get('/', (req, res) => res.send('BiteBox API v5 (Proxy Fixed) is Running...'));
 
