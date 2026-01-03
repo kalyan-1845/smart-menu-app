@@ -26,6 +26,8 @@ const styles = `
 .tab-btn.active { background: rgba(255,255,255,0.1); color: #FF9933; }
 .input-dark { width: 100%; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); padding: 16px; border-radius: 14px; color: white; margin-bottom: 15px; outline: none; box-sizing: border-box; font-size: 16px; }
 .dish-item { display: flex; justify-content: space-between; align-items: center; padding: 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+.inbox-card { background: rgba(255, 255, 255, 0.05); padding: 18px; border-radius: 20px; margin-bottom: 12px; border-left: 4px solid #FF9933; }
+.menu-link-box { background: rgba(0,0,0,0.3); border: 1px dashed #444; padding: 15px; border-radius: 16px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 .link-text { color: #3b82f6; font-size: 11px; font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px; text-decoration: none; }
 .spin { animation: rotate 1s linear infinite; } @keyframes rotate { 100% { transform: rotate(360deg); } }
 `;
@@ -66,7 +68,8 @@ const SetupWizard = ({ dishesCount, pushEnabled }) => {
 const RestaurantAdmin = () => {
     const { id } = useParams();
     const navigate = useNavigate();
-    const API_BASE = "https://smart-menu-backend-5ge7.onrender.com/api";
+    const SERVER_URL = "https://smart-menu-backend-5ge7.onrender.com";
+    const API_BASE = `${SERVER_URL}/api`;
     const publicMenuUrl = `${window.location.origin}/menu/${id}`;
 
     const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -81,7 +84,6 @@ const RestaurantAdmin = () => {
     const [bulkText, setBulkText] = useState("");
     const [qrRange, setQrRange] = useState({ start: 1, end: 5 });
 
-    // ✅ 1. CATEGORY AUTO-PICKER LOGIC
     const autoCategory = (name) => {
         const n = name.toLowerCase();
         if (n.includes("juice") || n.includes("tea") || n.includes("coffee") || n.includes("drink") || n.includes("water") || n.includes("shake") || n.includes("lassi") || n.includes("soda")) return "Drinks";
@@ -90,12 +92,15 @@ const RestaurantAdmin = () => {
         return "Main Course"; 
     };
 
-    const refreshData = useCallback(async (realMongoId) => {
-        if (!realMongoId) return;
+    // ✅ FIXED REFRESH ENGINE: Accepts a manual ID to bypass state delays
+    const refreshData = useCallback(async (targetMongoId) => {
+        const fetchId = targetMongoId || mongoId || localStorage.getItem(`owner_id_${id}`);
+        if (!fetchId) return;
+
         try {
             const [dishRes, orderRes] = await Promise.all([
-                axios.get(`${API_BASE}/dishes?restaurantId=${realMongoId}&t=${Date.now()}`),
-                axios.get(`${API_BASE}/orders/inbox?restaurantId=${realMongoId}&t=${Date.now()}`)
+                axios.get(`${API_BASE}/dishes?restaurantId=${fetchId}&t=${Date.now()}`),
+                axios.get(`${API_BASE}/orders/inbox?restaurantId=${fetchId}&t=${Date.now()}`)
             ]);
             setDishes(dishRes.data || []);
             setInboxOrders(orderRes.data || []);
@@ -104,7 +109,7 @@ const RestaurantAdmin = () => {
             console.error("Sync Error");
             setIsLoading(false);
         }
-    }, [API_BASE]);
+    }, [API_BASE, id, mongoId]);
 
     useEffect(() => {
         const init = async () => {
@@ -142,47 +147,53 @@ const RestaurantAdmin = () => {
         window.location.reload();
     };
 
-    // ✅ 2. INDUSTRIAL BULK INSERTER
+    // ✅ FIXED BULK INSERTER: Forces Refresh with Active ID
     const handleBulkInsert = async () => {
         const lines = bulkText.split("\n").filter(l => l.trim() !== "");
         const token = localStorage.getItem(`owner_token_${id}`);
-        if (!mongoId) return toast.error("Shop ID not found");
+        const activeId = mongoId || localStorage.getItem(`owner_id_${id}`);
+
+        if (!activeId) return toast.error("Shop ID not found. Please re-login.");
         if (!lines.length) return toast.error("Enter items first");
 
         setIsLoading(true);
         const t = toast.loading("Syncing Dishes...");
 
-        for (const line of lines) {
-            // Format: Name, Price, ImageURL
-            const [name, price, img] = line.split(",").map(item => item?.trim());
-            if (name && price) {
-                try {
+        try {
+            for (const line of lines) {
+                const [name, price, img] = line.split(",").map(item => item?.trim());
+                if (name && price) {
                     await axios.post(`${API_BASE}/dishes`, {
                         name,
                         price: parseFloat(price),
                         image: img || "",
                         category: autoCategory(name),
-                        restaurantId: mongoId,
+                        restaurantId: activeId,
                         isAvailable: true 
                     }, { headers: { Authorization: `Bearer ${token}` } });
-                } catch (e) { console.error("Err adding:", name); }
+                }
             }
+            toast.dismiss(t);
+            toast.success("All Items Live!");
+            setBulkText("");
+            refreshData(activeId); // 🚀 Force refresh with the specific ID
+        } catch (err) {
+            toast.dismiss(t);
+            toast.error("Failed to add items");
+        } finally {
+            setIsLoading(false);
         }
-        toast.dismiss(t);
-        toast.success("All Items Live!");
-        setBulkText("");
-        setIsLoading(false);
-        refreshData(mongoId);
     };
 
     const handleDeleteDish = async (dishId) => {
         if (!window.confirm("Delete this dish?")) return;
         const token = localStorage.getItem(`owner_token_${id}`);
+        const activeId = mongoId || localStorage.getItem(`owner_id_${id}`);
         try {
             await axios.delete(`${API_BASE}/dishes/${dishId}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            refreshData(mongoId);
+            refreshData(activeId);
             toast.success("Dish Removed");
         } catch (err) { toast.error("Failed to delete"); }
     };
@@ -190,6 +201,7 @@ const RestaurantAdmin = () => {
     const handleDownloadAndClear = async () => {
         if (inboxOrders.length === 0) return toast.error("No data to export");
         const doc = new jsPDF();
+        const activeId = mongoId || localStorage.getItem(`owner_id_${id}`);
         doc.text(`Sales Report - ${restaurantName}`, 14, 15);
         const tableData = inboxOrders.map((order, i) => [
             i + 1, order.tableNum, order.items.map(item => `${item.name} x${item.quantity}`).join(", "),
@@ -198,7 +210,7 @@ const RestaurantAdmin = () => {
         autoTable(doc, { startY: 30, head: [['#', 'Table', 'Items', 'Amount', 'Time']], body: tableData });
         doc.save(`Sales_${Date.now()}.pdf`);
         try {
-            await axios.put(`${API_BASE}/orders/mark-downloaded`, { restaurantId: mongoId });
+            await axios.put(`${API_BASE}/orders/mark-downloaded`, { restaurantId: activeId });
             setInboxOrders([]);
             toast.success("Report Saved & Inbox Cleared");
         } catch (err) { toast.error("Error clearing inbox"); }
@@ -229,7 +241,7 @@ const RestaurantAdmin = () => {
             <div style={{ height: '90vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <div className="glass-card" style={{ textAlign: 'center', width: '320px' }}>
                     <FaStore size={40} color="#FF9933" style={{ marginBottom: '20px' }} />
-                    <h1 style={{ fontSize: '20px', fontWeight: 900 }}>STAFF LOGIN</h1>
+                    <h1 style={{ fontSize: '20px', fontWeight: 900 }}>RESTRICTED AREA</h1>
                     <form onSubmit={handleLogin} style={{ marginTop: '20px' }}>
                         <input type="password" placeholder="Access Key" value={password} onChange={e => setPassword(e.target.value)} className="input-dark" style={{ textAlign: 'center' }} autoFocus />
                         <button type="submit" className="btn-primary">AUTHENTICATE</button>
@@ -289,6 +301,7 @@ const RestaurantAdmin = () => {
 
                         <div className="glass-card">
                             <h3 style={{fontSize:'12px', fontWeight:900, marginBottom:'15px', opacity:0.6}}>LIVE ITEMS ({dishes.length})</h3>
+                            {dishes.length === 0 && <p style={{textAlign:'center', opacity: 0.3, fontSize: '12px'}}>No dishes added yet.</p>}
                             {dishes.map(dish => (
                                 <div key={dish._id} className="dish-item">
                                     <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
