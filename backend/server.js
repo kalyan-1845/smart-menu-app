@@ -6,7 +6,11 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import rateLimit from 'express-rate-limit';
 import https from "https"; 
-import compression from 'compression'; // ✅ ADDED for 3x faster data loading
+import compression from 'compression'; 
+
+// --- IMPORT MODELS (Needed for Debugging) ---
+import Owner from './models/Owner.js'; // ✅ ADDED THIS
+
 // --- IMPORT ROUTES ---
 import authRoutes from './routes/authRoutes.js';
 import dishRoutes from './routes/dishRoutes.js';
@@ -18,7 +22,6 @@ const app = express();
 const httpServer = createServer(app);
 
 // 🚀 INDUSTRIAL UPGRADE: COMPRESSION
-// Shrinks JSON data sent to mobile phones (Starters/Main Course lists load faster)
 app.use(compression());
 
 // --- 🔒 SECURITY: ALLOWED ORIGINS ---
@@ -51,25 +54,24 @@ app.use(cors({
 // --- MIDDLEWARE ---
 app.use(express.json({ limit: '10mb' })); 
 
-// 🛡️ Rate Limiter - Industrial Setting
-// Prevents API crashes when thousands of customers open the menu at once
+// 🛡️ Rate Limiter
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, 
-    max: 2000, // Increased for massive scale
+    max: 2000, 
     standardHeaders: true,
     legacyHeaders: false,
     message: "Too many orders from this IP, please wait a moment."
 });
 app.use("/api/", limiter); 
 
-// 🔌 Socket.io Setup - High Resiliency
+// 🔌 Socket.io Setup
 const io = new Server(httpServer, {
     cors: {
         origin: allowedOrigins,
         methods: ["GET", "POST", "PUT", "DELETE"],
         credentials: true
     },
-    pingTimeout: 60000, // ✅ Increased to prevent mobile disconnects
+    pingTimeout: 60000, 
     pingInterval: 25000
 });
 
@@ -78,16 +80,34 @@ app.use((req, res, next) => {
     next();
 });
 
-// --- 🏗️ DATABASE: INDUSTRIAL CONNECTION POOLING ---
-// This ensures MongoDB can handle thousands of simultaneous orders
+// --- 🏗️ DATABASE CONNECTION ---
 mongoose.connect(process.env.MONGO_URI, {
-    maxPoolSize: 100,             // Allow 100 simultaneous DB workers
-    minPoolSize: 10,              // Always keep 10 connections "Warm"
-    socketTimeoutMS: 45000,       // Close dead connections after 45s
+    maxPoolSize: 100,            
+    minPoolSize: 10,             
+    socketTimeoutMS: 45000,      
     serverSelectionTimeoutMS: 5000
 })
 .then(() => console.log("✅ High-Scale MongoDB Connected"))
 .catch((err) => console.error("❌ MongoDB Error:", err));
+
+
+// =============================================================
+// 🛑 DEBUG ROUTE: CHECK DATABASE (ADDED HERE)
+// =============================================================
+app.get('/api/check-db', async (req, res) => {
+    try {
+        const users = await Owner.find({});
+        res.json({
+            count: users.length,
+            message: "Here is the raw data from MongoDB",
+            users: users
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+// =============================================================
+
 
 // --- ROUTES ---
 app.use('/api/auth', authRoutes);
@@ -95,9 +115,8 @@ app.use('/api/dishes', dishRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/superadmin', superAdminRoutes);
 app.use('/api/broadcast', broadcastRoutes);
-// Removed the redundant '/api/menu' line here to keep it clean
 
-app.get('/', (req, res) => res.send('BiteBox API v3 Industrial is Running...'));
+app.get('/', (req, res) => res.send('BiteBox API v4 (Debug Mode) is Running...'));
 
 // --- ERROR HANDLER ---
 app.use((err, req, res, next) => {
@@ -109,9 +128,8 @@ app.use((err, req, res, next) => {
     });
 });
 
-// --- SOCKETS (SaaS Isolated Logic) ---
+// --- SOCKETS ---
 io.on('connection', (socket) => {
-    // 📱 Mobile Socket Fix: Ensures identity persists on reconnection
     const rid = socket.handshake.query.restaurantId;
     if (rid) {
         socket.join(rid);
@@ -137,7 +155,6 @@ io.on('connection', (socket) => {
         }
     });
 
-    // 👨‍🍳 Chef Alert Logic
     socket.on("chef-ready-alert", (data) => {
         if(data.restaurantId) {
             io.to(data.restaurantId).emit("chef-ready-alert", data);
@@ -145,12 +162,10 @@ io.on('connection', (socket) => {
     });
 });
 
-// --- SELF PING (Keep Alive) ---
+// --- SELF PING ---
 const pingUrl = "https://smart-menu-backend-5ge7.onrender.com/"; 
 setInterval(() => {
-    https.get(pingUrl, (res) => {
-        // Keep alive ping
-    }).on("error", (e) => {});
+    https.get(pingUrl, (res) => {}).on("error", (e) => {});
 }, 840000); 
 
 const PORT = process.env.PORT || 5000;
