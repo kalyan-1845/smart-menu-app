@@ -61,7 +61,9 @@ const orderSchema = new mongoose.Schema({
   }
 
 }, { 
-  timestamps: true // This automatically creates 'createdAt' and 'updatedAt'
+  timestamps: true, // This automatically creates 'createdAt' and 'updatedAt'
+  toJSON: { virtuals: true }, // ✅ Added: Ensures virtuals are sent to frontend
+  toObject: { virtuals: true } // ✅ Added: Ensures virtuals work in console logs
 });
 
 // ============================================================
@@ -70,7 +72,6 @@ const orderSchema = new mongoose.Schema({
 
 // 🔥 1. THE AUTO-DELETE ENGINE (TTL INDEX)
 // Automatically deletes orders 30 days after creation to keep the DB lean.
-// 30 days = 2,592,000 seconds.
 orderSchema.index({ createdAt: 1 }, { expireAfterSeconds: 2592000 });
 
 // ⚡ 2. COMPOUND INDEX FOR ADMIN/CHEF DASHBOARD
@@ -80,6 +81,13 @@ orderSchema.index({ restaurantId: 1, status: 1, createdAt: -1 });
 // 🎯 3. INBOX SEARCH OPTIMIZATION
 // Specifically for the "Download PDF & Clear" feature.
 orderSchema.index({ restaurantId: 1, isDownloaded: 1 });
+
+// ✅ ADDED: HIGH-PERFORMANCE VIRTUALS
+// This makes the mobile app faster by pre-formatting the time on the server
+orderSchema.virtual('formattedTime').get(function() {
+  if (!this.createdAt) return "";
+  return this.createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+});
 
 /**
  * 2. Export the Model

@@ -10,7 +10,6 @@ const API_BASE = `${SERVER_URL}/api`;
 const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, tableNum, setTableNum }) => {
     const navigate = useNavigate();
     const [customerName, setCustomerName] = useState("");
-    // Automatically show modal if tableNum is missing
     const [showTableModal, setShowTableModal] = useState(!tableNum);
     const [tempTable, setTempTable] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -23,18 +22,22 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
 
     const totalPrice = cart.reduce((total, item) => total + (item.price * (item.quantity || 1)), 0);
 
-    // High-performance cleanup
+    // ✅ 1. PERSISTENT SOCKET ENGINE
     useEffect(() => {
+        if (finalRestaurantId) {
+            socketRef.current = io(SERVER_URL, { 
+                transports: ['websocket'],
+                query: { restaurantId: finalRestaurantId } 
+            });
+            socketRef.current.emit("join-restaurant", finalRestaurantId);
+        }
         return () => {
             if (socketRef.current) socketRef.current.disconnect();
         };
-    }, []);
+    }, [finalRestaurantId]);
 
-    // Force table selection on entry if not present
     useEffect(() => {
-        if (!finalTableNum) {
-            setShowTableModal(true);
-        }
+        if (!finalTableNum) setShowTableModal(true);
     }, [finalTableNum]);
 
     const handleTableSubmit = (e) => {
@@ -46,27 +49,27 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
         if ("vibrate" in navigator) navigator.vibrate(50);
     };
 
+    // ✅ 2. OPTIMIZED WAITER CALL (Instantly hits Chef & Waiter)
     const handleCallWaiter = async () => {
         if (!finalTableNum) return setShowTableModal(true);
         setCallLoading(true);
         if ("vibrate" in navigator) navigator.vibrate(100);
 
         try {
-            await axios.post(`${API_BASE}/orders/call-waiter`, {
+            // Log call in DB with cache-busting timestamp
+            await axios.post(`${API_BASE}/orders/call-waiter?t=${Date.now()}`, {
                 restaurantId: finalRestaurantId,
                 tableNumber: finalTableNum
             });
 
-            const socket = io(SERVER_URL, { transports: ['websocket'], upgrade: false });
-            socket.emit("join-restaurant", finalRestaurantId);
-            socket.emit("new-waiter-call", {
+            // Emit through persistent socket
+            socketRef.current.emit("call-waiter", {
                 restaurantId: finalRestaurantId,
                 tableNumber: finalTableNum,
                 _id: Date.now().toString()
             });
 
-            alert("🛎️ Waiter has been notified!");
-            setTimeout(() => socket.disconnect(), 500);
+            alert("🛎️ Waiter notified!");
         } catch (err) {
             console.error("Call failed", err);
         } finally {
@@ -74,6 +77,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
         }
     };
 
+    // ✅ 3. INDUSTRIAL ORDER PROCESSING
     const processOrder = async (paymentType) => {
         if (isSubmitting) return;
         if (!customerName.trim()) return alert("Please enter your name!");
@@ -94,17 +98,15 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                 status: "Pending"
             };
 
-            const res = await axios.post(`${API_BASE}/orders`, payload);
+            const res = await axios.post(`${API_BASE}/orders?t=${Date.now()}`, payload);
             
-            const socket = io(SERVER_URL, { transports: ['websocket'], upgrade: false });
-            socket.emit("join-restaurant", finalRestaurantId); 
-            socket.emit("new-order", res.data);
+            // Alert Kitchen immediately
+            socketRef.current.emit("new-order", res.data);
 
             setOrderSuccess(true);
             
             setTimeout(() => {
                 clearCart();
-                socket.disconnect();
                 navigate(`/track/${res.data._id}`); 
             }, 1200); 
 
@@ -116,13 +118,12 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
 
     return (
         <div style={styles.container}>
-            {/* --- MANDATORY TABLE SELECTION MODAL --- */}
+            {/* MANDATORY TABLE MODAL */}
             {showTableModal && (
                 <div style={styles.overlay}>
                     <div style={styles.tableCard} className="pop-in">
                         <FaChair size={40} color="#f97316" style={{marginBottom: 15}}/>
                         <h2 style={{margin: '0 0 10px 0', fontSize: '20px'}}>Where are you sitting?</h2>
-                        <p style={{color: '#888', fontSize: '13px', marginBottom: '20px'}}>Enter your table number to continue.</p>
                         <form onSubmit={handleTableSubmit}>
                             <input 
                                 style={styles.tableInput} 
@@ -140,13 +141,11 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                 </div>
             )}
 
-            {/* --- SUCCESS SCREEN --- */}
+            {/* SUCCESS SCREEN */}
             {orderSuccess && (
                 <div style={styles.overlay}>
                     <div style={styles.successCard} className="pop-in">
-                        <div className="checkmark-wrapper">
-                             <FaCheckCircle size={80} color="#22c55e" className="checkmark-anim" />
-                        </div>
+                        <FaCheckCircle size={80} color="#22c55e" className="checkmark-anim" />
                         <h2 style={styles.successTitle}>Order Placed!</h2>
                         <p style={styles.successSub}>Kitchen is preparing your meal.</p>
                         <div style={styles.loaderLine}></div>
@@ -159,11 +158,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                     <button onClick={() => navigate(-1)} style={styles.backBtn}><FaArrowLeft /></button>
                     <h1 style={styles.title}>Review Cart</h1>
                 </div>
-                <button 
-                    onClick={handleCallWaiter} 
-                    disabled={callLoading}
-                    style={{...styles.callBtn, opacity: callLoading ? 0.5 : 1}}
-                >
+                <button onClick={handleCallWaiter} disabled={callLoading} style={styles.callBtn}>
                     <FaBell style={{marginRight: '6px'}}/> {callLoading ? '...' : 'Call'}
                 </button>
             </div>
@@ -185,11 +180,7 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                 ) : (
                     cart.map(item => (
                         <div key={item._id} style={styles.item}>
-                            <img 
-                                src={item.image} 
-                                alt={item.name} 
-                                style={{ width: '60px', height: '60px', borderRadius: '12px', objectFit: 'cover', marginRight: '15px' }} 
-                            />
+                            <img src={item.image} alt={item.name} style={styles.thumb} />
                             <div style={{flex: 1}}>
                                 <p style={{margin: 0, fontWeight: 'bold', fontSize: '15px'}}>{item.name}</p>
                                 <p style={{margin: 0, color: '#f97316', fontSize: '14px'}}>
@@ -204,16 +195,12 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
 
             <div style={styles.footer}>
                 <div style={styles.totalRow}>
-                    <span>Order Total</span>
+                    <span>Total</span>
                     <span style={{color: '#f97316'}}>₹{totalPrice}</span>
                 </div>
                 <div style={styles.btnRow}>
-                    <button onClick={() => processOrder("ONLINE")} disabled={isSubmitting} style={styles.onlineBtn}>
-                        <FaMobileAlt style={{marginRight: '8px'}}/> Online
-                    </button>
-                    <button onClick={() => processOrder("CASH")} disabled={isSubmitting} style={styles.cashBtn}>
-                        <FaMoneyBillWave style={{marginRight: '8px'}}/> Pay Cash
-                    </button>
+                    <button onClick={() => processOrder("ONLINE")} disabled={isSubmitting} style={styles.onlineBtn}>Online</button>
+                    <button onClick={() => processOrder("CASH")} disabled={isSubmitting} style={styles.cashBtn}>Pay Cash</button>
                 </div>
             </div>
             
@@ -231,20 +218,15 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
 
 const styles = {
     container: { minHeight: '100vh', background: '#050505', color: 'white', padding: '20px', paddingBottom: '160px', fontFamily: 'Inter, sans-serif' },
-    overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.9)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)' },
-    
-    // Table Selection Modal
+    overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.95)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(12px)' },
     tableCard: { background: '#111', padding: '30px', borderRadius: '24px', textAlign: 'center', border: '1px solid #333', width: '85%', maxWidth: '320px' },
     tableInput: { width: '100%', padding: '15px', background: '#000', border: '1px solid #f97316', borderRadius: '12px', color: 'white', fontSize: '20px', textAlign: 'center', marginBottom: '15px', outline: 'none' },
-    confirmBtn: { width: '100%', padding: '15px', background: '#f97316', color: 'white', border: 'none', borderRadius: '12px', fontWeight: 'bold', fontSize: '16px' },
-
-    successCard: { background: '#111', padding: '40px 30px', borderRadius: '32px', textAlign: 'center', border: '1px solid #22c55e', width: '85%', maxWidth: '320px', boxShadow: '0 20px 40px rgba(0,0,0,0.5)' },
-    successTitle: { fontSize: '24px', fontWeight: '900', color: 'white', margin: '0 0 10px 0' },
-    successSub: { color: '#888', fontSize: '14px', lineHeight: '1.5', margin: 0 },
-    loaderLine: { height: '3px', background: '#22c55e', width: '100%', margin: '20px auto 0', borderRadius: '10px' },
-
+    confirmBtn: { width: '100%', padding: '15px', background: '#f97316', color: 'white', border: 'none', borderRadius: '12px', fontWeight: 'bold' },
+    successCard: { background: '#111', padding: '40px 30px', borderRadius: '32px', textAlign: 'center', border: '1px solid #22c55e', width: '85%', maxWidth: '320px' },
+    successTitle: { fontSize: '24px', fontWeight: '900', margin: '15px 0 5px' },
+    successSub: { color: '#888', fontSize: '14px', margin: 0 },
     header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '25px' },
-    backBtn: { background: '#1a1a1a', border: '1px solid #333', color: 'white', padding: '12px', borderRadius: '12px', display: 'flex', alignItems: 'center' },
+    backBtn: { background: '#1a1a1a', border: '1px solid #333', color: 'white', padding: '12px', borderRadius: '12px' },
     callBtn: { background: '#ef4444', color: 'white', border: 'none', padding: '10px 15px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold', display: 'flex', alignItems: 'center' },
     title: { margin: 0, fontSize: '20px', fontWeight: '800' },
     infoCard: { background: '#111', padding: '20px', borderRadius: '20px', marginBottom: '20px', border: '1px solid #222' },
@@ -252,13 +234,14 @@ const styles = {
     changeBtn: { background: 'rgba(249, 115, 22, 0.15)', border: 'none', color: '#f97316', borderRadius: '8px', padding: '6px 12px', fontSize: '12px', fontWeight: 'bold' },
     input: { width: '100%', padding: '14px', background: '#000', border: '1px solid #333', borderRadius: '12px', color: 'white', fontSize: '16px', boxSizing: 'border-box', outline: 'none' },
     list: { display: 'flex', flexDirection: 'column', gap: '12px' },
-    item: { background: '#111', padding: '15px', borderRadius: '18px', display: 'flex', alignItems: 'center', border: '1px solid #222' },
+    item: { background: '#111', padding: '12px', borderRadius: '18px', display: 'flex', alignItems: 'center', border: '1px solid #222' },
+    thumb: { width: '60px', height: '60px', borderRadius: '12px', objectFit: 'cover', marginRight: '15px' },
     delBtn: { background: 'rgba(239, 68, 68, 0.1)', border: 'none', color: '#ef4444', padding: '12px', borderRadius: '10px' },
-    footer: { position: 'fixed', bottom: 0, left: 0, right: 0, background: '#0a0a0a', padding: '25px 20px', borderTop: '1px solid #222', boxShadow: '0 -10px 20px rgba(0,0,0,0.5)', zIndex: 10 },
+    footer: { position: 'fixed', bottom: 0, left: 0, right: 0, background: '#0a0a0a', padding: '25px 20px', borderTop: '1px solid #222', zIndex: 10 },
     totalRow: { display: 'flex', justifyContent: 'space-between', marginBottom: '20px', fontSize: '20px', fontWeight: '900' },
     btnRow: { display: 'flex', gap: '12px' },
-    onlineBtn: { flex: 1, height: '55px', background: '#1a1a1a', color: 'white', border: '1px solid #333', borderRadius: '15px', fontWeight: 'bold', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center' },
-    cashBtn: { flex: 1.3, height: '55px', background: '#f97316', color: 'white', border: 'none', borderRadius: '15px', fontWeight: '900', fontSize: '15px', display: 'flex', alignItems: 'center', justifyContent: 'center' }
+    onlineBtn: { flex: 1, height: '55px', background: '#1a1a1a', color: 'white', border: '1px solid #333', borderRadius: '15px', fontWeight: 'bold' },
+    cashBtn: { flex: 1.3, height: '55px', background: '#f97316', color: 'white', border: 'none', borderRadius: '15px', fontWeight: '900' }
 };
 
 export default Cart;

@@ -5,7 +5,8 @@ import io from "socket.io-client";
 import InstallButton from "../components/InstallButton";
 import { 
     FaUtensils, FaVolumeUp, FaVolumeMute, FaCheck, FaBell, 
-    FaSignOutAlt, FaSpinner, FaBoxOpen, FaClipboardList 
+    FaSignOutAlt, FaSpinner, FaBoxOpen, FaClipboardList, 
+    FaCheckDouble, FaPowerOff, FaConciergeBell 
 } from "react-icons/fa";
 import { toast } from "react-hot-toast";
 
@@ -21,6 +22,10 @@ const ChefDashboard = () => {
     const [dishes, setDishes] = useState([]); 
     const [serviceCalls, setServiceCalls] = useState([]); 
     const [isMuted, setIsMuted] = useState(false);
+    
+    // ✅ FEATURE: Toggle for Table Alerts (🛎️)
+    const [alertsActive, setAlertsActive] = useState(true); 
+    
     const [activeTab, setActiveTab] = useState("orders");
     const [mongoId, setMongoId] = useState(null);
     const socketRef = useRef(null);
@@ -28,8 +33,7 @@ const ChefDashboard = () => {
     const audioRef = useRef(new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"));
     const callSound = useRef(new Audio("https://assets.mixkit.co/active_storage/sfx/2190/2190-preview.mp3"));
 
-    // ✅ 1. AGGRESSIVE DATA SYNC (The "Safety Net")
-    // If Sockets fail, this function manually pulls orders every 10 seconds.
+    // ✅ 1. CLEAN SYNC ENGINE
     const forceSync = useCallback(async (rId) => {
         if (!rId) return;
         try {
@@ -38,67 +42,33 @@ const ChefDashboard = () => {
                 axios.get(`${API_BASE}/dishes?restaurantId=${rId}`)
             ]);
             
-            const active = orderRes.data.filter(o => 
+            const activeOrders = orderRes.data.filter(o => 
                 o.status.toLowerCase() !== "served" && o.status.toLowerCase() !== "completed"
             );
 
-            // Trigger sound only if new orders arrived since last sync
-            if (active.length > orders.length && !isMuted) {
+            const validCategories = ["Starters", "Main Course", "Dessert", "Drinks"];
+            const cleanDishes = dishRes.data.filter(d => 
+                d.name && validCategories.includes(d.category) && d.price > 0
+            );
+
+            if (activeOrders.length > orders.length && !isMuted) {
                 audioRef.current.play().catch(()=>{});
             }
 
-            setOrders(active.sort((a,b) => new Date(a.createdAt) - new Date(b.createdAt)));
-            setDishes(dishRes.data);
+            setOrders(activeOrders.sort((a,b) => new Date(a.createdAt) - new Date(b.createdAt)));
+            setDishes(cleanDishes);
         } catch (e) { console.error("Cloud Sync Failed"); }
     }, [orders.length, isMuted]);
 
-    // ✅ 2. HANDLE SCREEN UNLOCK (Refresh immediately when chef looks at phone)
+    // ✅ 2. AUTH & PERSISTENCE
     useEffect(() => {
-        const handleWakeUp = () => {
-            if (document.visibilityState === 'visible' && mongoId) forceSync(mongoId);
-        };
-        document.addEventListener("visibilitychange", handleWakeUp);
-        window.addEventListener("focus", handleWakeUp);
-        return () => {
-            document.removeEventListener("visibilitychange", handleWakeUp);
-            window.removeEventListener("focus", handleWakeUp);
-        };
-    }, [mongoId, forceSync]);
-
-    // ✅ 3. RESILIENT SOCKET CONNECTION
-    useEffect(() => {
-        if (isAuthenticated && mongoId) {
-            socketRef.current = io(SERVER_URL, {
-                transports: ['websocket'],
-                reconnection: true,
-                query: { restaurantId: mongoId }
-            });
-
-            const s = socketRef.current;
-
-            s.on("connect", () => {
-                s.emit("join-restaurant", mongoId);
-                forceSync(mongoId);
-            });
-
-            s.on("new-order", () => forceSync(mongoId));
-            s.on("order-updated", () => forceSync(mongoId));
-            
-            s.on("new-waiter-call", (callData) => {
-                if (!isMuted) callSound.current.play().catch(()=>{});
-                if ("vibrate" in navigator) navigator.vibrate(500);
-                setServiceCalls(prev => [callData, ...prev]);
-            });
-
-            // 🛡️ THE ULTIMATE BACKUP: Poll database every 10 seconds
-            const backupTimer = setInterval(() => forceSync(mongoId), 10000);
-
-            return () => {
-                s.disconnect();
-                clearInterval(backupTimer);
-            };
+        const savedId = localStorage.getItem(`chef_session_${id}`);
+        if (savedId) {
+            setMongoId(savedId);
+            setIsAuthenticated(true);
+            forceSync(savedId);
         }
-    }, [isAuthenticated, mongoId, isMuted, forceSync]);
+    }, [id, forceSync]);
 
     const handleLogin = async (e) => {
         if(e) e.preventDefault();
@@ -117,34 +87,55 @@ const ChefDashboard = () => {
         } catch (err) { toast.error("Login Failed"); } finally { setAuthLoading(false); }
     };
 
+    // ✅ 3. SOCKETS (Includes Waiter Alert Toggle)
     useEffect(() => {
-        const savedId = localStorage.getItem(`chef_session_${id}`);
-        if (savedId) {
-            setMongoId(savedId);
-            setIsAuthenticated(true);
-            forceSync(savedId);
+        if (isAuthenticated && mongoId) {
+            socketRef.current = io(SERVER_URL, {
+                transports: ['websocket'],
+                query: { restaurantId: mongoId }
+            });
+
+            const s = socketRef.current;
+            s.on("connect", () => {
+                s.emit("join-restaurant", mongoId);
+                forceSync(mongoId);
+            });
+            s.on("new-order", () => forceSync(mongoId));
+            
+            s.on("new-waiter-call", (callData) => {
+                // ✅ Logic: Only show/sound alert if Chef has toggled Alerts to ACTIVE
+                if (alertsActive) {
+                    if (!isMuted) callSound.current.play().catch(()=>{});
+                    if ("vibrate" in navigator) navigator.vibrate([500, 200, 500]);
+                    setServiceCalls(prev => [callData, ...prev]);
+                }
+            });
+
+            const backupTimer = setInterval(() => forceSync(mongoId), 10000);
+            return () => {
+                s.disconnect();
+                clearInterval(backupTimer);
+            };
         }
-    }, [id, forceSync]);
+    }, [isAuthenticated, mongoId, isMuted, alertsActive, forceSync]);
 
-    const advanceOrderStatus = async (order) => {
-        let nextStatus = "";
-        const current = order.status.toLowerCase();
-        if (current === "pending" || current === "placed") nextStatus = "cooking";
-        else if (current === "cooking") nextStatus = "ready";
-        
-        if (!nextStatus) return;
-
+    // ✅ 🚀 HYBRID FEATURE: Preparing -> Ready -> Served (Bill Unlocks for Customer)
+    const updateStatus = async (order, nextStatus) => {
         try {
-            // Optimistic UI (Update screen instantly)
             setOrders(prev => prev.map(o => o._id === order._id ? { ...o, status: nextStatus } : o));
+            
             await axios.put(`${API_BASE}/orders/${order._id}`, { status: nextStatus });
             
+            if (nextStatus === "served") {
+                setOrders(prev => prev.filter(o => o._id !== order._id));
+            }
+
             if (socketRef.current) {
                 socketRef.current.emit("chef-ready-alert", { 
                     restaurantId: mongoId, tableNum: order.tableNum, orderId: order._id, status: nextStatus
                 });
             }
-            toast.success(`Table ${order.tableNum} is ${nextStatus}`);
+            toast.success(`Table ${order.tableNum} is now ${nextStatus}`);
         } catch (error) { forceSync(mongoId); }
     };
 
@@ -152,7 +143,7 @@ const ChefDashboard = () => {
         try {
             setDishes(prev => prev.map(d => d._id === dishId ? { ...d, isAvailable: !currentStatus } : d));
             await axios.put(`${API_BASE}/dishes/${dishId}`, { isAvailable: !currentStatus });
-        } catch (e) { toast.error("Update Failed"); }
+        } catch (e) { toast.error("Stock Update Failed"); }
     };
 
     if (!isAuthenticated) {
@@ -160,11 +151,11 @@ const ChefDashboard = () => {
             <div style={styles.lockContainer}>
                 <div style={styles.lockCard}>
                     <FaUtensils style={{fontSize:'40px', color:'#f97316', marginBottom:'15px'}}/>
-                    <h1 style={styles.lockTitle}>{id.toUpperCase()} KITCHEN</h1>
+                    <h1 style={styles.lockTitle}>{id.toUpperCase()} OS</h1>
                     <form onSubmit={handleLogin}>
-                        <input type="password" placeholder="ENTER PIN" value={password} inputMode="numeric" onChange={e=>setPassword(e.target.value)} style={styles.input} autoFocus />
+                        <input type="password" placeholder="PIN" value={password} inputMode="numeric" onChange={e=>setPassword(e.target.value)} style={styles.input} autoFocus />
                         <button type="submit" style={styles.loginBtn} disabled={authLoading}>
-                            {authLoading ? <FaSpinner className="spin"/> : "START COOKING"}
+                            {authLoading ? <FaSpinner className="spin"/> : "ENTER SYSTEM"}
                         </button>
                     </form>
                 </div>
@@ -174,11 +165,11 @@ const ChefDashboard = () => {
 
     return (
         <div style={styles.dashboardContainer}>
-            {/* 🛎️ Top Alerts */}
+            {/* 🛎️ Table Service Calls (Only if alertsActive) */}
             <div style={styles.alertWrapper}>
                 {serviceCalls.map((call, idx) => (
                     <div key={idx} style={styles.alertBanner}>
-                        <span style={styles.alertText}><FaBell /> TABLE {call.tableNumber} NEEDS HELP</span>
+                        <span style={styles.alertText}><FaBell /> TABLE {call.tableNumber} CALLING</span>
                         <button onClick={() => setServiceCalls(prev => prev.filter(c => c._id !== call._id))} style={styles.attendBtn}><FaCheck/></button>
                     </div>
                 ))}
@@ -190,11 +181,21 @@ const ChefDashboard = () => {
                     <div style={styles.statusDot}></div>
                 </div>
                 <div style={styles.headerRight}>
+                    {/* ✅ UI ADDITION: Alerts Toggle Button */}
+                    <button 
+                        onClick={() => {
+                            setAlertsActive(!alertsActive);
+                            toast(alertsActive ? "Table Alerts Deactivated" : "Table Alerts Active", { icon: '🛎️' });
+                        }} 
+                        style={{...styles.iconButton, background: alertsActive ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)'}}
+                    >
+                        <FaConciergeBell color={alertsActive ? "#22c55e" : "#ef4444"} />
+                    </button>
+
+                    <button onClick={() => setIsMuted(!isMuted)} style={styles.iconButton}>
+                        {isMuted ? <FaVolumeMute color="#ef4444" /> : <FaVolumeUp color="#22c55e" />}
+                    </button>
                     <InstallButton />
-                    <button onClick={() => {
-                        setIsMuted(!isMuted);
-                        audioRef.current.play().then(()=>audioRef.current.pause());
-                    }} style={styles.iconButton}>{isMuted ? <FaVolumeMute color="#ef4444" /> : <FaVolumeUp color="#22c55e" />}</button>
                     <button onClick={() => {localStorage.removeItem(`chef_session_${id}`); window.location.reload();}} style={styles.iconButtonRed}><FaSignOutAlt/></button>
                 </div>
             </header>
@@ -210,14 +211,14 @@ const ChefDashboard = () => {
                     
             <div style={styles.grid}>
                 {activeTab === "orders" ? (
-                    orders.length === 0 ? <div style={styles.emptyState}><FaUtensils size={40}/><p>No active orders</p></div> : (
+                    orders.length === 0 ? <div style={styles.emptyState}><FaUtensils size={40}/><p>No pending orders</p></div> : (
                         orders.map((order) => (
                             <div key={order._id} style={{
                                 ...styles.card, 
                                 borderTop: order.status.toLowerCase() === 'ready' ? '6px solid #22c55e' : (order.status.toLowerCase() === 'cooking' ? '6px solid #eab308' : '6px solid #f97316')
                             }}>
                                 <div style={styles.cardHeader}>
-                                    <h2 style={styles.tableNumber}>TABLE {order.tableNum}</h2>
+                                    <h2 style={styles.tableNumber}>T-{order.tableNum}</h2>
                                     <span style={{...styles.statusBadge, background: order.status.toLowerCase() === 'ready' ? '#22c55e' : (order.status.toLowerCase() === 'cooking' ? '#eab308' : '#222')}}>
                                         {order.status.toUpperCase()}
                                     </span>
@@ -232,14 +233,16 @@ const ChefDashboard = () => {
                                 </div>
                                 <div style={styles.actionContainer}>
                                     {order.status.toLowerCase() === "ready" ? (
-                                        <div style={styles.readyIndicator}><FaCheck /> WAITER NOTIFIED</div>
+                                        <button onClick={() => updateStatus(order, "served")} style={{...styles.actionBtn, background:'#22c55e', color:'white'}}>
+                                            <FaCheckDouble /> SERVE & LOCK BILL
+                                        </button>
                                     ) : (
-                                        <button onClick={() => advanceOrderStatus(order)} style={{
+                                        <button onClick={() => updateStatus(order, order.status.toLowerCase() === 'cooking' ? "ready" : "cooking")} style={{
                                             ...styles.actionBtn, 
                                             background: order.status.toLowerCase() === 'cooking' ? '#eab308' : '#f97316',
                                             color: order.status.toLowerCase() === 'cooking' ? 'black' : 'white'
                                         }}>
-                                            {order.status.toLowerCase() === "cooking" ? "MARK AS READY" : "START COOKING"}
+                                            {order.status.toLowerCase() === "cooking" ? "SET TO READY" : "START COOKING"}
                                         </button>
                                     )}
                                 </div>
@@ -268,16 +271,16 @@ const styles = {
     lockCard: { background: '#0a0a0a', padding: '40px', borderRadius: '30px', textAlign: 'center', width: '90%', maxWidth: '350px', border:'1px solid #111' },
     lockTitle: { color: 'white', fontSize: '20px', fontWeight: '900', margin: '0 0 20px 0' },
     input: { width: '100%', background: '#000', border: '1px solid #222', padding: '18px', borderRadius: '15px', color: 'white', marginBottom: '15px', textAlign: 'center', fontSize:'22px', outline:'none' },
-    loginBtn: { width: '100%', background: '#f97316', color: 'white', border: 'none', padding: '18px', borderRadius: '15px', fontWeight: '900', fontSize:'14px' },
+    loginBtn: { width: '100%', background: '#f97316', color: 'white', border: 'none', padding: '18px', borderRadius: '15px', fontWeight: '900' },
     header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px', background: '#0a0a0a', borderRadius: '20px', marginBottom: '15px', border:'1px solid #111' },
     headerLeft: { display: 'flex', alignItems: 'center', gap: '10px' },
-    headerTitle: { fontSize: '16px', fontWeight: '900', margin: 0 },
+    headerTitle: { fontSize: '14px', fontWeight: '900', margin: 0 },
     statusDot: { width:'8px', height:'8px', background:'#22c55e', borderRadius:'50%', boxShadow:'0 0 10px #22c55e' },
     headerRight: { display: 'flex', gap: '8px', alignItems: 'center' },
-    iconButton: { background: '#111', border: '1px solid #222', color: 'white', padding: '12px', borderRadius: '12px' },
-    iconButtonRed: { background: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444', color: '#ef4444', padding: '12px', borderRadius: '12px' },
+    iconButton: { background: '#111', border: '1px solid #222', color: 'white', padding: '10px', borderRadius: '10px', display:'flex', alignItems:'center' },
+    iconButtonRed: { background: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444', color: '#ef4444', padding: '10px', borderRadius: '10px' },
     tabContainer: { display: 'flex', gap: '10px', marginBottom: '15px' },
-    tabButton: { flex: 1, padding: '18px', borderRadius: '15px', border: '1px solid #222', color: 'white', fontWeight: '900', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px', fontSize: '12px', touchAction: 'manipulation' },
+    tabButton: { flex: 1, padding: '16px', borderRadius: '15px', border: '1px solid #222', color: 'white', fontWeight: '900', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px', fontSize: '11px' },
     grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '12px' },
     card: { background: '#0a0a0a', borderRadius: '24px', border: '1px solid #111', display: 'flex', flexDirection: 'column', overflow:'hidden' },
     cardHeader: { padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background:'rgba(255,255,255,0.02)' },
@@ -288,13 +291,12 @@ const styles = {
     itemQuantity: { color: '#f97316', fontWeight: '900', fontSize:'18px' },
     itemName: { fontSize: '16px', fontWeight:'600' },
     actionContainer: { padding: '20px', background:'rgba(0,0,0,0.2)' },
-    actionBtn: { width: '100%', border: 'none', padding: '20px', borderRadius: '18px', fontWeight: '900', fontSize: '14px', touchAction: 'manipulation', boxShadow:'0 4px 15px rgba(0,0,0,0.3)' },
-    readyIndicator: { textAlign: 'center', color: '#22c55e', fontSize: '12px', fontWeight: '900', background: 'rgba(34, 197, 94, 0.05)', padding: '18px', borderRadius: '15px', border: '1px dashed #22c55e' },
+    actionBtn: { width: '100%', border: 'none', padding: '18px', borderRadius: '15px', fontWeight: '900', fontSize: '14px', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px' },
     stockCard: { background: '#0a0a0a', padding: '15px 20px', borderRadius: '18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border:'1px solid #111' },
     stockBtn: { padding: '10px 20px', borderRadius: '12px', border: 'none', color: 'white', fontWeight: '900' },
     emptyState: { gridColumn: '1/-1', textAlign: 'center', padding: '100px 20px', color:'#333', fontWeight:'900' },
-    alertWrapper: { position: 'fixed', top: '10px', left: '50%', transform: 'translateX(-50%)', zIndex: 100, width: '95%', maxWidth:'400px' },
-    alertBanner: { background: '#ef4444', padding: '15px', borderRadius: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom:'8px', boxShadow:'0 10px 30px rgba(0,0,0,0.5)' },
+    alertWrapper: { position: 'fixed', top: '10px', left: '50%', transform: 'translateX(-50%)', zIndex: 1100, width: '95%', maxWidth:'400px' },
+    alertBanner: { background: '#ef4444', padding: '15px', borderRadius: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom:'8px', boxShadow: '0 10px 30px rgba(239, 68, 68, 0.3)', border: '1px solid rgba(255,255,255,0.2)' },
     alertText: { fontWeight:'900', fontSize:'13px' },
     attendBtn: { background: 'white', color: '#ef4444', border: 'none', borderRadius: '10px', padding:'8px 12px' }
 };
