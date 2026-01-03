@@ -1,24 +1,27 @@
 import express from 'express';
 import { getDishes, addDishReview, createDish, updateDish, deleteDish } from '../controllers/dishController.js';
 
-// Note: If you have an auth middleware, import it here:
-// import { protect } from '../middleware/authMiddleware.js'; 
-
 const router = express.Router();
 
 // ==========================================
-// ✅ THE MISSING FIX IS HERE 👇
+// ✅ THIS IS THE MISSING PIECE
 // ==========================================
-router.get('/', getDishes); 
-// 👆 This line allows "?restaurantId=kalyanresto1" to work
+router.get('/', (req, res, next) => {
+    console.log("🔥 ROOT ROUTE HIT: Query:", req.query);
+    getDishes(req, res, next);
+});
 
-// This handles the other style "/kalyanresto1"
-router.get('/:restaurantId', getDishes); 
+// This handles the old style "/kalyanresto1"
+router.get('/:restaurantId', (req, res, next) => {
+    console.log("🔥 PARAM ROUTE HIT: ID:", req.params.restaurantId);
+    getDishes(req, res, next);
+});
 
 // Review Route
 router.post('/:dishId/review', addDishReview);
 
-// Protected Routes (Uncomment if you use them)
+// 🔒 Protected Routes (Keep these if you have them, otherwise ignore)
+// import { protect } from '../middleware/authMiddleware.js';
 // router.post('/', protect, createDish);
 // router.put('/:id', protect, updateDish);
 // router.delete('/:id', protect, deleteDish);
