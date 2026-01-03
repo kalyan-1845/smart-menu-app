@@ -1,5 +1,5 @@
 import Dish from '../models/Dish.js';
-import Owner from '../models/Owner.js'; // 👈 Needed for Username-to-ID lookup
+import Owner from '../models/Owner.js'; 
 import mongoose from 'mongoose';
 
 // ============================================================
@@ -16,14 +16,17 @@ export const getDishes = async (req, res) => {
         // 🕵️ SMART LOOKUP: If restaurantId is NOT a valid ObjectId, it's a username.
         // We must find the real _id before querying the Dishes collection.
         if (!mongoose.Types.ObjectId.isValid(restaurantId)) {
-            const owner = await Owner.findOne({ username: restaurantId.toLowerCase() }).select('_id');
+            const owner = await Owner.findOne({ 
+                username: { $regex: new RegExp("^" + restaurantId + "$", "i") } 
+            }).select('_id').lean();
+            
             if (!owner) return res.status(404).json({ message: "Restaurant not found" });
             queryId = owner._id;
         }
 
-        // 🚀 PRO OPTIMIZATION:
+        // 🚀 PRO OPTIMIZATION: Uses Lean + Sort by availability & rating
         const dishes = await Dish.find({ restaurantId: queryId })
-            .select('-reviews') // Hide full reviews for initial menu load
+            .select('-reviews') 
             .sort({ isAvailable: -1, "ratings.average": -1 })
             .lean();
 
@@ -35,7 +38,7 @@ export const getDishes = async (req, res) => {
 };
 
 // ============================================================
-// 2. PUBLIC: SUBMIT RATING (The Math Engine)
+// 2. PUBLIC: SUBMIT RATING (Atomic Math Engine)
 // ============================================================
 export const addDishReview = async (req, res) => {
     const { dishId } = req.params;
@@ -53,8 +56,6 @@ export const addDishReview = async (req, res) => {
         const currentCount = dish.ratings?.count || 0;
         const currentAvg = dish.ratings?.average || 0;
         const newCount = currentCount + 1;
-        
-        // Formula: ((OldAvg * OldCount) + NewRating) / NewCount
         const newAverage = ((currentAvg * currentCount) + Number(rating)) / newCount;
 
         dish.ratings = {
@@ -62,7 +63,7 @@ export const addDishReview = async (req, res) => {
             count: newCount
         };
 
-        // 🧹 PRUNING: Keep document size small
+        // 🧹 PRUNING: Keep only last 50 reviews to keep DB fast
         dish.reviews.unshift({
             customerName: customerName || "Guest",
             rating: Number(rating),
@@ -79,13 +80,13 @@ export const addDishReview = async (req, res) => {
 };
 
 // ============================================================
-// 3. ADMIN: MANAGE ITEMS (Chef/Owner Power Tools)
+// 3. ADMIN: MANAGE ITEMS (Security Locked)
 // ============================================================
 
 export const createDish = async (req, res) => {
     try {
-        // req.user._id is the 24-character ObjectId from Auth Middleware
-        const dishData = { ...req.body, restaurantId: req.user._id };
+        // req.user._id comes from Auth Middleware
+        const dishData = { ...req.body, restaurantId: req.user._id }; 
         const dish = await Dish.create(dishData);
         res.status(201).json(dish);
     } catch (error) {

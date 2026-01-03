@@ -12,9 +12,12 @@ const protect = async (req, res, next) => {
     if (req.headers.authorization?.startsWith('Bearer')) {
         try {
             token = req.headers.authorization.split(' ')[1];
+            // Uses fallback secret if environment variable is missing
             const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret');
+            
             // Lean selection: Only get what is needed to verify ownership
             req.user = await Owner.findById(decoded.id).select('_id username').lean(); 
+            
             if (!req.user) return res.status(401).json({ message: 'User session expired' });
             next();
         } catch (error) {
@@ -29,16 +32,17 @@ const protect = async (req, res, next) => {
 // 🌐 1. GET MENU (Public - High Speed)
 // ============================================================
 router.get('/', async (req, res) => {
-    const { restaurantId } = req.query; 
+    const { restaurantId } = req.query; // Could be "kalyanresto1" or 24-char ID
     if (!restaurantId) return res.status(400).json({ message: "ID required" });
 
     try {
         let ownerObjectId;
 
-        // 🧠 INDUSTRIAL LOGIC: Resolve Username or ID
+        // 🧠 SMART LOOKUP: Resolve Username or ObjectID
         if (mongoose.Types.ObjectId.isValid(restaurantId)) {
             ownerObjectId = restaurantId;
         } else {
+            // Case-insensitive search for usernames like "kalyanresto1"
             const owner = await Owner.findOne({ 
                 username: { $regex: new RegExp("^" + restaurantId + "$", "i") } 
             }).select('_id').lean();
@@ -59,7 +63,7 @@ router.get('/', async (req, res) => {
 });
 
 // ============================================================
-// ⭐ 2. RATE DISH (Public - Incremental Math Engine)
+// ⭐ 2. RATE DISH (Public - Atomic Math Engine)
 // ============================================================
 router.post('/rate/:dishId', async (req, res) => {
     try {
@@ -73,7 +77,7 @@ router.post('/rate/:dishId', async (req, res) => {
         const dish = await Dish.findById(dishId);
         if (!dish) return res.status(404).json({ message: "Dish not found" });
 
-        // 🧠 MATH ENGINE: Atomic Average Calculation
+        // 🧠 MATH ENGINE: Update average without reading thousands of docs
         const oldCount = dish.ratings?.count || 0;
         const oldAvg = dish.ratings?.average || 0;
         const newCount = oldCount + 1;
@@ -84,7 +88,7 @@ router.post('/rate/:dishId', async (req, res) => {
             count: newCount
         };
 
-        // Review Pruning: Only keep last 50 reviews to keep DB fast
+        // 🧹 PRUNING: Only keep last 50 reviews to keep DB fast
         dish.reviews.unshift({ customerName, rating, comment });
         if (dish.reviews.length > 50) dish.reviews = dish.reviews.slice(0, 50);
 
@@ -114,6 +118,7 @@ router.post('/', protect, async (req, res) => {
 
 router.put('/:id', protect, async (req, res) => {
     try {
+        // Find by ID and ensure ownership in one query
         const updated = await Dish.findOneAndUpdate(
             { _id: req.params.id, restaurantId: req.user._id },
             req.body,
@@ -128,6 +133,7 @@ router.put('/:id', protect, async (req, res) => {
 
 router.delete('/:id', protect, async (req, res) => {
     try {
+        // Prevent cross-restaurant deletion
         const deleted = await Dish.findOneAndDelete({ 
             _id: req.params.id, 
             restaurantId: req.user._id 
