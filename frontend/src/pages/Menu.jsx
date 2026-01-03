@@ -15,10 +15,22 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
     const currentRestId = params.restaurantId || params.id;
     const currentTable = params.table;
 
-    // ✅ CACHING LAYER: Loads instantly from local storage while syncing with cloud
+    // ✅ CACHING LAYER (FIXED): Prevents crash if cache has old Object format
     const [dishes, setDishes] = useState(() => {
-        const cached = localStorage.getItem(`menu_cache_${currentRestId}`);
-        return cached ? JSON.parse(cached) : [];
+        try {
+            const cached = localStorage.getItem(`menu_cache_${currentRestId}`);
+            if (!cached) return [];
+            
+            const parsed = JSON.parse(cached);
+            
+            // 🛡️ SAFETY CHECK: Force it to be an Array
+            if (Array.isArray(parsed)) return parsed;
+            if (parsed.dishes && Array.isArray(parsed.dishes)) return parsed.dishes;
+            
+            return []; // Fallback to empty array if data is corrupted
+        } catch (e) {
+            return [];
+        }
     });
     
     const [activeCategory, setActiveCategory] = useState("All");
@@ -35,20 +47,25 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
     const fetchMenu = async () => {
         if (!currentRestId) return;
         try {
-            // ✅ SYNC NODE: Fetches real-time availability and ratings
+            // ✅ SYNC NODE: Fetches real-time data
             const res = await axios.get(`${API_BASE}/dishes?restaurantId=${currentRestId}&t=${Date.now()}`);
             
-            // Success: Parse Data
-            const dishData = Array.isArray(res.data) ? res.data : (res.data.dishes || []);
+            // 🛡️ PARSE DATA: Handle both Array and Object formats
+            let dishData = [];
+            if (Array.isArray(res.data)) {
+                dishData = res.data;
+            } else if (res.data.dishes && Array.isArray(res.data.dishes)) {
+                dishData = res.data.dishes;
+            }
+
             setDishes(dishData);
             
-            // Update Cache & Reset Suspension
+            // Update Cache with CLEAN Array
             localStorage.setItem(`menu_cache_${currentRestId}`, JSON.stringify(dishData));
             setIsSuspended(false);
 
         } catch (err) { 
-            // 🛑 KILL SWITCH DETECTION (Critical Fix)
-            // If the CEO turned off the menu, the backend sends 503. We catch it here.
+            // 🛑 KILL SWITCH DETECTION
             if (err.response && err.response.status === 503) {
                 console.warn("⛔ MENU KILLED BY ADMIN");
                 setIsSuspended(true);
