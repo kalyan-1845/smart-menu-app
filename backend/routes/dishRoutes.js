@@ -31,64 +31,59 @@ const protect = async (req, res, next) => {
 // ==========================================
 
 /**
- * 1. GET DISHES (Public - SUPER SEARCH)
- * ✅ FIX: Searches Username AND Email AND Name to find the owner.
+ * 1. GET DISHES (Public - GUARANTEED SEARCH)
+ * ✅ FIX: Finds Owner by Username/ID -> Then finds Dishes by restaurantId OR owner field
  */
 const getDishesLogic = async (req, res) => {
     let searchInput = req.query.restaurantId || req.params.restaurantId;
     
-    console.log(`🔎 [API] Searching menu for: "${searchInput}"`);
-
-    if (!searchInput) {
-        return res.status(400).json({ message: "Restaurant ID is required." });
-    }
-
-    // CLEANUP: Remove spaces just in case " kalyanresto1 " was sent
+    // Cleanup input
+    if (!searchInput) return res.status(400).json({ message: "Restaurant ID is required." });
     searchInput = searchInput.trim();
 
-    try {
-        let ownerObjectId;
+    console.log(`🔎 [API] Searching menu for: "${searchInput}"`);
 
-        // A. Check if it is a direct Database ID (e.g. 64f2...)
+    try {
+        let owner;
+
+        // A. Check if it is a direct Database ID (e.g. 6954ca...)
         if (mongoose.Types.ObjectId.isValid(searchInput)) {
-            ownerObjectId = searchInput;
+            owner = await Owner.findById(searchInput);
         } else {
             // B. SUPER SEARCH: Look in Username OR Email OR Name
-            // This ensures we find "kalyanresto1" even if it's saved as an email or name.
-            const regex = new RegExp("^" + searchInput + "$", "i"); // Case insensitive
-            
-            const owner = await Owner.findOne({
+            const regex = new RegExp("^" + searchInput + "$", "i");
+            owner = await Owner.findOne({
                 $or: [
                     { username: regex },
                     { email: regex },
-                    { restaurantName: regex },
-                    { name: regex } 
+                    { restaurantName: regex }
                 ]
             });
+        }
 
-            if (!owner) {
-                console.log(`❌ [API] Owner "${searchInput}" NOT found in DB.`);
-                
-                // 🕵️ DEBUG: Uncomment this to see what IS in your DB if you are stuck
-                // const allUsers = await Owner.find({}, "username email");
-                // console.log("Did you mean one of these?", allUsers);
+        if (!owner) {
+            console.log(`❌ [API] Owner "${searchInput}" NOT found in DB.`);
+            return res.status(404).json({ message: "Restaurant not found" });
+        }
 
-                return res.status(404).json({ message: "Restaurant not found" });
-            }
+        // C. SAFETY CHECK: Check if Menu is Active
+        if (owner.settings && owner.settings.menuActive === false) {
+             return res.status(503).json({ message: "Menu is currently offline." });
+        }
             
-            console.log(`✅ [API] Found Owner: ${owner.username} (${owner._id})`);
-            ownerObjectId = owner._id;
-        }
+        console.log(`✅ [API] Owner Found: ${owner.username} (${owner._id})`);
 
-        // C. Fetch Dishes
-        const dishes = await Dish.find({ restaurantId: ownerObjectId }); 
+        // D. HYBRID DISH SEARCH (The "Catch-All" Fix)
+        // This looks for dishes linked via 'restaurantId' OR 'owner'
+        // This prevents empty menus if your Dish Model schema is different.
+        const dishes = await Dish.find({
+            $or: [
+                { restaurantId: owner._id },
+                { owner: owner._id }
+            ]
+        }); 
         
-        // If no dishes, return empty array (Frontend handles this better than 404)
-        if (!dishes || dishes.length === 0) {
-             console.log("⚠️ Owner found, but no dishes in menu.");
-             return res.json([]); 
-        }
-
+        console.log(`📦 [API] Found ${dishes.length} dishes.`);
         res.json(dishes);
 
     } catch (error) {
@@ -105,14 +100,15 @@ router.get('/:restaurantId', getDishesLogic);
 
 
 /**
- * 2. ADD DISH (Protected - Owner Only)
+ * 2. ADD DISH (Protected)
  */
 router.post('/', protect, async (req, res) => {
     try {
         const { name, price, category, description, image } = req.body;
         const newDish = new Dish({
             name, price, category, description, image,
-            restaurantId: req.user.id 
+            restaurantId: req.user.id, // Primary link
+            owner: req.user.id         // Backup link
         });
         const savedDish = await newDish.save();
         res.status(201).json(savedDish);
@@ -122,7 +118,7 @@ router.post('/', protect, async (req, res) => {
 });
 
 /**
- * 3. UPDATE DISH (Public/Chef Access)
+ * 3. UPDATE DISH
  */
 router.put('/:id', async (req, res) => {
     try {
@@ -138,7 +134,7 @@ router.put('/:id', async (req, res) => {
 });
 
 /**
- * 4. DELETE DISH (Protected - Owner Only)
+ * 4. DELETE DISH
  */
 router.delete('/:id', protect, async (req, res) => {
     try {
@@ -150,7 +146,7 @@ router.delete('/:id', protect, async (req, res) => {
 });
 
 /**
- * 5. ADD REVIEW (Public)
+ * 5. ADD REVIEW
  */
 router.post('/:dishId/review', async (req, res) => {
     const { dishId } = req.params;
