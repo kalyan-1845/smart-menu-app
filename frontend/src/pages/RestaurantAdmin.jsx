@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import io from "socket.io-client";
 import confetti from "canvas-confetti";
 import jsPDF from 'jspdf';
@@ -27,7 +27,6 @@ const styles = `
 .tab-btn.active { background: rgba(255,255,255,0.1); color: #FF9933; }
 .input-dark { width: 100%; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); padding: 16px; border-radius: 14px; color: white; margin-bottom: 15px; outline: none; box-sizing: border-box; font-size: 16px; }
 .dish-item { display: flex; justify-content: space-between; align-items: center; padding: 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
-.inbox-card { background: rgba(255, 255, 255, 0.05); padding: 18px; border-radius: 20px; margin-bottom: 12px; border-left: 4px solid #FF9933; }
 .menu-link-box { background: rgba(0,0,0,0.3); border: 1px dashed #444; padding: 15px; border-radius: 16px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 .link-text { color: #3b82f6; font-size: 11px; font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px; text-decoration: none; }
 `;
@@ -67,6 +66,7 @@ const SetupWizard = ({ dishesCount, pushEnabled }) => {
 
 const RestaurantAdmin = () => {
     const { id } = useParams();
+    const navigate = useNavigate();
     const SERVER_URL = "https://smart-menu-backend-5ge7.onrender.com";
     const API_BASE = `${SERVER_URL}/api`;
     const publicMenuUrl = `${window.location.origin}/menu/${id}`;
@@ -81,6 +81,7 @@ const RestaurantAdmin = () => {
     const [formData, setFormData] = useState({ name: "", price: "", category: "Starters", image: "" });
     const [qrRange, setQrRange] = useState({ start: 1, end: 5 });
 
+    // ✅ REFRESH ENGINE
     const refreshData = useCallback(async (mongoId) => {
         if (!mongoId || mongoId === "undefined") return;
         try {
@@ -90,7 +91,10 @@ const RestaurantAdmin = () => {
             ]);
             setDishes(dishRes.data || []);
             setInboxOrders(orderRes.data || []);
-        } catch (e) { console.error("Sync Error"); }
+        } catch (e) { 
+            console.error("Sync Error");
+            if (e.response?.status === 401) handleLogout();
+        }
     }, [API_BASE]);
 
     useEffect(() => {
@@ -116,25 +120,50 @@ const RestaurantAdmin = () => {
         } catch (err) { toast.error("Invalid Key"); }
     };
 
+    const handleLogout = () => {
+        localStorage.removeItem(`owner_token_${id}`);
+        localStorage.removeItem(`owner_id_${id}`);
+        setIsAuthenticated(false);
+        navigate("/login");
+    };
+
+    // ✅ ADD DISH (Fixes 401 error)
     const handleAddDish = async (e) => {
         e.preventDefault();
         const mongoId = localStorage.getItem(`owner_id_${id}`);
+        const token = localStorage.getItem(`owner_token_${id}`);
+
+        if (!token) {
+            toast.error("Session expired. Please login again.");
+            return handleLogout();
+        }
+
         try {
-            await axios.post(`${API_BASE}/dishes`, { ...formData, restaurantId: mongoId }, 
-                { headers: { Authorization: `Bearer ${localStorage.getItem(`owner_token_${id}`)}` } }
+            await axios.post(
+                `${API_BASE}/dishes`, 
+                { ...formData, restaurantId: mongoId }, 
+                { headers: { Authorization: `Bearer ${token}` } }
             );
             setFormData({ name: "", price: "", category: "Starters", image: "" });
             refreshData(mongoId);
             toast.success("Dish Added");
-        } catch (err) { toast.error("Error adding dish"); }
+        } catch (err) { 
+            if (err.response?.status === 401) {
+                toast.error("Session expired");
+                handleLogout();
+            } else {
+                toast.error("Error adding dish");
+            }
+        }
     };
 
     const handleDeleteDish = async (dishId) => {
         if (!window.confirm("Delete this dish?")) return;
         const mongoId = localStorage.getItem(`owner_id_${id}`);
+        const token = localStorage.getItem(`owner_token_${id}`);
         try {
             await axios.delete(`${API_BASE}/dishes/${dishId}`, {
-                headers: { Authorization: `Bearer ${localStorage.getItem(`owner_token_${id}`)}` }
+                headers: { Authorization: `Bearer ${token}` }
             });
             refreshData(mongoId);
             toast.success("Dish Removed");
@@ -205,7 +234,7 @@ const RestaurantAdmin = () => {
                     </div>
                     <div style={{ display: 'flex', gap: '8px' }}>
                         <InstallButton />
-                        <button onClick={() => {localStorage.clear(); window.location.reload();}} className="btn-glass" style={{ color: '#ef4444' }}><FaSignOutAlt /></button>
+                        <button onClick={handleLogout} className="btn-glass" style={{ color: '#ef4444' }}><FaSignOutAlt /></button>
                     </div>
                 </header>
 
