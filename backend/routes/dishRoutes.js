@@ -114,7 +114,6 @@ router.post('/', protect, async (req, res) => {
 
 router.put('/:id', protect, async (req, res) => {
     try {
-        // Find by ID and ensure ownership in one query
         const updated = await Dish.findOneAndUpdate(
             { _id: req.params.id, restaurantId: req.user._id },
             req.body,

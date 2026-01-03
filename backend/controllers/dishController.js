@@ -1,24 +1,35 @@
 import Dish from '../models/Dish.js';
+import Owner from '../models/Owner.js'; // 👈 Needed for Username-to-ID lookup
+import mongoose from 'mongoose';
 
 // ============================================================
-// 1. PUBLIC: FETCH MENU (Ultra-High Speed)
+// 1. PUBLIC: FETCH MENU (Smart Sync Integration)
 // ============================================================
 export const getDishes = async (req, res) => {
-    const { restaurantId } = req.query;
+    const { restaurantId } = req.query; // Could be "kalyanresto1" or "65f8a..."
 
     try {
         if (!restaurantId) return res.status(400).json({ message: "Restaurant ID required" });
 
+        let queryId = restaurantId;
+
+        // 🕵️ SMART LOOKUP: If restaurantId is NOT a valid ObjectId, it's a username.
+        // We must find the real _id before querying the Dishes collection.
+        if (!mongoose.Types.ObjectId.isValid(restaurantId)) {
+            const owner = await Owner.findOne({ username: restaurantId.toLowerCase() }).select('_id');
+            if (!owner) return res.status(404).json({ message: "Restaurant not found" });
+            queryId = owner._id;
+        }
+
         // 🚀 PRO OPTIMIZATION:
-        // .lean() skips Mongoose hydration (saves 70% memory)
-        // Sorted by availability (IN STOCK first) then highest rating.
-        const dishes = await Dish.find({ restaurantId })
-            .select('-reviews') // 🛡️ Hide full review text on menu list to save bandwidth
+        const dishes = await Dish.find({ restaurantId: queryId })
+            .select('-reviews') // Hide full reviews for initial menu load
             .sort({ isAvailable: -1, "ratings.average": -1 })
             .lean();
 
         res.status(200).json(dishes);
     } catch (error) {
+        console.error("Fetch Error:", error);
         res.status(500).json({ message: "Sync Node Error" });
     }
 };
@@ -38,10 +49,12 @@ export const addDishReview = async (req, res) => {
         const dish = await Dish.findById(dishId);
         if (!dish) return res.status(404).json({ message: "Dish not found" });
 
-        // 🧠 O(1) COMPLEXITY MATH: Update average without reading history
+        // 🧠 O(1) COMPLEXITY MATH: Update average without reading thousands of docs
         const currentCount = dish.ratings?.count || 0;
         const currentAvg = dish.ratings?.average || 0;
         const newCount = currentCount + 1;
+        
+        // Formula: ((OldAvg * OldCount) + NewRating) / NewCount
         const newAverage = ((currentAvg * currentCount) + Number(rating)) / newCount;
 
         dish.ratings = {
@@ -49,7 +62,7 @@ export const addDishReview = async (req, res) => {
             count: newCount
         };
 
-        // 🧹 PRUNING: Keep only last 50 reviews to prevent database "Bloat"
+        // 🧹 PRUNING: Keep document size small
         dish.reviews.unshift({
             customerName: customerName || "Guest",
             rating: Number(rating),
@@ -71,7 +84,7 @@ export const addDishReview = async (req, res) => {
 
 export const createDish = async (req, res) => {
     try {
-        // Force link the dish to the authenticated owner's ID
+        // req.user._id is the 24-character ObjectId from Auth Middleware
         const dishData = { ...req.body, restaurantId: req.user._id };
         const dish = await Dish.create(dishData);
         res.status(201).json(dish);
@@ -82,13 +95,12 @@ export const createDish = async (req, res) => {
 
 export const updateDish = async (req, res) => {
     try {
-        // 🔒 SECURITY: Only update if the dish belongs to THIS owner
         const updated = await Dish.findOneAndUpdate(
             { _id: req.params.id, restaurantId: req.user._id }, 
             req.body, 
             { new: true }
         );
-        if (!updated) return res.status(403).json({ message: "Unauthorized or Not Found" });
+        if (!updated) return res.status(403).json({ message: "Unauthorized" });
         res.status(200).json(updated);
     } catch (error) {
         res.status(400).json({ message: "Update failed" });
@@ -97,14 +109,13 @@ export const updateDish = async (req, res) => {
 
 export const deleteDish = async (req, res) => {
     try {
-        // 🔒 SECURITY: Prevent cross-restaurant deletion
         const deleted = await Dish.findOneAndDelete({ 
             _id: req.params.id, 
             restaurantId: req.user._id 
         });
-        if (!deleted) return res.status(403).json({ message: "Purge forbidden" });
+        if (!deleted) return res.status(403).json({ message: "Delete forbidden" });
         res.status(200).json({ message: "PURGED FROM CLOUD" });
     } catch (error) {
-        res.status(400).json({ message: "Purge failed" });
+        res.status(400).json({ message: "Delete failed" });
     }
 };

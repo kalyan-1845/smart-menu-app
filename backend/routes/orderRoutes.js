@@ -1,23 +1,11 @@
 import express from 'express';
-import mongoose from 'mongoose'; 
-import webpush from 'web-push'; 
 import Order from '../models/Order.js';
 import Call from '../models/Call.js'; 
 import Owner from '../models/Owner.js'; 
 
 const router = express.Router();
 
-// --- 🔑 SAFE WEB PUSH CONFIGURATION ---
-const publicKey = process.env.VAPID_PUBLIC_KEY;
-const privateKey = process.env.VAPID_PRIVATE_KEY;
-
-if (publicKey && privateKey) {
-    try {
-        webpush.setVapidDetails('mailto:support@bitebox.com', publicKey, privateKey);
-    } catch (err) { console.error("❌ Push Config Error"); }
-}
-
-// --- 1. PLACE ORDER ---
+// --- 1. PLACE NEW ORDER ---
 router.post('/', async (req, res) => {
     try {
         const { customerName, items, totalAmount, paymentMethod, tableNum, restaurantId } = req.body;
@@ -43,27 +31,29 @@ router.post('/', async (req, res) => {
     } catch (error) { res.status(400).json({ message: error.message }); }
 });
 
-// ✅ --- 2. GET LIVE INBOX (Unfiltered for Admin) ---
+// ✅ --- 2. GET LIVE INBOX (For Dashboard Sync) ---
 router.get('/inbox', async (req, res) => {
     try {
         const { restaurantId } = req.query;
-        // Only fetch orders that haven't been "Saved & Cleared" (isDownloaded: false)
-        const orders = await Order.find({ restaurantId, isDownloaded: false }).sort({ createdAt: -1 });
+        // Fetch only active orders that haven't been archived/downloaded
+        const orders = await Order.find({ 
+            restaurantId, 
+            isDownloaded: false 
+        }).sort({ createdAt: -1 });
         res.json(orders);
     } catch (error) { res.status(500).json({ message: error.message }); }
 });
 
-// --- 3. GET ALL ORDERS (Chef/Waiter Filtered) ---
+// --- 3. GET ALL ORDERS (Staff Dashboards) ---
 router.get('/', async (req, res) => {
     try {
         const { restaurantId } = req.query;
-        // Fetch orders for the staff dashboards
         const orders = await Order.find({ restaurantId }).sort({ createdAt: -1 }).limit(50);
         res.json(orders);
     } catch (error) { res.status(500).json({ message: error.message }); }
 });
 
-// --- 4. UPDATE STATUS (Chef & Hybrid Actions) ---
+// --- 4. UPDATE STATUS & AUTO-REVENUE ---
 router.put('/:id', async (req, res) => {
     try {
         const oldOrder = await Order.findById(req.params.id);
@@ -75,17 +65,15 @@ router.put('/:id', async (req, res) => {
             { new: true }
         );
 
-        // 💰 REVENUE: Auto-calculate when status becomes "Served"
+        // 💰 REVENUE: Only increment when status FIRST becomes "Served"
         if (req.body.status.toLowerCase() === "served" && oldOrder.status.toLowerCase() !== "served") {
             await Owner.findByIdAndUpdate(order.restaurantId, {
                 $inc: { totalRevenue: order.totalAmount }
             });
         }
 
-        // 📡 Real-time update to all dashboards and customer tracking
         if (req.io) {
              req.io.to(order.restaurantId.toString()).emit('order-updated', order);
-             // If Ready, specifically alert the Waiter Terminal
              if (req.body.status.toLowerCase() === "ready") {
                 req.io.to(order.restaurantId.toString()).emit('chef-ready-alert', order);
              }
@@ -95,11 +83,15 @@ router.put('/:id', async (req, res) => {
     } catch (error) { res.status(400).json({ message: error.message }); }
 });
 
-// --- 5. CALL WAITER ---
+// --- 5. CALL WAITER (Real-time Alert) ---
 router.post('/call-waiter', async (req, res) => {
     try {
-        const { restaurantId, tableNumber } = req.body; 
-        const newCall = await Call.create({ restaurantId, tableNumber, type: 'help' });
+        const { restaurantId, tableNumber, type } = req.body; 
+        const newCall = await Call.create({ 
+            restaurantId, 
+            tableNumber, 
+            type: type || 'help' 
+        });
         
         if (req.io) {
             req.io.to(restaurantId.toString()).emit('new-waiter-call', newCall);
@@ -118,21 +110,28 @@ router.get('/calls', async (req, res) => {
     } catch (error) { res.status(500).json({ message: error.message }); }
 });
 
-// --- 7. CLEAR INBOX (Mark as Downloaded) ---
+// --- 7. RESOLVE/DELETE CALL ---
+router.delete('/calls/:callId', async (req, res) => {
+    try {
+        const call = await Call.findById(req.params.callId);
+        if (!call) return res.status(404).json({ message: "Call not found" });
+
+        await Call.findByIdAndDelete(req.params.callId);
+
+        if (req.io) {
+            req.io.to(call.restaurantId.toString()).emit("call-resolved", { id: req.params.callId });
+        }
+        res.json({ success: true });
+    } catch (error) { res.status(500).json({ message: "Failed" }); }
+});
+
+// --- 8. CLEAR INBOX ---
 router.put('/mark-downloaded', async (req, res) => {
     try {
         const { restaurantId } = req.body;
         await Order.updateMany({ restaurantId, isDownloaded: false }, { $set: { isDownloaded: true } });
         res.status(200).json({ message: "Inbox cleared" });
     } catch (error) { res.status(500).json({ error: "Failed" }); }
-});
-
-// --- 8. DELETE CALL ---
-router.delete('/calls/:callId', async (req, res) => {
-    try {
-        await Call.findByIdAndDelete(req.params.callId);
-        res.json({ success: true });
-    } catch (error) { res.status(500).json({ message: "Failed" }); }
 });
 
 export default router;
