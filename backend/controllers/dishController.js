@@ -3,7 +3,7 @@ import Owner from '../models/Owner.js';
 import mongoose from 'mongoose';
 
 // ============================================================
-// 1. PUBLIC: FETCH MENU (With Kill Switch)
+// 1. PUBLIC: FETCH MENU (The Engine)
 // ============================================================
 export const getDishes = async (req, res) => {
     const { restaurantId } = req.query; 
@@ -13,7 +13,7 @@ export const getDishes = async (req, res) => {
 
         let owner;
         
-        // 🕵️ SMART LOOKUP: Find Owner by ID or Username
+        // 🕵️ SMART LOOKUP: Finds Owner by ID (64f...) OR Username (kalyanresto1)
         if (mongoose.Types.ObjectId.isValid(restaurantId)) {
             owner = await Owner.findById(restaurantId).select('_id settings').lean();
         } else {
@@ -22,16 +22,19 @@ export const getDishes = async (req, res) => {
             }).select('_id settings').lean();
         }
 
+        // Safety: If no owner found, return empty array (Don't crash)
         if (!owner) return res.json([]); 
 
-        // 🛑 KILL SWITCH ENFORCEMENT
+        // 🛑 KILL SWITCH ENFORCEMENT (Crucial for God Mode)
+        // If CEO turned off menu, this sends 503. The frontend catches this to show "Locked" screen.
         if (owner.settings && owner.settings.menuActive === false) {
             return res.status(503).json({ message: "❌ SERVICE SUSPENDED BY ADMIN" });
         }
 
+        // 🚀 FETCH DISHES
         const dishes = await Dish.find({ restaurantId: owner._id })
             .select('-reviews') 
-            .sort({ isAvailable: -1, "ratings.average": -1 })
+            .sort({ isAvailable: -1, "ratings.average": -1 }) // Stock first, Highest rated second
             .lean();
 
         res.status(200).json(dishes);
@@ -42,7 +45,7 @@ export const getDishes = async (req, res) => {
 };
 
 // ============================================================
-// 2. PUBLIC: SUBMIT RATING (The Missing Function)
+// 2. PUBLIC: SUBMIT RATING 
 // ============================================================
 export const addDishReview = async (req, res) => {
     const { dishId } = req.params;
@@ -54,6 +57,7 @@ export const addDishReview = async (req, res) => {
         const dish = await Dish.findById(dishId);
         if (!dish) return res.status(404).json({ message: "Dish not found" });
 
+        // Calculate new average
         const currentCount = dish.ratings?.count || 0;
         const currentAvg = dish.ratings?.average || 0;
         const newCount = currentCount + 1;
@@ -64,6 +68,7 @@ export const addDishReview = async (req, res) => {
             count: newCount 
         };
 
+        // Add review text
         dish.reviews.unshift({ 
             customerName: customerName || "Guest", 
             rating, 
@@ -71,7 +76,7 @@ export const addDishReview = async (req, res) => {
             createdAt: new Date() 
         });
         
-        // Prune old reviews to save space
+        // Keep DB light (Max 50 reviews stored)
         if (dish.reviews.length > 50) dish.reviews = dish.reviews.slice(0, 50);
 
         await dish.save();
@@ -82,10 +87,11 @@ export const addDishReview = async (req, res) => {
 };
 
 // ============================================================
-// 3. ADMIN: MANAGE ITEMS
+// 3. ADMIN: MANAGE ITEMS (Protected)
 // ============================================================
 export const createDish = async (req, res) => {
     try {
+        // Links dish strictly to the logged-in owner
         const dishData = { ...req.body, restaurantId: req.user._id }; 
         const dish = await Dish.create(dishData);
         res.status(201).json(dish);
