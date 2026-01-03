@@ -7,7 +7,8 @@ import { Server } from 'socket.io';
 import rateLimit from 'express-rate-limit';
 import https from "https"; 
 import compression from 'compression'; // ✅ ADDED for 3x faster data loading
-
+// Add this with the other imports
+import { getDishes } from './controllers/dishController.js';
 // --- IMPORT ROUTES ---
 import authRoutes from './routes/authRoutes.js';
 import dishRoutes from './routes/dishRoutes.js';
@@ -98,7 +99,7 @@ app.use('/api/superadmin', superAdminRoutes);
 app.use('/api/broadcast', broadcastRoutes);
 // Removed the redundant '/api/menu' line here to keep it clean
 
-app.get('/', (req, res) => res.send('BiteBox API v2 Industrial is Running...'));
+app.get('/', (req, res) => res.send('BiteBox API v3 Industrial is Running...'));
 
 // --- ERROR HANDLER ---
 app.use((err, req, res, next) => {
