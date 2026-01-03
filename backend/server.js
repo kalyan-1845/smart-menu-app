@@ -96,7 +96,7 @@ app.use('/api/dishes', dishRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/superadmin', superAdminRoutes);
 app.use('/api/broadcast', broadcastRoutes);
-app.use('/api/menu', dishRoutes);
+// Removed the redundant '/api/menu' line here to keep it clean
 
 app.get('/', (req, res) => res.send('BiteBox API v2 Industrial is Running...'));
 
