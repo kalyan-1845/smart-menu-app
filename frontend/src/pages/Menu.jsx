@@ -8,7 +8,7 @@ const API_BASE = "https://smart-menu-backend-5ge7.onrender.com/api";
 
 const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
     const params = useParams();
-    const currentRestId = params.restaurantId || params.id;
+    const currentRestId = params.restaurantId || params.id; // This is the username (e.g., kalyanresto1)
     const currentTable = params.table;
 
     const [dishes, setDishes] = useState(() => {
@@ -27,60 +27,28 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
 
     const DEFAULT_IMG = "https://placehold.co/400x300/222/orange?text=Yummy";
 
-    // ✅ 1. REAL-TIME STOCK HEARTBEAT
-    // Updates availability every 15s so customers don't order Sold Out items
-    useEffect(() => {
-        if (!currentRestId) return;
-        fetchMenu(true); // Initial fetch
-        
-        const stockInterval = setInterval(() => {
-            fetchMenu(true); 
-        }, 15000); 
-
-        return () => clearInterval(stockInterval);
-    }, [currentRestId]);
-
-    // 🔄 MOBILE AUTO-REFRESH ON APP RE-ENTRY
-    useEffect(() => {
-        const handleVisibilityChange = () => {
-            if (document.visibilityState === "visible") fetchMenu(true); 
-        };
-        document.addEventListener("visibilitychange", handleVisibilityChange);
-        return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
-    }, [currentRestId]);
-
-    // ✅ 2. SMART TABLE & SHOP SYNC
-    useEffect(() => {
-        const lastTable = localStorage.getItem("last_table_scanned");
-        const lastRest = localStorage.getItem("last_rest_scanned");
-        
-        if (lastRest !== currentRestId) {
-            if (setCart) setCart([]); // Clear cart if switching restaurants
-            localStorage.setItem("last_rest_scanned", currentRestId || "");
-        }
-        
-        if (currentTable) {
-            localStorage.setItem("last_table_scanned", currentTable);
-            if (setTableNum) setTableNum(currentTable);
-        }
-        
-        if (setRestaurantId) setRestaurantId(currentRestId);
-    }, [currentRestId, currentTable]);
-
+    // ✅ FIXED FETCH ENGINE: Translates Username to MongoDB ID
     const fetchMenu = async (isManual = false) => {
         if (!currentRestId) return;
         try {
-            const res = await axios.get(`${API_BASE}/dishes?restaurantId=${currentRestId}`);
-            
-            if (res.data.status === "suspended") {
-                setIsSuspended(true);
-            } else {
-                const dishData = Array.isArray(res.data) ? res.data : (res.data.dishes || []);
-                setDishes(dishData);
-                localStorage.setItem(`menu_cache_${currentRestId}`, JSON.stringify(dishData));
+            // 1. First, find the real 24-character ID from the username
+            const idRes = await axios.get(`${API_BASE}/auth/owner-id/${currentRestId}`);
+            const realMongoId = idRes.data.id;
+
+            if (realMongoId) {
+                // 2. Now fetch dishes using that REAL ID and a timestamp to prevent cache
+                const res = await axios.get(`${API_BASE}/dishes?restaurantId=${realMongoId}&t=${Date.now()}`);
+                
+                if (res.data.status === "suspended") {
+                    setIsSuspended(true);
+                } else {
+                    const dishData = Array.isArray(res.data) ? res.data : (res.data.dishes || []);
+                    setDishes(dishData);
+                    localStorage.setItem(`menu_cache_${currentRestId}`, JSON.stringify(dishData));
+                }
             }
         } catch (err) {
-            console.error("Menu fetch failed");
+            console.error("Menu fetch failed:", err);
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -88,12 +56,42 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
         }
     };
 
+    // ✅ HEARTBEAT SYNC: Updates availability every 15s
+    useEffect(() => {
+        if (!currentRestId) return;
+        fetchMenu(true); 
+        const stockInterval = setInterval(() => { fetchMenu(true); }, 15000);
+        return () => clearInterval(stockInterval);
+    }, [currentRestId]);
+
+    // ✅ AUTO-REFRESH ON APP RE-ENTRY
+    useEffect(() => {
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === "visible") fetchMenu(true);
+        };
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+        return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+    }, [currentRestId]);
+
+    // ✅ SMART TABLE & SHOP SYNC
+    useEffect(() => {
+        const lastRest = localStorage.getItem("last_rest_scanned");
+        if (lastRest !== currentRestId) {
+            if (setCart) setCart([]);
+            localStorage.setItem("last_rest_scanned", currentRestId || "");
+        }
+        if (currentTable) {
+            localStorage.setItem("last_table_scanned", currentTable);
+            if (setTableNum) setTableNum(currentTable);
+        }
+        if (setRestaurantId) setRestaurantId(currentRestId);
+    }, [currentRestId, currentTable]);
+
     const handleAction = (dish, val = 1) => {
-        if ("vibrate" in navigator) navigator.vibrate(40); 
+        if ("vibrate" in navigator) navigator.vibrate(40);
         addToCart(val === -1 ? {...dish, quantity: -1} : dish);
     };
 
-    // ✅ 3. FILTERING LOGIC
     useEffect(() => {
         let result = dishes;
         if (activeCategory !== "All") result = result.filter(d => d.category === activeCategory);
@@ -164,7 +162,7 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
                 {filteredDishes.map(dish => {
                     const itemInCart = cart.find(i => i._id === dish._id);
                     const qty = itemInCart ? itemInCart.quantity : 0;
-                    const isAvailable = dish.isAvailable !== false; // Perfect stock check
+                    const isAvailable = dish.isAvailable !== false;
 
                     return (
                         <div key={dish._id} style={{...styles.card, opacity: isAvailable ? 1 : 0.7}}>
