@@ -11,7 +11,7 @@ import OwnerLogin from "./pages/OwnerLogin";
 import Register from "./pages/Register"; 
 import SuperLogin from "./pages/SuperLogin"; 
 import Terms from './pages/Terms';
-import Maintenance from './pages/Maintenance'; 
+import Maintenance from './pages/Maintenance'; // ✅ Import Maintenance
 import NotFound from './pages/NotFound';
 
 // --- STAFF PANELS ---
@@ -44,22 +44,10 @@ const GlobalStyles = () => (
 );
 
 function App() {
-  // 🛑 FIX: This is the ONLY change. It stops the White Screen crash.
-  const [cart, setCart] = useState(() => {
-    try {
-        const saved = localStorage.getItem("smartMenu_Cart");
-        return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-        // If data is broken, reset it instead of crashing the app
-        console.error("Cart data corrupted. Resetting.");
-        localStorage.removeItem("smartMenu_Cart"); 
-        return [];
-    }
-  });
-
+  const [cart, setCart] = useState(() => JSON.parse(localStorage.getItem("smartMenu_Cart") || "[]"));
   const [restaurantId, setRestaurantId] = useState(localStorage.getItem("smartMenu_RestaurantId") || null);
   const [tableNum, setTableNum] = useState(localStorage.getItem("last_table_num") || "");
-  const [isMaintenance, setIsMaintenance] = useState(false); 
+  const [isMaintenance, setIsMaintenance] = useState(false); // ✅ Global Maintenance State
 
   // ✅ 1. MAINTENANCE ENGINE
   useEffect(() => {
@@ -70,7 +58,7 @@ function App() {
       } catch (e) { console.error("System Status Check Failed"); }
     };
     checkSystemStatus();
-    const interval = setInterval(checkSystemStatus, 60000); 
+    const interval = setInterval(checkSystemStatus, 60000); // Re-check every minute
     return () => clearInterval(interval);
   }, []);
 
@@ -81,12 +69,9 @@ function App() {
   // --- CART ACTIONS ---
   const addToCart = (dish) => {
     setCart((prev) => {
-      // Safety check to prevent crashes if 'prev' is somehow not an array
-      const safePrev = Array.isArray(prev) ? prev : [];
-      
-      const exists = safePrev.find((item) => item._id === dish._id);
-      if (exists) return safePrev.map((i) => i._id === dish._id ? { ...i, quantity: i.quantity + (dish.quantity || 1) } : i);
-      return [...safePrev, { ...dish, quantity: dish.quantity || 1 }];
+      const exists = prev.find((item) => item._id === dish._id);
+      if (exists) return prev.map((i) => i._id === dish._id ? { ...i, quantity: i.quantity + (dish.quantity || 1) } : i);
+      return [...prev, { ...dish, quantity: dish.quantity || 1 }];
     });
   };
 
@@ -110,7 +95,7 @@ function App() {
         <Route path="/login" element={<OwnerLogin />} />
         <Route path="/register" element={<Register />} />
         <Route path="/terms" element={<Terms />} />
-          
+         
         {/* --- CUSTOMER MENU --- */}
         <Route path="/menu/:restaurantId" element={
             <div className="page-transition">

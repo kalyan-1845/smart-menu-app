@@ -1,114 +1,158 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import axios from "axios";
-import { FaSearch, FaPlus, FaMinus, FaStar, FaArrowRight, FaLock, FaSyncAlt, FaCommentAlt } from "react-icons/fa";
+import { FaSearch, FaPlus, FaMinus, FaStar, FaUtensils, FaArrowRight, FaLock, FaSyncAlt } from "react-icons/fa";
 import LoadingSpinner from "../components/LoadingSpinner";
-import FeedbackModal from "../components/FeedbackModal";
 
-const API_BASE = "https://smart-menu-backend-5ge7.onrender.com/api";
+const API_BASE = window.location.hostname === "localhost" || window.location.hostname.startsWith("192.168")
+    ? "http://localhost:5000/api" 
+    : "https://smart-menu-backend-5ge7.onrender.com/api";
 
-const Menu = ({ cart = [], addToCart, setRestaurantId, setTableNum, setCart }) => {
+const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
     const params = useParams();
     const currentRestId = params.restaurantId || params.id;
     const currentTable = params.table;
 
     const [dishes, setDishes] = useState(() => {
-        try {
-            const cached = localStorage.getItem(`menu_cache_${currentRestId}`);
-            return cached ? JSON.parse(cached) : [];
-        } catch (e) { return []; }
+        const cached = localStorage.getItem(`menu_cache_${currentRestId}`);
+        return cached ? JSON.parse(cached) : [];
     });
-    
+    const [filteredDishes, setFilteredDishes] = useState(dishes);
     const [activeCategory, setActiveCategory] = useState("All");
     const [searchTerm, setSearchTerm] = useState("");
     const [loading, setLoading] = useState(dishes.length === 0); 
+    const [error, setError] = useState(false);
     const [isSuspended, setIsSuspended] = useState(false);
+
     const [pullDistance, setPullDistance] = useState(0);
     const [refreshing, setRefreshing] = useState(false);
-    const [selectedDishForFeedback, setSelectedDishForFeedback] = useState(null);
     const startY = useRef(0);
 
-    const DEFAULT_IMG = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400&q=80";
+    const DEFAULT_IMG = "https://placehold.co/400x300/222/orange?text=Yummy";
 
-    const fetchMenu = async (isSilent = false) => {
+    // ✅ SUGGESTION: REAL-TIME STOCK INDICATOR (Heartbeat Sync)
+    // Synchronizes dish availability every 15 seconds for 100,000+ members
+    useEffect(() => {
+        if (!currentRestId) return;
+        const stockInterval = setInterval(() => {
+            fetchMenu(true); // Background sync
+        }, 15000); 
+
+        return () => clearInterval(stockInterval);
+    }, [currentRestId]);
+
+    // 🔄 MOBILE AUTO-REFRESH ON RE-ENTRY
+    useEffect(() => {
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === "visible") {
+                fetchMenu(true); 
+            }
+        };
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+        return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+    }, [currentRestId]);
+
+    useEffect(() => {
+        const lastTable = localStorage.getItem("last_table_scanned");
+        const lastRest = localStorage.getItem("last_rest_scanned");
+        if (lastTable !== currentTable || lastRest !== currentRestId) {
+            if (setCart) setCart([]); 
+            localStorage.setItem("last_table_scanned", currentTable || "");
+            localStorage.setItem("last_rest_scanned", currentRestId || "");
+        }
+    }, [currentRestId, currentTable, setCart]);
+
+    useEffect(() => {
+        if (!currentRestId) return;
+        if (setRestaurantId) setRestaurantId(currentRestId);
+        if (setTableNum && currentTable) setTableNum(currentTable);
+    }, [currentRestId, currentTable]);
+
+    const fetchMenu = async (isManual = false) => {
         if (!currentRestId) return;
         try {
-            const res = await axios.get(`${API_BASE}/dishes?restaurantId=${currentRestId}&t=${Date.now()}`);
+            if (!isManual && dishes.length === 0) setLoading(true);
+            const res = await axios.get(`${API_BASE}/dishes?restaurantId=${currentRestId}`, { timeout: 8000 });
             
-            // ✅ SAFETY FIX: Handle Array vs Object format
-            let data = [];
-            if (Array.isArray(res.data)) data = res.data;
-            else if (res.data.dishes && Array.isArray(res.data.dishes)) data = res.data.dishes;
-
-            setDishes(data);
-            localStorage.setItem(`menu_cache_${currentRestId}`, JSON.stringify(data));
-            
-        } catch (err) { 
-            if (err.response && err.response.status === 503) setIsSuspended(true);
-        } finally { 
-            setLoading(false); 
-            setRefreshing(false); 
-            setPullDistance(0); 
+            if (res.data.status === "suspended") {
+                setIsSuspended(true);
+            } else {
+                const dishData = Array.isArray(res.data) ? res.data : (res.data.dishes || []);
+                setDishes(dishData);
+                localStorage.setItem(`menu_cache_${currentRestId}`, JSON.stringify(dishData));
+            }
+            setError(false);
+        } catch (err) {
+            if (dishes.length === 0) setError(true);
+        } finally {
+            setLoading(false);
+            setRefreshing(false);
+            setPullDistance(0);
         }
     };
 
-    useEffect(() => { 
-        fetchMenu();
-        if (setRestaurantId) setRestaurantId(currentRestId);
-        if (setTableNum && currentTable) setTableNum(currentTable);
-    }, [currentRestId]);
+    useEffect(() => { fetchMenu(); }, [currentRestId]);
 
-    const filteredDishes = useMemo(() => {
-        return dishes.filter(d => {
-            const matchesCat = activeCategory === "All" || d.category === activeCategory;
-            const matchesSearch = d.name.toLowerCase().includes(searchTerm.toLowerCase());
-            return matchesCat && matchesSearch;
-        });
-    }, [dishes, activeCategory, searchTerm]);
-
-    const categories = useMemo(() => ["All", ...new Set(dishes.map(d => d.category))], [dishes]);
-
-    // Pull to Refresh Logic
-    const onTouchStart = (e) => { if (window.scrollY === 0) startY.current = e.touches[0].pageY; };
-    const onTouchMove = (e) => {
+    const handleTouchStart = (e) => { if (window.scrollY === 0) startY.current = e.touches[0].pageY; };
+    const handleTouchMove = (e) => {
         const diff = e.touches[0].pageY - startY.current;
-        if (window.scrollY === 0 && diff > 0 && diff < 80) setPullDistance(diff);
+        if (window.scrollY === 0 && diff > 0 && diff < 70) setPullDistance(diff);
     };
-    const onTouchEnd = () => {
-        if (pullDistance > 60) { setRefreshing(true); fetchMenu(true); } 
+    const handleTouchEnd = () => {
+        if (pullDistance > 50) { setRefreshing(true); fetchMenu(true); } 
         else setPullDistance(0);
     };
 
-    // ✅ SAFETY FIX: Default to [] if cart is undefined
-    const safeCart = Array.isArray(cart) ? cart : [];
-    const totalQty = safeCart.reduce((acc, item) => acc + item.quantity, 0);
-    const totalPrice = safeCart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+    const handleAction = (dish, val = 1) => {
+        if ("vibrate" in navigator) navigator.vibrate(40); 
+        addToCart(val === -1 ? {...dish, quantity: -1} : dish);
+    };
+
+    useEffect(() => {
+        let result = dishes;
+        if (activeCategory !== "All") result = result.filter(d => d.category === activeCategory);
+        if (searchTerm) result = result.filter(d => d.name.toLowerCase().includes(searchTerm.toLowerCase()));
+        setFilteredDishes(result);
+    }, [searchTerm, activeCategory, dishes]);
+
+    const totalQty = cart.reduce((acc, item) => acc + item.quantity, 0);
+    const totalPrice = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+    const categories = ["All", ...new Set(dishes.map(d => d.category))];
 
     if (loading && dishes.length === 0) return <LoadingSpinner />;
-    if (isSuspended) return <div style={styles.center}><FaLock size={60} color="#f97316"/><h1 style={{color:'white', marginTop:20}}>OFFLINE</h1></div>;
+
+    if (isSuspended) return (
+        <div style={styles.center}>
+            <FaLock size={60} color="#f97316"/>
+            <h1 style={{color:'white', marginTop:20}}>SERVICE UNAVAILABLE</h1>
+        </div>
+    );
 
     return (
-        <div style={styles.container} onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
+        <div style={styles.container} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}>
             
-            {selectedDishForFeedback && (
-                <FeedbackModal 
-                    dish={selectedDishForFeedback} 
-                    onClose={() => setSelectedDishForFeedback(null)} 
-                />
-            )}
-
             <div style={{...styles.pullLoader, height: `${pullDistance}px`, opacity: pullDistance / 60}}>
                 <FaSyncAlt className={refreshing ? "spin" : ""} style={{color: '#f97316'}} />
             </div>
 
+            <div style={styles.marqueeWrapper}>
+                <div style={styles.marqueeContent}>
+                    <span>JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • </span>
+                    <span>JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • </span>
+                </div>
+            </div>
+
             <div style={styles.hero}>
-                <div style={styles.heroTop}>
-                    <h1 style={styles.restName}>{currentRestId?.toUpperCase()}</h1>
-                    <div style={styles.ratingBadge}><FaStar color="#fbbf24"/> 4.9</div>
+                <div style={styles.heroContent}>
+                    <div>
+                        <h1 style={styles.restName}>{currentRestId?.toUpperCase()}</h1>
+                        <p style={styles.restSub}>Premium Food & Drinks</p>
+                    </div>
+                    <div style={styles.ratingBadge}><FaStar color="#fbbf24"/> 4.8</div>
                 </div>
                 <div style={styles.searchContainer}>
                     <FaSearch style={styles.searchIcon} />
-                    <input style={styles.searchInput} placeholder="Search for food..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                    <input style={styles.searchInput} placeholder="Search dishes..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                 </div>
             </div>
 
@@ -118,57 +162,42 @@ const Menu = ({ cart = [], addToCart, setRestaurantId, setTableNum, setCart }) =
                         <button key={cat} onClick={() => setActiveCategory(cat)}
                             style={{
                                 ...styles.catBtn, 
-                                background: activeCategory === cat ? '#f97316' : '#111', 
-                                color: activeCategory === cat ? 'white' : '#666',
-                                borderColor: activeCategory === cat ? '#f97316' : '#222'
-                            }}>{cat}</button>
+                                background: activeCategory === cat ? '#f97316' : '#18181b', 
+                                color: activeCategory === cat ? 'white' : '#a1a1aa',
+                                boxShadow: activeCategory === cat ? '0 0 20px rgba(249, 115, 22, 0.5)' : 'none'
+                            }}>
+                            {cat}
+                        </button>
                     ))}
                 </div>
             </div>
 
             <div style={styles.grid}>
                 {filteredDishes.map(dish => {
-                    // ✅ SAFETY FIX: Use safeCart
-                    const cartItem = safeCart.find(i => i._id === dish._id);
-                    const qty = cartItem ? cartItem.quantity : 0;
+                    const item = cart.find(i => i._id === dish._id);
+                    const qty = item ? item.quantity : 0;
                     return (
                         <div key={dish._id} style={styles.card}>
-                            <div style={styles.imgBox}>
+                            <div style={styles.imgWrapper}>
                                 <img src={dish.image || DEFAULT_IMG} alt={dish.name} style={styles.img} loading="lazy" />
-                                {!dish.isAvailable && <div style={styles.soldOut}>OUT</div>}
+                                {dish.isAvailable === false && <div style={styles.soldOut}>OUT OF STOCK</div>}
                             </div>
-                            <div style={styles.details}>
-                                <div style={styles.detailsTop}>
-                                    <div style={{maxWidth: '75%'}}>
-                                        <h3 style={styles.dishTitle}>{dish.name}</h3>
-                                        <div style={styles.ratingInfo}>
-                                            <FaStar color="#fbbf24" size={10}/>
-                                            <span style={styles.ratingText}>{dish.ratings?.average || 4.5}</span>
-                                            <span style={styles.countText}>({dish.ratings?.count || 12}+)</span>
-                                        </div>
-                                    </div>
+                            <div style={styles.info}>
+                                <div style={styles.row}>
+                                    <h3 style={styles.dishTitle}>{dish.name}</h3>
                                     <span style={styles.price}>₹{dish.price}</span>
                                 </div>
-                                
-                                <div style={styles.actionRow}>
-                                    <button 
-                                        onClick={() => setSelectedDishForFeedback(dish)}
-                                        style={styles.feedbackLink}
-                                    >
-                                        <FaCommentAlt size={10}/> Rate
-                                    </button>
-
+                                <p style={styles.desc}>{dish.description}</p>
+                                <div style={{marginTop:'auto', alignSelf: 'flex-end'}}>
                                     {dish.isAvailable !== false ? (
                                         qty > 0 ? (
                                             <div style={styles.counter}>
-                                                <button onClick={() => addToCart({...dish, quantity: -1})} style={styles.btnSmall}><FaMinus/></button>
-                                                <span style={styles.qty}>{qty}</span>
-                                                <button onClick={() => addToCart(dish)} style={styles.btnSmall}><FaPlus/></button>
+                                                <button onClick={() => handleAction(dish, -1)} style={styles.countBtn}><FaMinus size={10}/></button>
+                                                <span style={styles.qtyNum}>{qty}</span>
+                                                <button onClick={() => handleAction(dish)} style={styles.countBtn}><FaPlus size={10}/></button>
                                             </div>
-                                        ) : (
-                                            <button onClick={() => addToCart(dish)} style={styles.addBtn}>ADD</button>
-                                        )
-                                    ) : <span style={styles.soldOutText}>Sold Out</span>}
+                                        ) : ( <button onClick={() => handleAction(dish)} style={styles.addBtn}>ADD</button> )
+                                    ) : <button disabled style={styles.disabledBtn}>Sold Out</button>}
                                 </div>
                             </div>
                         </div>
@@ -177,60 +206,67 @@ const Menu = ({ cart = [], addToCart, setRestaurantId, setTableNum, setCart }) =
             </div>
 
             {totalQty > 0 && (
-                <div style={styles.checkoutFloat}>
-                    <Link to="/cart" style={styles.checkoutBar}>
-                        <div style={styles.checkLeft}>
-                            <span style={styles.checkQty}>{totalQty} ITEMS</span>
-                            <span style={styles.checkPrice}>₹{totalPrice}</span>
+                <div style={styles.floatBarContainer}>
+                    <Link to="/cart" style={styles.floatBar}>
+                        <div style={styles.floatInfo}>
+                            <span style={styles.floatQty}>{totalQty} ITEMS IN CART</span>
+                            <span style={styles.floatPrice}>₹{totalPrice}</span>
                         </div>
-                        <div style={styles.checkRight}>VIEW CART <FaArrowRight size={12}/></div>
+                        <div style={styles.viewCart}>View Cart <FaArrowRight style={{marginLeft:8}}/></div>
                     </Link>
                 </div>
             )}
-             <style>{`.spin { animation: spin 1s linear infinite; } @keyframes spin { 100% { transform: rotate(360deg); } }`}</style>
+
+            <style>{`
+                @keyframes marquee { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+                .spin { animation: spin 1s linear infinite; }
+                @keyframes spin { 100% { transform: rotate(360deg); } }
+                * { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+                body { overscroll-behavior-y: contain; background: #09090b; }
+                ::-webkit-scrollbar { display: none; }
+            `}</style>
         </div>
     );
 };
 
 const styles = {
-    container: { minHeight: "100vh", background: "#000", color: "#fff", paddingBottom: "120px", fontFamily: "'Inter', sans-serif" },
-    center: { height: "100vh", display: "flex", flexDirection:'column', justifyContent: "center", alignItems: "center" },
-    pullLoader: { width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', overflow: 'hidden', background: '#000' },
-    hero: { padding: "30px 20px 20px", background: "linear-gradient(180deg, #0a0a0a 0%, #000 100%)" },
-    heroTop: { display: "flex", justifyContent: "space-between", alignItems:'center', marginBottom: '20px' },
-    restName: { fontSize: "28px", fontWeight: "900", letterSpacing: "-1px", textTransform: 'uppercase' },
-    ratingBadge: { background: "#222", padding: "6px 12px", borderRadius: "100px", fontSize: "12px", fontWeight:'800', border: '1px solid #333' },
-    searchContainer: { position: "relative" },
-    searchIcon: { position: "absolute", left: "16px", top: "16px", color: "#444" },
-    searchInput: { width: "100%", padding: "16px 16px 16px 48px", borderRadius: "16px", background: "#0a0a0a", border: "1px solid #1a1a1a", color: "#fff", fontSize: "16px" },
-    stickyNav: { position: "sticky", top: 0, background: "rgba(0,0,0,0.85)", backdropFilter: "blur(20px)", padding: "15px 0", zIndex: 100 },
+    container: { minHeight: "100vh", background: "#09090b", color: "white", paddingBottom: "100px", fontFamily: "'Inter', sans-serif" },
+    pullLoader: { width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
+    marqueeWrapper: { background: "#f97316", padding: "8px 0", overflow: "hidden", whiteSpace: "nowrap" },
+    marqueeContent: { display: "flex", width: "max-content", animation: "marquee 20s linear infinite", fontSize: "11px", fontWeight: "900", letterSpacing: "3px" },
+    center: { height: "100vh", display: "flex", flexDirection:'column', justifyContent: "center", alignItems: "center", background: "#09090b" },
+    hero: { padding: "20px 20px 10px", background: "linear-gradient(to bottom, #111, #09090b)", borderBottom: '1px solid #27272a' },
+    heroContent: { display: "flex", justifyContent: "space-between" },
+    restName: { fontSize: "26px", fontWeight: "900", margin: 0, letterSpacing: "-1px" },
+    restSub: { fontSize: "12px", color: "#a1a1aa" },
+    ratingBadge: { background: "#18181b", padding: "6px 12px", borderRadius: "12px", fontSize: "12px", border: "1px solid #27272a" },
+    searchContainer: { position: "relative", marginTop: 15 },
+    searchIcon: { position: "absolute", left: "15px", top: "14px", color: "#71717a" },
+    searchInput: { width: "100%", padding: "12px 12px 12px 45px", borderRadius: "12px", background: "#18181b", border: "1px solid #27272a", color: "white", fontSize: "16px", outline: "none" },
+    stickyNav: { position: "sticky", top: 0, background: "rgba(9, 9, 11, 0.9)", backdropFilter: "blur(15px)", padding: "12px 0", zIndex: 10, borderBottom: "1px solid rgba(255,255,255,0.05)" },
     catScroll: { display: "flex", gap: "10px", padding: "0 20px", overflowX: "auto" },
-    catBtn: { padding: "10px 22px", borderRadius: "100px", fontSize: "13px", fontWeight: "800", whiteSpace: "nowrap", border: '1px solid', transition: "0.2s" },
-    grid: { padding: "0 20px", display: "flex", flexDirection: 'column', gap: "16px" },
-    card: { background: "#0a0a0a", borderRadius: "24px", border: "1px solid #111", display: 'flex', height: '140px', overflow:'hidden', position:'relative' },
-    imgBox: { width: "125px", height: "100%", position: "relative" },
+    catBtn: { padding: "10px 20px", borderRadius: "25px", fontSize: "13px", fontWeight: "700", whiteSpace: "nowrap", border: '1px solid #333', transition: "0.4s cubic-bezier(0.4, 0, 0.2, 1)" },
+    grid: { padding: "20px", display: "grid", gap: "16px" },
+    card: { background: "#111113", borderRadius: "20px", overflow: "hidden", border: "1px solid #27272a", display: 'flex', height: '130px', boxShadow: "0 4px 20px rgba(0,0,0,0.4)" },
+    imgWrapper: { width: "120px", height: "100%", position: "relative" },
     img: { width: "100%", height: "100%", objectFit: "cover" },
-    soldOut: { position: "absolute", inset: 0, background: "rgba(0,0,0,0.7)", color: "#ef4444", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", fontWeight: "900" },
-    details: { flex: 1, padding: "15px", display: 'flex', flexDirection: 'column', justifyContent: 'space-between' },
-    detailsTop: { display:'flex', justifyContent:'space-between', alignItems:'flex-start' },
-    dishTitle: { margin: 0, fontSize: "15px", fontWeight: "800" },
+    soldOut: { position: "absolute", inset: 0, background: "rgba(0,0,0,0.85)", color: "#ef4444", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px", fontWeight: "900", letterSpacing: "1px" },
+    info: { padding: "12px", flex: 1, display: 'flex', flexDirection: 'column' },
+    row: { display: "flex", justifyContent: "space-between", alignItems: "flex-start" },
+    dishTitle: { margin: 0, fontSize: "16px", color: '#fff', fontWeight: "700" },
     price: { color: "#f97316", fontWeight: "900", fontSize: "16px" },
-    ratingInfo: { display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' },
-    ratingText: { fontSize: '11px', fontWeight: '900', color: '#fff' },
-    countText: { fontSize: '9px', color: '#444', fontWeight: '700' },
-    actionRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-    feedbackLink: { background: 'none', border: 'none', color: '#333', fontSize: '10px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' },
-    addBtn: { padding: "8px 25px", background: "#fff", color: "#000", fontWeight: "900", borderRadius: "12px", border: "none", fontSize: '13px' },
-    counter: { display: "flex", alignItems: "center", gap: "15px", background: "#f97316", padding: "4px 8px", borderRadius: "12px" },
-    btnSmall: { background: "none", border: "none", color: "#fff", fontSize: '12px' },
-    qty: { fontWeight: "900", fontSize: "14px", color: "#fff" },
-    soldOutText: { color: '#ef4444', fontSize: '10px', fontWeight: '900', textTransform: 'uppercase' },
-    checkoutFloat: { position: "fixed", bottom: "30px", left: "0", right: "0", padding: "0 20px", zIndex: 1000 },
-    checkoutBar: { background: "#22c55e", padding: "18px 25px", borderRadius: "24px", display: "flex", justifyContent: "space-between", alignItems: "center", textDecoration: "none", boxShadow: "0 20px 40px rgba(34, 197, 94, 0.4)" },
-    checkLeft: { display: 'flex', flexDirection: 'column' },
-    checkQty: { fontSize: "10px", fontWeight: "900", color: "#052e16" },
-    checkPrice: { fontSize: "20px", fontWeight: "900", color: "#fff" },
-    checkRight: { fontWeight: "900", fontSize: "14px", color: "#fff", display: 'flex', alignItems: 'center', gap: '8px' },
+    desc: { color: "#71717a", fontSize: "11px", marginTop: 4, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: '2', WebkitBoxOrient: 'vertical' },
+    addBtn: { width: "80px", padding: "8px", background: "#fff", color: "#000", fontWeight: "900", borderRadius: "10px", border: "none" },
+    counter: { display: "flex", alignItems: "center", justifyContent: "space-between", background: "#f97316", borderRadius: "10px", width: "100px", padding: "2px", boxShadow: "0 0 15px rgba(249, 115, 22, 0.3)" },
+    countBtn: { width: "32px", height: "32px", background: "transparent", border: "none", color: "white", display: "flex", alignItems: "center", justifyContent: "center" },
+    qtyNum: { fontWeight: "900", color: "white" },
+    floatBarContainer: { position: "fixed", bottom: "25px", left: "0", right: "0", padding: "0 20px", zIndex: 100 },
+    floatBar: { background: "#22c55e", padding: "16px 25px", borderRadius: "20px", display: "flex", justifyContent: "space-between", alignItems: "center", textDecoration: "none", boxShadow: "0 15px 35px rgba(34, 197, 94, 0.5)", border: "1px solid rgba(255,255,255,0.25)", transition: "0.3s transform active" },
+    floatInfo: { display: "flex", flexDirection: "column" },
+    floatQty: { fontSize: "11px", color: "#052e16", fontWeight: "800" },
+    floatPrice: { fontSize: "18px", fontWeight: "900", color: "white" },
+    viewCart: { color: "white", fontWeight: "900", display: "flex", alignItems: "center", fontSize: "16px" },
+    disabledBtn: { background: "#27272a", color: "#71717a", padding: "8px", borderRadius: "10px", border: "none", fontSize: "12px", fontWeight: "700" }
 };
 
 export default Menu;
