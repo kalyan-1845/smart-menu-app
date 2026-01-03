@@ -5,8 +5,7 @@ import io from "socket.io-client";
 import InstallButton from "../components/InstallButton";
 import { 
     FaUtensils, FaVolumeUp, FaVolumeMute, FaCheck, FaBell, 
-    FaSignOutAlt, FaSpinner, FaBoxOpen, FaClipboardList, 
-    FaCheckDouble, FaConciergeBell 
+    FaSignOutAlt, FaSpinner, FaCheckDouble, FaConciergeBell 
 } from "react-icons/fa";
 import { toast } from "react-hot-toast";
 
@@ -39,14 +38,8 @@ const ChefDashboard = () => {
                 axios.get(`${API_BASE}/dishes?restaurantId=${rId}&t=${Date.now()}`)
             ]);
             
-            // Filter: Only show active kitchen orders
             const activeOrders = orderRes.data.filter(o => 
                 !["served", "completed", "archived"].includes(o.status.toLowerCase())
-            );
-
-            const validCategories = ["Starters", "Main Course", "Dessert", "Drinks"];
-            const cleanDishes = dishRes.data.filter(d => 
-                d.restaurantId === rId && d.name && validCategories.includes(d.category)
             );
 
             if (activeOrders.length > orders.length && !isMuted) {
@@ -54,7 +47,7 @@ const ChefDashboard = () => {
             }
 
             setOrders(activeOrders.sort((a,b) => new Date(a.createdAt) - new Date(b.createdAt)));
-            setDishes(cleanDishes);
+            setDishes(dishRes.data || []);
         } catch (e) { console.error("Sync Failed"); }
     }, [orders.length, isMuted]);
 
@@ -85,17 +78,20 @@ const ChefDashboard = () => {
         } catch (err) { toast.error("Invalid Access Key"); } finally { setAuthLoading(false); }
     };
 
-    // ✅ 3. STOCK TOGGLE (Instant Menu Update)
+    // ✅ 3. STOCK TOGGLE (Out of Stock Logic)
     const toggleStock = async (dishId, currentStatus) => {
         try {
+            // Optimistic UI update
             setDishes(prev => prev.map(d => d._id === dishId ? { ...d, isAvailable: !currentStatus } : d));
+            
             await axios.put(`${API_BASE}/dishes/${dishId}`, { 
                 isAvailable: !currentStatus,
                 restaurantId: mongoId 
             });
-            toast.success(currentStatus ? "Marked OUT" : "Marked IN");
+            
+            toast.success(currentStatus ? "Marked OUT OF STOCK" : "Item Back IN STOCK");
         } catch (e) { 
-            toast.error("Failed to update stock"); 
+            toast.error("Failed to update status"); 
             forceSync(mongoId);
         }
     };
@@ -125,23 +121,20 @@ const ChefDashboard = () => {
         }
     }, [isAuthenticated, mongoId, isMuted, alertsActive, forceSync]);
 
-    // ✅ 5. ORDER STATUS UPDATER (Automatic Bill Trigger)
+    // ✅ 5. ORDER STATUS UPDATER
     const updateStatus = async (order, nextStatus) => {
         try {
-            setOrders(prev => prev.map(o => o._id === order._id ? { ...o, status: nextStatus } : o));
-            
-            // This API call updates DB and triggers "chef-ready-alert" for customer
             await axios.put(`${API_BASE}/orders/${order._id}`, { status: nextStatus });
 
             if (nextStatus === "served") {
                 setOrders(prev => prev.filter(o => o._id !== order._id));
-                toast.success(`Table ${order.tableNum} Served • Bill Sent`);
+                toast.success(`Table ${order.tableNum} Served`);
             } else {
-                toast.success(`Table ${order.tableNum} is now ${nextStatus.toUpperCase()}`);
+                toast.success(`Table ${order.tableNum}: ${nextStatus.toUpperCase()}`);
+                forceSync(mongoId);
             }
         } catch (error) { 
-            toast.error("Status update failed");
-            forceSync(mongoId); 
+            toast.error("Update failed");
         }
     };
 
@@ -149,7 +142,7 @@ const ChefDashboard = () => {
         <div style={styles.lockContainer}>
             <div style={styles.lockCard}>
                 <FaUtensils style={{fontSize:'40px', color:'#f97316', marginBottom:'15px'}}/>
-                <h1 style={styles.lockTitle}>{id?.toUpperCase()} CHEF</h1>
+                <h1 style={styles.lockTitle}>{id?.toUpperCase()} KITCHEN</h1>
                 <form onSubmit={handleLogin}>
                     <input type="password" placeholder="ACCESS PIN" value={password} onChange={e=>setPassword(e.target.value)} style={styles.input} autoFocus />
                     <button type="submit" style={styles.loginBtn} disabled={authLoading}>{authLoading ? <FaSpinner className="spin"/> : "UNLOCK DASHBOARD"}</button>
@@ -171,7 +164,7 @@ const ChefDashboard = () => {
               
             <header style={styles.header}>
                 <div style={styles.headerLeft}>
-                    <h1 style={styles.headerTitle}>KITCHEN FEED</h1>
+                    <h1 style={styles.headerTitle}>CHEF DASHBOARD</h1>
                     <div style={styles.statusDot}></div>
                 </div>
                 <div style={styles.headerRight}>
@@ -186,12 +179,12 @@ const ChefDashboard = () => {
 
             <div style={styles.tabContainer}>
                 <button onClick={() => setActiveTab("orders")} style={{ ...styles.tabButton, background: activeTab === 'orders' ? '#f97316' : '#111' }}>LIVE ORDERS ({orders.length})</button>
-                <button onClick={() => setActiveTab("stock")} style={{ ...styles.tabButton, background: activeTab === 'stock' ? '#3b82f6' : '#111' }}>MENU AVAILABILITY</button>
+                <button onClick={() => setActiveTab("stock")} style={{ ...styles.tabButton, background: activeTab === 'stock' ? '#3b82f6' : '#111' }}>STOCK CONTROL</button>
             </div>
                     
             <div style={styles.grid}>
                 {activeTab === "orders" ? (
-                    orders.length === 0 ? <div style={styles.emptyState}><FaUtensils size={40}/><p>Kitchen is clear!</p></div> : (
+                    orders.length === 0 ? <div style={styles.emptyState}><FaUtensils size={40}/><p>No orders pending.</p></div> : (
                         orders.map((order) => (
                             <div key={order._id} style={{...styles.card, borderTop: order.status.toLowerCase() === 'ready' ? '6px solid #22c55e' : (order.status.toLowerCase() === 'cooking' ? '6px solid #eab308' : '6px solid #f97316')}}>
                                 <div style={styles.cardHeader}>
@@ -205,10 +198,10 @@ const ChefDashboard = () => {
                                 </div>
                                 <div style={styles.actionContainer}>
                                     {order.status.toLowerCase() === "ready" ? (
-                                        <button onClick={() => updateStatus(order, "served")} style={{...styles.actionBtn, background:'#22c55e', color:'white'}}><FaCheckDouble /> MARK SERVED & BILL</button>
+                                        <button onClick={() => updateStatus(order, "served")} style={{...styles.actionBtn, background:'#22c55e', color:'white'}}><FaCheckDouble /> MARK SERVED</button>
                                     ) : (
                                         <button onClick={() => updateStatus(order, order.status.toLowerCase() === 'cooking' ? "ready" : "cooking")} style={{...styles.actionBtn, background: order.status.toLowerCase() === 'cooking' ? '#eab308' : '#f97316', color: order.status.toLowerCase() === 'cooking' ? 'black' : 'white'}}>
-                                            {order.status.toLowerCase() === "cooking" ? "DONE / READY" : "START COOKING"}
+                                            {order.status.toLowerCase() === "cooking" ? "READY FOR PICKUP" : "START PREPARING"}
                                         </button>
                                     )}
                                 </div>
@@ -217,9 +210,12 @@ const ChefDashboard = () => {
                     )
                 ) : (
                     dishes.map(dish => (
-                        <div key={dish._id} style={{...styles.stockCard, opacity: dish.isAvailable ? 1 : 0.5}}>
-                            <h3 style={{ margin: 0, fontSize: '13px', fontWeight: '900' }}>{dish.name}</h3>
-                            <button onClick={() => toggleStock(dish._id, dish.isAvailable)} style={{...styles.stockBtn, background: dish.isAvailable ? '#ef4444' : '#22c55e'}}>
+                        <div key={dish._id} style={{...styles.stockCard, borderLeft: dish.isAvailable ? '4px solid #22c55e' : '4px solid #ef4444'}}>
+                            <div style={{flex:1}}>
+                                <h3 style={{ margin: 0, fontSize: '14px', fontWeight: '900', color: dish.isAvailable ? 'white' : '#555' }}>{dish.name}</h3>
+                                <p style={{margin:0, fontSize:'10px', color: dish.isAvailable ? '#22c55e' : '#ef4444'}}>{dish.isAvailable ? "AVAILABLE" : "OUT OF STOCK"}</p>
+                            </div>
+                            <button onClick={() => toggleStock(dish._id, dish.isAvailable)} style={{...styles.stockBtn, background: dish.isAvailable ? 'rgba(239, 68, 68, 0.1)' : 'rgba(34, 197, 94, 0.1)', color: dish.isAvailable ? '#ef4444' : '#22c55e', border: `1px solid ${dish.isAvailable ? '#ef4444' : '#22c55e'}`}}>
                                 {dish.isAvailable ? "MARK OUT" : "MARK IN"}
                             </button>
                         </div>
@@ -250,7 +246,7 @@ const styles = {
     iconButtonRed: { background: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444', color: '#ef4444', padding: '10px', borderRadius: '10px' },
     tabContainer: { display: 'flex', gap: '10px', marginBottom: '15px' },
     tabButton: { flex: 1, padding: '16px', borderRadius: '15px', border: '1px solid #222', color: 'white', fontWeight: '900', fontSize: '11px' },
-    grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' },
+    grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '12px' },
     card: { background: '#0a0a0a', borderRadius: '24px', border: '1px solid #111', display: 'flex', flexDirection: 'column', overflow:'hidden' },
     cardHeader: { padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom:'1px solid #111' },
     tableNumber: { fontSize: '24px', fontWeight: '900', margin:0, color:'#FF9933' },
@@ -261,8 +257,8 @@ const styles = {
     itemName: { fontSize: '16px', fontWeight:'600' },
     actionContainer: { padding: '15px' },
     actionBtn: { width: '100%', border: 'none', padding: '18px', borderRadius: '15px', fontWeight: '900', fontSize: '14px' },
-    stockCard: { background: '#0a0a0a', padding: '12px 18px', borderRadius: '18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border:'1px solid #111' },
-    stockBtn: { padding: '8px 15px', borderRadius: '10px', border: 'none', color: 'white', fontWeight: '900', fontSize: '10px' },
+    stockCard: { background: '#0a0a0a', padding: '15px 20px', borderRadius: '18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border:'1px solid #111' },
+    stockBtn: { padding: '10px 18px', borderRadius: '12px', fontWeight: '900', fontSize: '11px', cursor: 'pointer' },
     emptyState: { gridColumn: '1/-1', textAlign: 'center', padding: '100px 20px', color:'#444', fontWeight:'900' },
     alertWrapper: { position: 'fixed', top: '10px', left: '50%', transform: 'translateX(-50%)', zIndex: 1100, width: '95%', maxWidth:'400px' },
     alertBanner: { padding: '15px', borderRadius: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom:'8px', border: '1px solid rgba(255,255,255,0.2)' },

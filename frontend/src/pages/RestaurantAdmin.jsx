@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import { Link, useParams, useNavigate } from "react-router-dom";
-import io from "socket.io-client";
 import confetti from "canvas-confetti";
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -9,7 +8,7 @@ import InstallButton from "../components/InstallButton";
 import { 
     FaTrash, FaUtensils, FaBell, FaCheckCircle, FaCircle, FaCrown, 
     FaSignOutAlt, FaRocket, FaStore, FaCopy, 
-    FaDownload, FaQrcode, FaPlus, FaHistory
+    FaDownload, FaQrcode, FaPlus, FaHistory, FaSpinner, FaImage
 } from "react-icons/fa";
 import { toast } from "react-hot-toast";
 
@@ -27,8 +26,8 @@ const styles = `
 .tab-btn.active { background: rgba(255,255,255,0.1); color: #FF9933; }
 .input-dark { width: 100%; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); padding: 16px; border-radius: 14px; color: white; margin-bottom: 15px; outline: none; box-sizing: border-box; font-size: 16px; }
 .dish-item { display: flex; justify-content: space-between; align-items: center; padding: 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
-.menu-link-box { background: rgba(0,0,0,0.3); border: 1px dashed #444; padding: 15px; border-radius: 16px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 .link-text { color: #3b82f6; font-size: 11px; font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px; text-decoration: none; }
+.spin { animation: rotate 1s linear infinite; } @keyframes rotate { 100% { transform: rotate(360deg); } }
 `;
 
 const SetupWizard = ({ dishesCount, pushEnabled }) => {
@@ -67,43 +66,59 @@ const SetupWizard = ({ dishesCount, pushEnabled }) => {
 const RestaurantAdmin = () => {
     const { id } = useParams();
     const navigate = useNavigate();
-    const SERVER_URL = "https://smart-menu-backend-5ge7.onrender.com";
-    const API_BASE = `${SERVER_URL}/api`;
+    const API_BASE = "https://smart-menu-backend-5ge7.onrender.com/api";
     const publicMenuUrl = `${window.location.origin}/menu/${id}`;
 
     const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
     const [password, setPassword] = useState("");
     const [activeTab, setActiveTab] = useState("menu");
     const [restaurantName, setRestaurantName] = useState(id);
     const [dishes, setDishes] = useState([]);
     const [inboxOrders, setInboxOrders] = useState([]);
     const [isPro, setIsPro] = useState(false);
-    const [formData, setFormData] = useState({ name: "", price: "", category: "Starters", image: "" });
+    const [mongoId, setMongoId] = useState(null); 
+    const [bulkText, setBulkText] = useState("");
     const [qrRange, setQrRange] = useState({ start: 1, end: 5 });
 
-    // ✅ REFRESH ENGINE
-    const refreshData = useCallback(async (mongoId) => {
-        if (!mongoId || mongoId === "undefined") return;
+    // ✅ 1. CATEGORY AUTO-PICKER LOGIC
+    const autoCategory = (name) => {
+        const n = name.toLowerCase();
+        if (n.includes("juice") || n.includes("tea") || n.includes("coffee") || n.includes("drink") || n.includes("water") || n.includes("shake") || n.includes("lassi") || n.includes("soda")) return "Drinks";
+        if (n.includes("cake") || n.includes("ice") || n.includes("sweet") || n.includes("pudding") || n.includes("jamun") || n.includes("halwa")) return "Dessert";
+        if (n.includes("fry") || n.includes("tikka") || n.includes("kabab") || n.includes("soup") || n.includes("starter") || n.includes("manchurian") || n.includes("65")) return "Starters";
+        return "Main Course"; 
+    };
+
+    const refreshData = useCallback(async (realMongoId) => {
+        if (!realMongoId) return;
         try {
             const [dishRes, orderRes] = await Promise.all([
-                axios.get(`${API_BASE}/dishes?restaurantId=${mongoId}&t=${Date.now()}`),
-                axios.get(`${API_BASE}/orders/inbox?restaurantId=${mongoId}&t=${Date.now()}`)
+                axios.get(`${API_BASE}/dishes?restaurantId=${realMongoId}&t=${Date.now()}`),
+                axios.get(`${API_BASE}/orders/inbox?restaurantId=${realMongoId}&t=${Date.now()}`)
             ]);
             setDishes(dishRes.data || []);
             setInboxOrders(orderRes.data || []);
+            setIsLoading(false);
         } catch (e) { 
             console.error("Sync Error");
-            if (e.response?.status === 401) handleLogout();
+            setIsLoading(false);
         }
     }, [API_BASE]);
 
     useEffect(() => {
-        const token = localStorage.getItem(`owner_token_${id}`);
-        const savedId = localStorage.getItem(`owner_id_${id}`);
-        if (token && savedId) {
-            setIsAuthenticated(true);
-            refreshData(savedId);
-        }
+        const init = async () => {
+            const token = localStorage.getItem(`owner_token_${id}`);
+            const savedId = localStorage.getItem(`owner_id_${id}`);
+            if (token && savedId) {
+                setMongoId(savedId);
+                setIsAuthenticated(true);
+                refreshData(savedId);
+            } else {
+                setIsLoading(false);
+            }
+        };
+        init();
     }, [id, refreshData]);
 
     const handleLogin = async (e) => {
@@ -112,6 +127,7 @@ const RestaurantAdmin = () => {
             const res = await axios.post(`${API_BASE}/auth/login`, { username: id, password });
             localStorage.setItem(`owner_token_${id}`, res.data.token);
             localStorage.setItem(`owner_id_${id}`, res.data._id);
+            setMongoId(res.data._id);
             setRestaurantName(res.data.restaurantName);
             setIsPro(res.data.isPro);
             setIsAuthenticated(true);
@@ -123,43 +139,44 @@ const RestaurantAdmin = () => {
     const handleLogout = () => {
         localStorage.removeItem(`owner_token_${id}`);
         localStorage.removeItem(`owner_id_${id}`);
-        setIsAuthenticated(false);
-        navigate("/login");
+        window.location.reload();
     };
 
-    // ✅ ADD DISH (Fixes 401 error)
-    const handleAddDish = async (e) => {
-        e.preventDefault();
-        const mongoId = localStorage.getItem(`owner_id_${id}`);
+    // ✅ 2. INDUSTRIAL BULK INSERTER
+    const handleBulkInsert = async () => {
+        const lines = bulkText.split("\n").filter(l => l.trim() !== "");
         const token = localStorage.getItem(`owner_token_${id}`);
+        if (!mongoId) return toast.error("Shop ID not found");
+        if (!lines.length) return toast.error("Enter items first");
 
-        if (!token) {
-            toast.error("Session expired. Please login again.");
-            return handleLogout();
-        }
+        setIsLoading(true);
+        const t = toast.loading("Syncing Dishes...");
 
-        try {
-            await axios.post(
-                `${API_BASE}/dishes`, 
-                { ...formData, restaurantId: mongoId }, 
-                { headers: { Authorization: `Bearer ${token}` } }
-            );
-            setFormData({ name: "", price: "", category: "Starters", image: "" });
-            refreshData(mongoId);
-            toast.success("Dish Added");
-        } catch (err) { 
-            if (err.response?.status === 401) {
-                toast.error("Session expired");
-                handleLogout();
-            } else {
-                toast.error("Error adding dish");
+        for (const line of lines) {
+            // Format: Name, Price, ImageURL
+            const [name, price, img] = line.split(",").map(item => item?.trim());
+            if (name && price) {
+                try {
+                    await axios.post(`${API_BASE}/dishes`, {
+                        name,
+                        price: parseFloat(price),
+                        image: img || "",
+                        category: autoCategory(name),
+                        restaurantId: mongoId,
+                        isAvailable: true 
+                    }, { headers: { Authorization: `Bearer ${token}` } });
+                } catch (e) { console.error("Err adding:", name); }
             }
         }
+        toast.dismiss(t);
+        toast.success("All Items Live!");
+        setBulkText("");
+        setIsLoading(false);
+        refreshData(mongoId);
     };
 
     const handleDeleteDish = async (dishId) => {
         if (!window.confirm("Delete this dish?")) return;
-        const mongoId = localStorage.getItem(`owner_id_${id}`);
         const token = localStorage.getItem(`owner_token_${id}`);
         try {
             await axios.delete(`${API_BASE}/dishes/${dishId}`, {
@@ -167,7 +184,7 @@ const RestaurantAdmin = () => {
             });
             refreshData(mongoId);
             toast.success("Dish Removed");
-        } catch (err) { toast.error("Failed"); }
+        } catch (err) { toast.error("Failed to delete"); }
     };
 
     const handleDownloadAndClear = async () => {
@@ -175,16 +192,13 @@ const RestaurantAdmin = () => {
         const doc = new jsPDF();
         doc.text(`Sales Report - ${restaurantName}`, 14, 15);
         const tableData = inboxOrders.map((order, i) => [
-            i + 1, 
-            order.tableNum, 
-            order.items.map(item => `${item.name} x${item.quantity}`).join(", "),
-            `Rs.${order.totalAmount}`, 
-            new Date(order.createdAt).toLocaleTimeString()
+            i + 1, order.tableNum, order.items.map(item => `${item.name} x${item.quantity}`).join(", "),
+            `Rs.${order.totalAmount}`, new Date(order.createdAt).toLocaleTimeString()
         ]);
         autoTable(doc, { startY: 30, head: [['#', 'Table', 'Items', 'Amount', 'Time']], body: tableData });
         doc.save(`Sales_${Date.now()}.pdf`);
         try {
-            await axios.put(`${API_BASE}/orders/mark-downloaded`, { restaurantId: localStorage.getItem(`owner_id_${id}`) });
+            await axios.put(`${API_BASE}/orders/mark-downloaded`, { restaurantId: mongoId });
             setInboxOrders([]);
             toast.success("Report Saved & Inbox Cleared");
         } catch (err) { toast.error("Error clearing inbox"); }
@@ -208,12 +222,14 @@ const RestaurantAdmin = () => {
         printWindow.document.close();
     };
 
+    if (isLoading) return <div className="admin-container"><div style={{display:'flex', height:'100vh', alignItems:'center', justifyContent:'center'}}><FaSpinner className="spin" size={30} color="#FF9933"/></div></div>;
+
     if (!isAuthenticated) return (
         <div className="admin-container"><style>{styles}</style>
             <div style={{ height: '90vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <div className="glass-card" style={{ textAlign: 'center', width: '320px' }}>
                     <FaStore size={40} color="#FF9933" style={{ marginBottom: '20px' }} />
-                    <h1 style={{ fontSize: '20px', fontWeight: 900 }}>RESTRICTED AREA</h1>
+                    <h1 style={{ fontSize: '20px', fontWeight: 900 }}>STAFF LOGIN</h1>
                     <form onSubmit={handleLogin} style={{ marginTop: '20px' }}>
                         <input type="password" placeholder="Access Key" value={password} onChange={e => setPassword(e.target.value)} className="input-dark" style={{ textAlign: 'center' }} autoFocus />
                         <button type="submit" className="btn-primary">AUTHENTICATE</button>
@@ -256,55 +272,59 @@ const RestaurantAdmin = () => {
                 </nav>
 
                 {activeTab === "menu" && (
-                    <div className="glass-card">
-                        <form onSubmit={handleAddDish}>
-                            <input className="input-dark" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} placeholder="Dish Name" required />
-                            <input className="input-dark" value={formData.image} onChange={e => setFormData({ ...formData, image: e.target.value })} placeholder="Image URL (Direct Link)" />
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                                <input className="input-dark" type="number" value={formData.price} onChange={e => setFormData({ ...formData, price: e.target.value })} placeholder="Price (₹)" required />
-                                <select className="input-dark" value={formData.category} onChange={e => setFormData({ ...formData, category: e.target.value })}>
-                                    <option>Starters</option><option>Main Course</option><option>Dessert</option><option>Drinks</option>
-                                </select>
-                            </div>
-                            <button type="submit" className="btn-primary"><FaPlus /> SAVE TO MENU</button>
-                        </form>
-                        <div style={{ marginTop: '20px' }}>
+                    <>
+                        <div className="glass-card">
+                            <h3 style={{fontSize: '12px', fontWeight: 900, color: '#FF9933', marginBottom: '10px'}}><FaPlus /> BULK ADD DISHES</h3>
+                            <p style={{fontSize: '10px', opacity: 0.5, marginBottom: '10px'}}>Format: Name, Price, ImageURL (One per line)</p>
+                            <textarea 
+                                className="input-dark" 
+                                rows="6" 
+                                placeholder="Paneer Tikka, 250, https://img.com/p.jpg&#10;Mango Lassi, 90, https://img.com/m.jpg"
+                                value={bulkText}
+                                onChange={e => setBulkText(e.target.value)}
+                                style={{fontFamily: 'monospace', fontSize: '13px', color: '#22c55e'}}
+                            />
+                            <button onClick={handleBulkInsert} className="btn-primary">SYNC TO LIVE MENU</button>
+                        </div>
+
+                        <div className="glass-card">
+                            <h3 style={{fontSize:'12px', fontWeight:900, marginBottom:'15px', opacity:0.6}}>LIVE ITEMS ({dishes.length})</h3>
                             {dishes.map(dish => (
                                 <div key={dish._id} className="dish-item">
                                     <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
                                         <div style={{ width: '45px', height: '45px', background: '#111', borderRadius: '12px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                            {dish.image ? <img src={dish.image} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} /> : <FaUtensils color="#333"/>}
+                                            {dish.image ? <img src={dish.image} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} /> : <FaUtensils color="#222"/>}
                                         </div>
-                                        <div><p style={{ fontWeight: 900, margin: 0, fontSize: '13px' }}>{dish.name}</p><p style={{ margin: 0, fontSize: '10px', color: '#FF9933' }}>₹{dish.price}</p></div>
+                                        <div>
+                                            <p style={{ fontWeight: 900, margin: 0, fontSize: '14px' }}>{dish.name}</p>
+                                            <div style={{display:'flex', gap:'8px', alignItems:'center'}}>
+                                                <span style={{ fontSize: '10px', color: '#FF9933', fontWeight: 900 }}>₹{dish.price}</span>
+                                                <span style={{ fontSize: '9px', background: '#222', padding:'2px 6px', borderRadius:'4px', color:'#888'}}>{dish.category}</span>
+                                                {!dish.isAvailable && <span style={{fontSize:'9px', color:'#ef4444', fontWeight:'bold'}}>OFF STOCK</span>}
+                                            </div>
+                                        </div>
                                     </div>
                                     <button onClick={() => handleDeleteDish(dish._id)} className="btn-glass" style={{ color: '#ef4444' }}><FaTrash /></button>
                                 </div>
                             ))}
                         </div>
-                    </div>
+                    </>
                 )}
 
                 {activeTab === "settings" && (
                     <>
                         <div className="glass-card">
-                            <h2 style={{ fontSize: '12px', fontWeight: 900, color: '#FF9933', marginBottom: '15px' }}><FaHistory /> RECENT SALES ({inboxOrders.length})</h2>
-                            <p style={{ fontSize: '11px', color: '#666', marginBottom: '15px' }}>Download your orders into a PDF before clearing the inbox.</p>
-                            <button onClick={handleDownloadAndClear} className="btn-primary" style={{ background: '#22c55e', color: 'white' }}><FaDownload /> GENERATE SALES REPORT</button>
+                            <h2 style={{ fontSize: '12px', fontWeight: 900, color: '#FF9933', marginBottom: '15px' }}><FaHistory /> SALES & REPORTS</h2>
+                            <button onClick={handleDownloadAndClear} className="btn-primary" style={{ background: '#22c55e' }}><FaDownload /> EXPORT PDF & CLEAR INBOX</button>
                         </div>
 
                         <div className="glass-card">
-                            <h2 style={{ fontSize: '12px', fontWeight: 900, color: '#FF9933', marginBottom: '15px' }}><FaQrcode /> QR CODE GENERATOR</h2>
+                            <h2 style={{ fontSize: '12px', fontWeight: 900, color: '#FF9933', marginBottom: '15px' }}><FaQrcode /> QR GENERATOR</h2>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '15px' }}>
-                                <div>
-                                    <label style={{fontSize:'9px', color:'#666', marginLeft:'5px'}}>START TABLE</label>
-                                    <input type="number" className="input-dark" value={qrRange.start} onChange={e => setQrRange({ ...qrRange, start: e.target.value })} />
-                                </div>
-                                <div>
-                                    <label style={{fontSize:'9px', color:'#666', marginLeft:'5px'}}>END TABLE</label>
-                                    <input type="number" className="input-dark" value={qrRange.end} onChange={e => setQrRange({ ...qrRange, end: e.target.value })} />
-                                </div>
+                                <input type="number" className="input-dark" value={qrRange.start} onChange={e => setQrRange({ ...qrRange, start: e.target.value })} placeholder="Start" />
+                                <input type="number" className="input-dark" value={qrRange.end} onChange={e => setQrRange({ ...qrRange, end: e.target.value })} placeholder="End" />
                             </div>
-                            <button onClick={generatePrintableQRs} className="btn-primary"><FaQrcode /> PRINT TABLE STICKERS</button>
+                            <button onClick={generatePrintableQRs} className="btn-primary"><FaQrcode /> PRINT STICKERS</button>
                         </div>
                     </>
                 )}
