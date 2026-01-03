@@ -32,10 +32,13 @@ const RestaurantAdmin = () => {
     const [formData, setFormData] = useState({ name: "", price: "", category: "Starters", image: "" });
     const [qrRange, setQrRange] = useState({ start: 1, end: 5 });
     const [mongoId, setMongoId] = useState(localStorage.getItem(`owner_id_${id}`));
+    
+    // ✅ ADDED: State for SetupWizard checklist
+    const [pushEnabled, setPushEnabled] = useState(Notification.permission === 'granted');
 
-    // ✅ 1. AGGRESSIVE SYNC ENGINE (Prevents 404/500)
+    // ✅ 1. AGGRESSIVE SYNC ENGINE
     const refreshData = useCallback(async (rId) => {
-        if (!rId || rId === "undefined") return; // Safety check
+        if (!rId || rId === "undefined") return;
         try {
             const [dishRes, orderRes] = await Promise.all([
                 axios.get(`${API_BASE}/dishes?restaurantId=${rId}&t=${Date.now()}`),
@@ -80,7 +83,7 @@ const RestaurantAdmin = () => {
         }
     };
 
-    // ✅ 3. REAL-TIME ENGINE (Socket + Background Polling)
+    // ✅ 3. REAL-TIME ENGINE
     useEffect(() => {
         if (isAuthenticated && mongoId) {
             const socket = io(SERVER_URL, { query: { restaurantId: mongoId } });
@@ -92,7 +95,6 @@ const RestaurantAdmin = () => {
                 toast("New Order Received!", { icon: '🔔' });
             });
 
-            // 🛡️ Safety Net: Pull data every 10 seconds in case socket drops
             const backupSync = setInterval(() => refreshData(mongoId), 10000);
 
             return () => {
@@ -194,11 +196,12 @@ const RestaurantAdmin = () => {
                     </div>
                 </header>
 
+                {/* ✅ FIXED: pushEnabled variable is now defined above */}
                 <SetupWizard dishesCount={dishes.length} pushEnabled={pushEnabled} />
 
-                <div className="menu-link-box">
-                    <span className="link-text">{publicMenuUrl}</span>
-                    <button onClick={() => {navigator.clipboard.writeText(publicMenuUrl); toast.success("Copied!");}} className="btn-glass" style={{padding:'10px'}}><FaCopy/></button>
+                <div className="menu-link-box" style={{background: '#0a0a0a', padding: '15px', borderRadius: '15px', border: '1px solid #111', display: 'flex', justifyContent: 'space-between', marginBottom: '20px'}}>
+                    <span className="link-text" style={{fontSize: '11px', color: '#888', wordBreak: 'break-all'}}>{publicMenuUrl}</span>
+                    <button onClick={() => {navigator.clipboard.writeText(publicMenuUrl); toast.success("Copied!");}} className="btn-glass" style={{color: '#f97316'}}><FaCopy/></button>
                 </div>
 
                 <div style={{display:'flex', gap:'10px', marginBottom:'20px'}}>
@@ -232,7 +235,7 @@ const RestaurantAdmin = () => {
                             {dishes.map(dish => (
                                 <div key={dish._id} className="dish-item">
                                     <div style={{display:'flex', gap:'12px', alignItems:'center'}}>
-                                        <img src={dish.image || "https://placehold.co/50"} style={{width:'40px', height:'40px', borderRadius:'8px'}} />
+                                        <img src={dish.image || "https://placehold.co/50"} style={{width:'40px', height:'40px', borderRadius:'8px', objectFit: 'cover'}} />
                                         <div>
                                             <p style={{fontWeight:900, fontSize:'14px'}}>{dish.name}</p>
                                             <p style={{fontSize:'10px', color:'#f97316'}}>₹{dish.price}</p>
@@ -248,14 +251,15 @@ const RestaurantAdmin = () => {
                 {activeTab === "inbox" && (
                     <div className="glass-card animate-in">
                         <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'15px'}}>
-                            <h2 style={{fontSize:'12px'}}>LIVE ORDERS</h2>
-                            <button onClick={handleDownloadAndClear} className="btn-glass" style={{background:'#f97316', color:'black', border:'none'}}><FaDownload/> Save & Clear</button>
+                            <h2 style={{fontSize:'12px', fontWeight: '900'}}>LIVE ORDERS</h2>
+                            <button onClick={handleDownloadAndClear} className="btn-glass" style={{background:'#f97316', color:'black', border:'none', fontSize: '10px', fontWeight: '900'}}><FaDownload/> Save & Clear</button>
                         </div>
-                        {inboxOrders.map(order => (
+                        {inboxOrders.length === 0 ? <p style={{textAlign: 'center', color: '#444', fontSize: '12px', padding: '20px'}}>No active orders</p> : 
+                        inboxOrders.map(order => (
                             <div key={order._id} className="inbox-card">
                                 <p style={{fontWeight:900, color:'#f97316'}}>TABLE {order.tableNum}</p>
-                                <p style={{fontSize:'12px'}}>{order.items.map(i => `${i.name} x${i.quantity}`).join(", ")}</p>
-                                <p style={{fontSize:'10px', fontWeight:900}}>TOTAL: ₹{order.totalAmount}</p>
+                                <p style={{fontSize:'12px', marginTop: '5px'}}>{order.items.map(i => `${i.name} x${i.quantity}`).join(", ")}</p>
+                                <p style={{fontSize:'10px', fontWeight:900, marginTop: '8px', color: '#888'}}>TOTAL: ₹{order.totalAmount}</p>
                             </div>
                         ))}
                     </div>
@@ -263,10 +267,16 @@ const RestaurantAdmin = () => {
 
                 {activeTab === "settings" && (
                     <div className="glass-card">
-                        <h2 style={{fontSize:'12px', marginBottom:'15px'}}>QR GENERATOR</h2>
+                        <h2 style={{fontSize:'12px', marginBottom:'15px', fontWeight: '900'}}>QR GENERATOR</h2>
                         <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px', marginBottom:'15px'}}>
-                            <input type="number" className="input-dark" value={qrRange.start} onChange={e => setQrRange({...qrRange, start: e.target.value})} />
-                            <input type="number" className="input-dark" value={qrRange.end} onChange={e => setQrRange({...qrRange, end: e.target.value})} />
+                            <div>
+                                <label style={{fontSize: '8px', color: '#444', fontWeight: '900'}}>START TABLE</label>
+                                <input type="number" className="input-dark" value={qrRange.start} onChange={e => setQrRange({...qrRange, start: e.target.value})} />
+                            </div>
+                            <div>
+                                <label style={{fontSize: '8px', color: '#444', fontWeight: '900'}}>END TABLE</label>
+                                <input type="number" className="input-dark" value={qrRange.end} onChange={e => setQrRange({...qrRange, end: e.target.value})} />
+                            </div>
                         </div>
                         <button onClick={generatePrintableQRs} className="btn-primary"><FaQrcode/> Print QR Sheet</button>
                     </div>
@@ -281,19 +291,21 @@ const globalStyles = `
 .admin-container { min-height: 100vh; padding: 15px; background: #000; color: white; font-family: 'Inter', sans-serif; }
 .max-w-wrapper { max-width: 450px; margin: 0 auto; }
 .glass-card { background: #0a0a0a; border: 1px solid #111; padding: 20px; border-radius: 24px; margin-bottom: 15px; }
-.btn-primary { background: #f97316; color: white; border: none; width: 100%; padding: 15px; border-radius: 14px; font-weight: 900; cursor: pointer; }
-.input-dark { width: 100%; background: #000; border: 1px solid #222; padding: 14px; border-radius: 12px; color: white; margin-bottom: 10px; font-size: 16px; }
+.btn-primary { background: #f97316; color: white; border: none; width: 100%; padding: 15px; border-radius: 14px; font-weight: 900; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.input-dark { width: 100%; background: #000; border: 1px solid #222; padding: 14px; border-radius: 12px; color: white; margin-bottom: 10px; font-size: 16px; outline: none; }
 .nav-tabs { display: flex; gap: 5px; background: #0a0a0a; padding: 5px; border-radius: 16px; margin-bottom: 15px; }
-.tab-btn { flex: 1; padding: 12px; background: transparent; border: none; color: #555; font-size: 11px; font-weight: 900; border-radius: 12px; }
+.tab-btn { flex: 1; padding: 12px; background: transparent; border: none; color: #555; font-size: 11px; font-weight: 900; border-radius: 12px; transition: 0.3s; }
 .tab-btn.active { background: #111; color: #f97316; }
 .dish-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #111; }
 .inbox-card { background: #111; padding: 15px; border-radius: 16px; margin-bottom: 10px; border-left: 3px solid #f97316; }
-.badge-pro { font-size: 8px; font-weight: 900; color: #f97316; letter-spacing: 1px; }
+.badge-pro { font-size: 8px; font-weight: 900; color: #f97316; letter-spacing: 1px; text-transform: uppercase; }
 .count-badge { background: #f97316; color: black; padding: 2px 6px; border-radius: 8px; font-size: 9px; margin-left: 5px; }
-.pulse-dot { width: 8px; height: 8px; background: #f97316; border-radius: 50%; animation: pulse 1.5s infinite; position: absolute; right: 10px; top: 10px; }
+.btn-glass { background: none; border: none; cursor: pointer; }
+.pulse-dot { width: 8px; height: 8px; background: #f97316; border-radius: 50%; animation: pulse 1.5s infinite; margin-left: 5px; display: inline-block; }
 @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
 .spin { animation: spin 1s linear infinite; }
 @keyframes spin { 100% { transform: rotate(360deg); } }
+.shop-title { font-size: 20px; font-weight: 900; margin: 0; }
 `;
 
 export default RestaurantAdmin;
