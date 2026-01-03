@@ -2,7 +2,7 @@ import Owner from '../models/Owner.js';
 import Order from '../models/Order.js';
 import Dish from '../models/Dish.js';
 import jwt from 'jsonwebtoken';
-
+import System from '../models/System.js';
 // 🚀 MASTER SYNC: Gets All Data + Calculates Health
 export const getCEOStats = async (req, res) => {
     try {
@@ -74,4 +74,34 @@ export const sendBroadcast = async (req, res) => {
         return res.json({ success: true });
     }
     res.status(500).json({ message: "Socket Offline" });
+};
+// 👇 ADD THESE TWO FUNCTIONS TO FIX THE 404 ERROR 👇
+
+// 1. GET STATUS (Fixes "System Status Check Failed")
+export const getMaintenanceStatus = async (req, res) => {
+    try {
+        let settings = await System.findOne({ key: 'maintenance' });
+        // If first time running, create the setting
+        if (!settings) {
+            settings = await System.create({ key: 'maintenance', value: false });
+        }
+        res.json({ enabled: settings.value });
+    } catch (error) {
+        res.status(500).json({ message: "Status Sync Error" });
+    }
+};
+
+// 2. TOGGLE MAINTENANCE ( The Red Button )
+export const toggleMaintenance = async (req, res) => {
+    try {
+        const { enabled } = req.body;
+        const settings = await System.findOneAndUpdate(
+            { key: 'maintenance' },
+            { value: enabled },
+            { new: true, upsert: true } // Create if missing
+        );
+        res.json({ success: true, enabled: settings.value });
+    } catch (error) {
+        res.status(500).json({ message: "Toggle Failed" });
+    }
 };
