@@ -1,7 +1,7 @@
 [build]
-  base = "frontend" # Ensure this points to your frontend folder if it's a subfolder
+  base = "frontend"
   publish = "dist"
-  command = "npm install && npm run build"
+  command = "npm run build" # Removed 'npm install' as Netlify handles this automatically
 
 [build.environment]
   NODE_VERSION = "22"
