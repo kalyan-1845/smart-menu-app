@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import axios from "axios";
 
@@ -11,7 +11,7 @@ import OwnerLogin from "./pages/OwnerLogin";
 import Register from "./pages/Register"; 
 import SuperLogin from "./pages/SuperLogin"; 
 import Terms from './pages/Terms';
-import Maintenance from './pages/Maintenance'; // ✅ Import Maintenance
+import Maintenance from './pages/Maintenance';
 import NotFound from './pages/NotFound';
 
 // --- STAFF PANELS ---
@@ -35,52 +35,73 @@ const ProtectedSuperAdmin = ({ children }) => {
 
 const GlobalStyles = () => (
   <style>{`
-    :root { font-family: Inter, sans-serif; color: white; background-color: #050505; }
-    body { margin: 0; min-height: 100vh; overflow-x: hidden; }
+    :root { font-family: 'Inter', sans-serif; color: white; background-color: #050505; }
+    body { margin: 0; min-height: 100vh; overflow-x: hidden; background-color: #050505; }
     #root { width: 100%; margin: 0 auto; text-align: center; }
     .page-transition { animation: slideUp 0.4s ease-out forwards; }
-    @keyframes slideUp { from { transform: translateY(15px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    @keyframes slideUp { from { transform: translateY(10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
   `}</style>
 );
 
 function App() {
   const [cart, setCart] = useState(() => JSON.parse(localStorage.getItem("smartMenu_Cart") || "[]"));
   const [restaurantId, setRestaurantId] = useState(localStorage.getItem("smartMenu_RestaurantId") || null);
-  const [tableNum, setTableNum] = useState(localStorage.getItem("last_table_num") || "");
-  const [isMaintenance, setIsMaintenance] = useState(false); // ✅ Global Maintenance State
+  const [tableNum, setTableNum] = useState(localStorage.getItem("last_table_scanned") || "");
+  const [isMaintenance, setIsMaintenance] = useState(false);
 
-  // ✅ 1. MAINTENANCE ENGINE
+  // ✅ 1. SYSTEM MAINTENANCE CHECK
   useEffect(() => {
     const checkSystemStatus = async () => {
       try {
-        const res = await axios.get(`${API_BASE}/superadmin/maintenance-status`);
+        const res = await axios.get(`${API_BASE}/superadmin/maintenance-status?t=${Date.now()}`);
         if (res.data.enabled) setIsMaintenance(true);
-      } catch (e) { console.error("System Status Check Failed"); }
+      } catch (e) { console.error("Maintenance check silent fail"); }
     };
     checkSystemStatus();
-    const interval = setInterval(checkSystemStatus, 60000); // Re-check every minute
+    const interval = setInterval(checkSystemStatus, 60000); 
     return () => clearInterval(interval);
   }, []);
 
-  // 2. Persistence Sync
-  useEffect(() => { localStorage.setItem("smartMenu_Cart", JSON.stringify(cart)); }, [cart]);
-  useEffect(() => { if(restaurantId) localStorage.setItem("smartMenu_RestaurantId", restaurantId); }, [restaurantId]);
+  // ✅ 2. SMART DATA PERSISTENCE
+  useEffect(() => { 
+    localStorage.setItem("smartMenu_Cart", JSON.stringify(cart)); 
+  }, [cart]);
 
-  // --- CART ACTIONS ---
+  // ✅ 3. CART ACTIONS (With Haptics)
   const addToCart = (dish) => {
+    if ("vibrate" in navigator) navigator.vibrate(40);
     setCart((prev) => {
       const exists = prev.find((item) => item._id === dish._id);
-      if (exists) return prev.map((i) => i._id === dish._id ? { ...i, quantity: i.quantity + (dish.quantity || 1) } : i);
+      if (exists) {
+        return prev.map((i) => i._id === dish._id 
+          ? { ...i, quantity: i.quantity + (dish.quantity || 1) } 
+          : i
+        );
+      }
       return [...prev, { ...dish, quantity: dish.quantity || 1 }];
     });
   };
 
   const updateQuantity = (id, newQuantity) => {
-    if (newQuantity <= 0) { setCart(prev => prev.filter(i => i._id !== id)); return; }
+    if (newQuantity <= 0) {
+      setCart(prev => prev.filter(i => i._id !== id));
+      return;
+    }
     setCart((prev) => prev.map((item) => item._id === id ? { ...item, quantity: newQuantity } : item));
   };
 
-  // ✅ REDIRECT TO MAINTENANCE SCREEN IF ENABLED
+  const handleSetRestaurantId = (id) => {
+    const previousId = localStorage.getItem("smartMenu_RestaurantId");
+    if (previousId && previousId !== id) {
+      // Scanned a different restaurant - reset cart to prevent wrong orders
+      setCart([]);
+    }
+    setRestaurantId(id);
+    localStorage.setItem("smartMenu_RestaurantId", id);
+  };
+
+  // ✅ MAINTENANCE REDIRECT
   if (isMaintenance && !window.location.pathname.startsWith('/superadmin') && !window.location.pathname.startsWith('/super-login')) {
       return <Maintenance />;
   }
@@ -90,25 +111,24 @@ function App() {
       <GlobalStyles />
       <ScrollToTop />
       <Routes>
-        {/* --- PUBLIC ROUTES --- */}
+        {/* --- PUBLIC --- */}
         <Route path="/" element={<LandingPage />} /> 
         <Route path="/login" element={<OwnerLogin />} />
         <Route path="/register" element={<Register />} />
         <Route path="/terms" element={<Terms />} />
-         
-        {/* --- CUSTOMER MENU --- */}
+          
+        {/* --- CUSTOMER FLOW --- */}
         <Route path="/menu/:restaurantId" element={
             <div className="page-transition">
-              <Menu cart={cart} addToCart={addToCart} setRestaurantId={setRestaurantId} setTableNum={setTableNum} setCart={setCart} />
+              <Menu cart={cart} addToCart={addToCart} setRestaurantId={handleSetRestaurantId} setTableNum={setTableNum} setCart={setCart} />
             </div>
         } />
         <Route path="/menu/:restaurantId/:table" element={
             <div className="page-transition">
-              <Menu cart={cart} addToCart={addToCart} setRestaurantId={setRestaurantId} setTableNum={setTableNum} setCart={setCart} />
+              <Menu cart={cart} addToCart={addToCart} setRestaurantId={handleSetRestaurantId} setTableNum={setTableNum} setCart={setCart} />
             </div>
         } />
 
-        {/* --- CHECKOUT & TRACKING --- */}
         <Route path="/cart" element={
             <div className="page-transition">
               <Cart cart={cart} removeFromCart={(id) => updateQuantity(id, 0)} clearCart={() => setCart([])} updateQuantity={updateQuantity} restaurantId={restaurantId} tableNum={tableNum} setTableNum={setTableNum} />
@@ -126,7 +146,7 @@ function App() {
         <Route path="/:id/kitchen" element={<ChefDashboard />} />
         <Route path="/:id/waiter" element={<WaiterDashboard />} />
 
-        {/* ✅ FINAL CATCH-ALL (404) */}
+        {/* --- 404 --- */}
         <Route path="*" element={<NotFound />} />
       </Routes>
     </Router>

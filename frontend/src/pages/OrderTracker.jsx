@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import io from "socket.io-client";
@@ -6,7 +6,7 @@ import { generateCustomerReceipt } from "../utils/ReceiptGenerator";
 import { 
     FaCheck, FaUtensils, FaConciergeBell, FaFlagCheckered,
     FaArrowLeft, FaPhoneAlt, FaDownload, FaSpinner, FaReceipt, FaLock,
-    FaShieldAlt, FaWallet
+    FaShieldAlt, FaWallet, FaStar, FaTimes
 } from "react-icons/fa";
 
 const SERVER_URL = "https://smart-menu-backend-5ge7.onrender.com";
@@ -21,8 +21,12 @@ const OrderTracker = () => {
     const [callStatus, setCallStatus] = useState("Call Waiter"); 
     const [isCalling, setIsCalling] = useState(false);
     const [hasDownloaded, setHasDownloaded] = useState(false);
+    
+    // Feedback State
+    const [showFeedback, setShowFeedback] = useState(false);
+    const [rating, setRating] = useState(0);
+    const [submitted, setSubmitted] = useState(false);
 
-    // 🔄 Map status strings to the 4 visual steps
     const getStepIndex = (status) => {
         if (!status) return 0;
         const s = status.toLowerCase();
@@ -33,69 +37,63 @@ const OrderTracker = () => {
         return 0;
     };
 
-    const fetchOrderData = async () => {
+    const fetchOrderData = useCallback(async () => {
         try {
-            const res = await axios.get(`${API_BASE}/orders/${id}`); 
+            const res = await axios.get(`${API_BASE}/orders/${id}?t=${Date.now()}`); 
             setOrder(res.data);
             
-            // Fetch restaurant details for the receipt if not already fetched
             if(res.data.restaurantId && !restaurant) {
                 const resInfo = await axios.get(`${API_BASE}/auth/restaurant/${res.data.restaurantId}`);
                 setRestaurant(resInfo.data);
             }
         } catch (e) { console.error("Fetch Error:", e); }
-    };
+    }, [id, restaurant]);
 
     useEffect(() => {
         fetchOrderData();
-        
-        // 🔒 REAL-TIME SYNC: Join the private order room
         const socket = io(SERVER_URL, { transports: ['websocket'] });
-        socket.emit('join-restaurant', id); 
 
-        socket.on("order-updated", (updatedOrder) => {
-            if (updatedOrder._id === id) {
-                setOrder(updatedOrder);
-            }
+        socket.on("connect", () => {
+            socket.emit('join-restaurant', id); 
         });
 
-        // 📱 MOBILE BACKUP: Poll every 5 seconds in case socket disconnects in background
-        const interval = setInterval(fetchOrderData, 5000);
+        socket.on("chef-ready-alert", (data) => {
+            if (data.orderId === id) fetchOrderData(); 
+        });
 
-        return () => { 
-            socket.disconnect(); 
-            clearInterval(interval); 
-        };
-    }, [id]);
+        const interval = setInterval(fetchOrderData, 8000); 
+        return () => { socket.disconnect(); clearInterval(interval); };
+    }, [id, fetchOrderData]);
 
-    // 🧾 AUTO-RECEIPT: Download bill once the order is marked "Served"
+    // 🧾 AUTO-DOWNLOAD & FEEDBACK TRIGGER
     useEffect(() => {
-        if (order && (order.status === "Served" || order.status === "Completed") && !hasDownloaded && restaurant) {
-            generateCustomerReceipt(order, restaurant);
-            setHasDownloaded(true);
-        }
-    }, [order, hasDownloaded, restaurant]);
+        const triggerSequence = async () => {
+            if (order && (order.status.toLowerCase() === "served" || order.status.toLowerCase() === "completed")) {
+                if (!hasDownloaded && restaurant) {
+                    setTimeout(async () => {
+                        await generateCustomerReceipt(order, restaurant);
+                        setHasDownloaded(true);
+                        
+                        // 🌟 Show feedback pop-up 1.5s after download
+                        setTimeout(() => setShowFeedback(true), 1500);
+                    }, 1200);
+                }
+            }
+        };
+        triggerSequence();
+    }, [order?.status, hasDownloaded, restaurant, order]);
+
+    const handleRating = (val) => {
+        setRating(val);
+        // You can add an axios.post here to save ratings to your DB
+        setTimeout(() => {
+            setSubmitted(true);
+            setTimeout(() => setShowFeedback(false), 2000);
+        }, 5000);
+    };
 
     const currentStep = order ? getStepIndex(order.status) : 0;
     const isServed = currentStep === 3; 
-
-    const handleCallWaiter = async () => {
-        setIsCalling(true);
-        setCallStatus("Calling...");
-        try {
-            await axios.post(`${API_BASE}/orders/call-waiter`, {
-                restaurantId: order.restaurantId,
-                tableNumber: order.tableNum,
-                type: "help"
-            });
-            setCallStatus("Waiter Coming!");
-            if ("vibrate" in navigator) navigator.vibrate(100);
-            setTimeout(() => { setCallStatus("Call Waiter"); setIsCalling(false); }, 5000);
-        } catch (e) {
-            setCallStatus("Try Again");
-            setIsCalling(false);
-        }
-    };
 
     if (!order) return <div style={styles.center}><FaSpinner className="spin" size={30} color="#f97316"/></div>;
 
@@ -103,24 +101,24 @@ const OrderTracker = () => {
         <div style={styles.container}>
             <div style={styles.header}>
                 <button onClick={() => navigate(-1)} style={styles.backBtn}><FaArrowLeft /></button>
-                <div>
+                <div style={{ flex: 1 }}>
                     <h1 style={styles.title}>Track Order</h1>
-                    <p style={styles.sub}>Order #{id.slice(-4).toUpperCase()}</p>
+                    <p style={styles.sub}>ORDER #{id.slice(-4).toUpperCase()}</p>
                 </div>
+                <img src="/logo192.png" alt="BiteBox" style={styles.smallLogo} />
             </div>
 
             <div style={styles.statusCard}>
                 <h2 style={styles.statusTitle}>
-                    {currentStep === 0 ? "Order Sent" : 
-                     currentStep === 1 ? "Cooking..." : 
-                     currentStep === 2 ? "Ready to Serve" : "ENJOY MEAL"}
+                    {currentStep === 0 ? "Order Received" : 
+                     currentStep === 1 ? "Chef Cooking..." : 
+                     currentStep === 2 ? "Ready to Pickup" : "ORDER SERVED!"}
                 </h2>
-                
                 <div style={styles.statusBarContainer}>
                     <div style={styles.lineBase}></div>
                     <div style={{...styles.lineFill, width: `${currentStep * 33}%`}}></div>
                     <div style={styles.stepWrapper}>
-                        <StepIcon icon={<FaCheck/>} label="Sent" active={currentStep >= 0} />
+                        <StepIcon icon={<FaCheck/>} label="Placed" active={currentStep >= 0} />
                         <StepIcon icon={<FaUtensils/>} label="Cooking" active={currentStep >= 1} />
                         <StepIcon icon={<FaConciergeBell/>} label="Ready" active={currentStep >= 2} />
                         <StepIcon icon={<FaFlagCheckered/>} label="Served" active={currentStep >= 3} />
@@ -133,7 +131,7 @@ const OrderTracker = () => {
                     <div style={{display:'flex', alignItems:'center', gap:'8px'}}>
                         <FaReceipt color="#f97316" /> <span style={{letterSpacing:'1px', fontWeight:'900'}}>ORDER SUMMARY</span>
                     </div>
-                    <span style={{fontSize:'10px', color:'#444', fontWeight: 'bold'}}>BITEBOX SECURE</span>
+                    <span style={{fontSize:'10px', color:'#555', fontWeight: 'bold'}}>TABLE {order.tableNum}</span>
                 </div>
                 <div style={styles.itemList}>
                     {order.items.map((item, i) => (
@@ -145,70 +143,90 @@ const OrderTracker = () => {
                 </div>
                 <div style={styles.divider}></div>
                 <div style={styles.totalRow}><span>Grand Total</span><span style={styles.totalPrice}>₹{order.totalAmount}</span></div>
+            </div>
 
-                <div style={{
-                    marginTop: '20px', padding: '15px', borderRadius: '16px',
-                    background: order.paymentMethod === "Online" ? 'rgba(34, 197, 94, 0.1)' : 'rgba(249, 115, 22, 0.1)',
-                    border: order.paymentMethod === "Online" ? '1px solid rgba(34, 197, 94, 0.2)' : '1px solid rgba(249, 115, 22, 0.2)',
-                    display: 'flex', alignItems: 'center', gap: '12px'
-                }}>
-                    <div style={{
-                        width: '40px', height: '40px', borderRadius: '12px',
-                        background: order.paymentMethod === "Online" ? '#22c55e' : '#f97316',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white'
-                    }}>{order.paymentMethod === "Online" ? <FaShieldAlt /> : <FaWallet />}</div>
-                    <div>
-                        <p style={{margin:0, fontSize:'10px', fontWeight:'900', color:'#555'}}>PAYMENT METHOD</p>
-                        <p style={{ margin:0, fontSize:'14px', fontWeight:'900', color: order.paymentMethod === "Online" ? '#22c55e' : '#f97316' }}>{order.paymentMethod === "Online" ? "PAID VIA ONLINE" : "CASH AT COUNTER"}</p>
+            {/* ⭐ FEEDBACK MODAL */}
+            {showFeedback && (
+                <div style={styles.feedbackOverlay}>
+                    <div style={styles.feedbackCard} className="pop-in">
+                        {!submitted ? (
+                            <>
+                                <button onClick={() => setShowFeedback(false)} style={styles.closeBtn}><FaTimes/></button>
+                                <h3 style={{margin:'0 0 10px 0'}}>Rate your Meal!</h3>
+                                <p style={{fontSize:'12px', color:'#666', marginBottom:'20px'}}>How was the food and service at {restaurant?.restaurantName}?</p>
+                                <div style={{display:'flex', gap:'10px', justifyContent:'center'}}>
+                                    {[1,2,3,4,5].map(num => (
+                                        <FaStar 
+                                            key={num} 
+                                            size={30} 
+                                            color={rating >= num ? "#f97316" : "#333"} 
+                                            onClick={() => handleRating(num)}
+                                            style={{cursor:'pointer', transition:'0.2s'}}
+                                        />
+                                    ))}
+                                </div>
+                            </>
+                        ) : (
+                            <div style={{textAlign:'center', padding:'20px'}}>
+                                <FaCheck color="#22c55e" size={40}/>
+                                <h3 style={{marginTop:'15px'}}>Thank you!</h3>
+                                <p style={{fontSize:'12px', color:'#888'}}>Your feedback helps us improve.</p>
+                            </div>
+                        )}
                     </div>
                 </div>
-            </div>
+            )}
 
             <div style={styles.footer}>
-                <button onClick={handleCallWaiter} disabled={isCalling} style={styles.outlineBtn}><FaPhoneAlt /> {callStatus}</button>
-                <button onClick={() => { if(isServed) generateCustomerReceipt(order, restaurant); }} disabled={!isServed} 
-                    style={{...styles.solidBtn, background: isServed ? '#f97316' : '#333', color: isServed ? 'white' : '#666', cursor: isServed ? 'pointer' : 'not-allowed', boxShadow: isServed ? '0 10px 20px rgba(249, 115, 22, 0.3)' : 'none'}}
-                >{isServed ? <><FaDownload /> Download Bill</> : <><FaLock /> Wait for Bill</>}</button>
+                <button onClick={() => { if(isServed) generateCustomerReceipt(order, restaurant); }} 
+                    disabled={!isServed} 
+                    style={{...styles.solidBtn, background: isServed ? '#f97316' : '#222', color: isServed ? 'white' : '#555'}}
+                >
+                    {isServed ? <><FaDownload /> Download Bill</> : <><FaLock /> Receipt Locked</>}
+                </button>
             </div>
-            <style>{`.spin { animation: spin 1s linear infinite; } @keyframes spin { 100% { transform: rotate(360deg); } }`}</style>
+            <style>{`.spin { animation: spin 1s linear infinite; } @keyframes spin { 100% { transform: rotate(360deg); } } .pop-in { animation: pop 0.4s cubic-bezier(0.17, 0.89, 0.32, 1.49); } @keyframes pop { from { opacity:0; transform: scale(0.8) translateY(20px); } to { opacity:1; transform: scale(1) translateY(0); } }`}</style>
         </div>
     );
 };
 
 const StepIcon = ({ icon, label, active }) => (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 2, width: '40px' }}>
-        <div style={{ width: '35px', height: '35px', borderRadius: '50%', background: active ? '#f97316' : '#222', border: '3px solid #050505', color: active ? 'white' : '#555', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: '0.3s' }}>{icon}</div>
-        <span style={{ fontSize: '9px', marginTop: '5px', fontWeight: 'bold', color: active ? 'white' : '#444' }}>{label}</span>
+        <div style={{ width: '38px', height: '38px', borderRadius: '50%', background: active ? '#f97316' : '#18181b', color: active ? 'white' : '#3f3f46', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: '0.4s' }}>{icon}</div>
+        <span style={{ fontSize: '9px', marginTop: '6px', fontWeight: '900', color: active ? 'white' : '#3f3f46' }}>{label}</span>
     </div>
 );
 
 const styles = {
-    container: { minHeight: "100vh", background: "#050505", color: "white", padding: "20px", paddingBottom: "120px", fontFamily: "sans-serif" },
-    center: { height: "100vh", display: 'flex', justifyContent: 'center', alignItems: 'center' },
+    container: { minHeight: "100vh", background: "#050505", color: "white", padding: "20px", paddingBottom: "120px", fontFamily: "'Inter', sans-serif" },
+    center: { height: "100vh", display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#050505' },
     header: { display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '30px' },
-    backBtn: { width: '40px', height: '40px', background: '#222', border: 'none', borderRadius: '12px', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' },
-    title: { margin: 0, fontSize: '24px', fontWeight: '900' },
-    sub: { margin: 0, color: '#888', fontSize: '12px', fontWeight: 'bold' },
-    statusCard: { background: '#111', borderRadius: '20px', padding: '25px 20px', border: '1px solid #222', marginBottom: '20px', textAlign: 'center' },
-    statusTitle: { margin: '0 0 30px 0', color: '#f97316', fontSize: '24px', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '1px' },
-    statusBarContainer: { position: 'relative', marginTop: '10px', padding: '0 10px' },
-    lineBase: { position: 'absolute', top: '15px', left: '25px', right: '25px', height: '4px', background: '#222', borderRadius: '2px', zIndex: 0 },
-    lineFill: { position: 'absolute', top: '15px', left: '25px', height: '4px', background: '#f97316', borderRadius: '2px', zIndex: 1, transition: 'width 0.5s ease' },
+    backBtn: { width: '45px', height: '45px', background: '#111', border: '1px solid #222', borderRadius: '15px', color: 'white' },
+    title: { margin: 0, fontSize: '22px', fontWeight: '900' },
+    sub: { margin: 0, color: '#555', fontSize: '11px', fontWeight: '900' },
+    smallLogo: { width: '35px', height: '35px', borderRadius: '8px', objectFit: 'contain', background: 'white', padding: '2px' },
+    statusCard: { background: '#0a0a0a', borderRadius: '28px', padding: '30px 20px', border: '1px solid #111', marginBottom: '20px', textAlign: 'center' },
+    statusTitle: { margin: '0 0 35px 0', color: '#f97316', fontSize: '24px', fontWeight: '900' },
+    statusBarContainer: { position: 'relative', marginTop: '10px' },
+    lineBase: { position: 'absolute', top: '19px', left: '30px', right: '30px', height: '3px', background: '#18181b', zIndex: 0 },
+    lineFill: { position: 'absolute', top: '19px', left: '30px', height: '3px', background: '#f97316', zIndex: 1, transition: 'width 0.8s ease' },
     stepWrapper: { display: 'flex', justifyContent: 'space-between', position: 'relative', zIndex: 2 },
-    receiptCard: { background: '#111', borderRadius: '20px', padding: '20px', border: '1px solid #222' },
-    receiptHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', color: '#666', fontSize: '12px', fontWeight: 'bold', letterSpacing: '1px' },
-    itemList: { display: 'flex', flexDirection: 'column', gap: '15px' },
+    receiptCard: { background: '#0a0a0a', borderRadius: '28px', padding: '24px', border: '1px solid #111' },
+    receiptHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' },
+    itemList: { display: 'flex', flexDirection: 'column', gap: '18px' },
     itemRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-    itemLeft: { display: 'flex', alignItems: 'center', gap: '10px' },
-    qtyBox: { background: '#222', padding: '4px 8px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', color: '#f97316' },
-    itemName: { fontWeight: '600', fontSize: '14px' },
-    itemPrice: { fontWeight: 'bold' },
-    divider: { height: '1px', background: '#222', margin: '20px 0' },
-    totalRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '18px', fontWeight: '900' },
+    itemLeft: { display: 'flex', alignItems: 'center', gap: '12px' },
+    qtyBox: { background: '#111', padding: '4px 8px', borderRadius: '8px', fontSize: '11px', color: '#f97316', border:'1px solid #222' },
+    itemName: { fontWeight: '700', fontSize: '15px' },
+    itemPrice: { fontWeight: '900', fontSize: '15px' },
+    divider: { height: '1px', background: '#111', margin: '22px 0' },
+    totalRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '20px', fontWeight: '900' },
     totalPrice: { color: '#22c55e' },
-    footer: { position: 'fixed', bottom: 0, left: 0, right: 0, padding: '20px', background: 'rgba(5,5,5,0.95)', backdropFilter: 'blur(10px)', display: 'flex', gap: '15px', borderTop: '1px solid #222', zIndex: 100 },
-    outlineBtn: { flex: 1, height: '50px', background: 'transparent', border: '1px solid #333', color: 'white', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' },
-    solidBtn: { flex: 1, height: '50px', border: 'none', borderRadius: '12px', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }
+    footer: { position: 'fixed', bottom: 0, left: 0, right: 0, padding: '20px', background: 'rgba(5,5,5,0.8)', backdropFilter: 'blur(20px)', zIndex: 100 },
+    solidBtn: { width: '100%', height: '58px', border: 'none', borderRadius: '18px', fontWeight: '900', fontSize:'14px', display:'flex', alignItems:'center', justifyContent:'center', gap:'10px' },
+    feedbackOverlay: { position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', zIndex:2000, display:'flex', alignItems:'center', justifyContent:'center', padding:'20px' },
+    feedbackCard: { background:'white', color:'black', borderRadius:'28px', padding:'30px', width:'100%', maxWidth:'320px', position:'relative', textAlign:'center' },
+    closeBtn: { position:'absolute', top:'15px', right:'15px', background:'none', border:'none', color:'#ccc', fontSize:'20px' }
 };
 
 export default OrderTracker;

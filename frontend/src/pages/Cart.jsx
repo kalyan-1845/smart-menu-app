@@ -3,11 +3,12 @@ import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import io from "socket.io-client"; 
 import { FaArrowLeft, FaTrash, FaMobileAlt, FaMoneyBillWave, FaCheckCircle, FaBell, FaUtensils, FaChair } from "react-icons/fa";
+import { toast } from "react-hot-toast";
 
 const SERVER_URL = "https://smart-menu-backend-5ge7.onrender.com";
 const API_BASE = `${SERVER_URL}/api`;
 
-const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, tableNum, setTableNum }) => {
+const Cart = ({ cart, clearCart, removeFromCart, restaurantId, tableNum, setTableNum }) => {
     const navigate = useNavigate();
     const [customerName, setCustomerName] = useState("");
     const [showTableModal, setShowTableModal] = useState(!tableNum);
@@ -17,8 +18,9 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
     const [callLoading, setCallLoading] = useState(false);
     const socketRef = useRef(null); 
 
-    const finalRestaurantId = restaurantId || localStorage.getItem("last_restaurant_id");
-    const finalTableNum = tableNum || localStorage.getItem("last_table_num");
+    // ✅ RECOVERY LOGIC: Ensure we don't lose the ID on refresh
+    const finalRestaurantId = restaurantId || localStorage.getItem("last_rest_scanned");
+    const finalTableNum = tableNum || localStorage.getItem("last_table_scanned");
 
     const totalPrice = cart.reduce((total, item) => total + (item.price * (item.quantity || 1)), 0);
 
@@ -36,53 +38,48 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
         };
     }, [finalRestaurantId]);
 
+    // ✅ 2. TABLE MANAGEMENT
     useEffect(() => {
         if (!finalTableNum) setShowTableModal(true);
     }, [finalTableNum]);
 
     const handleTableSubmit = (e) => {
         e.preventDefault();
-        if (!tempTable || tempTable < 1) return alert("Enter a valid Table Number");
+        if (!tempTable || tempTable < 1) return toast.error("Enter a valid table number");
         setTableNum(tempTable);
-        localStorage.setItem("last_table_num", tempTable);
+        localStorage.setItem("last_table_scanned", tempTable);
         setShowTableModal(false);
         if ("vibrate" in navigator) navigator.vibrate(50);
     };
 
-    // ✅ 2. OPTIMIZED WAITER CALL (Instantly hits Chef & Waiter)
+    // ✅ 3. OPTIMIZED WAITER CALL
     const handleCallWaiter = async () => {
         if (!finalTableNum) return setShowTableModal(true);
         setCallLoading(true);
         if ("vibrate" in navigator) navigator.vibrate(100);
 
         try {
-            // Log call in DB with cache-busting timestamp
-            await axios.post(`${API_BASE}/orders/call-waiter?t=${Date.now()}`, {
-                restaurantId: finalRestaurantId,
-                tableNumber: finalTableNum
-            });
-
-            // Emit through persistent socket
+            // Emit through persistent socket for instant staff alert
             socketRef.current.emit("call-waiter", {
                 restaurantId: finalRestaurantId,
                 tableNumber: finalTableNum,
                 _id: Date.now().toString()
             });
 
-            alert("🛎️ Waiter notified!");
+            toast.success("🛎️ Waiter notified!");
         } catch (err) {
-            console.error("Call failed", err);
+            toast.error("Call failed. Try again.");
         } finally {
             setCallLoading(false);
         }
     };
 
-    // ✅ 3. INDUSTRIAL ORDER PROCESSING
+    // ✅ 4. INDUSTRIAL ORDER PROCESSING
     const processOrder = async (paymentType) => {
         if (isSubmitting) return;
-        if (!customerName.trim()) return alert("Please enter your name!");
+        if (!customerName.trim()) return toast.error("Please enter your name!");
         if (!finalTableNum) return setShowTableModal(true);
-        if (!cart.length) return alert("Cart is empty!");
+        if (cart.length === 0) return toast.error("Your cart is empty!");
 
         if ("vibrate" in navigator) navigator.vibrate(50);
         setIsSubmitting(true);
@@ -91,16 +88,22 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
             const payload = {
                 customerName,
                 tableNum: finalTableNum.toString(),
-                items: cart.map(i => ({ name: i.name, quantity: i.quantity, price: i.price, image: i.image })),
+                // 🔥 Added dishId for better backend data tracking
+                items: cart.map(i => ({ 
+                    dishId: i._id, 
+                    name: i.name, 
+                    quantity: i.quantity, 
+                    price: i.price 
+                })),
                 totalAmount: totalPrice,
-                paymentMethod: paymentType === "ONLINE" ? "Online" : "Cash",
+                paymentMethod: paymentType,
                 restaurantId: finalRestaurantId,
-                status: "Pending"
+                status: "placed"
             };
 
             const res = await axios.post(`${API_BASE}/orders?t=${Date.now()}`, payload);
             
-            // Alert Kitchen immediately
+            // Trigger instant alert in Kitchen/Chef Dashboard
             socketRef.current.emit("new-order", res.data);
 
             setOrderSuccess(true);
@@ -108,10 +111,10 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
             setTimeout(() => {
                 clearCart();
                 navigate(`/track/${res.data._id}`); 
-            }, 1200); 
+            }, 1500); 
 
         } catch (err) {
-            alert("Order failed. Check internet.");
+            toast.error("Order failed. Check internet.");
             setIsSubmitting(false);
         }
     };
@@ -123,13 +126,12 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                 <div style={styles.overlay}>
                     <div style={styles.tableCard} className="pop-in">
                         <FaChair size={40} color="#f97316" style={{marginBottom: 15}}/>
-                        <h2 style={{margin: '0 0 10px 0', fontSize: '20px'}}>Where are you sitting?</h2>
+                        <h2 style={{margin: '0 0 10px 0', fontSize: '20px'}}>Table Identification</h2>
                         <form onSubmit={handleTableSubmit}>
                             <input 
                                 style={styles.tableInput} 
                                 type="number" 
-                                pattern="\d*"
-                                placeholder="Table No." 
+                                placeholder="Enter Table Number" 
                                 value={tempTable} 
                                 onChange={(e) => setTempTable(e.target.value)} 
                                 autoFocus 
@@ -146,8 +148,8 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                 <div style={styles.overlay}>
                     <div style={styles.successCard} className="pop-in">
                         <FaCheckCircle size={80} color="#22c55e" className="checkmark-anim" />
-                        <h2 style={styles.successTitle}>Order Placed!</h2>
-                        <p style={styles.successSub}>Kitchen is preparing your meal.</p>
+                        <h2 style={styles.successTitle}>Order Sent!</h2>
+                        <p style={styles.successSub}>Chef is starting your meal now.</p>
                         <div style={styles.loaderLine}></div>
                     </div>
                 </div>
@@ -156,35 +158,34 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
             <div style={styles.header}>
                 <div style={{display: 'flex', alignItems: 'center', gap: '15px'}}>
                     <button onClick={() => navigate(-1)} style={styles.backBtn}><FaArrowLeft /></button>
-                    <h1 style={styles.title}>Review Cart</h1>
+                    <h1 style={styles.title}>Cart</h1>
                 </div>
                 <button onClick={handleCallWaiter} disabled={callLoading} style={styles.callBtn}>
-                    <FaBell style={{marginRight: '6px'}}/> {callLoading ? '...' : 'Call'}
+                    <FaBell style={{marginRight: '6px'}}/> {callLoading ? '...' : 'Call Staff'}
                 </button>
             </div>
 
             <div style={styles.infoCard}>
                 <div onClick={() => setShowTableModal(true)} style={styles.infoRow}>
-                    <p style={{margin: 0}}>Table: <span style={{color: '#f97316', fontWeight: 'bold'}}>{finalTableNum || "Tap to Set"}</span></p>
-                    <button style={styles.changeBtn}>Change</button>
+                    <p style={{margin: 0, fontSize: '14px'}}>Sitting at Table: <span style={{color: '#f97316', fontWeight: '900'}}>{finalTableNum || "Select"}</span></p>
+                    <button style={styles.changeBtn}>Edit</button>
                 </div>
-                <input style={styles.input} placeholder="Enter Your Name" value={customerName} onChange={e => setCustomerName(e.target.value)} />
+                <input style={styles.input} placeholder="Your Name" value={customerName} onChange={e => setCustomerName(e.target.value)} />
             </div>
 
             <div style={styles.list}>
                 {cart.length === 0 ? (
-                    <div style={{textAlign: 'center', marginTop: '60px', color: '#444'}}>
+                    <div style={{textAlign: 'center', marginTop: '60px', opacity: 0.3}}>
                         <FaUtensils size={40} style={{marginBottom: '10px'}}/>
-                        <p>Your cart is empty</p>
+                        <p>Cart is empty</p>
                     </div>
                 ) : (
                     cart.map(item => (
                         <div key={item._id} style={styles.item}>
-                            <img src={item.image} alt={item.name} style={styles.thumb} />
                             <div style={{flex: 1}}>
-                                <p style={{margin: 0, fontWeight: 'bold', fontSize: '15px'}}>{item.name}</p>
-                                <p style={{margin: 0, color: '#f97316', fontSize: '14px'}}>
-                                    ₹{item.price * item.quantity} <span style={{color: '#555', fontSize: '12px'}}>({item.quantity}x)</span>
+                                <p style={{margin: 0, fontWeight: '700', fontSize: '15px'}}>{item.name}</p>
+                                <p style={{margin: 0, color: '#f97316', fontSize: '14px', fontWeight: '900'}}>
+                                    ₹{item.price * item.quantity} <span style={{color: '#555', fontSize: '11px', fontWeight: '400'}}>({item.quantity}x)</span>
                                 </p>
                             </div>
                             <button onClick={() => removeFromCart(item._id)} style={styles.delBtn}><FaTrash /></button>
@@ -195,12 +196,12 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
 
             <div style={styles.footer}>
                 <div style={styles.totalRow}>
-                    <span>Total</span>
+                    <span>Total Amount</span>
                     <span style={{color: '#f97316'}}>₹{totalPrice}</span>
                 </div>
                 <div style={styles.btnRow}>
-                    <button onClick={() => processOrder("ONLINE")} disabled={isSubmitting} style={styles.onlineBtn}>Online</button>
-                    <button onClick={() => processOrder("CASH")} disabled={isSubmitting} style={styles.cashBtn}>Pay Cash</button>
+                    <button onClick={() => processOrder("CASH")} disabled={isSubmitting} style={styles.cashBtn}>Pay with Cash</button>
+                    <button onClick={() => processOrder("ONLINE")} disabled={isSubmitting} style={styles.onlineBtn}>Pay Online</button>
                 </div>
             </div>
             
@@ -210,14 +211,15 @@ const Cart = ({ cart, clearCart, updateQuantity, removeFromCart, restaurantId, t
                 @keyframes checkBounce { 0% { transform: scale(0); } 50% { transform: scale(1.2); } 100% { transform: scale(1); } }
                 .pop-in { animation: scaleUp 0.3s ease-out; }
                 .checkmark-anim { animation: checkBounce 0.5s ease-out forwards; }
-                .loaderLine { height: 3px; background: #22c55e; width: 100%; margin: 20px auto 0; border-radius: 10px; animation: loadingBar 1.2s linear forwards; }
+                .loaderLine { height: 3px; background: #22c55e; width: 100%; margin: 20px auto 0; border-radius: 10px; animation: loadingBar 1.5s linear forwards; }
+                * { -webkit-tap-highlight-color: transparent; }
             `}</style>
         </div>
     );
 };
 
 const styles = {
-    container: { minHeight: '100vh', background: '#050505', color: 'white', padding: '20px', paddingBottom: '160px', fontFamily: 'Inter, sans-serif' },
+    container: { minHeight: '100vh', background: '#050505', color: 'white', padding: '15px', paddingBottom: '160px', fontFamily: 'Inter, sans-serif' },
     overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.95)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(12px)' },
     tableCard: { background: '#111', padding: '30px', borderRadius: '24px', textAlign: 'center', border: '1px solid #333', width: '85%', maxWidth: '320px' },
     tableInput: { width: '100%', padding: '15px', background: '#000', border: '1px solid #f97316', borderRadius: '12px', color: 'white', fontSize: '20px', textAlign: 'center', marginBottom: '15px', outline: 'none' },
@@ -226,22 +228,21 @@ const styles = {
     successTitle: { fontSize: '24px', fontWeight: '900', margin: '15px 0 5px' },
     successSub: { color: '#888', fontSize: '14px', margin: 0 },
     header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '25px' },
-    backBtn: { background: '#1a1a1a', border: '1px solid #333', color: 'white', padding: '12px', borderRadius: '12px' },
-    callBtn: { background: '#ef4444', color: 'white', border: 'none', padding: '10px 15px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold', display: 'flex', alignItems: 'center' },
-    title: { margin: 0, fontSize: '20px', fontWeight: '800' },
-    infoCard: { background: '#111', padding: '20px', borderRadius: '20px', marginBottom: '20px', border: '1px solid #222' },
-    infoRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' },
-    changeBtn: { background: 'rgba(249, 115, 22, 0.15)', border: 'none', color: '#f97316', borderRadius: '8px', padding: '6px 12px', fontSize: '12px', fontWeight: 'bold' },
+    backBtn: { background: '#1a1a1a', border: '1px solid #333', color: 'white', padding: '12px', borderRadius: '12px', display:'flex' },
+    callBtn: { background: '#ef4444', color: 'white', border: 'none', padding: '10px 15px', borderRadius: '12px', fontSize: '11px', fontWeight: '900', display: 'flex', alignItems: 'center' },
+    title: { margin: 0, fontSize: '18px', fontWeight: '900' },
+    infoCard: { background: '#111', padding: '15px', borderRadius: '20px', marginBottom: '20px', border: '1px solid #222' },
+    infoRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' },
+    changeBtn: { background: 'rgba(249, 115, 22, 0.1)', border: 'none', color: '#f97316', borderRadius: '8px', padding: '4px 10px', fontSize: '11px', fontWeight: 'bold' },
     input: { width: '100%', padding: '14px', background: '#000', border: '1px solid #333', borderRadius: '12px', color: 'white', fontSize: '16px', boxSizing: 'border-box', outline: 'none' },
-    list: { display: 'flex', flexDirection: 'column', gap: '12px' },
-    item: { background: '#111', padding: '12px', borderRadius: '18px', display: 'flex', alignItems: 'center', border: '1px solid #222' },
-    thumb: { width: '60px', height: '60px', borderRadius: '12px', objectFit: 'cover', marginRight: '15px' },
-    delBtn: { background: 'rgba(239, 68, 68, 0.1)', border: 'none', color: '#ef4444', padding: '12px', borderRadius: '10px' },
-    footer: { position: 'fixed', bottom: 0, left: 0, right: 0, background: '#0a0a0a', padding: '25px 20px', borderTop: '1px solid #222', zIndex: 10 },
-    totalRow: { display: 'flex', justifyContent: 'space-between', marginBottom: '20px', fontSize: '20px', fontWeight: '900' },
-    btnRow: { display: 'flex', gap: '12px' },
-    onlineBtn: { flex: 1, height: '55px', background: '#1a1a1a', color: 'white', border: '1px solid #333', borderRadius: '15px', fontWeight: 'bold' },
-    cashBtn: { flex: 1.3, height: '55px', background: '#f97316', color: 'white', border: 'none', borderRadius: '15px', fontWeight: '900' }
+    list: { display: 'flex', flexDirection: 'column', gap: '10px' },
+    item: { background: '#0a0a0a', padding: '15px', borderRadius: '18px', display: 'flex', alignItems: 'center', border: '1px solid #111' },
+    delBtn: { background: 'rgba(239, 68, 68, 0.1)', border: 'none', color: '#ef4444', padding: '10px', borderRadius: '10px' },
+    footer: { position: 'fixed', bottom: 0, left: 0, right: 0, background: '#080808', padding: '20px', borderTop: '1px solid #111', zIndex: 10 },
+    totalRow: { display: 'flex', justifyContent: 'space-between', marginBottom: '20px', fontSize: '18px', fontWeight: '900' },
+    btnRow: { display: 'flex', gap: '10px' },
+    onlineBtn: { flex: 1, height: '55px', background: '#111', color: 'white', border: '1px solid #333', borderRadius: '15px', fontWeight: 'bold' },
+    cashBtn: { flex: 1.5, height: '55px', background: '#f97316', color: 'white', border: 'none', borderRadius: '15px', fontWeight: '900' }
 };
 
 export default Cart;

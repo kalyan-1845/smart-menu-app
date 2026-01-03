@@ -1,11 +1,13 @@
 import jsPDF from "jspdf";
-import "jspdf-autotable";
 
-export const generateCustomerReceipt = (order, restaurant) => {
+export const generateCustomerReceipt = async (order, restaurant) => {
+    // 1. Get the dynamic name: prioritize 'restaurantName', fallback to 'username'
+    const dynamicName = restaurant?.restaurantName || restaurant?.username || "BITEBOX KITCHEN";
+
     const doc = new jsPDF({
         orientation: "portrait",
         unit: "mm",
-        format: [80, 230] // Increased height to accommodate new features
+        format: [80, 240] 
     });
 
     const centerX = 40;
@@ -13,11 +15,26 @@ export const generateCustomerReceipt = (order, restaurant) => {
     const leftAlignX = 5;
     let y = 15;
 
-    // --- 1. HEADER (Branding) ---
+    const loadImage = (url) => {
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.crossOrigin = "Anonymous"; 
+            img.src = url;
+            img.onload = () => resolve(img);
+            img.onerror = () => resolve(null);
+        });
+    };
+
+    const landingPageUrl = "https://smartmenuss.netlify.app";
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(landingPageUrl)}`;
+    const qrImage = await loadImage(qrUrl);
+
+    // --- 1. HEADER (Now using dynamicName) ---
     doc.setFontSize(18);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(0);
-    doc.text(restaurant?.restaurantName?.toUpperCase() || "BITEBOX KITCHEN", centerX, y, { align: "center" });
+    // Uppercase for that professional thermal receipt look
+    doc.text(dynamicName.toUpperCase(), centerX, y, { align: "center" });
     
     y += 6;
     doc.setFontSize(9);
@@ -66,7 +83,7 @@ export const generateCustomerReceipt = (order, restaurant) => {
         doc.text(`${(item.price * item.quantity).toFixed(2)}`, rightAlignX, y, { align: "right" });
     });
 
-    // --- 4. TOTALS SECTION ---
+    // --- 4. TOTALS ---
     y += 8;
     doc.setLineDashPattern([], 0); 
     doc.line(leftAlignX, y, rightAlignX, y);
@@ -84,12 +101,12 @@ export const generateCustomerReceipt = (order, restaurant) => {
     doc.setFontSize(14);
     doc.setFont("helvetica", "bold");
     doc.text("GRAND TOTAL:", leftAlignX, y);
-    doc.setTextColor(249, 115, 22); // Orange Total
+    doc.setTextColor(249, 115, 22); 
     doc.text(`Rs.${order.totalAmount}`, rightAlignX, y, { align: "right" });
 
-    // --- 5. PAYMENT STATUS BOX ---
+    // --- 5. PAYMENT STATUS ---
     y += 8;
-    const isOnline = order.paymentMethod === "Online";
+    const isOnline = order.paymentMethod?.toLowerCase() === "online";
     if (isOnline) {
         doc.setFillColor(34, 197, 94); 
         doc.roundedRect(leftAlignX, y, 70, 9, 1, 1, "F");
@@ -105,7 +122,7 @@ export const generateCustomerReceipt = (order, restaurant) => {
         doc.text("⚠ PAY CASH AT COUNTER", centerX, y + 6, { align: "center" });
     }
 
-    // --- 6. FEEDBACK SECTION (NEW) ---
+    // --- 6. FEEDBACK ---
     y += 18;
     doc.setTextColor(0);
     doc.setFontSize(9);
@@ -114,48 +131,29 @@ export const generateCustomerReceipt = (order, restaurant) => {
     
     y += 6;
     doc.setFontSize(14);
-    doc.setTextColor(200); // Light gray for stars to be filled by customer
+    doc.setTextColor(200); 
     doc.text("☆   ☆   ☆   ☆   ☆", centerX, y, { align: "center" });
 
-    // --- 7. QUOTE & THANK YOU ---
-    y += 10;
-    const quotes = [
-        "Good food is good mood! 😊",
-        "Made with love & fresh ingredients! 🧡",
-        "Hope to see you again soon! 👋",
-        "Yummy food, happy tummy! 🍕"
-    ];
-    const randomQuote = quotes[Math.floor(Math.random() * quotes.length)];
-    
-    doc.setTextColor(80);
-    doc.setFontSize(8);
-    doc.setFont("helvetica", "italic");
-    doc.text(randomQuote, centerX, y, { align: "center" });
-
-    y += 6;
+    // --- 7. THANK YOU ---
+    y += 12;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
     doc.setTextColor(0);
     doc.text("THANK YOU FOR VISITING! 🙏", centerX, y, { align: "center" });
 
-    // --- 8. QR CODE & SAAS BRANDING ---
-    y += 12;
-    const landingPageUrl = "https://smartmenuss.netlify.app";
-    const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(landingPageUrl)}`;
-    
-    doc.addImage(qrSrc, "PNG", centerX - 12.5, y, 25, 25);
-    
+    // --- 8. QR CODE & BRANDING ---
+    if (qrImage) {
+        y += 12;
+        doc.addImage(qrImage, "PNG", centerX - 12.5, y, 25, 25);
+    }
+
     y += 32;
     doc.setFontSize(10);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(249, 115, 22); 
     doc.text("POWERED BY BITEBOX AI", centerX, y, { align: "center" });
 
-    y += 5;
-    doc.setFontSize(7);
-    doc.setTextColor(180);
-    doc.text("Get your digital menu at smartmenuss.netlify.app", centerX, y, { align: "center" });
-
-    // Final Save
-    doc.save(`Receipt_Table_${order.tableNum}_${Date.now()}.pdf`);
+    // --- 9. FINAL SAVE (Using dynamic name in filename) ---
+    const fileName = `${dynamicName.replace(/\s+/g, '_')}_Table_${order.tableNum}.pdf`;
+    doc.save(fileName);
 };

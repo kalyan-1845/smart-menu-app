@@ -30,29 +30,23 @@ const ChefDashboard = () => {
     const audioRef = useRef(new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"));
     const callSound = useRef(new Audio("https://assets.mixkit.co/active_storage/sfx/2190/2190-preview.mp3"));
 
-    // ✅ 1. THE "GHOST CLEANER" SYNC ENGINE
+    // ✅ 1. SYNC ENGINE: Fetches latest Orders & Menu
     const forceSync = useCallback(async (rId) => {
         if (!rId) return;
         try {
-            // Get orders and dishes for THIS restaurant specifically
             const [orderRes, dishRes] = await Promise.all([
-                axios.get(`${API_BASE}/orders?restaurantId=${rId}&t=${Date.now()}`),
+                axios.get(`${API_BASE}/orders/inbox?restaurantId=${rId}&t=${Date.now()}`),
                 axios.get(`${API_BASE}/dishes?restaurantId=${rId}&t=${Date.now()}`)
             ]);
             
-            // Only show orders that are NOT served
+            // Filter: Only show active kitchen orders
             const activeOrders = orderRes.data.filter(o => 
-                o.status.toLowerCase() !== "served" && o.status.toLowerCase() !== "completed"
+                !["served", "completed", "archived"].includes(o.status.toLowerCase())
             );
 
-            // 🔥 FIX: STRICT FILTERING FOR REAL DISHES ONLY
-            // This hides items like "kalyanreddy1" if they are missing a real category
             const validCategories = ["Starters", "Main Course", "Dessert", "Drinks"];
             const cleanDishes = dishRes.data.filter(d => 
-                d.restaurantId === rId && // Must match your ID
-                d.name && 
-                validCategories.includes(d.category) && // Must have a real category
-                !d.name.toLowerCase().includes("kalyan") // Filter out your test names specifically
+                d.restaurantId === rId && d.name && validCategories.includes(d.category)
             );
 
             if (activeOrders.length > orders.length && !isMuted) {
@@ -64,7 +58,7 @@ const ChefDashboard = () => {
         } catch (e) { console.error("Sync Failed"); }
     }, [orders.length, isMuted]);
 
-    // ✅ 2. AUTHENTICATION & TOKEN RETRIEVAL
+    // ✅ 2. AUTHENTICATION
     useEffect(() => {
         const savedId = localStorage.getItem(`chef_session_${id}`);
         if (savedId) {
@@ -78,78 +72,87 @@ const ChefDashboard = () => {
         if(e) e.preventDefault();
         setAuthLoading(true);
         try {
-            const res = await axios.post(`${API_BASE}/auth/verify-role`, { 
-                username: id, password: password, role: 'chef' 
+            const res = await axios.post(`${API_BASE}/auth/login`, { 
+                username: id, password: password
             });
-            if (res.data.success) {
-                const dbId = res.data.restaurantId || res.data._id;
-                setMongoId(dbId);
-                // Also store the token for "OUT" button authorization
-                localStorage.setItem(`chef_token_${id}`, res.data.token);
-                localStorage.setItem(`chef_session_${id}`, dbId);
-                setIsAuthenticated(true);
-                forceSync(dbId);
-            } else { toast.error("Invalid PIN"); }
-        } catch (err) { toast.error("Login Failed"); } finally { setAuthLoading(false); }
+            const dbId = res.data._id;
+            setMongoId(dbId);
+            localStorage.setItem(`chef_token_${id}`, res.data.token);
+            localStorage.setItem(`chef_session_${id}`, dbId);
+            setIsAuthenticated(true);
+            forceSync(dbId);
+            toast.success("Kitchen System Online");
+        } catch (err) { toast.error("Invalid Access Key"); } finally { setAuthLoading(false); }
     };
 
-    // ✅ 3. OUT OPTION FIX (Toggle Stock)
+    // ✅ 3. STOCK TOGGLE (Instant Menu Update)
     const toggleStock = async (dishId, currentStatus) => {
         try {
-            // Optimistic UI update for speed
             setDishes(prev => prev.map(d => d._id === dishId ? { ...d, isAvailable: !currentStatus } : d));
-            
-            // 🔥 The "OUT" Fix: Send PUT request with proper Restaurant ID and Status
             await axios.put(`${API_BASE}/dishes/${dishId}`, { 
                 isAvailable: !currentStatus,
                 restaurantId: mongoId 
             });
-            
-            toast.success(currentStatus ? "Item is now OUT" : "Item is now IN");
+            toast.success(currentStatus ? "Marked OUT" : "Marked IN");
         } catch (e) { 
-            toast.error("Stock Update Failed"); 
-            forceSync(mongoId); // Revert UI if server fails
+            toast.error("Failed to update stock"); 
+            forceSync(mongoId);
         }
     };
 
-    // ✅ 4. SOCKET & ALERTS
+    // ✅ 4. REAL-TIME SOCKET CONNECTION
     useEffect(() => {
         if (isAuthenticated && mongoId) {
-            socketRef.current = io(SERVER_URL, { transports: ['websocket'], query: { restaurantId: mongoId } });
+            socketRef.current = io(SERVER_URL, { query: { restaurantId: mongoId } });
             const s = socketRef.current;
-            s.on("connect", () => { s.emit("join-restaurant", mongoId); forceSync(mongoId); });
+            
+            s.on("connect", () => {
+                s.emit("join-restaurant", mongoId);
+                forceSync(mongoId);
+            });
+
             s.on("new-order", () => forceSync(mongoId));
+            
             s.on("new-waiter-call", (data) => {
                 if (alertsActive) {
                     if (!isMuted) callSound.current.play().catch(()=>{});
                     setServiceCalls(prev => [data, ...prev]);
                 }
             });
-            const backupTimer = setInterval(() => forceSync(mongoId), 10000);
+
+            const backupTimer = setInterval(() => forceSync(mongoId), 15000);
             return () => { s.disconnect(); clearInterval(backupTimer); };
         }
     }, [isAuthenticated, mongoId, isMuted, alertsActive, forceSync]);
 
+    // ✅ 5. ORDER STATUS UPDATER (Automatic Bill Trigger)
     const updateStatus = async (order, nextStatus) => {
         try {
             setOrders(prev => prev.map(o => o._id === order._id ? { ...o, status: nextStatus } : o));
+            
+            // This API call updates DB and triggers "chef-ready-alert" for customer
             await axios.put(`${API_BASE}/orders/${order._id}`, { status: nextStatus });
-            if (nextStatus === "served") setOrders(prev => prev.filter(o => o._id !== order._id));
-            if (socketRef.current) {
-                socketRef.current.emit("chef-ready-alert", { restaurantId: mongoId, tableNum: order.tableNum, orderId: order._id, status: nextStatus });
+
+            if (nextStatus === "served") {
+                setOrders(prev => prev.filter(o => o._id !== order._id));
+                toast.success(`Table ${order.tableNum} Served • Bill Sent`);
+            } else {
+                toast.success(`Table ${order.tableNum} is now ${nextStatus.toUpperCase()}`);
             }
-            toast.success(`Table ${order.tableNum} status: ${nextStatus}`);
-        } catch (error) { forceSync(mongoId); }
+        } catch (error) { 
+            toast.error("Status update failed");
+            forceSync(mongoId); 
+        }
     };
 
     if (!isAuthenticated) return (
         <div style={styles.lockContainer}>
             <div style={styles.lockCard}>
                 <FaUtensils style={{fontSize:'40px', color:'#f97316', marginBottom:'15px'}}/>
-                <h1 style={styles.lockTitle}>{id?.toUpperCase()} KITCHEN</h1>
+                <h1 style={styles.lockTitle}>{id?.toUpperCase()} CHEF</h1>
                 <form onSubmit={handleLogin}>
-                    <input type="password" placeholder="ENTER PIN" value={password} inputMode="numeric" onChange={e=>setPassword(e.target.value)} style={styles.input} autoFocus />
-                    <button type="submit" style={styles.loginBtn} disabled={authLoading}>{authLoading ? <FaSpinner className="spin"/> : "ENTER SYSTEM"}</button>
+                    <input type="password" placeholder="ACCESS PIN" value={password} onChange={e=>setPassword(e.target.value)} style={styles.input} autoFocus />
+                    <button type="submit" style={styles.loginBtn} disabled={authLoading}>{authLoading ? <FaSpinner className="spin"/> : "UNLOCK DASHBOARD"}</button>
                 </form>
             </div>
         </div>
@@ -159,8 +162,8 @@ const ChefDashboard = () => {
         <div style={styles.dashboardContainer}>
             <div style={styles.alertWrapper}>
                 {serviceCalls.map((call, idx) => (
-                    <div key={idx} style={styles.alertBanner}>
-                        <span style={styles.alertText}><FaBell /> TABLE {call.tableNumber} CALLING</span>
+                    <div key={idx} style={styles.alertBanner} className="pulse-red">
+                        <span style={styles.alertText}><FaBell /> TABLE {call.tableNumber} NEEDS HELP</span>
                         <button onClick={() => setServiceCalls(prev => prev.filter(c => c._id !== call._id))} style={styles.attendBtn}><FaCheck/></button>
                     </div>
                 ))}
@@ -168,7 +171,7 @@ const ChefDashboard = () => {
               
             <header style={styles.header}>
                 <div style={styles.headerLeft}>
-                    <h1 style={styles.headerTitle}>CHEF DASH</h1>
+                    <h1 style={styles.headerTitle}>KITCHEN FEED</h1>
                     <div style={styles.statusDot}></div>
                 </div>
                 <div style={styles.headerRight}>
@@ -182,13 +185,13 @@ const ChefDashboard = () => {
             </header>
 
             <div style={styles.tabContainer}>
-                <button onClick={() => setActiveTab("orders")} style={{ ...styles.tabButton, background: activeTab === 'orders' ? '#f97316' : '#111' }}><FaClipboardList /> LIVE ({orders.length})</button>
-                <button onClick={() => setActiveTab("stock")} style={{ ...styles.tabButton, background: activeTab === 'stock' ? '#3b82f6' : '#111' }}><FaBoxOpen /> MENU</button>
+                <button onClick={() => setActiveTab("orders")} style={{ ...styles.tabButton, background: activeTab === 'orders' ? '#f97316' : '#111' }}>LIVE ORDERS ({orders.length})</button>
+                <button onClick={() => setActiveTab("stock")} style={{ ...styles.tabButton, background: activeTab === 'stock' ? '#3b82f6' : '#111' }}>MENU AVAILABILITY</button>
             </div>
                     
             <div style={styles.grid}>
                 {activeTab === "orders" ? (
-                    orders.length === 0 ? <div style={styles.emptyState}><FaUtensils size={40}/><p>No pending orders</p></div> : (
+                    orders.length === 0 ? <div style={styles.emptyState}><FaUtensils size={40}/><p>Kitchen is clear!</p></div> : (
                         orders.map((order) => (
                             <div key={order._id} style={{...styles.card, borderTop: order.status.toLowerCase() === 'ready' ? '6px solid #22c55e' : (order.status.toLowerCase() === 'cooking' ? '6px solid #eab308' : '6px solid #f97316')}}>
                                 <div style={styles.cardHeader}>
@@ -202,10 +205,10 @@ const ChefDashboard = () => {
                                 </div>
                                 <div style={styles.actionContainer}>
                                     {order.status.toLowerCase() === "ready" ? (
-                                        <button onClick={() => updateStatus(order, "served")} style={{...styles.actionBtn, background:'#22c55e', color:'white'}}><FaCheckDouble /> MARK SERVED</button>
+                                        <button onClick={() => updateStatus(order, "served")} style={{...styles.actionBtn, background:'#22c55e', color:'white'}}><FaCheckDouble /> MARK SERVED & BILL</button>
                                     ) : (
                                         <button onClick={() => updateStatus(order, order.status.toLowerCase() === 'cooking' ? "ready" : "cooking")} style={{...styles.actionBtn, background: order.status.toLowerCase() === 'cooking' ? '#eab308' : '#f97316', color: order.status.toLowerCase() === 'cooking' ? 'black' : 'white'}}>
-                                            {order.status.toLowerCase() === "cooking" ? "SET TO READY" : "START COOKING"}
+                                            {order.status.toLowerCase() === "cooking" ? "DONE / READY" : "START COOKING"}
                                         </button>
                                     )}
                                 </div>
@@ -217,13 +220,16 @@ const ChefDashboard = () => {
                         <div key={dish._id} style={{...styles.stockCard, opacity: dish.isAvailable ? 1 : 0.5}}>
                             <h3 style={{ margin: 0, fontSize: '13px', fontWeight: '900' }}>{dish.name}</h3>
                             <button onClick={() => toggleStock(dish._id, dish.isAvailable)} style={{...styles.stockBtn, background: dish.isAvailable ? '#ef4444' : '#22c55e'}}>
-                                {dish.isAvailable ? "OUT" : "IN"}
+                                {dish.isAvailable ? "MARK OUT" : "MARK IN"}
                             </button>
                         </div>
                     ))
                 )}
             </div>
-            <style>{`.spin { animation: spin 1s linear infinite; } @keyframes spin { 100% { transform: rotate(360deg); } }`}</style>
+            <style>{`
+                .spin { animation: spin 1s linear infinite; } @keyframes spin { 100% { transform: rotate(360deg); } }
+                .pulse-red { animation: pulse-red 1s infinite alternate; } @keyframes pulse-red { from { background: #ef4444; } to { background: #991b1b; } }
+            `}</style>
         </div>
     );
 };
@@ -234,34 +240,34 @@ const styles = {
     lockCard: { background: '#0a0a0a', padding: '40px', borderRadius: '30px', textAlign: 'center', width: '90%', maxWidth: '350px', border:'1px solid #111' },
     lockTitle: { color: 'white', fontSize: '20px', fontWeight: '900', margin: '0 0 20px 0' },
     input: { width: '100%', background: '#000', border: '1px solid #222', padding: '18px', borderRadius: '15px', color: 'white', marginBottom: '15px', textAlign: 'center', fontSize:'22px', outline:'none' },
-    loginBtn: { width: '100%', background: '#f97316', color: 'white', border: 'none', padding: '18px', borderRadius: '15px', fontWeight: '900' },
+    loginBtn: { width: '100%', background: 'linear-gradient(135deg, #FF8800 0%, #FF5500 100%)', color: 'white', border: 'none', padding: '18px', borderRadius: '15px', fontWeight: '900' },
     header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px', background: '#0a0a0a', borderRadius: '20px', marginBottom: '15px', border:'1px solid #111' },
     headerLeft: { display: 'flex', alignItems: 'center', gap: '10px' },
-    headerTitle: { fontSize: '14px', fontWeight: '900', margin: 0 },
+    headerTitle: { fontSize: '14px', fontWeight: '900', margin: 0, letterSpacing: '1px' },
     statusDot: { width:'8px', height:'8px', background:'#22c55e', borderRadius:'50%', boxShadow:'0 0 10px #22c55e' },
     headerRight: { display: 'flex', gap: '8px', alignItems: 'center' },
     iconButton: { background: '#111', border: '1px solid #222', color: 'white', padding: '10px', borderRadius: '10px', display:'flex', alignItems:'center' },
     iconButtonRed: { background: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444', color: '#ef4444', padding: '10px', borderRadius: '10px' },
     tabContainer: { display: 'flex', gap: '10px', marginBottom: '15px' },
-    tabButton: { flex: 1, padding: '16px', borderRadius: '15px', border: '1px solid #222', color: 'white', fontWeight: '900', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px', fontSize: '11px' },
+    tabButton: { flex: 1, padding: '16px', borderRadius: '15px', border: '1px solid #222', color: 'white', fontWeight: '900', fontSize: '11px' },
     grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' },
     card: { background: '#0a0a0a', borderRadius: '24px', border: '1px solid #111', display: 'flex', flexDirection: 'column', overflow:'hidden' },
-    cardHeader: { padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-    tableNumber: { fontSize: '24px', fontWeight: '900', margin:0 },
+    cardHeader: { padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom:'1px solid #111' },
+    tableNumber: { fontSize: '24px', fontWeight: '900', margin:0, color:'#FF9933' },
     statusBadge: { padding: '6px 12px', borderRadius: '8px', fontSize: '10px', fontWeight: '900' },
     itemsContainer: { padding: '20px', flex: 1 },
     itemRow: { display: 'flex', gap:'12px', marginBottom: '10px', alignItems:'center' },
     itemQuantity: { color: '#f97316', fontWeight: '900', fontSize:'18px' },
     itemName: { fontSize: '16px', fontWeight:'600' },
-    actionContainer: { padding: '20px', background:'rgba(0,0,0,0.2)' },
-    actionBtn: { width: '100%', border: 'none', padding: '18px', borderRadius: '15px', fontWeight: '900', fontSize: '14px', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px' },
+    actionContainer: { padding: '15px' },
+    actionBtn: { width: '100%', border: 'none', padding: '18px', borderRadius: '15px', fontWeight: '900', fontSize: '14px' },
     stockCard: { background: '#0a0a0a', padding: '12px 18px', borderRadius: '18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border:'1px solid #111' },
     stockBtn: { padding: '8px 15px', borderRadius: '10px', border: 'none', color: 'white', fontWeight: '900', fontSize: '10px' },
-    emptyState: { gridColumn: '1/-1', textAlign: 'center', padding: '100px 20px', color:'#333', fontWeight:'900' },
+    emptyState: { gridColumn: '1/-1', textAlign: 'center', padding: '100px 20px', color:'#444', fontWeight:'900' },
     alertWrapper: { position: 'fixed', top: '10px', left: '50%', transform: 'translateX(-50%)', zIndex: 1100, width: '95%', maxWidth:'400px' },
-    alertBanner: { background: '#ef4444', padding: '15px', borderRadius: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom:'8px', border: '1px solid rgba(255,255,255,0.2)' },
+    alertBanner: { padding: '15px', borderRadius: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom:'8px', border: '1px solid rgba(255,255,255,0.2)' },
     alertText: { fontWeight:'900', fontSize:'13px' },
-    attendBtn: { background: 'white', color: '#ef4444', border: 'none', borderRadius: '10px', padding:'8px 12px' }
+    attendBtn: { background: 'white', color: '#000', border: 'none', borderRadius: '10px', padding:'8px 12px' }
 };
 
 export default ChefDashboard;

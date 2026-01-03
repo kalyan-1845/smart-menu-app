@@ -31,7 +31,8 @@ app.use(compression());
 
 // --- 🔒 SECURITY: ALLOWED ORIGINS ---
 const allowedOrigins = [
-    "http://localhost:5173",           
+    "http://localhost:5173",
+     "http://localhost:3000",          
     "https://smartmenuss.netlify.app",
     "https://694915c413d9f40008f38924--smartmenuss.netlify.app"
 ];
