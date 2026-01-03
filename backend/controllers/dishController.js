@@ -23,11 +23,10 @@ export const getDishes = async (req, res) => {
             }).select('_id settings').lean();
         }
 
-        // Safety: If no owner found, return empty array (Don't crash)
+        // Safety: If no owner found, return 404 (Don't crash)
         if (!owner) return res.status(404).json({ message: "Restaurant not found" }); 
 
-        // 🛑 KILL SWITCH ENFORCEMENT (Crucial for God Mode)
-        // If Owner turned off menu, this sends 503. Frontend shows "Locked" screen.
+        // 🛑 KILL SWITCH ENFORCEMENT
         if (owner.settings && owner.settings.menuActive === false) {
             return res.status(503).json({ message: "❌ SERVICE SUSPENDED BY ADMIN" });
         }
@@ -58,12 +57,9 @@ export const addDishReview = async (req, res) => {
         const dish = await Dish.findById(dishId);
         if (!dish) return res.status(404).json({ message: "Dish not found" });
 
-        // Calculate new average
         const currentCount = dish.ratings?.count || 0;
         const currentAvg = dish.ratings?.average || 0;
         const newCount = currentCount + 1;
-        
-        // Math: ((Old Avg * Old Count) + New Rating) / New Count
         const newAverage = ((currentAvg * currentCount) + Number(rating)) / newCount;
 
         dish.ratings = { 
@@ -71,7 +67,6 @@ export const addDishReview = async (req, res) => {
             count: newCount 
         };
 
-        // Add review text
         dish.reviews.unshift({ 
             customerName: customerName || "Guest", 
             rating, 
@@ -79,13 +74,11 @@ export const addDishReview = async (req, res) => {
             createdAt: new Date() 
         });
         
-        // Keep DB light (Max 50 reviews stored)
         if (dish.reviews.length > 50) dish.reviews = dish.reviews.slice(0, 50);
 
         await dish.save();
         res.status(200).json({ success: true, average: dish.ratings.average });
     } catch (error) {
-        console.error("Review Error:", error);
         res.status(500).json({ message: "Rating failed" });
     }
 };
@@ -95,12 +88,10 @@ export const addDishReview = async (req, res) => {
 // ============================================================
 export const createDish = async (req, res) => {
     try {
-        // Links dish strictly to the logged-in owner
         const dishData = { ...req.body, restaurantId: req.user._id }; 
         const dish = await Dish.create(dishData);
         res.status(201).json(dish);
     } catch (error) {
-        console.error("Create Dish Error:", error);
         res.status(400).json({ message: "Creation failed" });
     }
 };
@@ -112,7 +103,7 @@ export const updateDish = async (req, res) => {
             req.body, 
             { new: true }
         );
-        if (!updated) return res.status(403).json({ message: "Unauthorized or Dish not found" });
+        if (!updated) return res.status(403).json({ message: "Unauthorized" });
         res.status(200).json(updated);
     } catch (error) {
         res.status(400).json({ message: "Update failed" });
@@ -125,7 +116,7 @@ export const deleteDish = async (req, res) => {
             _id: req.params.id, 
             restaurantId: req.user._id 
         });
-        if (!deleted) return res.status(403).json({ message: "Forbidden or Dish not found" });
+        if (!deleted) return res.status(403).json({ message: "Forbidden" });
         res.status(200).json({ message: "PURGED" });
     } catch (error) {
         res.status(400).json({ message: "Delete failed" });
