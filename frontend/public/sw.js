@@ -65,8 +65,13 @@ self.addEventListener('notificationclick', function(event) {
 });
 
 // 5. Fetch Event - Optimized to fix MIME type & Reference Errors
-
+// 5. Fetch Event - Industrial Strength Security
 self.addEventListener('fetch', (event) => {
+    // 🔴 NUCLEAR FAIL-SAFE: Service Workers CANNOT cache non-GET requests
+    if (event.request.method !== 'GET') {
+        return; // Let the network handle POST, PUT, DELETE directly
+    }
+
     const url = new URL(event.request.url);
 
     // ✅ BYPASS CACHE: Always get real-time data from server
@@ -74,14 +79,15 @@ self.addEventListener('fetch', (event) => {
         return; 
     }
 
-    // ✅ NETWORK-FIRST: Scripts and Styles
-    // This stops the "MIME type text/html" error by checking the server for the latest file hashes
+    // ✅ NETWORK-FIRST: Scripts and Styles (Fixes MIME Error)
     if (event.request.destination === 'script' || event.request.destination === 'style') {
         event.respondWith(
             fetch(event.request)
                 .then((response) => {
-                    const copy = response.clone();
-                    caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+                    if (response.ok) {
+                        const copy = response.clone();
+                        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+                    }
                     return response;
                 })
                 .catch(() => caches.match(event.request))
@@ -94,7 +100,7 @@ self.addEventListener('fetch', (event) => {
         caches.match(event.request).then((cachedResponse) => {
             if (cachedResponse) return cachedResponse;
             return fetch(event.request).then((response) => {
-                if (response.status === 200) {
+                if (response.ok) {
                     const copy = response.clone();
                     caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
                 }
