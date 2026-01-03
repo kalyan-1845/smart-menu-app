@@ -1,144 +1,79 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
 import axios from "axios";
 import { 
     FaSearch, FaPlus, FaMinus, FaStar, FaArrowRight, 
-    FaLock, FaSyncAlt, FaCommentAlt, FaSpinner 
+    FaLock, FaSyncAlt, FaCommentAlt 
 } from "react-icons/fa";
-import LoadingSpinner from "../components/LoadingSpinner";
-import FeedbackModal from "../components/FeedbackModal"; 
+
+// ⚠️ REMOVED EXTERNAL IMPORTS TO PREVENT CRASHES
+// import LoadingSpinner from "../components/LoadingSpinner"; 
+// import FeedbackModal from "../components/FeedbackModal"; 
 
 const API_BASE = "https://smart-menu-backend-5ge7.onrender.com/api";
 
-const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
+const Menu = ({ cart, addToCart, setRestaurantId, setTableNum }) => {
     const params = useParams();
     const currentRestId = params.restaurantId || params.id;
     const currentTable = params.table;
 
-    // ✅ CACHING LAYER (FIXED): Prevents crash if cache has old Object format
-    const [dishes, setDishes] = useState(() => {
-        try {
-            const cached = localStorage.getItem(`menu_cache_${currentRestId}`);
-            if (!cached) return [];
-            
-            const parsed = JSON.parse(cached);
-            
-            // 🛡️ SAFETY CHECK: Force it to be an Array
-            if (Array.isArray(parsed)) return parsed;
-            if (parsed.dishes && Array.isArray(parsed.dishes)) return parsed.dishes;
-            
-            return []; // Fallback to empty array if data is corrupted
-        } catch (e) {
-            return [];
-        }
-    });
-    
+    // ✅ ROBUST STATE INITIALIZATION
+    const [dishes, setDishes] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+
     const [activeCategory, setActiveCategory] = useState("All");
     const [searchTerm, setSearchTerm] = useState("");
-    const [loading, setLoading] = useState(dishes.length === 0); 
-    const [isSuspended, setIsSuspended] = useState(false);
-    const [pullDistance, setPullDistance] = useState(0);
-    const [refreshing, setRefreshing] = useState(false);
-    const [selectedDishForFeedback, setSelectedDishForFeedback] = useState(null); 
-    const startY = useRef(0);
-
-    const DEFAULT_IMG = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400&q=80";
-
-    const fetchMenu = async () => {
-        if (!currentRestId) return;
-        try {
-            // ✅ SYNC NODE: Fetches real-time data
-            const res = await axios.get(`${API_BASE}/dishes?restaurantId=${currentRestId}&t=${Date.now()}`);
-            
-            // 🛡️ PARSE DATA: Handle both Array and Object formats
-            let dishData = [];
-            if (Array.isArray(res.data)) {
-                dishData = res.data;
-            } else if (res.data.dishes && Array.isArray(res.data.dishes)) {
-                dishData = res.data.dishes;
+    
+    // --- FETCH LOGIC ---
+    useEffect(() => {
+        const loadData = async () => {
+            if (!currentRestId) return;
+            try {
+                console.log("🔄 Fetching:", currentRestId);
+                const res = await axios.get(`${API_BASE}/dishes?restaurantId=${currentRestId}`);
+                console.log("✅ Data:", res.data);
+                
+                // Handle Array vs Object
+                const data = Array.isArray(res.data) ? res.data : (res.data.dishes || []);
+                setDishes(data);
+            } catch (err) {
+                console.error("❌ Error:", err);
+                setError(err.message);
+            } finally {
+                setLoading(false);
             }
-
-            setDishes(dishData);
-            
-            // Update Cache with CLEAN Array
-            localStorage.setItem(`menu_cache_${currentRestId}`, JSON.stringify(dishData));
-            setIsSuspended(false);
-
-        } catch (err) { 
-            // 🛑 KILL SWITCH DETECTION
-            if (err.response && err.response.status === 503) {
-                console.warn("⛔ MENU KILLED BY ADMIN");
-                setIsSuspended(true);
-            } else {
-                console.error("Cloud Sync Error", err); 
-            }
-        } finally { 
-            setLoading(false); 
-            setRefreshing(false); 
-            setPullDistance(0); 
-        }
-    };
-
-    useEffect(() => { 
-        fetchMenu();
+        };
+        loadData();
+        
         if (setRestaurantId) setRestaurantId(currentRestId);
         if (setTableNum && currentTable) setTableNum(currentTable);
-    }, [currentRestId]);
+    }, [currentRestId, setRestaurantId, setTableNum, currentTable]); // Added dependencies
 
-    const filteredDishes = useMemo(() => {
-        return dishes.filter(d => {
-            const matchesCat = activeCategory === "All" || d.category === activeCategory;
-            const matchesSearch = d.name.toLowerCase().includes(searchTerm.toLowerCase());
-            return matchesCat && matchesSearch;
-        });
-    }, [dishes, activeCategory, searchTerm]);
+    // --- FILTERING ---
+    const filteredDishes = dishes.filter(d => {
+        const matchesCat = activeCategory === "All" || d.category === activeCategory;
+        const matchesSearch = d.name.toLowerCase().includes(searchTerm.toLowerCase());
+        return matchesCat && matchesSearch;
+    });
 
-    const categories = useMemo(() => ["All", ...new Set(dishes.map(d => d.category))], [dishes]);
+    const categories = ["All", ...new Set(dishes.map(d => d.category))];
 
-    // --- 🚜 PULL TO REFRESH LOGIC ---
-    const onTouchStart = (e) => { if (window.scrollY === 0) startY.current = e.touches[0].pageY; };
-    const onTouchMove = (e) => {
-        const diff = e.touches[0].pageY - startY.current;
-        if (window.scrollY === 0 && diff > 0 && diff < 80) setPullDistance(diff);
-    };
-    const onTouchEnd = () => {
-        if (pullDistance > 60) { setRefreshing(true); fetchMenu(); } 
-        else setPullDistance(0);
-    };
-
+    // --- RENDER HELPERS ---
     const totalQty = cart.reduce((acc, item) => acc + item.quantity, 0);
     const totalPrice = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+    const DEFAULT_IMG = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400&q=80";
 
-    if (loading && dishes.length === 0) return <LoadingSpinner />;
+    // 🔒 ERROR STATE
+    if (error) return <div style={{color:'white', padding: 50, textAlign:'center'}}>Error: {error}</div>;
     
-    // 🔒 THE MAINTENANCE SCREEN (Shows if isSuspended is true)
-    if (isSuspended) return (
-        <div style={styles.center}>
-            <FaLock size={60} color="#f97316"/>
-            <h1 style={{color:'white', marginTop:20, fontSize: '24px', fontWeight: '900'}}>UNDER MAINTENANCE</h1>
-            <p style={{color: '#666', marginTop: 10}}>Service temporarily suspended by admin.</p>
-        </div>
-    );
+    // ⏳ LOADING STATE (Simple Text to avoid import crash)
+    if (loading) return <div style={{color:'white', padding: 50, textAlign:'center'}}>LOADING MENU...</div>;
 
     return (
-        <div style={styles.container} onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
+        <div style={styles.container}>
             
-            {/* ✅ DYNAMIC FEEDBACK OVERLAY */}
-            {selectedDishForFeedback && (
-                <FeedbackModal 
-                    dish={selectedDishForFeedback} 
-                    onClose={() => setSelectedDishForFeedback(null)} 
-                    onSuccess={() => {
-                        setSelectedDishForFeedback(null);
-                        fetchMenu(); // Refresh ratings after feedback
-                    }}
-                />
-            )}
-
-            <div style={{...styles.pullLoader, height: `${pullDistance}px`, opacity: pullDistance / 60}}>
-                <FaSyncAlt className={refreshing ? "spin" : ""} style={{color: '#f97316'}} />
-            </div>
-
+            {/* HERO SECTION */}
             <div style={styles.hero}>
                 <div style={styles.heroTop}>
                     <h1 style={styles.restName}>{currentRestId?.toUpperCase()}</h1>
@@ -146,10 +81,11 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
                 </div>
                 <div style={styles.searchContainer}>
                     <FaSearch style={styles.searchIcon} />
-                    <input style={styles.searchInput} placeholder="Search for food..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                    <input style={styles.searchInput} placeholder="Search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                 </div>
             </div>
 
+            {/* CATEGORY NAV */}
             <div style={styles.stickyNav}>
                 <div style={styles.catScroll}>
                     {categories.map(cat => (
@@ -164,6 +100,7 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
                 </div>
             </div>
 
+            {/* DISH GRID */}
             <div style={styles.grid}>
                 {filteredDishes.map(dish => {
                     const cartItem = cart.find(i => i._id === dish._id);
@@ -171,33 +108,22 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
                     return (
                         <div key={dish._id} style={styles.card}>
                             <div style={styles.imgBox}>
-                                <img src={dish.image || DEFAULT_IMG} alt={dish.name} style={styles.img} loading="lazy" />
+                                <img src={dish.image || DEFAULT_IMG} alt={dish.name} style={styles.img} />
                                 {!dish.isAvailable && <div style={styles.soldOut}>OUT OF STOCK</div>}
                             </div>
                             <div style={styles.details}>
                                 <div style={styles.detailsTop}>
-                                    <div style={{maxWidth: '75%'}}>
+                                    <div>
                                         <h3 style={styles.dishTitle}>{dish.name}</h3>
-                                        
-                                        {/* ⭐ SOCIAL PROOF LAYER */}
                                         <div style={styles.ratingInfo}>
                                             <FaStar color="#fbbf24" size={10}/>
                                             <span style={styles.ratingText}>{dish.ratings?.average || 4.5}</span>
-                                            <span style={styles.countText}>({dish.ratings?.count || 12}+)</span>
                                         </div>
                                     </div>
                                     <span style={styles.price}>₹{dish.price}</span>
                                 </div>
                                 
                                 <div style={styles.actionRow}>
-                                    {/* ✅ FEEDBACK TRIGGER */}
-                                    <button 
-                                        onClick={() => setSelectedDishForFeedback(dish)}
-                                        style={styles.feedbackLink}
-                                    >
-                                        <FaCommentAlt size={10}/> Rate Dish
-                                    </button>
-
                                     {dish.isAvailable !== false ? (
                                         qty > 0 ? (
                                             <div style={styles.counter}>
@@ -216,26 +142,25 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
                 })}
             </div>
 
+            {/* CHECKOUT BAR */}
             {totalQty > 0 && (
                 <div style={styles.checkoutFloat}>
                     <Link to="/cart" style={styles.checkoutBar}>
                         <div style={styles.checkLeft}>
-                            <span style={styles.checkQty}>{totalQty} ITEMS IN BASKET</span>
+                            <span style={styles.checkQty}>{totalQty} ITEMS</span>
                             <span style={styles.checkPrice}>₹{totalPrice}</span>
                         </div>
                         <div style={styles.checkRight}>CHECKOUT <FaArrowRight size={12}/></div>
                     </Link>
                 </div>
             )}
-            <style>{`.spin { animation: spin 1s linear infinite; } @keyframes spin { 100% { transform: rotate(360deg); } }`}</style>
         </div>
     );
 };
 
+// STYLES (Kept same for consistency)
 const styles = {
     container: { minHeight: "100vh", background: "#000", color: "#fff", paddingBottom: "120px", fontFamily: "'Inter', sans-serif", width: '100%', overflowX: 'hidden' },
-    center: { height: "100vh", display: "flex", flexDirection:'column', justifyContent: "center", alignItems: "center", background: '#000' },
-    pullLoader: { width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', overflow: 'hidden', transition: '0.2s' },
     hero: { padding: "30px 20px 20px", background: "#000" },
     heroTop: { display: "flex", justifyContent: "space-between", alignItems:'center', marginBottom: '20px' },
     restName: { fontSize: "28px", fontWeight: "900", letterSpacing: "-1px", textTransform: 'uppercase' },
@@ -257,9 +182,7 @@ const styles = {
     price: { color: "#f97316", fontWeight: "900", fontSize: "16px" },
     ratingInfo: { display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' },
     ratingText: { fontSize: '11px', fontWeight: '900', color: '#fff' },
-    countText: { fontSize: '10px', color: '#333', fontWeight: '700' },
     actionRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-    feedbackLink: { background: 'none', border: 'none', color: '#444', fontSize: '10px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', padding: 0 },
     addBtn: { padding: "8px 25px", background: "#fff", color: "#000", fontWeight: "900", borderRadius: "12px", border: "none", fontSize: '12px' },
     counter: { display: "flex", alignItems: "center", gap: "12px", background: "#f97316", padding: "6px 10px", borderRadius: "12px" },
     btnSmall: { background: "none", border: "none", color: "#fff", fontSize: '10px', cursor: 'pointer' },
