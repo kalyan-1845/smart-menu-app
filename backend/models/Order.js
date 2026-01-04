@@ -7,14 +7,20 @@ const orderSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'Owner', 
     required: true, 
-    index: true // High-speed lookup for specific restaurant dashboards
+    index: true 
   },
   
-  // Table Number is mandatory for the Dine-In flow
+  // Table Number
   tableNum: { 
     type: String, 
     required: true,
-    index: true // Faster lookup for Waiter filtering
+    index: true 
+  },
+
+  // ✅ FIX 1: Added 'customerId' so we can track who ordered what
+  customerId: {
+    type: String,
+    required: false // Optional for now to prevent crashes
   },
   
   // List of food items ordered
@@ -23,7 +29,7 @@ const orderSchema = new mongoose.Schema({
         name: { type: String, required: true },
         quantity: { type: Number, required: true },
         price: { type: Number, required: true },
-        image: { type: String }, // RETAINED: Chef/Waiter can see what the dish looks like
+        image: { type: String }, 
         _id: { type: String } 
     }],
     validate: [v => v.length > 0, 'Order must contain at least one item']
@@ -34,12 +40,12 @@ const orderSchema = new mongoose.Schema({
     required: true 
   },
   
-  // High-Speed Status Flow
+  // ✅ FIX 2: Updated Enum to accept 'placed' (lowercase) to match the code
   status: { 
     type: String, 
-    enum: ['Pending', 'Cooking', 'Ready', 'Served', 'Paid', 'Cancelled'], 
-    default: 'Pending',
-    index: true // CRITICAL: Makes the "Live Orders" tab load instantly
+    enum: ['placed', 'Pending', 'Cooking', 'Ready', 'Served', 'Paid', 'Cancelled'], 
+    default: 'placed', // Set default to 'placed'
+    index: true 
   },
   
   customerName: { 
@@ -47,50 +53,41 @@ const orderSchema = new mongoose.Schema({
     default: "Guest" 
   },
 
-  // Tracks payment choice from Cart.jsx
   paymentMethod: {
     type: String,
-    enum: ['Online', 'Cash'],
+    enum: ['Online', 'Cash', 'CASH', 'ONLINE'], // Added caps just in case
     default: 'Cash'
   },
 
-  // For the Admin Inbox/Receipt feature
   isDownloaded: { 
     type: Boolean, 
     default: false 
   }
 
 }, { 
-  timestamps: true, // This automatically creates 'createdAt' and 'updatedAt'
-  toJSON: { virtuals: true }, // ✅ Added: Ensures virtuals are sent to frontend
-  toObject: { virtuals: true } // ✅ Added: Ensures virtuals work in console logs
+  timestamps: true, 
+  toJSON: { virtuals: true }, 
+  toObject: { virtuals: true } 
 });
 
 // ============================================================
 // 🚀 PRO SPEED & AUTO-CLEANUP OPTIMIZATIONS
 // ============================================================
 
-// 🔥 1. THE AUTO-DELETE ENGINE (TTL INDEX)
-// Automatically deletes orders 30 days after creation to keep the DB lean.
+// 1. AUTO-DELETE (TTL INDEX)
 orderSchema.index({ createdAt: 1 }, { expireAfterSeconds: 2592000 });
 
-// ⚡ 2. COMPOUND INDEX FOR ADMIN/CHEF DASHBOARD
-// This handles the "Show me all active orders for My Restaurant, newest first" query.
+// 2. COMPOUND INDEX
 orderSchema.index({ restaurantId: 1, status: 1, createdAt: -1 });
 
-// 🎯 3. INBOX SEARCH OPTIMIZATION
-// Specifically for the "Download PDF & Clear" feature.
+// 3. INBOX SEARCH OPTIMIZATION
 orderSchema.index({ restaurantId: 1, isDownloaded: 1 });
 
-// ✅ ADDED: HIGH-PERFORMANCE VIRTUALS
-// This makes the mobile app faster by pre-formatting the time on the server
+// VIRTUALS
 orderSchema.virtual('formattedTime').get(function() {
   if (!this.createdAt) return "";
   return this.createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 });
 
-/**
- * 2. Export the Model
- */
 const Order = mongoose.models.Order || mongoose.model('Order', orderSchema);
 export default Order;
