@@ -1,39 +1,50 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
 import axios from "axios";
-import { FaSearch, FaPlus, FaMinus, FaStar, FaUtensils, FaArrowRight, FaLock, FaSyncAlt, FaShoppingCart } from "react-icons/fa";
+import { FaSearch, FaPlus, FaMinus, FaShoppingCart, FaArrowRight, FaLock, FaSyncAlt } from "react-icons/fa";
 import LoadingSpinner from "../components/LoadingSpinner";
 
 const API_BASE = "https://smart-menu-backend-5ge7.onrender.com/api";
 
-const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
+// ✅ 1. ADD 'customerId' TO PROPS
+const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customerId }) => {
     const params = useParams();
     const currentRestId = params.restaurantId || params.id;
     const currentTable = params.table;
 
+    // ⚡️ OPTIMIZATION: Instant Load from Cache
     const [dishes, setDishes] = useState(() => {
-        const cached = localStorage.getItem(`menu_cache_${currentRestId}`);
-        return cached ? JSON.parse(cached) : [];
+        try {
+            const cached = localStorage.getItem(`menu_cache_${currentRestId}`);
+            return cached ? JSON.parse(cached) : [];
+        } catch (e) { return []; }
     });
-    const [filteredDishes, setFilteredDishes] = useState(dishes);
+
     const [activeCategory, setActiveCategory] = useState("All");
     const [searchTerm, setSearchTerm] = useState("");
     const [loading, setLoading] = useState(dishes.length === 0); 
     const [isSuspended, setIsSuspended] = useState(false);
-
+    
+    // Pull-to-refresh state
     const [pullDistance, setPullDistance] = useState(0);
     const [refreshing, setRefreshing] = useState(false);
     const startY = useRef(0);
 
     const DEFAULT_IMG = "https://placehold.co/400x300/222/orange?text=Yummy";
 
+    // ✅ FETCH LOGIC: Stale-While-Revalidate Strategy
     const fetchMenu = async (isManual = false) => {
         if (!currentRestId) return;
         try {
+            // Only show loader if we have NO data at all
+            if (dishes.length === 0) setLoading(true);
+
+            // 1. Get Real ID
             const idRes = await axios.get(`${API_BASE}/auth/owner-id/${currentRestId}`);
             const realMongoId = idRes.data.id;
 
             if (realMongoId) {
+                // 2. Fetch Menu
                 const res = await axios.get(`${API_BASE}/dishes?restaurantId=${realMongoId}&t=${Date.now()}`);
                 
                 if (res.data.status === "suspended") {
@@ -41,11 +52,12 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
                 } else {
                     const dishData = Array.isArray(res.data) ? res.data : (res.data.dishes || []);
                     setDishes(dishData);
+                    // ⚡️ Update Cache
                     localStorage.setItem(`menu_cache_${currentRestId}`, JSON.stringify(dishData));
                 }
             }
         } catch (err) {
-            console.error("Menu fetch failed:", err);
+            console.error("Fetch failed", err);
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -53,21 +65,16 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
         }
     };
 
+    // Initial Load & Background Sync
     useEffect(() => {
         if (!currentRestId) return;
-        fetchMenu(true); 
-        const stockInterval = setInterval(() => { fetchMenu(true); }, 15000);
+        fetchMenu(); // Load immediately
+        // Sync every 30 seconds instead of 15 to save server load
+        const stockInterval = setInterval(() => { fetchMenu(); }, 30000);
         return () => clearInterval(stockInterval);
     }, [currentRestId]);
 
-    useEffect(() => {
-        const handleVisibilityChange = () => {
-            if (document.visibilityState === "visible") fetchMenu(true);
-        };
-        document.addEventListener("visibilitychange", handleVisibilityChange);
-        return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
-    }, [currentRestId]);
-
+    // Handle Table & Restaurant Context
     useEffect(() => {
         const lastRest = localStorage.getItem("last_rest_scanned");
         if (lastRest !== currentRestId) {
@@ -81,21 +88,31 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
         if (setRestaurantId) setRestaurantId(currentRestId);
     }, [currentRestId, currentTable, setRestaurantId, setTableNum, setCart]);
 
+    // ⚡️ OPTIMIZATION: Memoized Filtering (Prevents lag when typing)
+    const filteredDishes = useMemo(() => {
+        let result = dishes;
+        if (activeCategory !== "All") {
+            result = result.filter(d => d.category === activeCategory);
+        }
+        if (searchTerm) {
+            const lowerTerm = searchTerm.toLowerCase();
+            result = result.filter(d => d.name.toLowerCase().includes(lowerTerm));
+        }
+        return result;
+    }, [dishes, activeCategory, searchTerm]);
+
+    // ⚡️ OPTIMIZATION: Memoized Categories & Totals
+    const categories = useMemo(() => ["All", ...new Set(dishes.map(d => d.category))], [dishes]);
+    const totalQty = useMemo(() => cart.reduce((acc, item) => acc + item.quantity, 0), [cart]);
+    const totalPrice = useMemo(() => cart.reduce((acc, item) => acc + (item.price * item.quantity), 0), [cart]);
+
+    // ✅ UNIQUE CART URL
+    const cartLink = `/${currentRestId}/cart/${customerId}`;
+
     const handleAction = (dish, val = 1) => {
         if ("vibrate" in navigator) navigator.vibrate(40);
         addToCart(val === -1 ? {...dish, quantity: -1} : dish);
     };
-
-    useEffect(() => {
-        let result = dishes;
-        if (activeCategory !== "All") result = result.filter(d => d.category === activeCategory);
-        if (searchTerm) result = result.filter(d => d.name.toLowerCase().includes(searchTerm.toLowerCase()));
-        setFilteredDishes(result);
-    }, [searchTerm, activeCategory, dishes]);
-
-    const totalQty = cart.reduce((acc, item) => acc + item.quantity, 0);
-    const totalPrice = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
-    const categories = ["All", ...new Set(dishes.map(d => d.category))];
 
     if (loading && dishes.length === 0) return <LoadingSpinner />;
 
@@ -118,28 +135,36 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
                 else setPullDistance(0);
              }}>
             
+            {/* Pull Refresh Indicator */}
             <div style={{...styles.pullLoader, height: `${pullDistance}px`, opacity: pullDistance / 60}}>
                 <FaSyncAlt className={refreshing ? "spin" : ""} style={{color: '#f97316'}} />
             </div>
 
+            {/* Header Section */}
             <div style={styles.hero}>
                 <div style={styles.heroContent}>
                     <div>
                         <h1 style={styles.restName}>{currentRestId?.toUpperCase()}</h1>
                         <p style={styles.restSub}>{currentTable ? `Table No: ${currentTable}` : "Digital Menu"}</p>
                     </div>
-                    {/* ✅ New: Persistent Header Cart Link for easy access */}
-                    <Link to="/cart" style={styles.headerCart}>
+                    {/* Header Cart Link */}
+                    <Link to={cartLink} style={styles.headerCart}>
                         <FaShoppingCart size={20} />
                         {totalQty > 0 && <span style={styles.headerBadge}>{totalQty}</span>}
                     </Link>
                 </div>
                 <div style={styles.searchContainer}>
                     <FaSearch style={styles.searchIcon} />
-                    <input style={styles.searchInput} placeholder="Search delicious food..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                    <input 
+                        style={styles.searchInput} 
+                        placeholder="Search food..." 
+                        value={searchTerm} 
+                        onChange={(e) => setSearchTerm(e.target.value)} 
+                    />
                 </div>
             </div>
 
+            {/* Category Filter */}
             <div style={styles.stickyNav}>
                 <div style={styles.catScroll}>
                     {categories.map(cat => (
@@ -156,6 +181,7 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
                 </div>
             </div>
 
+            {/* Dish Grid */}
             <div style={styles.grid}>
                 {filteredDishes.map(dish => {
                     const itemInCart = cart.find(i => i._id === dish._id);
@@ -165,7 +191,14 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
                     return (
                         <div key={dish._id} style={{...styles.card, opacity: isAvailable ? 1 : 0.7}}>
                             <div style={styles.imgWrapper}>
-                                <img src={dish.image || DEFAULT_IMG} alt={dish.name} style={styles.img} loading="lazy" />
+                                {/* ⚡️ OPTIMIZATION: Lazy Loading Images */}
+                                <img 
+                                    src={dish.image || DEFAULT_IMG} 
+                                    alt={dish.name} 
+                                    style={styles.img} 
+                                    loading="lazy" 
+                                    decoding="async"
+                                />
                                 {!isAvailable && <div style={styles.soldOut}>OUT OF STOCK</div>}
                             </div>
                             <div style={styles.info}>
@@ -196,10 +229,10 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
                 })}
             </div>
 
-            {/* ✅ ALWAYS VISIBLE BOTTOM BAR (When cart has items) */}
+            {/* Bottom Float Cart */}
             {totalQty > 0 && (
                 <div style={styles.floatBarContainer} className="slide-up">
-                    <Link to="/cart" style={styles.floatBar}>
+                    <Link to={cartLink} style={styles.floatBar}>
                         <div style={styles.floatInfo}>
                             <span style={styles.floatQty}>{totalQty} ITEMS</span>
                             <span style={styles.floatPrice}>₹{totalPrice}</span>
@@ -215,12 +248,13 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
                 .slide-up { animation: slideUp 0.3s ease-out; }
                 @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
                 ::-webkit-scrollbar { display: none; }
-                * { -webkit-tap-highlight-color: transparent; }
+                * { -webkit-tap-highlight-color: transparent; user-select: none; }
             `}</style>
         </div>
     );
 };
 
+// ... Styles object remains exactly the same as before ...
 const styles = {
     container: { minHeight: "100vh", background: "#050505", color: "white", paddingBottom: "120px", fontFamily: "'Inter', sans-serif" },
     center: { display:'flex', height:'100vh', alignItems:'center', justifyContent:'center', flexDirection:'column' },
