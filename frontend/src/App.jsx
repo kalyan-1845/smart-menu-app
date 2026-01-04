@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import axios from "axios";
 
@@ -40,7 +40,7 @@ const GlobalStyles = () => (
     #root { width: 100%; margin: 0 auto; text-align: center; }
     .page-transition { animation: slideUp 0.4s ease-out forwards; }
     @keyframes slideUp { from { transform: translateY(10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-    * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
+    * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; outline: none; }
   `}</style>
 );
 
@@ -50,34 +50,48 @@ function App() {
   const [tableNum, setTableNum] = useState(localStorage.getItem("last_table_scanned") || "");
   const [isMaintenance, setIsMaintenance] = useState(false);
 
-  // ✅ 1. SYSTEM MAINTENANCE CHECK
+  // ✅ 1. SESSION TIMEOUT ENGINE (2 HOURS)
+  useEffect(() => {
+    const SESSION_DURATION = 2 * 60 * 60 * 1000; // 2 Hours in milliseconds
+    const lastActive = localStorage.getItem("smartMenu_LastActive");
+    const now = Date.now();
+
+    if (lastActive && now - parseInt(lastActive) > SESSION_DURATION) {
+      // Session Expired - Wipe data
+      setCart([]);
+      localStorage.removeItem("smartMenu_Cart");
+      localStorage.removeItem("last_table_scanned");
+      console.log("🧹 Session expired: Cart cleared automatically.");
+    }
+    // Update activity timestamp
+    localStorage.setItem("smartMenu_LastActive", now.toString());
+  }, []);
+
+  // ✅ 2. SYSTEM MAINTENANCE CHECK
   useEffect(() => {
     const checkSystemStatus = async () => {
       try {
         const res = await axios.get(`${API_BASE}/superadmin/maintenance-status?t=${Date.now()}`);
         if (res.data.enabled) setIsMaintenance(true);
-      } catch (e) { console.error("Maintenance check silent fail"); }
+      } catch (e) { /* Silent */ }
     };
     checkSystemStatus();
-    const interval = setInterval(checkSystemStatus, 60000); 
+    const interval = setInterval(checkSystemStatus, 300000); 
     return () => clearInterval(interval);
   }, []);
 
-  // ✅ 2. SMART DATA PERSISTENCE
+  // ✅ 3. PERSISTENCE ENGINE (Updates activity whenever cart changes)
   useEffect(() => { 
-    localStorage.setItem("smartMenu_Cart", JSON.stringify(cart)); 
+    localStorage.setItem("smartMenu_Cart", JSON.stringify(cart));
+    localStorage.setItem("smartMenu_LastActive", Date.now().toString()); // Update timestamp
   }, [cart]);
 
-  // ✅ 3. CART ACTIONS (With Haptics)
   const addToCart = (dish) => {
     if ("vibrate" in navigator) navigator.vibrate(40);
     setCart((prev) => {
       const exists = prev.find((item) => item._id === dish._id);
       if (exists) {
-        return prev.map((i) => i._id === dish._id 
-          ? { ...i, quantity: i.quantity + (dish.quantity || 1) } 
-          : i
-        );
+        return prev.map((i) => i._id === dish._id ? { ...i, quantity: i.quantity + (dish.quantity || 1) } : i );
       }
       return [...prev, { ...dish, quantity: dish.quantity || 1 }];
     });
@@ -94,14 +108,12 @@ function App() {
   const handleSetRestaurantId = (id) => {
     const previousId = localStorage.getItem("smartMenu_RestaurantId");
     if (previousId && previousId !== id) {
-      // Scanned a different restaurant - reset cart to prevent wrong orders
       setCart([]);
     }
     setRestaurantId(id);
     localStorage.setItem("smartMenu_RestaurantId", id);
   };
 
-  // ✅ MAINTENANCE REDIRECT
   if (isMaintenance && !window.location.pathname.startsWith('/superadmin') && !window.location.pathname.startsWith('/super-login')) {
       return <Maintenance />;
   }
@@ -111,13 +123,11 @@ function App() {
       <GlobalStyles />
       <ScrollToTop />
       <Routes>
-        {/* --- PUBLIC --- */}
         <Route path="/" element={<LandingPage />} /> 
         <Route path="/login" element={<OwnerLogin />} />
         <Route path="/register" element={<Register />} />
         <Route path="/terms" element={<Terms />} />
           
-        {/* --- CUSTOMER FLOW --- */}
         <Route path="/menu/:restaurantId" element={
             <div className="page-transition">
               <Menu cart={cart} addToCart={addToCart} setRestaurantId={handleSetRestaurantId} setTableNum={setTableNum} setCart={setCart} />
@@ -134,19 +144,15 @@ function App() {
               <Cart cart={cart} removeFromCart={(id) => updateQuantity(id, 0)} clearCart={() => setCart([])} updateQuantity={updateQuantity} restaurantId={restaurantId} tableNum={tableNum} setTableNum={setTableNum} />
             </div>
         } />
+        
         <Route path="/track/:id" element={<div className="page-transition"><OrderTracker /></div>} />
-
-        {/* --- 🔐 SUPER ADMIN --- */}
         <Route path="/super-login" element={<SuperLogin />} />
         <Route path="/superadmin" element={<ProtectedSuperAdmin><SuperAdmin /></ProtectedSuperAdmin>} />
         
-        {/* --- STAFF PANELS --- */}
         <Route path="/:id/admin" element={<RestaurantAdmin />} />
         <Route path="/:id/chef" element={<ChefDashboard />} />
         <Route path="/:id/kitchen" element={<ChefDashboard />} />
         <Route path="/:id/waiter" element={<WaiterDashboard />} />
-
-        {/* --- 404 --- */}
         <Route path="*" element={<NotFound />} />
       </Routes>
     </Router>

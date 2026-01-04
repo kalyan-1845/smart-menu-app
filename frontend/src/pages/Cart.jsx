@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import io from "socket.io-client"; 
-import { FaArrowLeft, FaTrash, FaMobileAlt, FaMoneyBillWave, FaCheckCircle, FaBell, FaUtensils, FaChair } from "react-icons/fa";
+import { FaArrowLeft, FaTrash, FaCheckCircle, FaBell, FaUtensils, FaChair } from "react-icons/fa";
 import { toast } from "react-hot-toast";
 
 const SERVER_URL = "https://smart-menu-backend-5ge7.onrender.com";
@@ -15,14 +15,16 @@ const Cart = ({ cart, clearCart, removeFromCart, restaurantId, tableNum, setTabl
     const [tempTable, setTempTable] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [orderSuccess, setOrderSuccess] = useState(false); 
-    const [paymentChosen, setPaymentChosen] = useState(""); // Track for success message
+    const [paymentChosen, setPaymentChosen] = useState(""); 
     const [callLoading, setCallLoading] = useState(false);
     const socketRef = useRef(null); 
 
+    // ✅ SESSION RECOVERY: Ensures unique cart/table per customer
     const finalRestaurantId = restaurantId || localStorage.getItem("last_rest_scanned");
     const finalTableNum = tableNum || localStorage.getItem("last_table_scanned");
     const totalPrice = cart.reduce((total, item) => total + (item.price * (item.quantity || 1)), 0);
 
+    // ✅ SOCKET ENGINE: High-speed real-time connection
     useEffect(() => {
         if (finalRestaurantId) {
             socketRef.current = io(SERVER_URL, { 
@@ -67,7 +69,7 @@ const Cart = ({ cart, clearCart, removeFromCart, restaurantId, tableNum, setTabl
         }
     };
 
-    // ✅ UPDATED: Unified Order Processing
+    // ✅ ATOMIC ORDERING: Works same for Cash and Online
     const processOrder = async (paymentType) => {
         if (isSubmitting) return;
         if (!customerName.trim()) return toast.error("Please enter your name!");
@@ -79,6 +81,15 @@ const Cart = ({ cart, clearCart, removeFromCart, restaurantId, tableNum, setTabl
         setPaymentChosen(paymentType);
 
         try {
+            // 🎯 CRITICAL STEP: Convert Username to REAL MongoDB ID
+            let mongoId = finalRestaurantId;
+            if (finalRestaurantId && finalRestaurantId.length !== 24) {
+                const idRes = await axios.get(`${API_BASE}/auth/owner-id/${finalRestaurantId}`);
+                mongoId = idRes.data.id;
+            }
+
+            if (!mongoId) throw new Error("Invalid Restaurant ID");
+
             const payload = {
                 customerName,
                 tableNum: finalTableNum.toString(),
@@ -90,23 +101,29 @@ const Cart = ({ cart, clearCart, removeFromCart, restaurantId, tableNum, setTabl
                 })),
                 totalAmount: totalPrice,
                 paymentMethod: paymentType,
-                restaurantId: finalRestaurantId,
+                restaurantId: mongoId, 
                 status: "placed"
             };
 
+            // 🎯 Submit Order to Database
             const res = await axios.post(`${API_BASE}/orders?t=${Date.now()}`, payload);
-            socketRef.current.emit("new-order", res.data);
+            
+            // 🎯 Alert the specific Kitchen Dashboard via Socket
+            if (socketRef.current) {
+                socketRef.current.emit("new-order", res.data);
+            }
 
+            // 🎯 SHOW SUCCESS UI
             setOrderSuccess(true);
             
             setTimeout(() => {
-                clearCart();
-                // Redirect to track page
-                navigate(`/track/${res.data._id}`); 
-            }, 2500); // Slightly longer to let them read the "Pay at Counter" note
+                clearCart(); // Wipes local cart unique to this customer
+                navigate(`/track/${res.data._id}`); // Sends to unique tracking page
+            }, 2500); 
 
         } catch (err) {
-            toast.error("Order failed.");
+            console.error("Order processing error:", err);
+            toast.error("Order failed. Use correct restaurant link.");
             setIsSubmitting(false);
         }
     };
@@ -118,26 +135,26 @@ const Cart = ({ cart, clearCart, removeFromCart, restaurantId, tableNum, setTabl
                 <div style={styles.overlay}>
                     <div style={styles.tableCard} className="pop-in">
                         <FaChair size={40} color="#f97316" style={{marginBottom: 15}}/>
-                        <h2 style={{margin: '0 0 10px 0', fontSize: '20px'}}>Table Identification</h2>
+                        <h2 style={{margin: '0 0 10px 0', fontSize: '20px'}}>Identify Table</h2>
                         <form onSubmit={handleTableSubmit}>
-                            <input style={styles.tableInput} type="number" placeholder="Table Number" value={tempTable} onChange={(e) => setTempTable(e.target.value)} autoFocus required />
-                            <button type="submit" style={styles.confirmBtn}>Confirm Table</button>
+                            <input style={styles.tableInput} type="number" placeholder="Enter Table #" value={tempTable} onChange={(e) => setTempTable(e.target.value)} autoFocus required />
+                            <button type="submit" style={styles.confirmBtn}>Confirm & Continue</button>
                         </form>
                     </div>
                 </div>
             )}
 
-            {/* ✅ UPDATED: SUCCESS SCREEN WITH COUNTER INSTRUCTION */}
+            {/* SUCCESS MODAL */}
             {orderSuccess && (
                 <div style={styles.overlay}>
                     <div style={styles.successCard} className="pop-in">
                         <FaCheckCircle size={80} color="#22c55e" className="checkmark-anim" />
                         <h2 style={styles.successTitle}>Order Sent!</h2>
                         <p style={styles.counterNote}>
-                            Selected: <strong>{paymentChosen}</strong><br/>
-                            Please pay at the counter/cashier.
+                            Payment Mode: <strong>{paymentChosen}</strong><br/>
+                            Kindly pay at the cash counter.
                         </p>
-                        <p style={styles.successSub}>Redirecting to status tracker...</p>
+                        <p style={styles.successSub}>Opening live tracker...</p>
                         <div style={styles.loaderLine}></div>
                     </div>
                 </div>
@@ -155,17 +172,17 @@ const Cart = ({ cart, clearCart, removeFromCart, restaurantId, tableNum, setTabl
 
             <div style={styles.infoCard}>
                 <div onClick={() => setShowTableModal(true)} style={styles.infoRow}>
-                    <p style={{margin: 0, fontSize: '14px'}}>Table: <span style={{color: '#f97316', fontWeight: '900'}}>{finalTableNum || "Select"}</span></p>
+                    <p style={{margin: 0, fontSize: '14px'}}>Table: <span style={{color: '#f97316', fontWeight: '900'}}>{finalTableNum || "Tap to Set"}</span></p>
                     <button style={styles.changeBtn}>Edit</button>
                 </div>
-                <input style={styles.input} placeholder="Your Name" value={customerName} onChange={e => setCustomerName(e.target.value)} />
+                <input style={styles.input} placeholder="Enter Your Name" value={customerName} onChange={e => setCustomerName(e.target.value)} />
             </div>
 
             <div style={styles.list}>
                 {cart.length === 0 ? (
                     <div style={{textAlign: 'center', marginTop: '60px', opacity: 0.3}}>
                         <FaUtensils size={40} style={{marginBottom: '10px'}}/>
-                        <p>Cart is empty</p>
+                        <p>No food selected</p>
                     </div>
                 ) : (
                     cart.map(item => (
@@ -173,7 +190,7 @@ const Cart = ({ cart, clearCart, removeFromCart, restaurantId, tableNum, setTabl
                             <div style={{flex: 1}}>
                                 <p style={{margin: 0, fontWeight: '700', fontSize: '15px'}}>{item.name}</p>
                                 <p style={{margin: 0, color: '#f97316', fontSize: '14px', fontWeight: '900'}}>
-                                    ₹{item.price * item.quantity} <span style={{color: '#555', fontSize: '11px', fontWeight: '400'}}>({item.quantity}x)</span>
+                                    ₹{item.price * item.quantity} <span style={{color: '#555', fontSize: '11px'}}>(x{item.quantity})</span>
                                 </p>
                             </div>
                             <button onClick={() => removeFromCart(item._id)} style={styles.delBtn}><FaTrash /></button>
@@ -184,10 +201,9 @@ const Cart = ({ cart, clearCart, removeFromCart, restaurantId, tableNum, setTabl
 
             <div style={styles.footer}>
                 <div style={styles.totalRow}>
-                    <span>Total Amount</span>
+                    <span>Amount Payable</span>
                     <span style={{color: '#f97316'}}>₹{totalPrice}</span>
                 </div>
-                {/* BOTH BUTTONS PROCESS THE ORDER LOCALLY */}
                 <div style={styles.btnRow}>
                     <button onClick={() => processOrder("CASH")} disabled={isSubmitting} style={styles.cashBtn}>Pay Cash</button>
                     <button onClick={() => processOrder("ONLINE")} disabled={isSubmitting} style={styles.onlineBtn}>Pay Online</button>
@@ -200,7 +216,8 @@ const Cart = ({ cart, clearCart, removeFromCart, restaurantId, tableNum, setTabl
                 @keyframes checkBounce { 0% { transform: scale(0); } 50% { transform: scale(1.2); } 100% { transform: scale(1); } }
                 .pop-in { animation: scaleUp 0.3s ease-out; }
                 .checkmark-anim { animation: checkBounce 0.5s ease-out forwards; }
-                .loaderLine { height: 3px; background: #22c55e; width: 100%; margin: 20px auto 0; border-radius: 10px; animation: loadingBar 2.5s linear forwards; }
+                .loaderLine { height: 3px; background: #22c55e; width: 100%; margin: 20px auto 0; border-radius: 10px; animation: loadingBar 1.5s linear forwards; }
+                * { -webkit-tap-highlight-color: transparent; outline: none; }
             `}</style>
         </div>
     );
@@ -210,7 +227,7 @@ const styles = {
     container: { minHeight: '100vh', background: '#050505', color: 'white', padding: '15px', paddingBottom: '160px', fontFamily: 'Inter, sans-serif' },
     overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.95)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(12px)' },
     tableCard: { background: '#111', padding: '30px', borderRadius: '24px', textAlign: 'center', border: '1px solid #333', width: '85%', maxWidth: '320px' },
-    tableInput: { width: '100%', padding: '15px', background: '#000', border: '1px solid #f97316', borderRadius: '12px', color: 'white', fontSize: '20px', textAlign: 'center', marginBottom: '15px', outline: 'none' },
+    tableInput: { width: '100%', padding: '15px', background: '#000', border: '1px solid #f97316', borderRadius: '12px', color: 'white', fontSize: '20px', textAlign: 'center', marginBottom: '15px' },
     confirmBtn: { width: '100%', padding: '15px', background: '#f97316', color: 'white', border: 'none', borderRadius: '12px', fontWeight: 'bold' },
     successCard: { background: '#111', padding: '40px 30px', borderRadius: '32px', textAlign: 'center', border: '1px solid #22c55e', width: '85%', maxWidth: '320px' },
     successTitle: { fontSize: '24px', fontWeight: '900', margin: '15px 0 5px' },
@@ -223,7 +240,7 @@ const styles = {
     infoCard: { background: '#111', padding: '15px', borderRadius: '20px', marginBottom: '20px', border: '1px solid #222' },
     infoRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' },
     changeBtn: { background: 'rgba(249, 115, 22, 0.1)', border: 'none', color: '#f97316', borderRadius: '8px', padding: '4px 10px', fontSize: '11px', fontWeight: 'bold' },
-    input: { width: '100%', padding: '14px', background: '#000', border: '1px solid #333', borderRadius: '12px', color: 'white', fontSize: '16px', boxSizing: 'border-box', outline: 'none' },
+    input: { width: '100%', padding: '14px', background: '#000', border: '1px solid #333', borderRadius: '12px', color: 'white', fontSize: '16px', boxSizing: 'border-box' },
     list: { display: 'flex', flexDirection: 'column', gap: '10px' },
     item: { background: '#0a0a0a', padding: '15px', borderRadius: '18px', display: 'flex', alignItems: 'center', border: '1px solid #111' },
     delBtn: { background: 'rgba(239, 68, 68, 0.1)', border: 'none', color: '#ef4444', padding: '10px', borderRadius: '10px' },
@@ -231,7 +248,7 @@ const styles = {
     totalRow: { display: 'flex', justifyContent: 'space-between', marginBottom: '20px', fontSize: '18px', fontWeight: '900' },
     btnRow: { display: 'flex', gap: '10px' },
     onlineBtn: { flex: 1, height: '55px', background: '#111', color: 'white', border: '1px solid #333', borderRadius: '15px', fontWeight: 'bold' },
-    cashBtn: { flex: 1, height: '55px', background: '#f97316', color: 'white', border: 'none', borderRadius: '15px', fontWeight: '900' }
+    cashBtn: { flex: 1.5, height: '55px', background: '#f97316', color: 'white', border: 'none', borderRadius: '15px', fontWeight: '900' }
 };
 
 export default Cart;

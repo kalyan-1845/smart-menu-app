@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import axios from "axios";
-import { FaSearch, FaPlus, FaMinus, FaStar, FaUtensils, FaArrowRight, FaLock, FaSyncAlt } from "react-icons/fa";
+import { FaSearch, FaPlus, FaMinus, FaStar, FaUtensils, FaArrowRight, FaLock, FaSyncAlt, FaShoppingCart } from "react-icons/fa";
 import LoadingSpinner from "../components/LoadingSpinner";
 
 const API_BASE = "https://smart-menu-backend-5ge7.onrender.com/api";
 
 const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
     const params = useParams();
-    const currentRestId = params.restaurantId || params.id; // This is the username (e.g., kalyanresto1)
+    const currentRestId = params.restaurantId || params.id;
     const currentTable = params.table;
 
     const [dishes, setDishes] = useState(() => {
@@ -27,16 +27,13 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
 
     const DEFAULT_IMG = "https://placehold.co/400x300/222/orange?text=Yummy";
 
-    // ✅ FIXED FETCH ENGINE: Translates Username to MongoDB ID
     const fetchMenu = async (isManual = false) => {
         if (!currentRestId) return;
         try {
-            // 1. First, find the real 24-character ID from the username
             const idRes = await axios.get(`${API_BASE}/auth/owner-id/${currentRestId}`);
             const realMongoId = idRes.data.id;
 
             if (realMongoId) {
-                // 2. Now fetch dishes using that REAL ID and a timestamp to prevent cache
                 const res = await axios.get(`${API_BASE}/dishes?restaurantId=${realMongoId}&t=${Date.now()}`);
                 
                 if (res.data.status === "suspended") {
@@ -56,7 +53,6 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
         }
     };
 
-    // ✅ HEARTBEAT SYNC: Updates availability every 15s
     useEffect(() => {
         if (!currentRestId) return;
         fetchMenu(true); 
@@ -64,7 +60,6 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
         return () => clearInterval(stockInterval);
     }, [currentRestId]);
 
-    // ✅ AUTO-REFRESH ON APP RE-ENTRY
     useEffect(() => {
         const handleVisibilityChange = () => {
             if (document.visibilityState === "visible") fetchMenu(true);
@@ -73,7 +68,6 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
         return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
     }, [currentRestId]);
 
-    // ✅ SMART TABLE & SHOP SYNC
     useEffect(() => {
         const lastRest = localStorage.getItem("last_rest_scanned");
         if (lastRest !== currentRestId) {
@@ -85,7 +79,7 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
             if (setTableNum) setTableNum(currentTable);
         }
         if (setRestaurantId) setRestaurantId(currentRestId);
-    }, [currentRestId, currentTable]);
+    }, [currentRestId, currentTable, setRestaurantId, setTableNum, setCart]);
 
     const handleAction = (dish, val = 1) => {
         if ("vibrate" in navigator) navigator.vibrate(40);
@@ -134,7 +128,11 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
                         <h1 style={styles.restName}>{currentRestId?.toUpperCase()}</h1>
                         <p style={styles.restSub}>{currentTable ? `Table No: ${currentTable}` : "Digital Menu"}</p>
                     </div>
-                    <div style={styles.ratingBadge}><FaStar color="#fbbf24"/> 4.8</div>
+                    {/* ✅ New: Persistent Header Cart Link for easy access */}
+                    <Link to="/cart" style={styles.headerCart}>
+                        <FaShoppingCart size={20} />
+                        {totalQty > 0 && <span style={styles.headerBadge}>{totalQty}</span>}
+                    </Link>
                 </div>
                 <div style={styles.searchContainer}>
                     <FaSearch style={styles.searchIcon} />
@@ -198,11 +196,12 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
                 })}
             </div>
 
+            {/* ✅ ALWAYS VISIBLE BOTTOM BAR (When cart has items) */}
             {totalQty > 0 && (
-                <div style={styles.floatBarContainer}>
+                <div style={styles.floatBarContainer} className="slide-up">
                     <Link to="/cart" style={styles.floatBar}>
                         <div style={styles.floatInfo}>
-                            <span style={styles.floatQty}>{totalQty} ITEMS SELECTED</span>
+                            <span style={styles.floatQty}>{totalQty} ITEMS</span>
                             <span style={styles.floatPrice}>₹{totalPrice}</span>
                         </div>
                         <div style={styles.viewCart}>View Cart <FaArrowRight style={{marginLeft:8}}/></div>
@@ -213,6 +212,8 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
             <style>{`
                 .spin { animation: spin 1s linear infinite; }
                 @keyframes spin { 100% { transform: rotate(360deg); } }
+                .slide-up { animation: slideUp 0.3s ease-out; }
+                @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
                 ::-webkit-scrollbar { display: none; }
                 * { -webkit-tap-highlight-color: transparent; }
             `}</style>
@@ -222,12 +223,14 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart }) => {
 
 const styles = {
     container: { minHeight: "100vh", background: "#050505", color: "white", paddingBottom: "120px", fontFamily: "'Inter', sans-serif" },
+    center: { display:'flex', height:'100vh', alignItems:'center', justifyContent:'center', flexDirection:'column' },
     pullLoader: { width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', overflow: 'hidden', transition: '0.2s' },
     hero: { padding: "25px 20px", background: "linear-gradient(180deg, #0f0f0f 0%, #050505 100%)" },
     heroContent: { display: "flex", justifyContent: "space-between", alignItems: 'center' },
     restName: { fontSize: "28px", fontWeight: "900", margin: 0, letterSpacing: "-1px" },
     restSub: { fontSize: "13px", color: "#f97316", fontWeight: "700" },
-    ratingBadge: { background: "#111", padding: "6px 12px", borderRadius: "12px", fontSize: "12px", border: "1px solid #222", fontWeight: "800" },
+    headerCart: { position: 'relative', background: '#111', padding: '12px', borderRadius: '15px', border: '1px solid #222', color: '#f97316', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+    headerBadge: { position: 'absolute', top: '-5px', right: '-5px', background: '#22c55e', color: 'white', fontSize: '10px', padding: '2px 6px', borderRadius: '10px', fontWeight: '900' },
     searchContainer: { position: "relative", marginTop: 20 },
     searchIcon: { position: "absolute", left: "15px", top: "14px", color: "#555" },
     searchInput: { width: "100%", padding: "14px 15px 14px 45px", borderRadius: "16px", background: "#0a0a0a", border: "1px solid #111", color: "white", fontSize: "15px", outline: "none" },
