@@ -204,8 +204,8 @@ const Cart = ({ cart, customerId, clearCart, removeFromCart, tableNum, setTableN
             <div style={styles.footer}>
                 <div style={styles.totalRow}><span>Total</span><span>₹{totalPrice}</span></div>
                 <div style={styles.btnRow}>
-                    <button onClick={() => processOrder("CASH")} disabled={isSubmitting} style={styles.cashBtn}>Pay Cash</button>
-                    <button onClick={() => processOrder("ONLINE")} disabled={isSubmitting} style={styles.onlineBtn}>Pay Online</button>
+                    <button onClick={() => processOrder("Cash")} disabled={isSubmitting} style={styles.cashBtn}>Pay Cash</button>
+                    <button onClick={() => processOrder("Online")} disabled={isSubmitting} style={styles.onlineBtn}>Pay Online</button>
                 </div>
             </div>
             <style>{`.pop-in { animation: pop 0.3s; } @keyframes pop { from {transform:scale(0.8)} to {transform:scale(1)} } .checkmark-anim { animation: checkBounce 0.5s ease-out forwards; } @keyframes checkBounce { 0% { transform: scale(0); } 50% { transform: scale(1.2); } 100% { transform: scale(1); } } .loaderLine { height: 3px; background: #22c55e; width: 100%; margin: 20px auto 0; border-radius: 10px; animation: loadingBar 2.5s linear forwards; } @keyframes loadingBar { from { width: 0%; } to { width: 100%; } }`}</style>
