@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useNavigate, useParams } from "react-router-dom"; // 🎯 Added useParams
+import { useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
 import io from "socket.io-client"; 
 import { FaArrowLeft, FaTrash, FaCheckCircle, FaBell, FaChair, FaUtensils } from "react-icons/fa";
@@ -8,10 +8,8 @@ import { toast } from "react-hot-toast";
 const SERVER_URL = "https://smart-menu-backend-5ge7.onrender.com";
 const API_BASE = `${SERVER_URL}/api`;
 
-// ✅ PROPS: customerId is passed from App.js for the Unique ID logic
 const Cart = ({ cart, customerId, clearCart, removeFromCart, tableNum, setTableNum }) => {
     
-    // 🎯 1. GET RESTAURANT NAME FROM URL
     const { restaurantId } = useParams(); 
     const navigate = useNavigate();
     
@@ -27,7 +25,7 @@ const Cart = ({ cart, customerId, clearCart, removeFromCart, tableNum, setTableN
     const finalTableNum = tableNum || localStorage.getItem("last_table_scanned");
     const totalPrice = cart.reduce((total, item) => total + (item.price * (item.quantity || 1)), 0);
 
-    // ✅ 2. SOCKET CONNECTION (Based on URL Name)
+    // 2. SOCKET CONNECTION
     useEffect(() => {
         if (restaurantId) {
             socketRef.current = io(SERVER_URL, { 
@@ -53,9 +51,9 @@ const Cart = ({ cart, customerId, clearCart, removeFromCart, tableNum, setTableN
         if ("vibrate" in navigator) navigator.vibrate(100);
         try {
             socketRef.current.emit("call-waiter", {
-                restaurantId: restaurantId, // Uses name from URL
+                restaurantId: restaurantId,
                 tableNumber: finalTableNum,
-                customerId: customerId, // 🎯 Identifies the unique customer
+                customerId: customerId,
                 _id: Date.now().toString()
             });
             toast.success("Waiter notified!");
@@ -63,7 +61,7 @@ const Cart = ({ cart, customerId, clearCart, removeFromCart, tableNum, setTableN
         finally { setCallLoading(false); }
     };
 
-    // ✅ 3. ATOMIC ORDER PROCESS (The "Single Line" Logic)
+    // 3. ATOMIC ORDER PROCESS
     const processOrder = async (paymentType) => {
         if (isSubmitting) return;
         if (!customerName.trim()) return toast.error("Enter your name");
@@ -74,39 +72,46 @@ const Cart = ({ cart, customerId, clearCart, removeFromCart, tableNum, setTableN
         setPaymentChosen(paymentType);
 
         try {
-            // 🎯 A. TRANSLATE NAME TO ID
-            // We take 'kalyanresto1' from URL and ask DB for the hidden ID '659a...'
+            // A. TRANSLATE NAME TO ID
             const idRes = await axios.get(`${API_BASE}/auth/owner-id/${restaurantId}`);
             const realMongoId = idRes.data.id;
 
             const payload = {
                 customerName,
-                customerId: customerId, // 🎯 Unique Fingerprint
+                customerId: customerId,
                 tableNum: finalTableNum.toString(),
-                items: cart.map(i => ({ dishId: i._id, name: i.name, quantity: i.quantity, price: i.price })),
+                items: cart.map(i => ({ 
+                    dishId: i._id, 
+                    name: i.name, 
+                    quantity: i.quantity, 
+                    price: i.price 
+                })),
                 totalAmount: totalPrice,
                 paymentMethod: paymentType,
-                restaurantId: realMongoId, // 🎯 Real Database ID
+                restaurantId: realMongoId,
                 status: "placed"
             };
 
-            // 🎯 B. SUBMIT ORDER
+            // 🎯 DEBUGGER: Check your console for this log if 500 happens again
+            console.log("SENDING PAYLOAD:", payload);
+
+            // B. SUBMIT ORDER
             const res = await axios.post(`${API_BASE}/orders?t=${Date.now()}`, payload);
             
-            // 🎯 C. NOTIFY KITCHEN
+            // C. NOTIFY KITCHEN
             if (socketRef.current) socketRef.current.emit("new-order", res.data);
 
             setOrderSuccess(true);
             
-            // 🎯 D. UNIQUE REDIRECT (The Final Fix)
-            // URL changes from /kalyanresto1/cart --> /track/659a123...
+            // D. UNIQUE REDIRECT
             setTimeout(() => {
                 clearCart(); 
                 navigate(`/track/${res.data._id}`); 
             }, 2500); 
 
         } catch (err) {
-            toast.error("Order Failed. Try again.");
+            console.error("ORDER ERROR:", err); // Check console for details
+            toast.error("Order Failed. Server Error (500).");
             setIsSubmitting(false);
         }
     };
@@ -168,6 +173,14 @@ const Cart = ({ cart, customerId, clearCart, removeFromCart, tableNum, setTableN
                 ) : (
                     cart.map(item => (
                         <div key={item._id} style={styles.item}>
+                            {/* 🎯 FIXED: ADDED IMAGE TAG HERE */}
+                            <img 
+                                src={item.image && item.image.startsWith("http") ? item.image : `https://images.unsplash.com/${item.image}`} 
+                                alt={item.name} 
+                                style={{ width: "50px", height: "50px", borderRadius: "10px", objectFit: "cover", marginRight: "15px" }}
+                                onError={(e) => e.target.style.display = 'none'} 
+                            />
+                            
                             <div style={{flex: 1}}>
                                 <p style={{margin:0, fontWeight:'bold'}}>{item.name}</p>
                                 <p style={{margin:0, color:'#f97316'}}>₹{item.price * item.quantity} ({item.quantity}x)</p>

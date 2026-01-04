@@ -25,11 +25,12 @@ const protect = async (req, res, next) => {
 };
 
 // ============================================================
-// 🛒 1. PLACE ORDER
+// 🛒 1. PLACE ORDER (FIXED)
 // ============================================================
 router.post('/', async (req, res) => {
     try {
-        const { restaurantId, tableNum, items, totalAmount, customerName, paymentMethod } = req.body;
+        // ✅ FIX 1: Added 'customerId' here so we don't lose it
+        const { restaurantId, tableNum, items, totalAmount, customerName, paymentMethod, customerId } = req.body;
 
         const newOrder = new Order({
             restaurantId,
@@ -38,6 +39,7 @@ router.post('/', async (req, res) => {
             totalAmount,
             customerName: customerName || "Guest",
             paymentMethod: paymentMethod || "Cash",
+            customerId: customerId, // ✅ FIX 2: Saving it to database
             status: "placed"
         });
 
@@ -50,7 +52,9 @@ router.post('/', async (req, res) => {
 
         res.status(201).json(savedOrder);
     } catch (error) {
-        res.status(500).json({ message: "Order Failed" });
+        // ✅ FIX 3: Added console log so you can see the REAL error in VS Code
+        console.error("❌ ORDER SAVE FAILED:", error.message); 
+        res.status(500).json({ message: "Order Failed", error: error.message });
     }
 });
 
