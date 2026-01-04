@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom"; // 🎯 Changed Link to useNavigate
 import axios from "axios";
 import { FaSearch, FaPlus, FaMinus, FaShoppingCart, FaArrowRight, FaLock, FaSyncAlt } from "react-icons/fa";
+import { toast } from "react-hot-toast"; // 🎯 Added Toast for empty cart alert
 import LoadingSpinner from "../components/LoadingSpinner";
 
 const API_BASE = "https://smart-menu-backend-5ge7.onrender.com/api";
 
-// ✅ 1. ADD 'customerId' TO PROPS
 const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customerId }) => {
     const params = useParams();
+    const navigate = useNavigate(); // 🎯 Added Navigation Hook
     const currentRestId = params.restaurantId || params.id;
     const currentTable = params.table;
 
@@ -32,11 +33,10 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customer
 
     const DEFAULT_IMG = "https://placehold.co/400x300/222/orange?text=Yummy";
 
-    // ✅ FETCH LOGIC: Stale-While-Revalidate Strategy
+    // ✅ FETCH LOGIC
     const fetchMenu = async (isManual = false) => {
         if (!currentRestId) return;
         try {
-            // Only show loader if we have NO data at all
             if (dishes.length === 0) setLoading(true);
 
             // 1. Get Real ID
@@ -52,7 +52,6 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customer
                 } else {
                     const dishData = Array.isArray(res.data) ? res.data : (res.data.dishes || []);
                     setDishes(dishData);
-                    // ⚡️ Update Cache
                     localStorage.setItem(`menu_cache_${currentRestId}`, JSON.stringify(dishData));
                 }
             }
@@ -65,16 +64,13 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customer
         }
     };
 
-    // Initial Load & Background Sync
     useEffect(() => {
         if (!currentRestId) return;
-        fetchMenu(); // Load immediately
-        // Sync every 30 seconds instead of 15 to save server load
+        fetchMenu(); 
         const stockInterval = setInterval(() => { fetchMenu(); }, 30000);
         return () => clearInterval(stockInterval);
     }, [currentRestId]);
 
-    // Handle Table & Restaurant Context
     useEffect(() => {
         const lastRest = localStorage.getItem("last_rest_scanned");
         if (lastRest !== currentRestId) {
@@ -88,7 +84,7 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customer
         if (setRestaurantId) setRestaurantId(currentRestId);
     }, [currentRestId, currentTable, setRestaurantId, setTableNum, setCart]);
 
-    // ⚡️ OPTIMIZATION: Memoized Filtering (Prevents lag when typing)
+    // ⚡️ OPTIMIZATION: Memoized Filtering
     const filteredDishes = useMemo(() => {
         let result = dishes;
         if (activeCategory !== "All") {
@@ -101,13 +97,20 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customer
         return result;
     }, [dishes, activeCategory, searchTerm]);
 
-    // ⚡️ OPTIMIZATION: Memoized Categories & Totals
     const categories = useMemo(() => ["All", ...new Set(dishes.map(d => d.category))], [dishes]);
     const totalQty = useMemo(() => cart.reduce((acc, item) => acc + item.quantity, 0), [cart]);
     const totalPrice = useMemo(() => cart.reduce((acc, item) => acc + (item.price * item.quantity), 0), [cart]);
 
-    // ✅ UNIQUE CART URL
     const cartLink = `/${currentRestId}/cart/${customerId}`;
+
+    // ✅ NEW: Handle Cart Click safely
+    const handleCartClick = () => {
+        if (totalQty === 0) {
+            toast.error("Cart is empty! Add items first.");
+        } else {
+            navigate(cartLink);
+        }
+    };
 
     const handleAction = (dish, val = 1) => {
         if ("vibrate" in navigator) navigator.vibrate(40);
@@ -135,23 +138,23 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customer
                 else setPullDistance(0);
              }}>
             
-            {/* Pull Refresh Indicator */}
             <div style={{...styles.pullLoader, height: `${pullDistance}px`, opacity: pullDistance / 60}}>
                 <FaSyncAlt className={refreshing ? "spin" : ""} style={{color: '#f97316'}} />
             </div>
 
-            {/* Header Section */}
             <div style={styles.hero}>
                 <div style={styles.heroContent}>
                     <div>
                         <h1 style={styles.restName}>{currentRestId?.toUpperCase()}</h1>
                         <p style={styles.restSub}>{currentTable ? `Table No: ${currentTable}` : "Digital Menu"}</p>
                     </div>
-                    {/* Header Cart Link */}
-                    <Link to={cartLink} style={styles.headerCart}>
+                    
+                    {/* 🎯 FIXED HEADER CART ICON: Prevents click if empty */}
+                    <div onClick={handleCartClick} style={{...styles.headerCart, opacity: totalQty === 0 ? 0.5 : 1, cursor: 'pointer'}}>
                         <FaShoppingCart size={20} />
                         {totalQty > 0 && <span style={styles.headerBadge}>{totalQty}</span>}
-                    </Link>
+                    </div>
+
                 </div>
                 <div style={styles.searchContainer}>
                     <FaSearch style={styles.searchIcon} />
@@ -164,7 +167,6 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customer
                 </div>
             </div>
 
-            {/* Category Filter */}
             <div style={styles.stickyNav}>
                 <div style={styles.catScroll}>
                     {categories.map(cat => (
@@ -181,7 +183,6 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customer
                 </div>
             </div>
 
-            {/* Dish Grid */}
             <div style={styles.grid}>
                 {filteredDishes.map(dish => {
                     const itemInCart = cart.find(i => i._id === dish._id);
@@ -191,7 +192,6 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customer
                     return (
                         <div key={dish._id} style={{...styles.card, opacity: isAvailable ? 1 : 0.7}}>
                             <div style={styles.imgWrapper}>
-                                {/* ⚡️ OPTIMIZATION: Lazy Loading Images */}
                                 <img 
                                     src={dish.image || DEFAULT_IMG} 
                                     alt={dish.name} 
@@ -229,16 +229,17 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customer
                 })}
             </div>
 
-            {/* Bottom Float Cart */}
+            {/* Bottom Float Cart - Only shows if items exist */}
             {totalQty > 0 && (
                 <div style={styles.floatBarContainer} className="slide-up">
-                    <Link to={cartLink} style={styles.floatBar}>
+                    {/* 🎯 Updated Bottom Link to use navigate for consistency, though Link is also fine here */}
+                    <div onClick={() => navigate(cartLink)} style={{...styles.floatBar, cursor: 'pointer'}}>
                         <div style={styles.floatInfo}>
                             <span style={styles.floatQty}>{totalQty} ITEMS</span>
                             <span style={styles.floatPrice}>₹{totalPrice}</span>
                         </div>
                         <div style={styles.viewCart}>View Cart <FaArrowRight style={{marginLeft:8}}/></div>
-                    </Link>
+                    </div>
                 </div>
             )}
 
@@ -254,7 +255,6 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customer
     );
 };
 
-// ... Styles object remains exactly the same as before ...
 const styles = {
     container: { minHeight: "100vh", background: "#050505", color: "white", paddingBottom: "120px", fontFamily: "'Inter', sans-serif" },
     center: { display:'flex', height:'100vh', alignItems:'center', justifyContent:'center', flexDirection:'column' },
