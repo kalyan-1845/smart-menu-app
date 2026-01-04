@@ -1,15 +1,38 @@
 import React, { useState, useEffect } from "react";
-import { BrowserRouter as Router, Routes, Route, useLocation } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import axios from "axios";
 
-// --- IMPORTS ---
+// --- ✅ 1. MAKE SURE THESE IMPORTS EXIST ---
 import LandingPage from "./pages/LandingPage"; 
 import Menu from "./pages/Menu"; 
 import Cart from "./pages/Cart";
 import OrderTracker from "./pages/OrderTracker";
-// ... (Your other imports like Admin, Login, etc.)
+import OwnerLogin from "./pages/OwnerLogin"; // <--- CRITICAL
+import Register from "./pages/Register";     // <--- CRITICAL
+import SuperLogin from "./pages/SuperLogin"; 
+import Terms from './pages/Terms';
+import Maintenance from './pages/Maintenance';
+import NotFound from './pages/NotFound';
 
-// --- STYLES ---
+// --- STAFF PANELS ---
+import SuperAdmin from "./pages/SuperAdmin";
+import RestaurantAdmin from "./pages/RestaurantAdmin";
+import ChefDashboard from "./pages/ChefDashboard"; 
+import WaiterDashboard from "./pages/WaiterDashboard";
+
+const API_BASE = "https://smart-menu-backend-5ge7.onrender.com/api";
+
+const ScrollToTop = () => {
+  const { pathname } = useLocation();
+  useEffect(() => { window.scrollTo(0, 0); }, [pathname]);
+  return null;
+};
+
+const ProtectedSuperAdmin = ({ children }) => {
+  const isAuthenticated = localStorage.getItem("superAdminAuth") === "true";
+  return isAuthenticated ? children : <Navigate to="/super-login" replace />;
+};
+
 const GlobalStyles = () => (
   <style>{`
     :root { font-family: 'Inter', sans-serif; color: white; background-color: #050505; }
@@ -21,43 +44,43 @@ const GlobalStyles = () => (
   `}</style>
 );
 
-const ScrollToTop = () => {
-  const { pathname } = useLocation();
-  useEffect(() => { window.scrollTo(0, 0); }, [pathname]);
-  return null;
-};
-
 function App() {
-  // ✅ 1. GLOBAL CUSTOMER ID (Follows the user everywhere)
+  // 1. UNIQUE CUSTOMER FINGERPRINT
   const [customerId] = useState(() => {
     let id = localStorage.getItem("smartMenu_CustomerId");
     if (!id) {
-      // Generates a random ID unique to this phone
       id = `CUST-${Math.random().toString(36).substr(2, 9)}-${Date.now()}`;
       localStorage.setItem("smartMenu_CustomerId", id);
     }
     return id;
   });
 
-  // ✅ 2. DYNAMIC RESTAURANT DETECTION
-  // We don't hardcode "kalyanresto1". We ask "Which restaurant is active right now?"
+  // 2. RESTAURANT STATE
   const [restaurantId, setRestaurantId] = useState(localStorage.getItem("smartMenu_ActiveRest") || null);
 
-  // ✅ 3. DYNAMIC CART
-  // The cart key changes automatically based on the Restaurant Name
+  // 3. CART STATE (Locked to Restaurant + Customer)
   const [cart, setCart] = useState(() => {
     const activeRest = localStorage.getItem("smartMenu_ActiveRest");
     if (!activeRest) return [];
-    
-    // 🔒 The Secret to Multi-Restaurant Support:
-    // Key format: cart_RESTAURANTNAME_CUSTOMERID
     const saved = localStorage.getItem(`cart_${activeRest}_${customerId}`);
     return saved ? JSON.parse(saved) : [];
   });
 
   const [tableNum, setTableNum] = useState(localStorage.getItem(`table_${restaurantId}`) || "");
+  const [isMaintenance, setIsMaintenance] = useState(false);
 
-  // ✅ 4. AUTO-SAVE (Saves to the correct restaurant folder)
+  // 4. MAINTENANCE CHECK
+  useEffect(() => {
+    const checkSystemStatus = async () => {
+      try {
+        const res = await axios.get(`${API_BASE}/superadmin/maintenance-status?t=${Date.now()}`);
+        if (res.data.enabled) setIsMaintenance(true);
+      } catch (e) { }
+    };
+    checkSystemStatus();
+  }, []);
+
+  // 5. PERSISTENCE
   useEffect(() => { 
     if (restaurantId) {
       localStorage.setItem(`cart_${restaurantId}_${customerId}`, JSON.stringify(cart));
@@ -65,7 +88,6 @@ function App() {
     }
   }, [cart, restaurantId, customerId]);
 
-  // ✅ 5. CART ACTIONS
   const addToCart = (dish) => {
     if ("vibrate" in navigator) navigator.vibrate(40);
     setCart((prev) => {
@@ -85,14 +107,12 @@ function App() {
     setCart((prev) => prev.map((item) => item._id === id ? { ...item, quantity: newQuantity } : item));
   };
 
-  // ✅ 6. SWITCHING RESTAURANTS
-  // If user scans a NEW QR code, this function clears the old cart and loads the new one
-  const handleSetRestaurantId = (newId) => {
-    if (restaurantId !== newId) {
-      const saved = localStorage.getItem(`cart_${newId}_${customerId}`);
-      setCart(saved ? JSON.parse(saved) : []); // Load fresh cart for new restaurant
-      setRestaurantId(newId);
-      localStorage.setItem("smartMenu_ActiveRest", newId);
+  const handleSetRestaurantId = (id) => {
+    if (restaurantId !== id) {
+      const saved = localStorage.getItem(`cart_${id}_${customerId}`);
+      setCart(saved ? JSON.parse(saved) : []);
+      setRestaurantId(id);
+      localStorage.setItem("smartMenu_ActiveRest", id);
     }
   };
 
@@ -101,14 +121,25 @@ function App() {
     localStorage.setItem(`table_${restaurantId}`, num);
   };
 
+  // MAINTENANCE REDIRECT
+  if (isMaintenance && !window.location.pathname.includes('super')) {
+      return <Maintenance />;
+  }
+
   return (
     <Router>
       <GlobalStyles />
       <ScrollToTop />
       <Routes>
-        {/* --- UNIVERSAL ROUTES (Work for any restaurant name) --- */}
+        {/* --- PUBLIC PAGES --- */}
+        <Route path="/" element={<LandingPage />} /> 
         
-        {/* 1. MENU: /menu/pizzahut, /menu/dominos, etc. */}
+        {/* ✅ 2. HERE ARE THE MISSING ROUTES */}
+        <Route path="/login" element={<OwnerLogin />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/terms" element={<Terms />} />
+          
+        {/* --- CUSTOMER MENU FLOW --- */}
         <Route path="/menu/:restaurantId" element={
             <div className="page-transition">
               <Menu 
@@ -117,13 +148,24 @@ function App() {
                 setRestaurantId={handleSetRestaurantId} 
                 setTableNum={handleSetTable} 
                 setCart={setCart} 
-                customerId={customerId} // Pass the ID to generate links
+                customerId={customerId} // Required for unique links
               />
             </div>
         } />
-        
-        {/* 2. CART: /pizzahut/cart/CUST-123, /dominos/cart/CUST-123 */}
-        {/* The :restaurantId part makes it work for everyone */}
+        <Route path="/menu/:restaurantId/:table" element={
+            <div className="page-transition">
+              <Menu 
+                cart={cart} 
+                addToCart={addToCart} 
+                setRestaurantId={handleSetRestaurantId} 
+                setTableNum={handleSetTable} 
+                setCart={setCart} 
+                customerId={customerId} 
+              />
+            </div>
+        } />
+
+        {/* --- CART FLOW (Unique URL) --- */}
         <Route path="/:restaurantId/cart/:customerId" element={
             <div className="page-transition">
               <Cart 
@@ -141,12 +183,20 @@ function App() {
             </div>
         } />
         
-        {/* 3. TRACKER: /track/659abc... (Unique Database ID) */}
+        {/* --- TRACKING FLOW --- */}
         <Route path="/track/:id" element={<div className="page-transition"><OrderTracker /></div>} />
         
-        {/* Other Public/Admin Routes */}
-        <Route path="/" element={<LandingPage />} /> 
-        {/* ... (Add your admin routes here) ... */}
+        {/* --- ADMIN & STAFF --- */}
+        <Route path="/super-login" element={<SuperLogin />} />
+        <Route path="/superadmin" element={<ProtectedSuperAdmin><SuperAdmin /></ProtectedSuperAdmin>} />
+        
+        <Route path="/:id/admin" element={<RestaurantAdmin />} />
+        <Route path="/:id/chef" element={<ChefDashboard />} />
+        <Route path="/:id/kitchen" element={<ChefDashboard />} />
+        <Route path="/:id/waiter" element={<WaiterDashboard />} />
+
+        {/* --- 404 PAGE --- */}
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </Router>
   );
