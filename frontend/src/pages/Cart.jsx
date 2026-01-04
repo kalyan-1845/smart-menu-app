@@ -61,76 +61,72 @@ const Cart = ({ cart, customerId, clearCart, removeFromCart, tableNum, setTableN
         finally { setCallLoading(false); }
     };
 
-   // 3. ATOMIC ORDER PROCESS (Debug Version)
-const processOrder = async (paymentType) => {
-    if (isSubmitting) return;
-    if (!customerName.trim()) return toast.error("Enter your name");
-    if (!finalTableNum) return setShowTableModal(true);
-    if (cart.length === 0) return toast.error("Cart is empty");
+    // 3. ATOMIC ORDER PROCESS (FIXED FOR STRICT BACKEND)
+    const processOrder = async (paymentType) => { // paymentType comes in as "CASH" or "ONLINE"
+        if (isSubmitting) return;
+        if (!customerName.trim()) return toast.error("Enter your name");
+        if (!finalTableNum) return setShowTableModal(true);
+        if (cart.length === 0) return toast.error("Cart is empty");
 
-    setIsSubmitting(true);
-    setPaymentChosen(paymentType);
+        setIsSubmitting(true);
+        setPaymentChosen(paymentType);
 
-    try {
-        // A. TRANSLATE NAME TO ID
-        console.log("Fetching ID for:", restaurantId); // Log 1
-        const idRes = await axios.get(`${API_BASE}/auth/owner-id/${restaurantId}`);
-        const realMongoId = idRes.data.id;
+        try {
+            // A. TRANSLATE NAME TO ID
+            const idRes = await axios.get(`${API_BASE}/auth/owner-id/${restaurantId}`);
+            const realMongoId = idRes.data.id;
 
-        // 🚨 TRAP 1: Check if ID is missing
-        if (!realMongoId) {
-            alert("CRITICAL ERROR: Could not find Restaurant ID. The URL might be wrong.");
+            // ✅ FIX: Convert "CASH" -> "Cash" and "ONLINE" -> "Online"
+            const formattedPayment = paymentType === "CASH" ? "Cash" : "Online";
+
+            const payload = {
+                customerName,
+                customerId: customerId,
+                tableNum: finalTableNum.toString(),
+                items: cart.map(i => ({ 
+                    dishId: i._id, 
+                    name: i.name, 
+                    quantity: i.quantity, 
+                    price: i.price,
+                    image: i.image 
+                })),
+                totalAmount: totalPrice,
+                
+                // ✅ CRITICAL FIX: Match the Schema exactly
+                paymentMethod: formattedPayment, 
+                status: "Pending", // Was "placed", now "Pending" to match Backend
+                
+                restaurantId: realMongoId
+            };
+
+            console.log("SENDING STRICT PAYLOAD:", payload);
+
+            // B. SUBMIT ORDER
+            const res = await axios.post(`${API_BASE}/orders?t=${Date.now()}`, payload);
+            
+            // C. NOTIFY KITCHEN
+            if (socketRef.current) socketRef.current.emit("new-order", res.data);
+
+            setOrderSuccess(true);
+            
+            // D. UNIQUE REDIRECT
+            setTimeout(() => {
+                clearCart(); 
+                navigate(`/track/${res.data._id}`); 
+            }, 2500); 
+
+        } catch (err) {
+            console.error("ORDER ERROR:", err);
+            // Keep the alert trap in case something else breaks
+            if (err.response && err.response.data) {
+                alert("SERVER ERROR: " + JSON.stringify(err.response.data));
+            } else {
+                toast.error("Order Failed. Try again.");
+            }
             setIsSubmitting(false);
-            return;
         }
+    };
 
-        const payload = {
-            customerName,
-            customerId: customerId || "guest-user", // Fallback if missing
-            tableNum: finalTableNum.toString(),
-            items: cart.map(i => ({ 
-                dishId: i._id, // Ensure this matches backend expectation
-                name: i.name, 
-                quantity: i.quantity, 
-                price: i.price,
-                image: i.image 
-            })),
-            totalAmount: totalPrice,
-            paymentMethod: paymentType,
-            restaurantId: realMongoId,
-            status: "placed"
-        };
-
-        // 🚨 TRAP 2: Show exactly what we are sending
-        console.log("SENDING PAYLOAD:", payload);
-
-        // B. SUBMIT ORDER
-        const res = await axios.post(`${API_BASE}/orders?t=${Date.now()}`, payload);
-        
-        // C. NOTIFY KITCHEN
-        if (socketRef.current) socketRef.current.emit("new-order", res.data);
-
-        setOrderSuccess(true);
-        
-        setTimeout(() => {
-            clearCart(); 
-            navigate(`/track/${res.data._id}`); 
-        }, 2500); 
-
-    } catch (err) {
-        console.error("ORDER ERROR:", err);
-        
-        // 🚨 TRAP 3: The "Silver Bullet" Alert
-        // This will pop up the EXACT message from the server on your phone/screen
-        if (err.response && err.response.data) {
-            alert("SERVER ERROR: " + JSON.stringify(err.response.data));
-        } else {
-            alert("NETWORK ERROR: " + err.message);
-        }
-        
-        setIsSubmitting(false);
-    }
-};
     return (
         <div style={styles.container}>
             {orderSuccess && (
@@ -188,12 +184,11 @@ const processOrder = async (paymentType) => {
                 ) : (
                     cart.map(item => (
                         <div key={item._id} style={styles.item}>
-                            {/* 🎯 FIXED: ADDED IMAGE TAG HERE */}
                             <img 
-                                src={item.image && item.image.startsWith("http") ? item.image : `https://images.unsplash.com/${item.image}`} 
+                                src={item.image && item.image.startsWith("http") ? item.image : `https://images.unsplash.com/${item.image}?w=200`} 
                                 alt={item.name} 
                                 style={{ width: "50px", height: "50px", borderRadius: "10px", objectFit: "cover", marginRight: "15px" }}
-                                onError={(e) => e.target.style.display = 'none'} 
+                                onError={(e) => { e.target.onerror = null; e.target.src = "https://placehold.co/100?text=Yummy"; }}
                             />
                             
                             <div style={{flex: 1}}>
