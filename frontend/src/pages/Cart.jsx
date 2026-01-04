@@ -8,7 +8,7 @@ import { toast } from "react-hot-toast";
 const SERVER_URL = "https://smart-menu-backend-5ge7.onrender.com";
 const API_BASE = `${SERVER_URL}/api`;
 
-const Cart = ({ cart, clearCart, removeFromCart, restaurantId, tableNum, setTableNum }) => {
+const Cart = ({ cart, customerId, clearCart, removeFromCart, restaurantId, tableNum, setTableNum }) => {
     const navigate = useNavigate();
     const [customerName, setCustomerName] = useState("");
     const [showTableModal, setShowTableModal] = useState(!tableNum);
@@ -19,8 +19,8 @@ const Cart = ({ cart, clearCart, removeFromCart, restaurantId, tableNum, setTabl
     const [callLoading, setCallLoading] = useState(false);
     const socketRef = useRef(null); 
 
-    // ✅ SESSION RECOVERY: Ensures unique cart/table per customer
-    const finalRestaurantId = restaurantId || localStorage.getItem("last_rest_scanned");
+    // ✅ SESSION RECOVERY: Loads data specific to this Restaurant + this Customer
+    const finalRestaurantId = restaurantId || localStorage.getItem("smartMenu_RestaurantId");
     const finalTableNum = tableNum || localStorage.getItem("last_table_scanned");
     const totalPrice = cart.reduce((total, item) => total + (item.price * (item.quantity || 1)), 0);
 
@@ -59,6 +59,7 @@ const Cart = ({ cart, clearCart, removeFromCart, restaurantId, tableNum, setTabl
             socketRef.current.emit("call-waiter", {
                 restaurantId: finalRestaurantId,
                 tableNumber: finalTableNum,
+                customerId: customerId, // 🎯 Identify WHO is calling
                 _id: Date.now().toString()
             });
             toast.success("🛎️ Waiter notified!");
@@ -69,7 +70,7 @@ const Cart = ({ cart, clearCart, removeFromCart, restaurantId, tableNum, setTabl
         }
     };
 
-    // ✅ ATOMIC ORDERING: Works same for Cash and Online
+    // ✅ ATOMIC ORDERING: Fixed with ID Translation & Session Separation
     const processOrder = async (paymentType) => {
         if (isSubmitting) return;
         if (!customerName.trim()) return toast.error("Please enter your name!");
@@ -81,17 +82,16 @@ const Cart = ({ cart, clearCart, removeFromCart, restaurantId, tableNum, setTabl
         setPaymentChosen(paymentType);
 
         try {
-            // 🎯 CRITICAL STEP: Convert Username to REAL MongoDB ID
+            // 🎯 STEP 1: ID Lookup (Translate Username to MongoDB ID)
             let mongoId = finalRestaurantId;
             if (finalRestaurantId && finalRestaurantId.length !== 24) {
                 const idRes = await axios.get(`${API_BASE}/auth/owner-id/${finalRestaurantId}`);
                 mongoId = idRes.data.id;
             }
 
-            if (!mongoId) throw new Error("Invalid Restaurant ID");
-
             const payload = {
                 customerName,
+                customerId: customerId, // 🎯 Send unique fingerprint to backend
                 tableNum: finalTableNum.toString(),
                 items: cart.map(i => ({ 
                     dishId: i._id, 
@@ -105,25 +105,22 @@ const Cart = ({ cart, clearCart, removeFromCart, restaurantId, tableNum, setTabl
                 status: "placed"
             };
 
-            // 🎯 Submit Order to Database
             const res = await axios.post(`${API_BASE}/orders?t=${Date.now()}`, payload);
             
-            // 🎯 Alert the specific Kitchen Dashboard via Socket
             if (socketRef.current) {
                 socketRef.current.emit("new-order", res.data);
             }
 
-            // 🎯 SHOW SUCCESS UI
             setOrderSuccess(true);
             
             setTimeout(() => {
-                clearCart(); // Wipes local cart unique to this customer
-                navigate(`/track/${res.data._id}`); // Sends to unique tracking page
+                clearCart(); // 🎯 Wipes only THIS customer's cart
+                navigate(`/track/${res.data._id}`); // Redirects to unique order tracking
             }, 2500); 
 
         } catch (err) {
-            console.error("Order processing error:", err);
-            toast.error("Order failed. Use correct restaurant link.");
+            console.error("Order error:", err);
+            toast.error("Submission failed. Try again.");
             setIsSubmitting(false);
         }
     };
@@ -137,8 +134,8 @@ const Cart = ({ cart, clearCart, removeFromCart, restaurantId, tableNum, setTabl
                         <FaChair size={40} color="#f97316" style={{marginBottom: 15}}/>
                         <h2 style={{margin: '0 0 10px 0', fontSize: '20px'}}>Identify Table</h2>
                         <form onSubmit={handleTableSubmit}>
-                            <input style={styles.tableInput} type="number" placeholder="Enter Table #" value={tempTable} onChange={(e) => setTempTable(e.target.value)} autoFocus required />
-                            <button type="submit" style={styles.confirmBtn}>Confirm & Continue</button>
+                            <input style={styles.tableInput} type="number" placeholder="Table #" value={tempTable} onChange={(e) => setTempTable(e.target.value)} autoFocus required />
+                            <button type="submit" style={styles.confirmBtn}>Confirm Table</button>
                         </form>
                     </div>
                 </div>
@@ -151,10 +148,10 @@ const Cart = ({ cart, clearCart, removeFromCart, restaurantId, tableNum, setTabl
                         <FaCheckCircle size={80} color="#22c55e" className="checkmark-anim" />
                         <h2 style={styles.successTitle}>Order Sent!</h2>
                         <p style={styles.counterNote}>
-                            Payment Mode: <strong>{paymentChosen}</strong><br/>
-                            Kindly pay at the cash counter.
+                            Mode: <strong>{paymentChosen}</strong><br/>
+                            Please pay at the cashier counter.
                         </p>
-                        <p style={styles.successSub}>Opening live tracker...</p>
+                        <p style={styles.successSub}>Redirecting to tracker...</p>
                         <div style={styles.loaderLine}></div>
                     </div>
                 </div>
@@ -172,17 +169,17 @@ const Cart = ({ cart, clearCart, removeFromCart, restaurantId, tableNum, setTabl
 
             <div style={styles.infoCard}>
                 <div onClick={() => setShowTableModal(true)} style={styles.infoRow}>
-                    <p style={{margin: 0, fontSize: '14px'}}>Table: <span style={{color: '#f97316', fontWeight: '900'}}>{finalTableNum || "Tap to Set"}</span></p>
+                    <p style={{margin: 0, fontSize: '14px'}}>Table: <span style={{color: '#f97316', fontWeight: '900'}}>{finalTableNum || "Tap to set"}</span></p>
                     <button style={styles.changeBtn}>Edit</button>
                 </div>
-                <input style={styles.input} placeholder="Enter Your Name" value={customerName} onChange={e => setCustomerName(e.target.value)} />
+                <input style={styles.input} placeholder="Your Name" value={customerName} onChange={e => setCustomerName(e.target.value)} />
             </div>
 
             <div style={styles.list}>
                 {cart.length === 0 ? (
                     <div style={{textAlign: 'center', marginTop: '60px', opacity: 0.3}}>
                         <FaUtensils size={40} style={{marginBottom: '10px'}}/>
-                        <p>No food selected</p>
+                        <p>Cart is empty</p>
                     </div>
                 ) : (
                     cart.map(item => (
@@ -201,7 +198,7 @@ const Cart = ({ cart, clearCart, removeFromCart, restaurantId, tableNum, setTabl
 
             <div style={styles.footer}>
                 <div style={styles.totalRow}>
-                    <span>Amount Payable</span>
+                    <span>Total</span>
                     <span style={{color: '#f97316'}}>₹{totalPrice}</span>
                 </div>
                 <div style={styles.btnRow}>
