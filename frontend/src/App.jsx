@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import axios from "axios";
 
@@ -45,53 +45,60 @@ const GlobalStyles = () => (
 );
 
 function App() {
-  const [cart, setCart] = useState(() => JSON.parse(localStorage.getItem("smartMenu_Cart") || "[]"));
+  // ✅ 1. UNIQUE CUSTOMER FINGERPRINT (The "Different ID" Fix)
+  // Generates a unique ID like: CUST-789234-170456789 for every single phone
+  const [customerId] = useState(() => {
+    let id = localStorage.getItem("smartMenu_CustomerId");
+    if (!id) {
+      id = `CUST-${Math.floor(Math.random() * 1000000)}-${Date.now()}`;
+      localStorage.setItem("smartMenu_CustomerId", id);
+    }
+    return id;
+  });
+
+  // ✅ 2. RESTAURANT-LOCKED CART
+  // We save the cart using a combination of RestaurantID and CustomerID
+  // This prevents Customer A from seeing Customer B's cart even at the same shop
   const [restaurantId, setRestaurantId] = useState(localStorage.getItem("smartMenu_RestaurantId") || null);
+  
+  const [cart, setCart] = useState(() => {
+    const storageKey = restaurantId ? `cart_${restaurantId}_${customerId}` : "smartMenu_Cart_Temp";
+    return JSON.parse(localStorage.getItem(storageKey) || "[]");
+  });
+
   const [tableNum, setTableNum] = useState(localStorage.getItem("last_table_scanned") || "");
   const [isMaintenance, setIsMaintenance] = useState(false);
 
-  // ✅ 1. SESSION TIMEOUT ENGINE (2 HOURS)
-  useEffect(() => {
-    const SESSION_DURATION = 2 * 60 * 60 * 1000; // 2 Hours in milliseconds
-    const lastActive = localStorage.getItem("smartMenu_LastActive");
-    const now = Date.now();
-
-    if (lastActive && now - parseInt(lastActive) > SESSION_DURATION) {
-      // Session Expired - Wipe data
-      setCart([]);
-      localStorage.removeItem("smartMenu_Cart");
-      localStorage.removeItem("last_table_scanned");
-      console.log("🧹 Session expired: Cart cleared automatically.");
-    }
-    // Update activity timestamp
-    localStorage.setItem("smartMenu_LastActive", now.toString());
-  }, []);
-
-  // ✅ 2. SYSTEM MAINTENANCE CHECK
+  // ✅ 3. SYSTEM MAINTENANCE CHECK
   useEffect(() => {
     const checkSystemStatus = async () => {
       try {
         const res = await axios.get(`${API_BASE}/superadmin/maintenance-status?t=${Date.now()}`);
         if (res.data.enabled) setIsMaintenance(true);
-      } catch (e) { /* Silent */ }
+      } catch (e) { console.error("Maintenance check silent fail"); }
     };
     checkSystemStatus();
-    const interval = setInterval(checkSystemStatus, 300000); 
+    const interval = setInterval(checkSystemStatus, 60000); 
     return () => clearInterval(interval);
   }, []);
 
-  // ✅ 3. PERSISTENCE ENGINE (Updates activity whenever cart changes)
+  // ✅ 4. DATA PERSISTENCE (Restricted to this specific user & shop)
   useEffect(() => { 
-    localStorage.setItem("smartMenu_Cart", JSON.stringify(cart));
-    localStorage.setItem("smartMenu_LastActive", Date.now().toString()); // Update timestamp
-  }, [cart]);
+    if (restaurantId) {
+      localStorage.setItem(`cart_${restaurantId}_${customerId}`, JSON.stringify(cart));
+    }
+  }, [cart, restaurantId, customerId]);
 
+  // ✅ 5. CART ACTIONS (Isolated)
   const addToCart = (dish) => {
     if ("vibrate" in navigator) navigator.vibrate(40);
     setCart((prev) => {
       const exists = prev.find((item) => item._id === dish._id);
       if (exists) {
-        return prev.map((i) => i._id === dish._id ? { ...i, quantity: i.quantity + (dish.quantity || 1) } : i );
+        return prev.map((i) => i._id === dish._id 
+          ? { ...i, quantity: i.quantity + (dish.quantity || 1) } 
+          : i
+        );
       }
       return [...prev, { ...dish, quantity: dish.quantity || 1 }];
     });
@@ -108,13 +115,14 @@ function App() {
   const handleSetRestaurantId = (id) => {
     const previousId = localStorage.getItem("smartMenu_RestaurantId");
     if (previousId && previousId !== id) {
+      // Switched shops - clear current cart to prevent ordering from wrong restaurant
       setCart([]);
     }
     setRestaurantId(id);
     localStorage.setItem("smartMenu_RestaurantId", id);
   };
 
-  if (isMaintenance && !window.location.pathname.startsWith('/superadmin') && !window.location.pathname.startsWith('/super-login')) {
+  if (isMaintenance && !window.location.pathname.includes('super')) {
       return <Maintenance />;
   }
 
@@ -128,6 +136,7 @@ function App() {
         <Route path="/register" element={<Register />} />
         <Route path="/terms" element={<Terms />} />
           
+        {/* CUSTOMER FLOW */}
         <Route path="/menu/:restaurantId" element={
             <div className="page-transition">
               <Menu cart={cart} addToCart={addToCart} setRestaurantId={handleSetRestaurantId} setTableNum={setTableNum} setCart={setCart} />
@@ -141,11 +150,25 @@ function App() {
 
         <Route path="/cart" element={
             <div className="page-transition">
-              <Cart cart={cart} removeFromCart={(id) => updateQuantity(id, 0)} clearCart={() => setCart([])} updateQuantity={updateQuantity} restaurantId={restaurantId} tableNum={tableNum} setTableNum={setTableNum} />
+              <Cart 
+                cart={cart} 
+                customerId={customerId} // 🎯 Pass unique ID to Cart for backend storage
+                removeFromCart={(id) => updateQuantity(id, 0)} 
+                clearCart={() => {
+                  setCart([]);
+                  localStorage.removeItem(`cart_${restaurantId}_${customerId}`);
+                }} 
+                updateQuantity={updateQuantity} 
+                restaurantId={restaurantId} 
+                tableNum={tableNum} 
+                setTableNum={setTableNum} 
+              />
             </div>
         } />
-        
+
+        {/* EACH ORDER GETS A DIFFERENT TRACKING ID */}
         <Route path="/track/:id" element={<div className="page-transition"><OrderTracker /></div>} />
+
         <Route path="/super-login" element={<SuperLogin />} />
         <Route path="/superadmin" element={<ProtectedSuperAdmin><SuperAdmin /></ProtectedSuperAdmin>} />
         
@@ -153,6 +176,7 @@ function App() {
         <Route path="/:id/chef" element={<ChefDashboard />} />
         <Route path="/:id/kitchen" element={<ChefDashboard />} />
         <Route path="/:id/waiter" element={<WaiterDashboard />} />
+
         <Route path="*" element={<NotFound />} />
       </Routes>
     </Router>
