@@ -116,30 +116,46 @@ router.get('/owner-id/:username', async (req, res) => {
         if (!owner) {
             return res.status(404).json({ message: "Restaurant not found" });
         }
-        // This returns the 24-character ID that Menu.jsx needs to find dishes
         res.json({ id: owner._id }); 
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
 });
 
-// --- 🌐 PUBLIC RESTAURANT LOOKUP (Anti-Cache) ---
+// ============================================================
+// 🌐 WAITER/CUSTOMER RESTAURANT LOOKUP (Fixed 404)
+// ============================================================
 router.get('/restaurant/:id', async (req, res) => {
+    // 1. Kill Cache to prevent old data issues
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     
     try {
         const { id } = req.params;
         let owner;
 
+        // 2. INTELLIGENT SEARCH: Check if it's an ID or a Username
         if (mongoose.Types.ObjectId.isValid(id)) {
             owner = await Owner.findById(id).select('username restaurantName isPro');
         } else {
+            // This fixes the "kalyanresto1" 404 error
             owner = await Owner.findOne({ username: id.toLowerCase() }).select('username restaurantName isPro');
         }
 
-        if (!owner) return res.status(404).json({ message: 'Not found' });
-        res.json(owner);
-    } catch (error) { res.status(500).json({ message: error.message }); }
+        if (!owner) return res.status(404).json({ message: 'Restaurant not found' });
+        
+        // 3. Send back explicitly formatted data
+        res.json({
+            id: owner._id,          // <--- Critical for Waiter App
+            _id: owner._id,         // <--- Fallback
+            username: owner.username,
+            restaurantName: owner.restaurantName,
+            isPro: owner.isPro
+        });
+
+    } catch (error) { 
+        console.error("Lookup Error:", error);
+        res.status(500).json({ message: error.message }); 
+    }
 });
 
 export default router;

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'bitebox-v3.0'; // ✅ Bumping to v3.0 forces a clean slate for all users
+const CACHE_NAME = 'bitebox-v3.1'; // Bumping version to force update
 
 // 1. Install Event - Force immediate takeover
 self.addEventListener('install', (event) => {
@@ -64,17 +64,19 @@ self.addEventListener('notificationclick', function(event) {
     );
 });
 
-// 5. Fetch Event - Optimized to fix MIME type & Reference Errors
-// 5. Fetch Event - Industrial Strength Security
+// 5. Fetch Event - Industrial Strength Security & Error Prevention
 self.addEventListener('fetch', (event) => {
-    // 🔴 NUCLEAR FAIL-SAFE: Service Workers CANNOT cache non-GET requests
-    if (event.request.method !== 'GET') {
-        return; // Let the network handle POST, PUT, DELETE directly
+    
+    // 🔴 TRAP 1: Ignore Non-GET requests (POST/PUT/DELETE)
+    if (event.request.method !== 'GET') return;
+
+    // 🔴 TRAP 2: IGNORE CHROME EXTENSIONS (Stops the Console Errors)
+    const url = new URL(event.request.url);
+    if (url.protocol === 'chrome-extension:' || url.protocol === 'moz-extension:') {
+        return; 
     }
 
-    const url = new URL(event.request.url);
-
-    // ✅ BYPASS CACHE: Always get real-time data from server
+    // ✅ BYPASS CACHE: Always get real-time data from server (API & Socket)
     if (url.pathname.startsWith('/api/') || url.hostname.includes('socket.io')) {
         return; 
     }
@@ -84,7 +86,8 @@ self.addEventListener('fetch', (event) => {
         event.respondWith(
             fetch(event.request)
                 .then((response) => {
-                    if (response.ok) {
+                    // Only cache valid responses
+                    if (response && response.status === 200 && response.type === 'basic') {
                         const copy = response.clone();
                         caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
                     }
@@ -100,7 +103,8 @@ self.addEventListener('fetch', (event) => {
         caches.match(event.request).then((cachedResponse) => {
             if (cachedResponse) return cachedResponse;
             return fetch(event.request).then((response) => {
-                if (response.ok) {
+                // Only cache valid responses
+                if (response && response.status === 200 && response.type === 'basic') {
                     const copy = response.clone();
                     caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
                 }
