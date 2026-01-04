@@ -61,61 +61,76 @@ const Cart = ({ cart, customerId, clearCart, removeFromCart, tableNum, setTableN
         finally { setCallLoading(false); }
     };
 
-    // 3. ATOMIC ORDER PROCESS
-    const processOrder = async (paymentType) => {
-        if (isSubmitting) return;
-        if (!customerName.trim()) return toast.error("Enter your name");
-        if (!finalTableNum) return setShowTableModal(true);
-        if (cart.length === 0) return toast.error("Cart is empty");
+   // 3. ATOMIC ORDER PROCESS (Debug Version)
+const processOrder = async (paymentType) => {
+    if (isSubmitting) return;
+    if (!customerName.trim()) return toast.error("Enter your name");
+    if (!finalTableNum) return setShowTableModal(true);
+    if (cart.length === 0) return toast.error("Cart is empty");
 
-        setIsSubmitting(true);
-        setPaymentChosen(paymentType);
+    setIsSubmitting(true);
+    setPaymentChosen(paymentType);
 
-        try {
-            // A. TRANSLATE NAME TO ID
-            const idRes = await axios.get(`${API_BASE}/auth/owner-id/${restaurantId}`);
-            const realMongoId = idRes.data.id;
+    try {
+        // A. TRANSLATE NAME TO ID
+        console.log("Fetching ID for:", restaurantId); // Log 1
+        const idRes = await axios.get(`${API_BASE}/auth/owner-id/${restaurantId}`);
+        const realMongoId = idRes.data.id;
 
-            const payload = {
-                customerName,
-                customerId: customerId,
-                tableNum: finalTableNum.toString(),
-                items: cart.map(i => ({ 
-                    dishId: i._id, 
-                    name: i.name, 
-                    quantity: i.quantity, 
-                    price: i.price 
-                })),
-                totalAmount: totalPrice,
-                paymentMethod: paymentType,
-                restaurantId: realMongoId,
-                status: "placed"
-            };
-
-            // 🎯 DEBUGGER: Check your console for this log if 500 happens again
-            console.log("SENDING PAYLOAD:", payload);
-
-            // B. SUBMIT ORDER
-            const res = await axios.post(`${API_BASE}/orders?t=${Date.now()}`, payload);
-            
-            // C. NOTIFY KITCHEN
-            if (socketRef.current) socketRef.current.emit("new-order", res.data);
-
-            setOrderSuccess(true);
-            
-            // D. UNIQUE REDIRECT
-            setTimeout(() => {
-                clearCart(); 
-                navigate(`/track/${res.data._id}`); 
-            }, 2500); 
-
-        } catch (err) {
-            console.error("ORDER ERROR:", err); // Check console for details
-            toast.error("Order Failed. Server Error (500).");
+        // 🚨 TRAP 1: Check if ID is missing
+        if (!realMongoId) {
+            alert("CRITICAL ERROR: Could not find Restaurant ID. The URL might be wrong.");
             setIsSubmitting(false);
+            return;
         }
-    };
 
+        const payload = {
+            customerName,
+            customerId: customerId || "guest-user", // Fallback if missing
+            tableNum: finalTableNum.toString(),
+            items: cart.map(i => ({ 
+                dishId: i._id, // Ensure this matches backend expectation
+                name: i.name, 
+                quantity: i.quantity, 
+                price: i.price,
+                image: i.image 
+            })),
+            totalAmount: totalPrice,
+            paymentMethod: paymentType,
+            restaurantId: realMongoId,
+            status: "placed"
+        };
+
+        // 🚨 TRAP 2: Show exactly what we are sending
+        console.log("SENDING PAYLOAD:", payload);
+
+        // B. SUBMIT ORDER
+        const res = await axios.post(`${API_BASE}/orders?t=${Date.now()}`, payload);
+        
+        // C. NOTIFY KITCHEN
+        if (socketRef.current) socketRef.current.emit("new-order", res.data);
+
+        setOrderSuccess(true);
+        
+        setTimeout(() => {
+            clearCart(); 
+            navigate(`/track/${res.data._id}`); 
+        }, 2500); 
+
+    } catch (err) {
+        console.error("ORDER ERROR:", err);
+        
+        // 🚨 TRAP 3: The "Silver Bullet" Alert
+        // This will pop up the EXACT message from the server on your phone/screen
+        if (err.response && err.response.data) {
+            alert("SERVER ERROR: " + JSON.stringify(err.response.data));
+        } else {
+            alert("NETWORK ERROR: " + err.message);
+        }
+        
+        setIsSubmitting(false);
+    }
+};
     return (
         <div style={styles.container}>
             {orderSuccess && (
