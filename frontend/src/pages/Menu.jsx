@@ -141,7 +141,12 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customer
             <div style={{...styles.pullLoader, height: `${pullDistance}px`, opacity: pullDistance / 60}}>
                 <FaSyncAlt className={refreshing ? "spin" : ""} style={{color: '#f97316'}} />
             </div>
-
+               <div style={styles.marqueeWrapper}>
+                <div style={styles.marqueeContent}>
+                    <span>JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • </span>
+                    <span>JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • </span>
+                </div>
+            </div>
             <div style={styles.hero}>
                 <div style={styles.heroContent}>
                     <div>

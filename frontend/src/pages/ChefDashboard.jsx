@@ -2,10 +2,13 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
 import { useParams } from "react-router-dom";
 import io from "socket.io-client";
+import jsPDF from 'jspdf'; // ✅ Added
+import html2canvas from 'html2canvas'; // ✅ Added
 import InstallButton from "../components/InstallButton";
 import { 
     FaUtensils, FaVolumeUp, FaVolumeMute, FaCheck, FaBell, 
-    FaSignOutAlt, FaSpinner, FaCheckDouble, FaConciergeBell 
+    FaSignOutAlt, FaSpinner, FaCheckDouble, FaConciergeBell,
+    FaLock, FaPrint, FaRupeeSign // ✅ Added Icons
 } from "react-icons/fa";
 import { toast } from "react-hot-toast";
 
@@ -138,6 +141,22 @@ const ChefDashboard = () => {
         }
     };
 
+    // ✅ 6. PRINT RECEIPT FUNCTION (Added)
+    const printReceipt = async (orderId) => {
+        const element = document.getElementById(`receipt-${orderId}`);
+        if (!element) return;
+        try {
+            const canvas = await html2canvas(element, { scale: 2 });
+            const imgData = canvas.toDataURL('image/png');
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+            pdf.save(`Kitchen-Order-${orderId.slice(-4)}.pdf`);
+            toast.success("Receipt Printed");
+        } catch (err) { toast.error("Print failed"); }
+    };
+
     if (!isAuthenticated) return (
         <div style={styles.lockContainer}>
             <div style={styles.lockCard}>
@@ -185,28 +204,61 @@ const ChefDashboard = () => {
             <div style={styles.grid}>
                 {activeTab === "orders" ? (
                     orders.length === 0 ? <div style={styles.emptyState}><FaUtensils size={40}/><p>No orders pending.</p></div> : (
-                        orders.map((order) => (
-                            <div key={order._id} style={{...styles.card, borderTop: order.status.toLowerCase() === 'ready' ? '6px solid #22c55e' : (order.status.toLowerCase() === 'cooking' ? '6px solid #eab308' : '6px solid #f97316')}}>
-                                <div style={styles.cardHeader}>
-                                    <h2 style={styles.tableNumber}>T-{order.tableNum}</h2>
-                                    <span style={{...styles.statusBadge, background: order.status.toLowerCase() === 'ready' ? '#22c55e' : (order.status.toLowerCase() === 'cooking' ? '#eab308' : '#222')}}>{order.status.toUpperCase()}</span>
-                                </div>
-                                <div style={styles.itemsContainer}>
-                                    {order.items.map((item, idx) => (
-                                        <div key={idx} style={styles.itemRow}><span style={styles.itemQuantity}>{item.quantity}x</span><div style={styles.itemName}>{item.name}</div></div>
-                                    ))}
-                                </div>
-                                <div style={styles.actionContainer}>
-                                    {order.status.toLowerCase() === "ready" ? (
-                                        <button onClick={() => updateStatus(order, "served")} style={{...styles.actionBtn, background:'#22c55e', color:'white'}}><FaCheckDouble /> MARK SERVED</button>
-                                    ) : (
-                                        <button onClick={() => updateStatus(order, order.status.toLowerCase() === 'cooking' ? "ready" : "cooking")} style={{...styles.actionBtn, background: order.status.toLowerCase() === 'cooking' ? '#eab308' : '#f97316', color: order.status.toLowerCase() === 'cooking' ? 'black' : 'white'}}>
-                                            {order.status.toLowerCase() === "cooking" ? "READY FOR PICKUP" : "START PREPARING"}
+                        orders.map((order) => {
+                            // ✅ LOCK LOGIC: Locked unless Served or Paid
+                            const isLocked = !(order.status === 'Served' || order.status === 'Paid');
+                            
+                            return (
+                                <div key={order._id} style={{...styles.card, borderTop: order.status.toLowerCase() === 'ready' ? '6px solid #22c55e' : (order.status.toLowerCase() === 'cooking' ? '6px solid #eab308' : '6px solid #f97316')}}>
+                                    
+                                    {/* ✅ HIDDEN RECEIPT TEMPLATE (For PDF Generation) */}
+                                    <div id={`receipt-${order._id}`} style={{position:'absolute', top:-9999, left:-9999, background:'white', color:'black', padding:20, width:300}}>
+                                        <h3>Kitchen Order</h3>
+                                        <p>Table: {order.tableNum} | {new Date(order.createdAt).toLocaleTimeString()}</p>
+                                        <hr/>
+                                        {order.items.map((it, i) => <div key={i}>{it.quantity} x {it.name}</div>)}
+                                        <hr/>
+                                        <h4>Total: {order.totalAmount}</h4>
+                                    </div>
+
+                                    <div style={styles.cardHeader}>
+                                        <h2 style={styles.tableNumber}>T-{order.tableNum}</h2>
+                                        <span style={{...styles.statusBadge, background: order.status.toLowerCase() === 'ready' ? '#22c55e' : (order.status.toLowerCase() === 'cooking' ? '#eab308' : '#222')}}>{order.status.toUpperCase()}</span>
+                                    </div>
+                                    <div style={styles.itemsContainer}>
+                                        {order.items.map((item, idx) => (
+                                            <div key={idx} style={styles.itemRow}><span style={styles.itemQuantity}>{item.quantity}x</span><div style={styles.itemName}>{item.name}</div></div>
+                                        ))}
+                                    </div>
+                                    <div style={styles.actionContainer}>
+                                        {order.status.toLowerCase() === "ready" ? (
+                                            <button onClick={() => updateStatus(order, "served")} style={{...styles.actionBtn, background:'#22c55e', color:'white'}}><FaCheckDouble /> MARK SERVED</button>
+                                        ) : (
+                                            <button onClick={() => updateStatus(order, order.status.toLowerCase() === 'cooking' ? "ready" : "cooking")} style={{...styles.actionBtn, background: order.status.toLowerCase() === 'cooking' ? '#eab308' : '#f97316', color: order.status.toLowerCase() === 'cooking' ? 'black' : 'white'}}>
+                                                {order.status.toLowerCase() === "cooking" ? "READY FOR PICKUP" : "START PREPARING"}
+                                            </button>
+                                        )}
+                                        
+                                        {/* ✅ NEW: LOCKED RECEIPT BUTTON */}
+                                        <button 
+                                            onClick={() => printReceipt(order._id)} 
+                                            disabled={isLocked}
+                                            style={{
+                                                ...styles.actionBtn, 
+                                                marginTop: 10, 
+                                                background: isLocked ? '#222' : '#fff', 
+                                                color: isLocked ? '#666' : '#000',
+                                                border: isLocked ? '1px solid #333' : 'none',
+                                                cursor: isLocked ? 'not-allowed' : 'pointer',
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8
+                                            }}
+                                        >
+                                            {isLocked ? <><FaLock/> RECEIPT LOCKED</> : <><FaPrint/> PRINT RECEIPT</>}
                                         </button>
-                                    )}
+                                    </div>
                                 </div>
-                            </div>
-                        ))
+                            );
+                        })
                     )
                 ) : (
                     dishes.map(dish => (

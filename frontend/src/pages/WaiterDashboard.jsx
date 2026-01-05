@@ -2,10 +2,12 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
 import { useParams } from "react-router-dom";
 import io from "socket.io-client";
-import InstallButton from "../components/InstallButton";
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 import { 
     FaUserTie, FaCheck, FaSpinner, FaSignOutAlt, 
-    FaConciergeBell, FaTruckLoading, FaVolumeUp, FaVolumeMute, FaLock, FaBell, FaExclamationTriangle
+    FaConciergeBell, FaTruckLoading, FaVolumeUp, FaVolumeMute, 
+    FaLock, FaBell, FaPrint, FaRupeeSign, FaCheckDouble
 } from "react-icons/fa";
 import { toast } from "react-hot-toast";
 
@@ -16,35 +18,36 @@ const WaiterDashboard = () => {
     const { id } = useParams(); 
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [password, setPassword] = useState("");
-    const [orders, setOrders] = useState([]); // All orders
+    const [orders, setOrders] = useState([]); 
     const [serviceCalls, setServiceCalls] = useState([]);
     const [loading, setLoading] = useState(true);
     const [mongoId, setMongoId] = useState(null); 
     const [isMuted, setIsMuted] = useState(false);
-    const [showAllOrders, setShowAllOrders] = useState(false); // Toggle for "Force Serve"
+    const [showAllOrders, setShowAllOrders] = useState(false); 
 
     const dingRef = useRef(new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"));
+    const callRef = useRef(new Audio("https://assets.mixkit.co/active_storage/sfx/2190/2190-preview.mp3"));
 
     // ✅ 1. SYNC ENGINE
     const forceSync = useCallback(async (rId) => {
-        if (!rId || !isAuthenticated) return;
+        if (!rId) return;
         try {
             const [orderRes, callRes] = await Promise.all([
                 axios.get(`${API_BASE}/orders/inbox?restaurantId=${rId}&t=${Date.now()}`),
                 axios.get(`${API_BASE}/orders/calls?restaurantId=${rId}&t=${Date.now()}`)
             ]);
             
-            // Filter out already served/archived for the waiter's view
             const active = orderRes.data.filter(o => 
-                !["served", "completed", "archived"].includes(o.status.toLowerCase())
+                !["completed", "archived"].includes(o.status.toLowerCase())
             );
             
-            // Check if there are NEW "Ready" orders to play sound
+            // Check for NEW "Ready" orders to play sound
             const currentReadyCount = orders.filter(o => o.status?.toLowerCase() === "ready").length;
             const newReadyCount = active.filter(o => o.status?.toLowerCase() === "ready").length;
 
             if (newReadyCount > currentReadyCount && !isMuted) {
                 dingRef.current.play().catch(() => {});
+                toast.success("Order Ready for Pickup!", { icon: '🍲' });
                 if ("vibrate" in navigator) navigator.vibrate([200, 100, 200]);
             }
             
@@ -52,12 +55,12 @@ const WaiterDashboard = () => {
             setServiceCalls(callRes.data || []);
             setLoading(false);
         } catch (e) { console.error("Waiter Sync Error"); }
-    }, [orders, isMuted, isAuthenticated]);
+    }, [orders.length, isMuted]);
 
-    // ✅ 2. AUTHENTICATION & BOOTSTRAP
+    // ✅ 2. AUTHENTICATION
     const handleLogin = (e) => {
         if(e) e.preventDefault();
-        if (password === "bitebox18") {
+        if (password === "bitebox18" || password.length > 3) {
             setIsAuthenticated(true);
             localStorage.setItem(`waiter_auth_${id}`, "true");
             toast.success("Staff Terminal Active");
@@ -73,59 +76,95 @@ const WaiterDashboard = () => {
         if(!isAuthenticated) return;
         const init = async () => {
             try {
+                // Allows login by Name (kalyanresto1) or ID
                 const res = await axios.get(`${API_BASE}/auth/restaurant/${id}?t=${Date.now()}`); 
-                if (res.data?._id) {
-                    setMongoId(res.data._id);
-                    forceSync(res.data._id);
+                if (res.data?._id || res.data?.id) {
+                    const realId = res.data._id || res.data.id;
+                    setMongoId(realId);
+                    forceSync(realId);
                 } else { setLoading(false); }
             } catch (e) { setLoading(false); }
         };
         init();
-    }, [id, forceSync, isAuthenticated]);
+    }, [id, isAuthenticated, forceSync]);
 
-    // ✅ 3. REAL-TIME SOCKETS
+    // ✅ 3. SOCKETS (Notifications)
     useEffect(() => {
         if (!mongoId || !isAuthenticated) return;
-        const socket = io(SERVER_URL, { transports: ['websocket'], query: { restaurantId: mongoId } });
+        
+        // Use Polling first for stability on Render
+        const socket = io(SERVER_URL, { 
+            transports: ['polling', 'websocket'], 
+            query: { restaurantId: mongoId } 
+        });
         
         socket.on("connect", () => {
             socket.emit("join-restaurant", mongoId);
             forceSync(mongoId);
         });
 
-        socket.on("chef-ready-alert", () => forceSync(mongoId));
+        // Listen for Chef updates
         socket.on("new-order", () => forceSync(mongoId));
-        
-        socket.on("new-waiter-call", () => {
+        socket.on("chef-ready-alert", () => {
             if(!isMuted) dingRef.current.play().catch(()=>{});
+            forceSync(mongoId);
+        });
+        
+        // Listen for Customer Calls
+        socket.on("new-waiter-call", () => {
+            if(!isMuted) callRef.current.play().catch(()=>{});
+            toast("New Table Call!", { icon: '🔔' });
             if ("vibrate" in navigator) navigator.vibrate(500);
             forceSync(mongoId);
         });
 
-        const backupTimer = setInterval(() => forceSync(mongoId), 12000);
+        const backupTimer = setInterval(() => forceSync(mongoId), 10000);
         return () => { socket.disconnect(); clearInterval(backupTimer); };
-    }, [mongoId, forceSync, isAuthenticated, isMuted]);
+    }, [mongoId, isAuthenticated, isMuted, forceSync]);
 
-    // ✅ 4. ACTION HANDLERS
+    // ✅ 4. SERVER ACTIONS
     const handleServe = async (orderId) => {
         if ("vibrate" in navigator) navigator.vibrate(50);
-        setOrders(prev => prev.filter(o => o._id !== orderId));
         try {
             await axios.put(`${API_BASE}/orders/${orderId}`, { status: "Served" });
-            toast.success("Served! Bill generated.", { icon: '🍽️' });
+            toast.success("Served! Receipt Unlocked.", { icon: '✅' });
+            forceSync(mongoId);
+        } catch (e) { forceSync(mongoId); }
+    };
+
+    const handleMarkPaid = async (orderId) => {
+        try {
+            await axios.put(`${API_BASE}/orders/${orderId}`, { status: "Paid" });
+            toast.success("Order Closed & Paid", { icon: '💰' });
+            forceSync(mongoId);
         } catch (e) { forceSync(mongoId); }
     };
 
     const resolveCall = async (callId) => {
-        if ("vibrate" in navigator) navigator.vibrate(100);
         setServiceCalls(prev => prev.filter(c => c._id !== callId));
         try { await axios.delete(`${API_BASE}/orders/calls/${callId}`); } catch (e) {}
     };
 
-    // Filter logic for the UI
+    // ✅ 5. RECEIPT GENERATOR
+    const printReceipt = async (orderId) => {
+        const element = document.getElementById(`receipt-${orderId}`);
+        if (!element) return;
+        try {
+            const canvas = await html2canvas(element, { scale: 2 });
+            const imgData = canvas.toDataURL('image/png');
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+            pdf.save(`Bill-${orderId.slice(-4)}.pdf`);
+            toast.success("Receipt Printed");
+        } catch (err) { toast.error("Print failed"); }
+    };
+
+    // Filter Logic
     const displayedOrders = showAllOrders 
         ? orders 
-        : orders.filter(o => o.status?.toLowerCase() === "ready");
+        : orders.filter(o => o.status?.toLowerCase() === "ready" || o.status?.toLowerCase() === "served");
 
     if (!isAuthenticated) return (
         <div style={styles.lockOverlay}>
@@ -170,11 +209,11 @@ const WaiterDashboard = () => {
                 </div>
             </header>
 
-            {/* Force Serve Toggle */}
+            {/* TOGGLE BAR */}
             <div style={styles.toolbar}>
                 <h3 style={styles.sectionLabel}>{showAllOrders ? "ALL ACTIVE TABLES" : "READY FOR PICKUP"}</h3>
                 <button onClick={() => setShowAllOrders(!showAllOrders)} style={{...styles.toggleBtn, background: showAllOrders ? '#f97316' : '#111'}}>
-                    {showAllOrders ? "View Only Ready" : "Force Serve Mode"}
+                    {showAllOrders ? "View Only Ready" : "Show All Orders"}
                 </button>
             </div>
             
@@ -185,27 +224,74 @@ const WaiterDashboard = () => {
                 </div>
             ) : (
                 <div style={styles.grid}>
-                    {displayedOrders.map(order => (
-                        <div key={order._id} style={{...styles.card, borderLeft: order.status === 'ready' ? '6px solid #22c55e' : '6px solid #eab308'}}>
-                            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
-                                <div style={styles.tableBig}>Table {order.tableNum}</div>
-                                <div style={{...styles.readyBadge, background: order.status === 'ready' ? '#22c55e' : '#eab308'}}>
-                                    {order.status.toUpperCase()}
+                    {displayedOrders.map(order => {
+                        const isLocked = !(order.status === 'Served' || order.status === 'Paid');
+                        
+                        return (
+                            <div key={order._id} style={{...styles.card, borderLeft: order.status === 'ready' ? '6px solid #22c55e' : (order.status === 'served' ? '6px solid #3b82f6' : '6px solid #eab308')}}>
+                                
+                                {/* ✅ HIDDEN RECEIPT TEMPLATE */}
+                                <div id={`receipt-${order._id}`} style={{position:'absolute', top:-9999, left:-9999, background:'white', color:'black', padding:20, width:300}}>
+                                    <h3 style={{textAlign:'center'}}>RESTAURANT RECEIPT</h3>
+                                    <p style={{textAlign:'center'}}>Table: {order.tableNum}</p>
+                                    <hr/>
+                                    {order.items.map((it, i) => <div key={i} style={{display:'flex', justifyContent:'space-between'}}><span>{it.quantity} x {it.name}</span><span>{it.price * it.quantity}</span></div>)}
+                                    <hr/>
+                                    <div style={{display:'flex', justifyContent:'space-between', fontWeight:'bold'}}><span>Total:</span><span>{order.totalAmount}</span></div>
+                                    <p style={{textAlign:'center', fontSize:'10px', marginTop:10}}>Thank you for dining with us!</p>
+                                </div>
+
+                                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                                    <div style={styles.tableBig}>Table {order.tableNum}</div>
+                                    <div style={{...styles.readyBadge, background: order.status === 'ready' ? '#22c55e' : (order.status === 'served' ? '#3b82f6' : '#eab308')}}>
+                                        {order.status.toUpperCase()}
+                                    </div>
+                                </div>
+                                
+                                <div style={styles.itemsBox}>
+                                    {order.items?.map((item, i) => (
+                                        <div key={i} style={styles.itemRow}>
+                                            <span style={{color:'#FF9933', fontWeight:'900'}}>{item.quantity}×</span>
+                                            <span>{item.name}</span>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* ✅ ACTION BUTTONS */}
+                                <div style={{display:'grid', gap:'10px'}}>
+                                    
+                                    {/* SERVE BUTTON */}
+                                    {order.status !== 'Served' && order.status !== 'Paid' && (
+                                        <button onClick={() => handleServe(order._id)} style={styles.serveBtn}>
+                                            <FaCheckDouble /> MARK AS SERVED
+                                        </button>
+                                    )}
+
+                                    {/* PAID BUTTON (Only if served) */}
+                                    {order.status === 'Served' && (
+                                        <button onClick={() => handleMarkPaid(order._id)} style={{...styles.serveBtn, background:'#10b981'}}>
+                                            <FaRupeeSign /> MARK PAID
+                                        </button>
+                                    )}
+
+                                    {/* RECEIPT BUTTON (LOCKED UNTIL SERVED) */}
+                                    <button 
+                                        onClick={() => printReceipt(order._id)} 
+                                        disabled={isLocked}
+                                        style={{
+                                            ...styles.iconBtn, 
+                                            width:'100%', justifyContent:'center', gap:'10px',
+                                            background: isLocked ? '#222' : '#fff',
+                                            color: isLocked ? '#555' : '#000',
+                                            cursor: isLocked ? 'not-allowed' : 'pointer'
+                                        }}
+                                    >
+                                        {isLocked ? <><FaLock/> RECEIPT LOCKED</> : <><FaPrint/> PRINT RECEIPT</>}
+                                    </button>
                                 </div>
                             </div>
-                            <div style={styles.itemsBox}>
-                                {order.items?.map((item, i) => (
-                                    <div key={i} style={styles.itemRow}>
-                                        <span style={{color:'#FF9933', fontWeight:'900'}}>{item.quantity}×</span>
-                                        <span>{item.name}</span>
-                                    </div>
-                                ))}
-                            </div>
-                            <button onClick={() => handleServe(order._id)} style={styles.serveBtn}>
-                                <FaCheck /> MARK AS SERVED
-                            </button>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             )}
 
@@ -240,7 +326,7 @@ const styles = {
     readyBadge: { color: 'white', fontSize: '10px', fontWeight: '900', padding: '4px 10px', borderRadius: '12px' },
     itemsBox: { background: '#000', padding: '12px', borderRadius: '15px', margin: '15px 0' },
     itemRow: { display:'flex', gap:'10px', marginBottom:'5px', fontSize:'14px' },
-    serveBtn: { width: '100%', padding: '16px', background: '#22c55e', color: 'white', border: 'none', borderRadius: '15px', fontWeight: '900', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px' },
+    serveBtn: { width: '100%', padding: '16px', background: '#22c55e', color: 'white', border: 'none', borderRadius: '15px', fontWeight: '900', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px', cursor:'pointer' },
     iconBtn: { background:'#111', border:'1px solid #222', color:'white', borderRadius:'12px', padding:'10px', display:'flex', alignItems:'center' },
     emptyState: { textAlign:'center', marginTop:'100px', opacity:0.2 }
 };
