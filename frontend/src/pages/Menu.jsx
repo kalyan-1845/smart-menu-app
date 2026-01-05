@@ -1,15 +1,15 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import { useParams, useNavigate } from "react-router-dom"; // 🎯 Changed Link to useNavigate
+import { useParams, useNavigate } from "react-router-dom"; 
 import axios from "axios";
 import { FaSearch, FaPlus, FaMinus, FaShoppingCart, FaArrowRight, FaLock, FaSyncAlt } from "react-icons/fa";
-import { toast } from "react-hot-toast"; // 🎯 Added Toast for empty cart alert
+import { toast } from "react-hot-toast"; 
 import LoadingSpinner from "../components/LoadingSpinner";
 
 const API_BASE = "https://smart-menu-backend-5ge7.onrender.com/api";
 
 const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customerId }) => {
     const params = useParams();
-    const navigate = useNavigate(); // 🎯 Added Navigation Hook
+    const navigate = useNavigate(); 
     const currentRestId = params.restaurantId || params.id;
     const currentTable = params.table;
 
@@ -141,12 +141,15 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customer
             <div style={{...styles.pullLoader, height: `${pullDistance}px`, opacity: pullDistance / 60}}>
                 <FaSyncAlt className={refreshing ? "spin" : ""} style={{color: '#f97316'}} />
             </div>
-               <div style={styles.marqueeWrapper}>
+
+            {/* 🟠 SCROLLING MARQUEE ADDED HERE */}
+            <div style={styles.marqueeWrapper}>
                 <div style={styles.marqueeContent}>
-                    <span>JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • </span>
-                    <span>JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • </span>
+                    <span>JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • </span>
+                    <span>JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • </span>
                 </div>
             </div>
+
             <div style={styles.hero}>
                 <div style={styles.heroContent}>
                     <div>
@@ -154,7 +157,6 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customer
                         <p style={styles.restSub}>{currentTable ? `Table No: ${currentTable}` : "Digital Menu"}</p>
                     </div>
                     
-                    {/* 🎯 FIXED HEADER CART ICON: Prevents click if empty */}
                     <div onClick={handleCartClick} style={{...styles.headerCart, opacity: totalQty === 0 ? 0.5 : 1, cursor: 'pointer'}}>
                         <FaShoppingCart size={20} />
                         {totalQty > 0 && <span style={styles.headerBadge}>{totalQty}</span>}
@@ -234,10 +236,8 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customer
                 })}
             </div>
 
-            {/* Bottom Float Cart - Only shows if items exist */}
             {totalQty > 0 && (
                 <div style={styles.floatBarContainer} className="slide-up">
-                    {/* 🎯 Updated Bottom Link to use navigate for consistency, though Link is also fine here */}
                     <div onClick={() => navigate(cartLink)} style={{...styles.floatBar, cursor: 'pointer'}}>
                         <div style={styles.floatInfo}>
                             <span style={styles.floatQty}>{totalQty} ITEMS</span>
@@ -253,6 +253,13 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customer
                 @keyframes spin { 100% { transform: rotate(360deg); } }
                 .slide-up { animation: slideUp 0.3s ease-out; }
                 @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+                
+                /* MARQUEE ANIMATION */
+                @keyframes scroll {
+                    0% { transform: translateX(0); }
+                    100% { transform: translateX(-50%); }
+                }
+                
                 ::-webkit-scrollbar { display: none; }
                 * { -webkit-tap-highlight-color: transparent; user-select: none; }
             `}</style>
@@ -264,6 +271,11 @@ const styles = {
     container: { minHeight: "100vh", background: "#050505", color: "white", paddingBottom: "120px", fontFamily: "'Inter', sans-serif" },
     center: { display:'flex', height:'100vh', alignItems:'center', justifyContent:'center', flexDirection:'column' },
     pullLoader: { width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', overflow: 'hidden', transition: '0.2s' },
+    
+    // 🟠 MARQUEE STYLES
+    marqueeWrapper: { background: '#1a0b00', borderBottom: '1px solid #331400', padding: '8px 0', overflow: 'hidden', whiteSpace: 'nowrap' },
+    marqueeContent: { display: 'inline-block', paddingLeft: '100%', animation: 'scroll 20s linear infinite', color: '#f97316', fontSize: '10px', fontWeight: '900', letterSpacing: '2px' },
+
     hero: { padding: "25px 20px", background: "linear-gradient(180deg, #0f0f0f 0%, #050505 100%)" },
     heroContent: { display: "flex", justifyContent: "space-between", alignItems: 'center' },
     restName: { fontSize: "28px", fontWeight: "900", margin: 0, letterSpacing: "-1px" },
