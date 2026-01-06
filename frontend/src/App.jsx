@@ -13,15 +13,16 @@ import SuperLogin from "./pages/SuperLogin";
 import Terms from './pages/Terms';
 import Maintenance from './pages/Maintenance';
 import NotFound from './pages/NotFound';
-import ProjectFlyer from './pages/ProjectFlyer';
+
 // --- STAFF PANELS ---
 import SuperAdmin from "./pages/SuperAdmin";
 import RestaurantAdmin from "./pages/RestaurantAdmin";
 import ChefDashboard from "./pages/ChefDashboard"; 
 import WaiterDashboard from "./pages/WaiterDashboard";
 
-// ✅ NEW IMPORT
+// ✅ NEW IMPORTS
 import RoleLogin from "./pages/RoleLogin"; 
+import ProjectFlyer from "./pages/ProjectFlyer"; // 👈 IMPORTED FLYER
 
 const API_BASE = "https://smart-menu-backend-5ge7.onrender.com/api";
 
@@ -131,14 +132,16 @@ function App() {
         {/* --- PUBLIC PAGES --- */}
         <Route path="/" element={<LandingPage />} /> 
         
-        {/* ✅ ADDED ROLE LOGIN HUB HERE */}
+        {/* ✅ ADDED PROJECT FLYER ROUTE HERE */}
+        <Route path="/ProjectFlyer" element={<ProjectFlyer />} />
+        
+        {/* ✅ ROLE LOGIN PORTAL */}
         <Route path="/portal" element={<RoleLogin />} />
 
         <Route path="/login" element={<OwnerLogin />} />
         <Route path="/register" element={<Register />} />
         <Route path="/terms" element={<Terms />} />
-        <Route path="/flyer" element={<ProjectFlyer />} />
-
+          
         {/* --- CUSTOMER MENU FLOW --- */}
         <Route path="/menu/:restaurantId" element={
             <div className="page-transition">
