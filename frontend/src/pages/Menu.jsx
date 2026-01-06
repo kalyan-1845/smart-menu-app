@@ -142,11 +142,11 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customer
                 <FaSyncAlt className={refreshing ? "spin" : ""} style={{color: '#f97316'}} />
             </div>
 
-            {/* 🟠 SCROLLING MARQUEE ADDED HERE */}
+            {/* 🟠 STYLISH MARQUEE UI ADDED HERE */}
             <div style={styles.marqueeWrapper}>
                 <div style={styles.marqueeContent}>
-                    <span>JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • </span>
-                    <span>JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • JAI SHREE RAM • </span>
+                    <span>✦ JAI SHREE RAM ✦ JAI SHREE RAM ✦ JAI SHREE RAM ✦ JAI SHREE RAM ✦ </span>
+                    <span>✦ JAI SHREE RAM ✦ JAI SHREE RAM ✦ JAI SHREE RAM ✦ JAI SHREE RAM ✦ </span>
                 </div>
             </div>
 
@@ -272,9 +272,25 @@ const styles = {
     center: { display:'flex', height:'100vh', alignItems:'center', justifyContent:'center', flexDirection:'column' },
     pullLoader: { width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', overflow: 'hidden', transition: '0.2s' },
     
-    // 🟠 MARQUEE STYLES
-    marqueeWrapper: { background: '#1a0b00', borderBottom: '1px solid #331400', padding: '8px 0', overflow: 'hidden', whiteSpace: 'nowrap' },
-    marqueeContent: { display: 'inline-block', paddingLeft: '100%', animation: 'scroll 20s linear infinite', color: '#f97316', fontSize: '10px', fontWeight: '900', letterSpacing: '2px' },
+    // 🟠 STYLISH DIVINE MARQUEE STYLES
+    marqueeWrapper: { 
+        background: 'linear-gradient(90deg, #4a2c0f, #1a0b00, #4a2c0f)', // Saffron gradient
+        borderBottom: '2px solid #f97316', 
+        padding: '10px 0', 
+        overflow: 'hidden', 
+        whiteSpace: 'nowrap',
+        boxShadow: '0 4px 15px rgba(249, 115, 22, 0.3)' 
+    },
+    marqueeContent: { 
+        display: 'inline-block', 
+        paddingLeft: '100%', 
+        animation: 'scroll 25s linear infinite', // Slightly slower for elegance
+        color: '#ffedd5', 
+        fontSize: '12px', 
+        fontWeight: '900', 
+        letterSpacing: '3px',
+        textShadow: '0 0 10px rgba(249, 115, 22, 0.8)' // Neon glow effect
+    },
 
     hero: { padding: "25px 20px", background: "linear-gradient(180deg, #0f0f0f 0%, #050505 100%)" },
     heroContent: { display: "flex", justifyContent: "space-between", alignItems: 'center' },

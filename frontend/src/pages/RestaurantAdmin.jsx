@@ -3,14 +3,12 @@ import axios from "axios";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import confetti from "canvas-confetti";
 import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas'; // Added for Receipt Generation
 import autoTable from 'jspdf-autotable';
 import InstallButton from "../components/InstallButton";
 import { 
     FaTrash, FaUtensils, FaBell, FaCheckCircle, FaCircle, FaCrown, 
     FaSignOutAlt, FaRocket, FaStore, FaCopy, 
-    FaDownload, FaQrcode, FaPlus, FaHistory, FaSpinner, FaImage,
-    FaConciergeBell, FaFire, FaRupeeSign, FaLock, FaPrint, FaCheck // Added Icons
+    FaDownload, FaQrcode, FaPlus, FaHistory, FaSpinner, FaImage
 } from "react-icons/fa";
 import { toast } from "react-hot-toast";
 
@@ -32,11 +30,6 @@ const styles = `
 .menu-link-box { background: rgba(0,0,0,0.3); border: 1px dashed #444; padding: 15px; border-radius: 16px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 .link-text { color: #3b82f6; font-size: 11px; font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px; text-decoration: none; }
 .spin { animation: rotate 1s linear infinite; } @keyframes rotate { 100% { transform: rotate(360deg); } }
-/* ADDED STYLES FOR ORDER CARDS */
-.order-card { background: #fff; color: #000; border-radius: 16px; padding: 15px; margin-bottom: 15px; }
-.status-btn { padding: 8px 12px; border: none; border-radius: 8px; color: white; font-weight: bold; font-size: 11px; cursor: pointer; display: flex; align-items: center; gap: 5px; }
-.locked-btn { background: #e5e7eb; color: #9ca3af; cursor: not-allowed; width: 100%; padding: 10px; border-radius: 8px; font-weight: bold; display: flex; justify-content: center; align-items: center; gap: 8px; border: none; }
-.unlock-btn { background: #22c55e; color: white; cursor: pointer; width: 100%; padding: 10px; border-radius: 8px; font-weight: bold; display: flex; justify-content: center; align-items: center; gap: 8px; border: none; }
 `;
 
 const SetupWizard = ({ dishesCount, pushEnabled }) => {
@@ -82,7 +75,7 @@ const RestaurantAdmin = () => {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [password, setPassword] = useState("");
-    const [activeTab, setActiveTab] = useState("orders"); // ✅ Changed default to Orders for quick access
+    const [activeTab, setActiveTab] = useState("menu");
     const [restaurantName, setRestaurantName] = useState(id);
     const [dishes, setDishes] = useState([]);
     const [inboxOrders, setInboxOrders] = useState([]);
@@ -226,32 +219,6 @@ const RestaurantAdmin = () => {
         } catch (err) { toast.error("Error clearing inbox"); }
     };
 
-    // --- 🟢 NEW: ORDER STATUS & RECEIPT LOCK LOGIC ---
-    const updateOrderStatus = async (orderId, newStatus) => {
-        try {
-            await axios.put(`${API_BASE}/orders/${orderId}/status`, { status: newStatus });
-            toast.success(`Marked as ${newStatus}`);
-            refreshData(); // Refresh list to show status change
-        } catch (err) {
-            toast.error("Update failed");
-        }
-    };
-
-    const printReceipt = async (orderId) => {
-        const element = document.getElementById(`receipt-${orderId}`);
-        if (!element) return;
-        try {
-            const canvas = await html2canvas(element, { scale: 2 });
-            const imgData = canvas.toDataURL('image/png');
-            const pdf = new jsPDF('p', 'mm', 'a4');
-            const pdfWidth = pdf.internal.pageSize.getWidth();
-            const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-            pdf.save(`Order-${orderId.slice(-4)}.pdf`);
-            toast.success("Receipt Printed");
-        } catch (err) { toast.error("Print failed"); }
-    };
-
     const generatePrintableQRs = () => {
         const printWindow = window.open('', '_blank');
         const qrCodesHtml = [];
@@ -315,71 +282,9 @@ const RestaurantAdmin = () => {
                 <SetupWizard dishesCount={dishes.length} pushEnabled={Notification.permission === 'granted'} />
 
                 <nav className="nav-tabs">
-                    {/* ✅ ADDED ORDERS TAB */}
-                    <button onClick={() => setActiveTab("orders")} className={`tab-btn ${activeTab === "orders" ? 'active' : ''}`}>Live Orders</button>
                     <button onClick={() => setActiveTab("menu")} className={`tab-btn ${activeTab === "menu" ? 'active' : ''}`}>Menu Editor</button>
-                    <button onClick={() => setActiveTab("settings")} className={`tab-btn ${activeTab === "settings" ? 'active' : ''}`}>Tools</button>
+                    <button onClick={() => setActiveTab("settings")} className={`tab-btn ${activeTab === "settings" ? 'active' : ''}`}>Business Tools</button>
                 </nav>
-
-                {/* ✅ ORDERS TAB CONTENT WITH LOCK LOGIC */}
-                {activeTab === "orders" && (
-                    <div style={{paddingBottom: 80}}>
-                        {inboxOrders.length === 0 ? (
-                            <div className="glass-card" style={{textAlign:'center', opacity:0.5}}>
-                                <FaCheckCircle size={40} style={{marginBottom:10}}/>
-                                <p>All clear! No pending orders.</p>
-                            </div>
-                        ) : (
-                            inboxOrders.map(order => {
-                                const isLocked = !(order.status === 'Served' || order.status === 'Paid');
-                                return (
-                                    <div key={order._id} className="order-card">
-                                        {/* HIDDEN RECEIPT CONTENT */}
-                                        <div id={`receipt-${order._id}`} style={{marginBottom:10, padding:10, borderBottom:'1px dashed #ccc'}}>
-                                            <div style={{display:'flex', justifyContent:'space-between', fontWeight:'bold'}}>
-                                                <span>Table {order.tableNum}</span>
-                                                <span style={{color:'#666'}}>{new Date(order.createdAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
-                                            </div>
-                                            <div style={{margin:'5px 0', fontSize:'13px'}}>{order.customerName}</div>
-                                            {order.items.map((it, i) => (
-                                                <div key={i} style={{display:'flex', justifyContent:'space-between', fontSize:'13px'}}>
-                                                    <span>{it.quantity} x {it.name}</span>
-                                                    <span>{it.price * it.quantity}</span>
-                                                </div>
-                                            ))}
-                                            <div style={{display:'flex', justifyContent:'space-between', fontWeight:'900', marginTop:5}}>
-                                                <span>Total</span>
-                                                <span>₹{order.totalAmount}</span>
-                                            </div>
-                                        </div>
-
-                                        {/* STATUS BUTTONS */}
-                                        <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:10}}>
-                                            {order.status === 'Pending' && <button onClick={()=>updateOrderStatus(order._id, 'Cooking')} className="status-btn" style={{background:'#f59e0b'}}><FaFire/> Cook</button>}
-                                            {order.status === 'Cooking' && <button onClick={()=>updateOrderStatus(order._id, 'Ready')} className="status-btn" style={{background:'#10b981'}}><FaConciergeBell/> Ready</button>}
-                                            {order.status === 'Ready' && <button onClick={()=>updateOrderStatus(order._id, 'Served')} className="status-btn" style={{background:'#3b82f6'}}><FaCheck/> Serve</button>}
-                                            {(order.status === 'Served' || order.status === 'Ready') && (
-                                                <button onClick={()=>updateOrderStatus(order._id, 'Paid')} className="status-btn" style={{background:'#22c55e', gridColumn:'span 2', justifyContent:'center'}}>
-                                                    <FaRupeeSign/> Mark Paid
-                                                </button>
-                                            )}
-                                            {order.status === 'Paid' && <div style={{gridColumn:'span 2', textAlign:'center', color:'#22c55e', fontWeight:'bold', padding:5}}>PAID ✅</div>}
-                                        </div>
-
-                                        {/* 🔒 LOCKED RECEIPT BUTTON */}
-                                        <button 
-                                            onClick={() => printReceipt(order._id)} 
-                                            disabled={isLocked} 
-                                            className={isLocked ? 'locked-btn' : 'unlock-btn'}
-                                        >
-                                            {isLocked ? <><FaLock/> Receipt Locked</> : <><FaPrint/> Print Receipt</>}
-                                        </button>
-                                    </div>
-                                );
-                            })
-                        )}
-                    </div>
-                )}
 
                 {activeTab === "menu" && (
                     <>

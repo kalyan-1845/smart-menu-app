@@ -6,7 +6,7 @@ import { generateCustomerReceipt } from "../utils/ReceiptGenerator";
 import { 
     FaCheck, FaUtensils, FaConciergeBell, FaFlagCheckered,
     FaArrowLeft, FaDownload, FaSpinner, FaReceipt, 
-    FaTimes, FaBell, FaCashRegister, FaStar, FaLock // ✅ Added FaLock
+    FaTimes, FaBell, FaCashRegister, FaStar 
 } from "react-icons/fa";
 import { toast } from "react-hot-toast";
 
@@ -14,7 +14,7 @@ const SERVER_URL = "https://smart-menu-backend-5ge7.onrender.com";
 const API_BASE = `${SERVER_URL}/api`;
 
 const OrderTracker = () => {
-    const { id } = useParams(); 
+    const { id } = useParams(); // 🎯 Unique Order ID from URL
     const navigate = useNavigate();
     const socketRef = useRef(null);
     
@@ -85,7 +85,7 @@ const OrderTracker = () => {
             if(socketRef.current) socketRef.current.disconnect(); 
             clearInterval(interval); 
         };
-    }, [id, order?.restaurantId, fetchOrderData]); 
+    }, [id, order?.restaurantId, fetchOrderData]); // Re-run when restaurantId is known
 
     // 🛎️ WAITER CALL
     const handleCallWaiter = () => {
@@ -105,9 +105,9 @@ const OrderTracker = () => {
         setTimeout(() => setIsCalling(false), 10000); // 10s cooldown
     };
 
-    // 🧾 AUTO-DOWNLOAD RECEIPT (Only if served/paid)
+    // 🧾 AUTO-DOWNLOAD RECEIPT
     useEffect(() => {
-        if (order && (order.status.toLowerCase() === "served" || order.status.toLowerCase() === "paid")) {
+        if (order && (order.status.toLowerCase() === "served" || order.status.toLowerCase() === "completed")) {
             if (!hasDownloaded && restaurant) {
                 setTimeout(async () => {
                     await generateCustomerReceipt(order, restaurant);
@@ -127,9 +127,6 @@ const OrderTracker = () => {
     };
 
     const currentStep = order ? getStepIndex(order.status) : 0;
-
-    // ✅ LOCK LOGIC: Is the receipt locked?
-    const isLocked = order ? !(order.status.toLowerCase() === "served" || order.status.toLowerCase() === "paid") : true;
 
     if (!order) return <div style={styles.center}><FaSpinner className="spin" size={30} color="#f97316"/></div>;
 
@@ -223,19 +220,9 @@ const OrderTracker = () => {
             <div style={styles.footer}>
                 <button 
                     onClick={() => generateCustomerReceipt(order, restaurant)} 
-                    disabled={isLocked} // 🔒 Disable if locked
-                    style={{
-                        ...styles.solidBtn,
-                        background: isLocked ? '#333' : '#f97316', // Grey if locked
-                        color: isLocked ? '#666' : 'white',
-                        cursor: isLocked ? 'not-allowed' : 'pointer'
-                    }}
+                    style={styles.solidBtn}
                 >
-                    {isLocked ? (
-                        <><FaLock /> Receipt Locked (Wait for Bill)</>
-                    ) : (
-                        <><FaDownload /> Download Receipt</>
-                    )}
+                    <FaDownload /> Download Receipt
                 </button>
             </div>
             <style>{`.spin { animation: spin 1s linear infinite; } @keyframes spin { 100% { transform: rotate(360deg); } } .pop-in { animation: pop 0.4s cubic-bezier(0.17, 0.89, 0.32, 1.49); }`}</style>
@@ -278,7 +265,7 @@ const styles = {
     totalRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '20px', fontWeight: '900' },
     totalPrice: { color: '#22c55e' },
     footer: { position: 'fixed', bottom: 0, left: 0, right: 0, padding: '20px', background: 'rgba(5,5,5,0.8)', backdropFilter: 'blur(20px)', zIndex: 100 },
-    solidBtn: { width: '100%', height: '58px', border: 'none', borderRadius: '18px', fontWeight: '900', fontSize:'14px', display:'flex', alignItems:'center', justifyContent:'center', gap:'10px' },
+    solidBtn: { width: '100%', height: '58px', border: 'none', borderRadius: '18px', fontWeight: '900', fontSize:'14px', display:'flex', alignItems:'center', justifyContent:'center', gap:'10px', color: 'white', background: '#f97316' },
     feedbackOverlay: { position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', zIndex:2000, display:'flex', alignItems:'center', justifyContent:'center', padding:'20px' },
     feedbackCard: { background:'white', color:'black', borderRadius:'28px', padding:'30px', width:'100%', maxWidth:'320px', position:'relative', textAlign:'center' },
     closeBtn: { position:'absolute', top:'15px', right:'15px', background:'none', border:'none', color:'#ccc', fontSize:'20px' }
