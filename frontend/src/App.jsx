@@ -2,23 +2,26 @@ import React, { useState, useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import axios from "axios";
 
-// --- ✅ 1. MAKE SURE THESE IMPORTS EXIST ---
+// --- EXISTING IMPORTS ---
 import LandingPage from "./pages/LandingPage"; 
 import Menu from "./pages/Menu"; 
 import Cart from "./pages/Cart";
 import OrderTracker from "./pages/OrderTracker";
-import OwnerLogin from "./pages/OwnerLogin"; // <--- CRITICAL
-import Register from "./pages/Register";     // <--- CRITICAL
+import OwnerLogin from "./pages/OwnerLogin"; 
+import Register from "./pages/Register";    
 import SuperLogin from "./pages/SuperLogin"; 
 import Terms from './pages/Terms';
 import Maintenance from './pages/Maintenance';
 import NotFound from './pages/NotFound';
-
+import ProjectFlyer from './pages/ProjectFlyer';
 // --- STAFF PANELS ---
 import SuperAdmin from "./pages/SuperAdmin";
 import RestaurantAdmin from "./pages/RestaurantAdmin";
 import ChefDashboard from "./pages/ChefDashboard"; 
 import WaiterDashboard from "./pages/WaiterDashboard";
+
+// ✅ NEW IMPORT
+import RoleLogin from "./pages/RoleLogin"; 
 
 const API_BASE = "https://smart-menu-backend-5ge7.onrender.com/api";
 
@@ -45,7 +48,6 @@ const GlobalStyles = () => (
 );
 
 function App() {
-  // 1. UNIQUE CUSTOMER FINGERPRINT
   const [customerId] = useState(() => {
     let id = localStorage.getItem("smartMenu_CustomerId");
     if (!id) {
@@ -55,10 +57,8 @@ function App() {
     return id;
   });
 
-  // 2. RESTAURANT STATE
   const [restaurantId, setRestaurantId] = useState(localStorage.getItem("smartMenu_ActiveRest") || null);
 
-  // 3. CART STATE (Locked to Restaurant + Customer)
   const [cart, setCart] = useState(() => {
     const activeRest = localStorage.getItem("smartMenu_ActiveRest");
     if (!activeRest) return [];
@@ -69,7 +69,6 @@ function App() {
   const [tableNum, setTableNum] = useState(localStorage.getItem(`table_${restaurantId}`) || "");
   const [isMaintenance, setIsMaintenance] = useState(false);
 
-  // 4. MAINTENANCE CHECK
   useEffect(() => {
     const checkSystemStatus = async () => {
       try {
@@ -80,7 +79,6 @@ function App() {
     checkSystemStatus();
   }, []);
 
-  // 5. PERSISTENCE
   useEffect(() => { 
     if (restaurantId) {
       localStorage.setItem(`cart_${restaurantId}_${customerId}`, JSON.stringify(cart));
@@ -121,7 +119,6 @@ function App() {
     localStorage.setItem(`table_${restaurantId}`, num);
   };
 
-  // MAINTENANCE REDIRECT
   if (isMaintenance && !window.location.pathname.includes('super')) {
       return <Maintenance />;
   }
@@ -134,11 +131,14 @@ function App() {
         {/* --- PUBLIC PAGES --- */}
         <Route path="/" element={<LandingPage />} /> 
         
-        {/* ✅ 2. HERE ARE THE MISSING ROUTES */}
+        {/* ✅ ADDED ROLE LOGIN HUB HERE */}
+        <Route path="/portal" element={<RoleLogin />} />
+
         <Route path="/login" element={<OwnerLogin />} />
         <Route path="/register" element={<Register />} />
         <Route path="/terms" element={<Terms />} />
-          
+        <Route path="/flyer" element={<ProjectFlyer />} />
+
         {/* --- CUSTOMER MENU FLOW --- */}
         <Route path="/menu/:restaurantId" element={
             <div className="page-transition">
@@ -148,7 +148,7 @@ function App() {
                 setRestaurantId={handleSetRestaurantId} 
                 setTableNum={handleSetTable} 
                 setCart={setCart} 
-                customerId={customerId} // Required for unique links
+                customerId={customerId} 
               />
             </div>
         } />
@@ -165,7 +165,7 @@ function App() {
             </div>
         } />
 
-        {/* --- CART FLOW (Unique URL) --- */}
+        {/* --- CART FLOW --- */}
         <Route path="/:restaurantId/cart/:customerId" element={
             <div className="page-transition">
               <Cart 

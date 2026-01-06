@@ -1,4 +1,4 @@
-const CACHE_NAME = 'bitebox-v3.1'; // Bumping version to force update
+const CACHE_NAME = 'bitebox-forever-v5.2'; // ⬆️ Bumping version to force "Forever" update
 
 // 1. Install Event - Force immediate takeover
 self.addEventListener('install', (event) => {
@@ -22,7 +22,7 @@ self.addEventListener('activate', (event) => {
     return self.clients.claim();
 });
 
-// 3. Push Event - Staff Alerts
+// 3. Push Event - Staff Alerts (Retained from your code)
 self.addEventListener('push', function(event) {
     if (!event.data) return;
     try {
@@ -64,51 +64,63 @@ self.addEventListener('notificationclick', function(event) {
     );
 });
 
-// 5. Fetch Event - Industrial Strength Security & Error Prevention
+// 5. Fetch Event - "FOREVER" CACHE STRATEGY
 self.addEventListener('fetch', (event) => {
-    
-    // 🔴 TRAP 1: Ignore Non-GET requests (POST/PUT/DELETE)
-    if (event.request.method !== 'GET') return;
-
-    // 🔴 TRAP 2: IGNORE CHROME EXTENSIONS (Stops the Console Errors)
     const url = new URL(event.request.url);
-    if (url.protocol === 'chrome-extension:' || url.protocol === 'moz-extension:') {
-        return; 
-    }
 
-    // ✅ BYPASS CACHE: Always get real-time data from server (API & Socket)
+    // 🔴 SAFETY 1: IGNORE API & SOCKETS (Never cache these)
+    // This ensures your Live Orders are ALWAYS real-time.
     if (url.pathname.startsWith('/api/') || url.hostname.includes('socket.io')) {
         return; 
     }
 
-    // ✅ NETWORK-FIRST: Scripts and Styles (Fixes MIME Error)
-    if (event.request.destination === 'script' || event.request.destination === 'style') {
+    // 🔴 SAFETY 2: IGNORE EXTENSIONS (Fixes console errors)
+    if (url.protocol === 'chrome-extension:' || url.protocol === 'moz-extension:') {
+        return;
+    }
+
+    // ✅ STRATEGY A: HTML (Navigation) -> NETWORK FIRST
+    // We ALWAYS try to fetch the new index.html first.
+    // This prevents the "MIME Type" error because it updates the pointer to the JS files.
+    if (event.request.mode === 'navigate') {
         event.respondWith(
             fetch(event.request)
-                .then((response) => {
-                    // Only cache valid responses
-                    if (response && response.status === 200 && response.type === 'basic') {
-                        const copy = response.clone();
-                        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
-                    }
-                    return response;
+                .then((networkResponse) => {
+                    const copy = networkResponse.clone();
+                    caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+                    return networkResponse;
                 })
-                .catch(() => caches.match(event.request))
+                .catch(() => {
+                    // Offline? Serve the last cached HTML
+                    return caches.match(event.request);
+                })
         );
         return;
     }
 
-    // ✅ CACHE-FIRST: Images and Static Assets
+    // ✅ STRATEGY B: ASSETS (JS, CSS, Images) -> CACHE FIRST (FOREVER)
+    // We check the cache first. If it's there, we return it instantly.
+    // Because your built files have unique hashes (e.g. index-A1b2.js),
+    // we never need to update them. They live forever until deleted.
     event.respondWith(
         caches.match(event.request).then((cachedResponse) => {
-            if (cachedResponse) return cachedResponse;
-            return fetch(event.request).then((response) => {
-                // Only cache valid responses
-                if (response && response.status === 200 && response.type === 'basic') {
-                    const copy = response.clone();
-                    caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+            if (cachedResponse) {
+                return cachedResponse; // 🚀 Return immediately from storage
+            }
+
+            return fetch(event.request).then((networkResponse) => {
+                // Verify valid response
+                if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
+                    return networkResponse;
                 }
-                return response;
+
+                // Save to cache for next time (Forever)
+                const responseToCache = networkResponse.clone();
+                caches.open(CACHE_NAME).then((cache) => {
+                    cache.put(event.request, responseToCache);
+                });
+
+                return networkResponse;
             });
         })
     );

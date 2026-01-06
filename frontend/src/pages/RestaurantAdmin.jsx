@@ -1,18 +1,18 @@
 import React, { useEffect, useState, useCallback } from "react";
 import axios from "axios";
-import { Link, useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas'; 
 import autoTable from 'jspdf-autotable';
 import InstallButton from "../components/InstallButton";
-// ✅ IMPORT DASHBOARDS
 import ChefDashboard from "./ChefDashboard";
 import WaiterDashboard from "./WaiterDashboard";
 
 import { 
     FaTrash, FaUtensils, FaBell, FaCrown, FaSignOutAlt, FaStore, FaCopy, 
     FaDownload, FaQrcode, FaPlus, FaHistory, FaSpinner, FaLock, FaPrint, 
-    FaCheck, FaFire, FaConciergeBell, FaRupeeSign, FaUserTie, FaCreditCard, FaMoneyBillWave
+    FaCheck, FaFire, FaConciergeBell, FaRupeeSign, FaUserTie, FaCreditCard, 
+    FaMoneyBillWave, FaEye, FaBroom, FaBullhorn
 } from "react-icons/fa";
 import { toast } from "react-hot-toast";
 
@@ -37,6 +37,15 @@ const styles = `
 .status-btn { padding: 8px 12px; border: none; border-radius: 8px; color: white; font-weight: bold; font-size: 11px; cursor: pointer; display: flex; align-items: center; gap: 5px; }
 .locked-btn { background: #e5e7eb; color: #9ca3af; cursor: not-allowed; width: 100%; padding: 10px; border-radius: 8px; font-weight: bold; display: flex; justify-content: center; align-items: center; gap: 8px; border: none; }
 .unlock-btn { background: #22c55e; color: white; cursor: pointer; width: 100%; padding: 10px; border-radius: 8px; font-weight: bold; display: flex; justify-content: center; align-items: center; gap: 8px; border: none; }
+
+/* 🆕 NEW STYLES FOR BROADCAST & QR POPUP */
+.broadcast-bar { background: linear-gradient(90deg, #f97316, #ef4444); color: white; font-size: 12px; font-weight: bold; padding: 8px 0; overflow: hidden; white-space: nowrap; position: fixed; top: 0; left: 0; width: 100%; z-index: 100; box-shadow: 0 4px 15px rgba(249, 115, 22, 0.4); }
+.marquee { display: inline-block; padding-left: 100%; animation: scroll 15s linear infinite; }
+@keyframes scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }
+
+.qr-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 9999; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(10px); }
+.qr-modal { background: white; padding: 30px; border-radius: 30px; text-align: center; width: 300px; animation: popUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+@keyframes popUp { from { transform: scale(0.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 `;
 
 const RestaurantAdmin = () => {
@@ -57,6 +66,10 @@ const RestaurantAdmin = () => {
     const [mongoId, setMongoId] = useState(null); 
     const [bulkText, setBulkText] = useState("");
     const [qrRange, setQrRange] = useState({ start: 1, end: 5 });
+    
+    // 🆕 NEW STATES
+    const [broadcastMessage, setBroadcastMessage] = useState("");
+    const [qrModalOrder, setQrModalOrder] = useState(null); // Holds the order for the pop-up
 
     const autoCategory = (name) => {
         const n = name.toLowerCase();
@@ -71,12 +84,15 @@ const RestaurantAdmin = () => {
         if (!fetchId || fetchId === "undefined") return;
 
         try {
-            const [dishRes, orderRes] = await Promise.all([
+            const [dishRes, orderRes, settingsRes] = await Promise.all([
                 axios.get(`${API_BASE}/dishes?restaurantId=${fetchId}&t=${Date.now()}`),
-                axios.get(`${API_BASE}/orders/inbox?restaurantId=${fetchId}&t=${Date.now()}`)
+                axios.get(`${API_BASE}/orders/inbox?restaurantId=${fetchId}&t=${Date.now()}`),
+                axios.get(`${API_BASE}/superadmin/maintenance-status`) // Fetch broadcast if available
             ]);
             setDishes(dishRes.data || []);
             setInboxOrders(orderRes.data || []);
+            // Assuming the broadcast message might be in settingsRes.message or you can set a default
+            if(settingsRes.data.message) setBroadcastMessage(settingsRes.data.message);
             setIsLoading(false);
         } catch (e) { 
             console.error("Sync Error");
@@ -120,41 +136,26 @@ const RestaurantAdmin = () => {
         window.location.reload();
     };
 
+    // ... (Bulk Insert & Delete Dish Functions remain same) ...
     const handleBulkInsert = async () => {
         const lines = bulkText.split("\n").filter(l => l.trim() !== "");
         const token = localStorage.getItem(`owner_token_${id}`);
         const activeId = localStorage.getItem(`owner_id_${id}`);
-
         if (!activeId) return toast.error("Shop ID not found. Login again.");
         if (!lines.length) return toast.error("Enter items first");
-
         setIsLoading(true);
         const t = toast.loading("Syncing Dishes...");
-
         try {
             for (const line of lines) {
                 const [name, price, img] = line.split(",").map(item => item?.trim());
                 if (name && price) {
                     await axios.post(`${API_BASE}/dishes`, {
-                        name,
-                        price: parseFloat(price),
-                        image: img || "",
-                        category: autoCategory(name),
-                        restaurantId: activeId,
-                        isAvailable: true 
+                        name, price: parseFloat(price), image: img || "", category: autoCategory(name), restaurantId: activeId, isAvailable: true 
                     }, { headers: { Authorization: `Bearer ${token}` } });
                 }
             }
-            toast.dismiss(t);
-            toast.success("All Items Live!");
-            setBulkText("");
-            await refreshData(activeId);
-        } catch (err) {
-            toast.dismiss(t);
-            toast.error("Failed to sync items");
-        } finally {
-            setIsLoading(false);
-        }
+            toast.dismiss(t); toast.success("All Items Live!"); setBulkText(""); await refreshData(activeId);
+        } catch (err) { toast.dismiss(t); toast.error("Failed to sync items"); } finally { setIsLoading(false); }
     };
 
     const handleDeleteDish = async (dishId) => {
@@ -162,12 +163,22 @@ const RestaurantAdmin = () => {
         const token = localStorage.getItem(`owner_token_${id}`);
         const activeId = localStorage.getItem(`owner_id_${id}`);
         try {
-            await axios.delete(`${API_BASE}/dishes/${dishId}`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            refreshData(activeId);
-            toast.success("Dish Removed");
+            await axios.delete(`${API_BASE}/dishes/${dishId}`, { headers: { Authorization: `Bearer ${token}` } });
+            refreshData(activeId); toast.success("Dish Removed");
         } catch (err) { toast.error("Failed to delete"); }
+    };
+
+    // 🧹 🆕 CLEAR HISTORY (WITHOUT DOWNLOADING)
+    const handleClearHistory = async () => {
+        if (!window.confirm("🗑️ Are you sure? This will remove all served/paid orders from the screen.")) return;
+        
+        const activeId = localStorage.getItem(`owner_id_${id}`);
+        try {
+            // Reusing mark-downloaded but for UI cleaning purpose
+            await axios.put(`${API_BASE}/orders/mark-downloaded`, { restaurantId: activeId });
+            setInboxOrders([]);
+            toast.success("History Cleared! screen is fresh.");
+        } catch (err) { toast.error("Error clearing"); }
     };
 
     const handleDownloadAndClear = async () => {
@@ -188,22 +199,19 @@ const RestaurantAdmin = () => {
         } catch (err) { toast.error("Error clearing inbox"); }
     };
 
-    // --- 🟢 ORDER LOGIC FOR "LIVE ORDERS" TAB ---
     const updateOrderStatus = async (orderId, newStatus) => {
         try {
             await axios.put(`${API_BASE}/orders/${orderId}/status`, { status: newStatus });
             toast.success(`Marked as ${newStatus}`);
             refreshData(); 
-        } catch (err) {
-            toast.error("Update failed");
-        }
+        } catch (err) { toast.error("Update failed"); }
     };
 
     const printReceipt = async (orderId) => {
         const element = document.getElementById(`receipt-${orderId}`);
         if (!element) return;
         try {
-            const canvas = await html2canvas(element, { scale: 2 });
+            const canvas = await html2canvas(element, { scale: 2, logging: false, useCORS: true });
             const imgData = canvas.toDataURL('image/png');
             const pdf = new jsPDF('p', 'mm', 'a4');
             const pdfWidth = pdf.internal.pageSize.getWidth();
@@ -228,8 +236,10 @@ const RestaurantAdmin = () => {
                 </div>
             `);
         }
-        printWindow.document.write(`<html><body onload="window.print()">${qrCodesHtml.join('')}</body></html>`);
-        printWindow.document.close();
+        if(printWindow) {
+            printWindow.document.write(`<html><body onload="window.print()">${qrCodesHtml.join('')}</body></html>`);
+            printWindow.document.close();
+        }
     };
 
     if (isLoading) return <div className="admin-container"><div style={{display:'flex', height:'100vh', alignItems:'center', justifyContent:'center'}}><FaSpinner className="spin" size={30} color="#FF9933"/></div></div>;
@@ -252,7 +262,17 @@ const RestaurantAdmin = () => {
     return (
         <div className="admin-container">
             <style>{styles}</style>
-            <div className="max-w-wrapper">
+            
+            {/* 📢 1. BROADCAST MARQUEE */}
+            {broadcastMessage && (
+                <div className="broadcast-bar">
+                    <div className="marquee">
+                        📢 SYSTEM NOTICE: {broadcastMessage} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 📢 {broadcastMessage}
+                    </div>
+                </div>
+            )}
+
+            <div className="max-w-wrapper" style={{marginTop: broadcastMessage ? '30px' : '0'}}>
                 <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                     <div>
                         <h1 className="shop-title">{restaurantName}</h1>
@@ -269,39 +289,27 @@ const RestaurantAdmin = () => {
                     <button onClick={() => { navigator.clipboard.writeText(publicMenuUrl); toast.success("Link Copied!"); }} className="btn-glass" style={{ padding: '8px' }}><FaCopy /></button>
                 </div>
 
-                {/* ✅ BIG WIDGET NAVIGATION */}
                 <nav className="nav-tabs">
-                    <button onClick={() => setActiveTab("orders")} className={`tab-btn ${activeTab === "orders" ? 'active' : ''}`}>
-                        <FaFire size={20} />
-                        Live Orders
-                    </button>
-                    
-                    <button onClick={() => setActiveTab("menu")} className={`tab-btn ${activeTab === "menu" ? 'active' : ''}`}>
-                        <FaUtensils size={20} />
-                        Menu Editor
-                    </button>
-
-                    <button onClick={() => setActiveTab("chef")} className={`tab-btn ${activeTab === "chef" ? 'active' : ''}`}>
-                        <FaConciergeBell size={20} />
-                        Kitchen Panel
-                    </button>
-
-                    <button onClick={() => setActiveTab("waiter")} className={`tab-btn ${activeTab === "waiter" ? 'active' : ''}`}>
-                        <FaUserTie size={20} />
-                        Waiter Panel
-                    </button>
-
-                    <button onClick={() => setActiveTab("settings")} className={`tab-btn ${activeTab === "settings" ? 'active' : ''}`} style={{gridColumn: 'span 2'}}>
-                        <FaHistory size={20} />
-                        Business Tools & Reports
-                    </button>
+                    <button onClick={() => setActiveTab("orders")} className={`tab-btn ${activeTab === "orders" ? 'active' : ''}`}><FaFire size={20} /> Live Orders</button>
+                    <button onClick={() => setActiveTab("menu")} className={`tab-btn ${activeTab === "menu" ? 'active' : ''}`}><FaUtensils size={20} /> Menu Editor</button>
+                    <button onClick={() => setActiveTab("chef")} className={`tab-btn ${activeTab === "chef" ? 'active' : ''}`}><FaConciergeBell size={20} /> Kitchen Panel</button>
+                    <button onClick={() => setActiveTab("waiter")} className={`tab-btn ${activeTab === "waiter" ? 'active' : ''}`}><FaUserTie size={20} /> Waiter Panel</button>
+                    <button onClick={() => setActiveTab("settings")} className={`tab-btn ${activeTab === "settings" ? 'active' : ''}`} style={{gridColumn: 'span 2'}}><FaHistory size={20} /> Business Tools & Reports</button>
                 </nav>
-
-                {/* --- RENDER CONTENT BASED ON TAB --- */}
 
                 {/* 🟠 LIVE ORDERS TAB */}
                 {activeTab === "orders" && (
                     <div style={{paddingBottom: 80}}>
+                        
+                        {/* 🆕 CLEAR HISTORY BUTTON */}
+                        {inboxOrders.length > 0 && (
+                            <div style={{display:'flex', justifyContent:'flex-end', marginBottom:'10px'}}>
+                                <button onClick={handleClearHistory} style={{background:'rgba(239, 68, 68, 0.2)', border:'1px solid #ef4444', color:'#ef4444', padding:'8px 12px', borderRadius:'10px', fontSize:'11px', fontWeight:'bold', display:'flex', alignItems:'center', gap:5, cursor:'pointer'}}>
+                                    <FaBroom /> CLEAR HISTORY
+                                </button>
+                            </div>
+                        )}
+
                         {inboxOrders.length === 0 ? (
                             <div className="glass-card" style={{textAlign:'center', opacity:0.5}}>
                                 <FaCheck size={40} style={{marginBottom:10}}/>
@@ -313,7 +321,6 @@ const RestaurantAdmin = () => {
                                 const isOnline = order.paymentMethod?.toLowerCase() === 'online';
                                 return (
                                     <div key={order._id} className="order-card">
-                                        {/* Hidden Receipt */}
                                         <div id={`receipt-${order._id}`} style={{marginBottom:10, padding:10, borderBottom:'1px dashed #ccc'}}>
                                             <div style={{display:'flex', justifyContent:'space-between', fontWeight:'bold'}}>
                                                 <span>Table {order.tableNum}</span>
@@ -339,27 +346,26 @@ const RestaurantAdmin = () => {
                                             </span>
                                         </div>
 
-                                        {/* Status Actions */}
                                         <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:10}}>
                                             {order.status === 'Pending' && <button onClick={()=>updateOrderStatus(order._id, 'Cooking')} className="status-btn" style={{background:'#f59e0b'}}><FaFire/> Cook</button>}
                                             {order.status === 'Cooking' && <button onClick={()=>updateOrderStatus(order._id, 'Ready')} className="status-btn" style={{background:'#10b981'}}><FaConciergeBell/> Ready</button>}
                                             {order.status === 'Ready' && <button onClick={()=>updateOrderStatus(order._id, 'Served')} className="status-btn" style={{background:'#3b82f6'}}><FaCheck/> Serve</button>}
                                             {(order.status === 'Served' || order.status === 'Ready') && (
-                                                <button onClick={()=>updateOrderStatus(order._id, 'Paid')} className="status-btn" style={{background:'#22c55e', gridColumn:'span 2', justifyContent:'center'}}>
-                                                    <FaRupeeSign/> Mark Paid
-                                                </button>
+                                                <button onClick={()=>updateOrderStatus(order._id, 'Paid')} className="status-btn" style={{background:'#22c55e', gridColumn:'span 2', justifyContent:'center'}}><FaRupeeSign/> Mark Paid</button>
                                             )}
                                             {order.status === 'Paid' && <div style={{gridColumn:'span 2', textAlign:'center', color:'#22c55e', fontWeight:'bold', padding:5}}>PAID ✅</div>}
                                         </div>
 
-                                        {/* Locked Receipt */}
-                                        <button 
-                                            onClick={() => printReceipt(order._id)} 
-                                            disabled={isLocked} 
-                                            className={isLocked ? 'locked-btn' : 'unlock-btn'}
-                                        >
-                                            {isLocked ? <><FaLock/> Receipt Locked</> : <><FaPrint/> Print Receipt</>}
-                                        </button>
+                                        <div style={{display:'flex', gap:5}}>
+                                            <button onClick={() => printReceipt(order._id)} disabled={isLocked} className={isLocked ? 'locked-btn' : 'unlock-btn'} style={{flex:1}}>
+                                                {isLocked ? <><FaLock/> Receipt Locked</> : <><FaPrint/> Receipt</>}
+                                            </button>
+                                            
+                                            {/* 🆕 SHOW QR POPUP BUTTON */}
+                                            <button onClick={() => setQrModalOrder(order)} className="btn-glass" style={{color:'#000', background:'#f3f4f6'}}>
+                                                <FaQrcode size={16}/>
+                                            </button>
+                                        </div>
                                     </div>
                                 );
                             })
@@ -373,26 +379,16 @@ const RestaurantAdmin = () => {
                         <div className="glass-card">
                             <h3 style={{fontSize: '12px', fontWeight: 900, color: '#FF9933', marginBottom: '10px'}}><FaPlus /> BULK ADD DISHES</h3>
                             <p style={{fontSize: '10px', opacity: 0.5, marginBottom: '10px'}}>Format: Name, Price, ImageURL (One per line)</p>
-                            <textarea 
-                                className="input-dark" 
-                                rows="6" 
-                                placeholder="Paneer Tikka, 250, https://img.com/p.jpg&#10;Mango Lassi, 90, https://img.com/m.jpg"
-                                value={bulkText}
-                                onChange={e => setBulkText(e.target.value)}
-                                style={{fontFamily: 'monospace', fontSize: '13px', color: '#22c55e'}}
-                            />
+                            <textarea className="input-dark" rows="6" placeholder="Paneer Tikka, 250, https://img.com/p.jpg&#10;Mango Lassi, 90, https://img.com/m.jpg" value={bulkText} onChange={e => setBulkText(e.target.value)} style={{fontFamily: 'monospace', fontSize: '13px', color: '#22c55e'}}/>
                             <button onClick={handleBulkInsert} className="btn-primary">SYNC TO LIVE MENU</button>
                         </div>
-
                         <div className="glass-card">
                             <h3 style={{fontSize:'12px', fontWeight:900, marginBottom:'15px', opacity:0.6}}>LIVE ITEMS ({dishes.length})</h3>
                             {dishes.length === 0 && <p style={{textAlign:'center', opacity: 0.3, fontSize: '12px'}}>No dishes added yet.</p>}
                             {dishes.map(dish => (
                                 <div key={dish._id} className="dish-item">
                                     <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                                        <div style={{ width: '45px', height: '45px', background: '#111', borderRadius: '12px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                            {dish.image ? <img src={dish.image} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} /> : <FaUtensils color="#222"/>}
-                                        </div>
+                                        <div style={{ width: '45px', height: '45px', background: '#111', borderRadius: '12px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{dish.image ? <img src={dish.image} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} /> : <FaUtensils color="#222"/>}</div>
                                         <div>
                                             <p style={{ fontWeight: 900, margin: 0, fontSize: '14px' }}>{dish.name}</p>
                                             <div style={{display:'flex', gap:'8px', alignItems:'center'}}>
@@ -409,18 +405,17 @@ const RestaurantAdmin = () => {
                     </>
                 )}
 
-                {/* 🟠 CHEF & WAITER EMBEDDED PAGES (WITH AUTH BYPASS) */}
+                {/* --- EMBEDDED DASHBOARDS --- */}
                 {activeTab === "chef" && <ChefDashboard bypassAuth={true} providedMongoId={mongoId} />}
                 {activeTab === "waiter" && <WaiterDashboard bypassAuth={true} providedMongoId={mongoId} />}
 
-                {/* 🟠 SETTINGS TAB */}
+                {/* --- SETTINGS TAB --- */}
                 {activeTab === "settings" && (
                     <>
                         <div className="glass-card">
                             <h2 style={{ fontSize: '12px', fontWeight: 900, color: '#FF9933', marginBottom: '15px' }}><FaHistory /> SALES & REPORTS</h2>
                             <button onClick={handleDownloadAndClear} className="btn-primary" style={{ background: '#22c55e' }}><FaDownload /> EXPORT PDF & CLEAR INBOX</button>
                         </div>
-
                         <div className="glass-card">
                             <h2 style={{ fontSize: '12px', fontWeight: 900, color: '#FF9933', marginBottom: '15px' }}><FaQrcode /> QR GENERATOR</h2>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '15px' }}>
@@ -432,6 +427,28 @@ const RestaurantAdmin = () => {
                     </>
                 )}
             </div>
+            
+            {/* 🆕 QR POP-UP MODAL (Touch outside to close) */}
+            {qrModalOrder && (
+                <div className="qr-overlay" onClick={() => setQrModalOrder(null)}>
+                    <div className="qr-modal" onClick={(e) => e.stopPropagation()}>
+                        
+
+[Image of QR Code]
+
+                        <h3 style={{color:'#f97316', marginTop:0}}>ORDER QR</h3>
+                        <p style={{fontSize:12, color:'#666', marginBottom:20}}>Table {qrModalOrder.tableNum} • ₹{qrModalOrder.totalAmount}</p>
+                        <img 
+                            src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(`${window.location.origin}/track/${qrModalOrder._id}`)}`} 
+                            style={{width:'100%', borderRadius:10}} 
+                            alt="Scan Order"
+                        />
+                        <p style={{fontSize:10, color:'#888', marginTop:15}}>Scan to Track Order & Pay</p>
+                    </div>
+                </div>
+            )}
+
+            <InstallButton /> 
         </div>
     );
 };
