@@ -12,7 +12,7 @@ const ProjectFlyer = () => {
         {/* --- HEADER --- */}
         <header style={styles.header}>
           <div style={styles.brandBox}>
-            <h1 style={styles.lalaTitle}>LALA</h1>
+            <h1 style={styles.lalaTitle}>BITEBOX</h1>
             <span style={styles.tagline}>SMART RESTO SOLUTIONS</span>
           </div>
           <div style={styles.developerInfo}>
@@ -42,7 +42,7 @@ const ProjectFlyer = () => {
               <li>📱 <strong>Scan & Order:</strong> No App Download Needed (PWA).</li>
               <li>📦 <strong>Parcel Mode:</strong> Choose Dine-in or Takeaway.</li>
               <li>⏳ <strong>Live Tracking:</strong> Real-time status updates.</li>
-              <li>💳 <strong>Payment:</strong> Cash or Online integration.</li>
+              <li>💳 <strong>Payment:</strong> Cash or Online integration LATER.</li>
             </ul>
           </div>
 
@@ -96,15 +96,15 @@ const ProjectFlyer = () => {
         <footer style={styles.footer}>
           <div style={styles.contactItem}>
             <FaPhone style={{color:'#f97316'}} /> 
-            <span>+91 98765 43210</span> {/* UPDATE YOUR PHONE HERE */}
+            <span>+91 63050 13340</span> {/* UPDATE YOUR PHONE HERE */}
           </div>
           <div style={styles.contactItem}>
             <FaEnvelope style={{color:'#f97316'}} /> 
-            <span>kalyanreddy@example.com</span> {/* UPDATE EMAIL HERE */}
+            <span>bitebox.web@gmail.com</span> {/* UPDATE EMAIL HERE */}
           </div>
           <div style={styles.contactItem}>
             <FaMapMarkerAlt style={{color:'#f97316'}} /> 
-            <span>Hyderabad, India</span>
+            <span>Hyderabad or Siddipet, India</span>
           </div>
         </footer>
 
