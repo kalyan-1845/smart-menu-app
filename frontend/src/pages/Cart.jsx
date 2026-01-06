@@ -25,23 +25,26 @@ const Cart = ({ cart, customerId, clearCart, removeFromCart, tableNum, setTableN
     const finalTableNum = tableNum || localStorage.getItem("last_table_scanned");
     const totalPrice = cart.reduce((total, item) => total + (item.price * (item.quantity || 1)), 0);
 
-    // 2. SOCKET CONNECTION (FIXED FOR CLOUD SERVERS)
+    // ✅ 2. SOCKET CONNECTION (STABILIZED FOR RENDER)
     useEffect(() => {
         if (restaurantId) {
-            // ✅ FIX: Use 'polling' first to ensure connection succeeds on Render/Netlify
+            // FIX: Force 'polling' to prevent "WebSocket closed" errors on Render
             socketRef.current = io(SERVER_URL, { 
-                transports: ['polling', 'websocket'], // <--- CHANGED THIS
+                transports: ['polling'], // <--- This fixes the red console errors
                 withCredentials: true,
                 query: { restaurantId: restaurantId } 
             });
 
-            // Debugging logs to confirm connection
-            socketRef.current.on("connect", () => console.log("✅ Socket Connected"));
-            socketRef.current.on("connect_error", (err) => console.error("❌ Socket Error:", err));
+            socketRef.current.on('connect', () => {
+                console.log("✅ Socket Connected (Stable Mode)");
+            });
 
             socketRef.current.emit("join-restaurant", restaurantId);
         }
-        return () => { if (socketRef.current) socketRef.current.disconnect(); };
+        
+        return () => { 
+            if (socketRef.current) socketRef.current.disconnect(); 
+        };
     }, [restaurantId]);
 
     const handleTableSubmit = (e) => {
@@ -69,7 +72,7 @@ const Cart = ({ cart, customerId, clearCart, removeFromCart, tableNum, setTableN
     };
 
     // 3. ATOMIC ORDER PROCESS
-    const processOrder = async (paymentType) => {
+    const processOrder = async (paymentType) => { 
         if (isSubmitting) return;
         if (!customerName.trim()) return toast.error("Enter your name");
         if (!finalTableNum) return setShowTableModal(true);
@@ -79,11 +82,11 @@ const Cart = ({ cart, customerId, clearCart, removeFromCart, tableNum, setTableN
         setPaymentChosen(paymentType);
 
         try {
-            // A. TRANSLATE NAME TO ID
+            // A. GET OWNER ID (Handling the 404)
+            // Note: If this fails, the Backend auth.js update hasn't been deployed yet.
             const idRes = await axios.get(`${API_BASE}/auth/owner-id/${restaurantId}`);
             const realMongoId = idRes.data.id;
 
-            // FIX: Convert "CASH" -> "Cash" for Backend
             const formattedPayment = paymentType === "CASH" ? "Cash" : "Online";
 
             const payload = {
@@ -98,37 +101,30 @@ const Cart = ({ cart, customerId, clearCart, removeFromCart, tableNum, setTableN
                     image: i.image 
                 })),
                 totalAmount: totalPrice,
-                
-                // CRITICAL FIXES FOR BACKEND SCHEMA
                 paymentMethod: formattedPayment, 
                 status: "Pending", 
-                
                 restaurantId: realMongoId
             };
 
-            console.log("SENDING PAYLOAD:", payload);
+            console.log("SENDING ORDER...", payload);
 
             // B. SUBMIT ORDER
             const res = await axios.post(`${API_BASE}/orders?t=${Date.now()}`, payload);
             
-            // C. NOTIFY KITCHEN (SOCKET)
+            // C. NOTIFY KITCHEN
             if (socketRef.current) socketRef.current.emit("new-order", res.data);
 
             setOrderSuccess(true);
             
-            // D. REDIRECT
+            // D. REDIRECT (Small delay to ensure socket message sends)
             setTimeout(() => {
                 clearCart(); 
                 navigate(`/track/${res.data._id}`); 
-            }, 2500); 
+            }, 2000); 
 
         } catch (err) {
             console.error("ORDER ERROR:", err);
-            if (err.response && err.response.data) {
-                alert("SERVER ERROR: " + JSON.stringify(err.response.data));
-            } else {
-                toast.error("Order Failed. Try again.");
-            }
+            toast.error("Order Failed. Please try again.");
             setIsSubmitting(false);
         }
     };
