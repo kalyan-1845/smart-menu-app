@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
-import { Chef, User, Shield, Store, ArrowLeft, LogIn } from 'lucide-react';
+// ✅ FIXED: Changed 'Chef' to 'ChefHat'
+import { ChefHat, User, Shield, Store, ArrowLeft, LogIn, Utensils } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const RoleLogin = () => {
   const [selectedRole, setSelectedRole] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [restaurantId, setRestaurantId] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
@@ -23,14 +23,14 @@ const RoleLogin = () => {
       id: 'chef',
       name: 'Chef',
       description: 'Prepare and manage orders',
-      icon: Chef,
+      icon: ChefHat, // ✅ FIXED: Uses ChefHat instead of Chef
       color: '#FF6B35'
     },
     {
       id: 'waiter',
       name: 'Waiter',
       description: 'Serve and manage tables',
-      icon: User,
+      icon: Utensils, // ✅ FIXED: Uses Utensils or User
       color: '#FFA500'
     },
     {
@@ -51,6 +51,7 @@ const RoleLogin = () => {
 
   const handleRoleSelect = (roleId) => {
     setSelectedRole(roleId);
+    setRestaurantId(''); // Reset input
   };
 
   const handleLogin = async (e) => {
@@ -61,40 +62,42 @@ const RoleLogin = () => {
       return;
     }
 
-    if (!email || !password) {
-      toast.error('Please fill in all fields');
-      return;
+    // Validation for Chef/Waiter
+    if ((selectedRole === 'chef' || selectedRole === 'waiter') && !restaurantId.trim()) {
+       toast.error('Please enter the Restaurant Username');
+       return;
     }
 
     setLoading(true);
     
-    // Simulate API call
+    // Simulate processing
     setTimeout(() => {
       setLoading(false);
-      toast.success(`Logged in as ${roles.find(r => r.id === selectedRole).name}`);
       
-      // Redirect based on role
       switch(selectedRole) {
         case 'customer':
           navigate('/');
-          break;
-        case 'chef':
-          navigate('/chef-dashboard');
-          break;
-        case 'waiter':
-          navigate('/waiter-dashboard');
+          toast.success("Welcome Guest!");
           break;
         case 'owner':
-          navigate('/restaurant-admin');
+          navigate('/login');
           break;
         case 'super_admin':
-          navigate('/super-admin');
+          navigate('/super-login');
+          break;
+        case 'chef':
+        case 'waiter':
+          // Dynamic Navigation to specific restaurant dashboard
+          navigate(`/${restaurantId}/${selectedRole}`);
+          toast.success(`Entering ${selectedRole} panel...`);
           break;
         default:
           navigate('/');
       }
-    }, 1500);
+    }, 800);
   };
+
+  const isStaff = selectedRole === 'chef' || selectedRole === 'waiter';
 
   return (
     <LoginContainer>
@@ -105,7 +108,7 @@ const RoleLogin = () => {
         </BackButton>
         
         <LoginHeader>
-          <Shield size={48} color="var(--primary-color)" />
+          <Shield size={48} color="#f97316" />
           <h1>Welcome Back</h1>
           <p>Select your role and sign in to continue</p>
         </LoginHeader>
@@ -135,45 +138,35 @@ const RoleLogin = () => {
         </RoleSelection>
 
         <LoginForm onSubmit={handleLogin}>
-          <FormGroup>
-            <FormLabel>Email Address</FormLabel>
-            <FormControl
-              type="email"
-              placeholder="Enter your email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-          </FormGroup>
+          
+          {/* ✅ CONDITIONAL INPUT FOR STAFF */}
+          {isStaff && (
+             <FormGroup style={{animation: 'fadeIn 0.3s'}}>
+               <FormLabel>Restaurant Username (ID)</FormLabel>
+               <FormControl
+                 type="text"
+                 placeholder="e.g. kalyanresto"
+                 value={restaurantId}
+                 onChange={(e) => setRestaurantId(e.target.value)}
+                 required
+                 autoFocus
+               />
+             </FormGroup>
+          )}
 
-          <FormGroup>
-            <FormLabel>Password</FormLabel>
-            <FormControl
-              type="password"
-              placeholder="Enter your password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </FormGroup>
-
-          <FormOptions>
-            <RememberMe>
-              <input type="checkbox" id="remember" />
-              <label htmlFor="remember">Remember me</label>
-            </RememberMe>
-            <ForgotPassword to="/forgot-password">
-              Forgot Password?
-            </ForgotPassword>
-          </FormOptions>
+          {!isStaff && selectedRole && (
+             <div style={{textAlign:'center', marginBottom:'15px', fontSize:'13px', color:'#666'}}>
+               Proceed to {roles.find(r=>r.id===selectedRole).name} Login
+             </div>
+          )}
 
           <LoginButton type="submit" disabled={loading}>
             {loading ? (
-              'Signing in...'
+              'Redirecting...'
             ) : (
               <>
                 <LogIn size={20} />
-                Sign In
+                Continue
               </>
             )}
           </LoginButton>
@@ -184,13 +177,15 @@ const RoleLogin = () => {
         </LoginForm>
 
         <QuickLinks>
-          <QuickLink to="/owner-login">Restaurant Owner Login</QuickLink>
-          <QuickLink to="/super-login">Super Admin Login</QuickLink>
+          <QuickLink to="/login">Owner Login</QuickLink>
+          <QuickLink to="/super-login">CEO Access</QuickLink>
         </QuickLinks>
       </LoginCard>
     </LoginContainer>
   );
 };
+
+// --- STYLED COMPONENTS ---
 
 const LoginContainer = styled.div`
   min-height: 100vh;
@@ -198,28 +193,32 @@ const LoginContainer = styled.div`
   align-items: center;
   justify-content: center;
   padding: 20px;
-  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  background: radial-gradient(circle at center, #1a1a1a 0%, #000 100%);
+  font-family: 'Inter', sans-serif;
 `;
 
 const LoginCard = styled.div`
-  background: white;
-  border-radius: var(--radius-lg);
+  background: #0a0a0a;
+  border: 1px solid #222;
+  border-radius: 24px;
   padding: 40px;
   width: 100%;
   max-width: 500px;
-  box-shadow: var(--shadow-lg);
+  box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+  color: white;
 `;
 
 const BackButton = styled(Link)`
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  color: var(--gray-color);
+  color: #666;
   margin-bottom: 30px;
   text-decoration: none;
+  font-weight: 600;
   
   &:hover {
-    color: var(--primary-color);
+    color: #f97316;
   }
 `;
 
@@ -229,10 +228,13 @@ const LoginHeader = styled.div`
   
   h1 {
     margin: 20px 0 10px;
+    font-size: 24px;
+    font-weight: 900;
   }
   
   p {
-    color: var(--gray-color);
+    color: #666;
+    font-size: 14px;
   }
 `;
 
@@ -241,15 +243,18 @@ const RoleSelection = styled.div`
 `;
 
 const RoleLabel = styled.div`
-  font-weight: 500;
+  font-weight: 700;
   margin-bottom: 15px;
-  color: var(--dark-color);
+  color: #888;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 `;
 
 const RoleGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 15px;
+  gap: 12px;
   margin-bottom: 20px;
 `;
 
@@ -258,23 +263,23 @@ const RoleOption = styled.div`
   align-items: center;
   gap: 15px;
   padding: 15px;
-  border: 2px solid ${props => props.selected ? 'var(--primary-color)' : 'var(--light-gray)'};
-  border-radius: var(--radius);
+  border: 1px solid ${props => props.selected ? '#f97316' : '#222'};
+  border-radius: 12px;
   cursor: pointer;
-  transition: all 0.3s ease;
-  background: ${props => props.selected ? 'rgba(255, 107, 53, 0.05)' : 'white'};
+  transition: all 0.2s ease;
+  background: ${props => props.selected ? 'rgba(249, 115, 22, 0.1)' : '#111'};
   
   &:hover {
-    border-color: var(--primary-color);
+    border-color: #f97316;
     transform: translateY(-2px);
   }
 `;
 
 const RoleIcon = styled.div`
-  width: 50px;
-  height: 50px;
+  width: 45px;
+  height: 45px;
   border-radius: 50%;
-  background: ${props => `${props.color}15`};
+  background: ${props => `${props.color}20`};
   display: flex;
   align-items: center;
   justify-content: center;
@@ -286,13 +291,14 @@ const RoleInfo = styled.div`
 `;
 
 const RoleName = styled.div`
-  font-weight: 600;
-  margin-bottom: 5px;
+  font-weight: 700;
+  margin-bottom: 4px;
+  font-size: 14px;
 `;
 
 const RoleDescription = styled.div`
-  font-size: 12px;
-  color: var(--gray-color);
+  font-size: 11px;
+  color: #666;
 `;
 
 const LoginForm = styled.form`
@@ -306,21 +312,24 @@ const FormGroup = styled.div`
 const FormLabel = styled.label`
   display: block;
   margin-bottom: 8px;
-  font-weight: 500;
-  color: var(--dark-color);
+  font-weight: 600;
+  color: #ccc;
+  font-size: 14px;
 `;
 
 const FormControl = styled.input`
   width: 100%;
-  padding: 12px 16px;
-  border: 2px solid var(--light-gray);
-  border-radius: var(--radius);
+  padding: 14px 16px;
+  background: #000;
+  border: 1px solid #333;
+  border-radius: 12px;
   font-size: 16px;
+  color: white;
   transition: border-color 0.3s ease;
   
   &:focus {
     outline: none;
-    border-color: var(--primary-color);
+    border-color: #f97316;
   }
 `;
 
@@ -340,17 +349,20 @@ const RememberMe = styled.div`
     width: 18px;
     height: 18px;
     cursor: pointer;
+    accent-color: #f97316;
   }
   
   label {
     cursor: pointer;
-    color: var(--dark-color);
+    color: #666;
+    font-size: 13px;
   }
 `;
 
 const ForgotPassword = styled(Link)`
-  color: var(--primary-color);
+  color: #f97316;
   text-decoration: none;
+  font-size: 13px;
   
   &:hover {
     text-decoration: underline;
@@ -359,26 +371,26 @@ const ForgotPassword = styled(Link)`
 
 const LoginButton = styled.button`
   width: 100%;
-  padding: 14px;
-  background-color: var(--primary-color);
+  padding: 16px;
+  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
   color: white;
   border: none;
-  border-radius: var(--radius);
+  border-radius: 12px;
   font-size: 16px;
-  font-weight: 600;
+  font-weight: 800;
   cursor: pointer;
-  transition: background-color 0.3s ease;
+  transition: opacity 0.3s ease;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
   
   &:hover:not(:disabled) {
-    background-color: #E55A2E;
+    opacity: 0.9;
   }
   
   &:disabled {
-    opacity: 0.6;
+    opacity: 0.5;
     cursor: not-allowed;
   }
 `;
@@ -386,10 +398,14 @@ const LoginButton = styled.button`
 const RegisterLink = styled.div`
   text-align: center;
   margin-top: 25px;
-  color: var(--gray-color);
+  color: #666;
+  font-size: 14px;
   
   a {
-    font-weight: 600;
+    font-weight: 700;
+    color: #f97316;
+    text-decoration: none;
+    margin-left: 5px;
   }
 `;
 
@@ -397,17 +413,18 @@ const QuickLinks = styled.div`
   display: flex;
   justify-content: space-between;
   margin-top: 30px;
-  padding-top: 30px;
-  border-top: 1px solid var(--light-gray);
+  padding-top: 25px;
+  border-top: 1px solid #222;
 `;
 
 const QuickLink = styled(Link)`
-  color: var(--primary-color);
+  color: #444;
   text-decoration: none;
-  font-weight: 500;
+  font-size: 12px;
+  font-weight: 600;
   
   &:hover {
-    text-decoration: underline;
+    color: #f97316;
   }
 `;
 
