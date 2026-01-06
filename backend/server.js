@@ -8,9 +8,6 @@ import rateLimit from 'express-rate-limit';
 import https from "https"; 
 import compression from 'compression'; 
 
-// --- IMPORT MODELS ---
-import Owner from './models/Owner.js'; // Ensure this is imported if used in debug routes
-
 // --- IMPORT ROUTES ---
 import authRoutes from './routes/authRoutes.js';
 import dishRoutes from './routes/dishRoutes.js';
@@ -20,24 +17,28 @@ import broadcastRoutes from './routes/broadcastRoutes.js';
 
 const app = express();
 
-// ✅ FIX: TRUST RENDER PROXY (Solves the Rate Limit Error)
-// This is the specific line that fixes "ERR_ERL_UNEXPECTED_X_FORWARDED_FOR"
+// ✅ FIX 1: TRUST PROXY (Critical for Render/Heroku)
 app.set('trust proxy', 1); 
 
 const httpServer = createServer(app);
 
-// 🚀 INDUSTRIAL UPGRADE: COMPRESSION
+// ✅ FIX 2: TURBO KEEP-ALIVE (Fixes Mobile "Network Error" & Lag)
+// Render kills connections after 60s. We keep them alive slightly longer to prevent drops.
+httpServer.keepAliveTimeout = 120 * 1000; 
+httpServer.headersTimeout = 120 * 1000;
+
+// 🚀 INDUSTRIAL UPGRADE: COMPRESSION (Makes JSON responses 70% smaller)
 app.use(compression());
 
 // --- 🔒 SECURITY: ALLOWED ORIGINS ---
 const allowedOrigins = [
     "http://localhost:5173",
-     "http://localhost:3000",          
+    "http://localhost:3000",          
     "https://smartmenuss.netlify.app",
     "https://694915c413d9f40008f38924--smartmenuss.netlify.app"
 ];
 
-// ☢️ NUCLEAR CORS FIX (RETAINED)
+// ☢️ NUCLEAR CORS FIX
 app.use((req, res, next) => {
     const origin = req.headers.origin;
     if (allowedOrigins.includes(origin)) {
@@ -50,33 +51,43 @@ app.use((req, res, next) => {
     next();
 });
 
-// 🛡️ STANDARD CORS (RETAINED)
 app.use(cors({
     origin: allowedOrigins,
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
 }));
 
-// --- MIDDLEWARE ---
 app.use(express.json({ limit: '10mb' })); 
 
-// 🛡️ Rate Limiter
+// 🛡️ Rate Limiter (Generous limits to prevent blocking legitimate users)
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, 
-    max: 2000, 
+    max: 3000, // Increased to 3000 to prevent blocking busy restaurants
     standardHeaders: true,
     legacyHeaders: false,
-    message: "Too many orders from this IP, please wait a moment."
+    message: "Too many requests, please slow down."
 });
 app.use("/api/", limiter); 
 
-// 🔌 Socket.io Setup
+// ✅ FIX 3: SMART CACHING (Speeds up Menu Loading)
+// Applies only to GET requests. tells browser: "Don't ask server for 60 seconds"
+app.use((req, res, next) => {
+    if (req.method === 'GET') {
+        res.set('Cache-Control', 'public, max-age=60, s-maxage=60'); 
+    } else {
+        res.set('Cache-Control', 'no-store');
+    }
+    next();
+});
+
+// 🔌 Socket.io Setup (Optimized for Mobile)
 const io = new Server(httpServer, {
     cors: {
         origin: allowedOrigins,
         methods: ["GET", "POST", "PUT", "DELETE"],
         credentials: true
     },
+    transports: ['polling', 'websocket'], // Force support for both
     pingTimeout: 60000, 
     pingInterval: 25000
 });
@@ -88,30 +99,14 @@ app.use((req, res, next) => {
 
 // --- 🏗️ DATABASE CONNECTION ---
 mongoose.connect(process.env.MONGO_URI, {
-    maxPoolSize: 100,            
-    minPoolSize: 10,             
+    maxPoolSize: 50, // Reduced slightly to prevent hitting free tier limits            
+    minPoolSize: 5,             
     socketTimeoutMS: 45000,      
-    serverSelectionTimeoutMS: 5000
+    serverSelectionTimeoutMS: 5000,
+    family: 4 // Force IPv4 (Faster on some networks)
 })
-.then(() => console.log("✅ High-Scale MongoDB Connected"))
+.then(() => console.log("✅ MongoDB Connected (Optimized)"))
 .catch((err) => console.error("❌ MongoDB Error:", err));
-
-// =============================================================
-// 🛑 DEBUG ROUTE: CHECK DATABASE (Optional but good for testing)
-// =============================================================
-app.get('/api/check-db', async (req, res) => {
-    try {
-        // Only works if Owner model is imported
-        if(Owner) {
-            const users = await Owner.find({});
-            res.json({ count: users.length, message: "DB Connection OK", users: users });
-        } else {
-             res.json({ message: "DB Connection OK" });
-        }
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
 
 // --- ROUTES ---
 app.use('/api/auth', authRoutes);
@@ -119,9 +114,8 @@ app.use('/api/dishes', dishRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/superadmin', superAdminRoutes);
 app.use('/api/broadcast', broadcastRoutes);
-// app.use('/api/menu', dishRoutes); // Removed duplicate route to avoid confusion
 
-app.get('/', (req, res) => res.send('BiteBox API v5 (Proxy Fixed) is Running...'));
+app.get('/', (req, res) => res.send('BiteBox API v6 (Speed Optimized) is Running...'));
 
 // --- ERROR HANDLER ---
 app.use((err, req, res, next) => {
@@ -133,47 +127,52 @@ app.use((err, req, res, next) => {
     });
 });
 
-// --- SOCKETS ---
+// --- SOCKET EVENTS ---
 io.on('connection', (socket) => {
     const rid = socket.handshake.query.restaurantId;
     if (rid) {
         socket.join(rid);
-        console.log(`Auto-Joined Room on Reconnect: ${rid}`);
+        console.log(`Socket Reconnected: ${rid}`);
     }
 
     socket.on('join-restaurant', (restaurantId) => {
         socket.join(restaurantId);
-        console.log(`Connection established for Shop: ${restaurantId}`);
     });
 
     socket.on('join-owner-room', (ownerId) => socket.join(ownerId));
 
     socket.on("call-waiter", (data) => {
-        if(data.restaurantId) {
-            io.to(data.restaurantId).emit("new-waiter-call", data);
-        }
+        if(data.restaurantId) io.to(data.restaurantId).emit("new-waiter-call", data);
     });
 
     socket.on("resolve-call", (data) => {
-        if(data.restaurantId) {
-            io.to(data.restaurantId).emit("call-resolved", data);
-        }
+        if(data.restaurantId) io.to(data.restaurantId).emit("call-resolved", data);
     });
 
     socket.on("chef-ready-alert", (data) => {
-        if(data.restaurantId) {
-            io.to(data.restaurantId).emit("chef-ready-alert", data);
-        }
+        if(data.restaurantId) io.to(data.restaurantId).emit("chef-ready-alert", data);
+    });
+    
+    // NEW: Order update relay
+    socket.on("new-order", (data) => {
+        if(data.restaurantId) io.to(data.restaurantId).emit("new-order", data);
     });
 });
 
-// --- SELF PING ---
+// ✅ FIX 4: AGGRESSIVE SELF PING (Every 5 Minutes)
+// This keeps the server "Hot" so it never sleeps on Render Free Tier.
 const pingUrl = "https://smart-menu-backend-5ge7.onrender.com/"; 
 setInterval(() => {
-    https.get(pingUrl, (res) => {}).on("error", (e) => {});
-}, 840000); 
+    console.log("🔥 Keeping Server Awake...");
+    https.get(pingUrl, (res) => {
+        // Just consume the stream to keep it active
+        res.on('data', () => {});
+    }).on("error", (e) => {
+        console.error("Ping Error (Ignored):", e.message);
+    });
+}, 300000); // 300,000 ms = 5 Minutes
 
 const PORT = process.env.PORT || 5000;
 httpServer.listen(PORT, () => {
-    console.log(`🚀 High-Performance Server running on port ${PORT}`);
+    console.log(`🚀 Speed Server running on port ${PORT}`);
 });

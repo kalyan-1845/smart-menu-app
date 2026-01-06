@@ -1,14 +1,18 @@
 import React, { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import { Link, useParams, useNavigate } from "react-router-dom";
-import confetti from "canvas-confetti";
 import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas'; 
 import autoTable from 'jspdf-autotable';
 import InstallButton from "../components/InstallButton";
+// ✅ IMPORT DASHBOARDS
+import ChefDashboard from "./ChefDashboard";
+import WaiterDashboard from "./WaiterDashboard";
+
 import { 
-    FaTrash, FaUtensils, FaBell, FaCheckCircle, FaCircle, FaCrown, 
-    FaSignOutAlt, FaRocket, FaStore, FaCopy, 
-    FaDownload, FaQrcode, FaPlus, FaHistory, FaSpinner, FaImage
+    FaTrash, FaUtensils, FaBell, FaCrown, FaSignOutAlt, FaStore, FaCopy, 
+    FaDownload, FaQrcode, FaPlus, FaHistory, FaSpinner, FaLock, FaPrint, 
+    FaCheck, FaFire, FaConciergeBell, FaRupeeSign, FaUserTie, FaCreditCard, FaMoneyBillWave
 } from "react-icons/fa";
 import { toast } from "react-hot-toast";
 
@@ -21,49 +25,19 @@ const styles = `
 .btn-glass { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); color: white; padding: 10px 16px; border-radius: 12px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: 0.2s; }
 .btn-primary { background: linear-gradient(135deg, #FF8800 0%, #FF5500 100%); border: none; color: white; width: 100%; padding: 18px; border-radius: 18px; font-size: 14px; font-weight: 700; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; box-shadow: 0 4px 15px rgba(255, 85, 0, 0.4); touch-action: manipulation; }
 .glass-card { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); backdrop-filter: blur(12px); border-radius: 28px; padding: 22px; margin-bottom: 20px; }
-.nav-tabs { display: flex; background: rgba(0,0,0,0.3); padding: 4px; border-radius: 18px; margin-bottom: 20px; }
-.tab-btn { flex: 1; padding: 14px; background: transparent; border: none; color: #666; font-size: 11px; font-weight: 900; cursor: pointer; border-radius: 14px; text-transform: uppercase; transition: 0.3s; position: relative; }
-.tab-btn.active { background: rgba(255,255,255,0.1); color: #FF9933; }
+.nav-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+.tab-btn { padding: 16px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #888; font-size: 11px; font-weight: 900; cursor: pointer; border-radius: 18px; text-transform: uppercase; transition: 0.3s; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.tab-btn.active { background: rgba(255, 153, 51, 0.15); border: 1px solid #FF9933; color: #FF9933; }
 .input-dark { width: 100%; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); padding: 16px; border-radius: 14px; color: white; margin-bottom: 15px; outline: none; box-sizing: border-box; font-size: 16px; }
 .dish-item { display: flex; justify-content: space-between; align-items: center; padding: 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
-.inbox-card { background: rgba(255, 255, 255, 0.05); padding: 18px; border-radius: 20px; margin-bottom: 12px; border-left: 4px solid #FF9933; }
 .menu-link-box { background: rgba(0,0,0,0.3); border: 1px dashed #444; padding: 15px; border-radius: 16px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 .link-text { color: #3b82f6; font-size: 11px; font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px; text-decoration: none; }
 .spin { animation: rotate 1s linear infinite; } @keyframes rotate { 100% { transform: rotate(360deg); } }
+.order-card { background: #fff; color: #000; border-radius: 16px; padding: 15px; margin-bottom: 15px; }
+.status-btn { padding: 8px 12px; border: none; border-radius: 8px; color: white; font-weight: bold; font-size: 11px; cursor: pointer; display: flex; align-items: center; gap: 5px; }
+.locked-btn { background: #e5e7eb; color: #9ca3af; cursor: not-allowed; width: 100%; padding: 10px; border-radius: 8px; font-weight: bold; display: flex; justify-content: center; align-items: center; gap: 8px; border: none; }
+.unlock-btn { background: #22c55e; color: white; cursor: pointer; width: 100%; padding: 10px; border-radius: 8px; font-weight: bold; display: flex; justify-content: center; align-items: center; gap: 8px; border: none; }
 `;
-
-const SetupWizard = ({ dishesCount, pushEnabled }) => {
-    const steps = [
-        { id: 1, label: "Add 3 dishes", done: dishesCount >= 3 },
-        { id: 2, label: "Live Alerts", done: pushEnabled }
-    ];
-    const completed = steps.filter(s => s.done).length;
-    const percent = Math.round((completed / steps.length) * 100);
-
-    useEffect(() => {
-        if (completed === 2) confetti({ particleCount: 100, spread: 60, origin: { y: 0.8 }, colors: ['#FF9933', '#ffffff'] });
-    }, [completed]);
-
-    return (
-        <div className="glass-card" style={{ border: completed === 2 ? '1px solid rgba(34, 197, 94, 0.3)' : '1px solid rgba(255,255,255,0.08)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-                <h2 style={{ fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', color: '#666', letterSpacing: '1px' }}><FaRocket /> Setup Progress</h2>
-                <span style={{ color: '#FF9933', fontWeight: 900, fontSize: '12px' }}>{percent}%</span>
-            </div>
-            <div style={{ width: '100%', height: '4px', background: '#111', borderRadius: '10px', marginBottom: '15px', overflow: 'hidden' }}>
-                <div style={{ width: `${percent}%`, height: '100%', background: '#FF9933', transition: 'width 0.8s ease-in-out' }}></div>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                {steps.map(step => (
-                    <div key={step.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', opacity: step.done ? 0.4 : 1 }}>
-                        {step.done ? <FaCheckCircle color="#22c55e" size={12}/> : <FaCircle color="#222" size={12}/>}
-                        <span style={{ fontWeight: 900, fontSize: '9px', textTransform: 'uppercase' }}>{step.label}</span>
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
-};
 
 const RestaurantAdmin = () => {
     const { id } = useParams();
@@ -75,7 +49,7 @@ const RestaurantAdmin = () => {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [password, setPassword] = useState("");
-    const [activeTab, setActiveTab] = useState("menu");
+    const [activeTab, setActiveTab] = useState("orders");
     const [restaurantName, setRestaurantName] = useState(id);
     const [dishes, setDishes] = useState([]);
     const [inboxOrders, setInboxOrders] = useState([]);
@@ -86,13 +60,12 @@ const RestaurantAdmin = () => {
 
     const autoCategory = (name) => {
         const n = name.toLowerCase();
-        if (n.includes("juice") || n.includes("tea") || n.includes("coffee") || n.includes("drink") || n.includes("water") || n.includes("shake") || n.includes("lassi") || n.includes("soda")) return "Drinks";
-        if (n.includes("cake") || n.includes("ice") || n.includes("sweet") || n.includes("pudding") || n.includes("jamun") || n.includes("halwa")) return "Dessert";
-        if (n.includes("fry") || n.includes("tikka") || n.includes("kabab") || n.includes("soup") || n.includes("starter") || n.includes("manchurian") || n.includes("65")) return "Starters";
+        if (n.includes("juice") || n.includes("tea") || n.includes("coffee") || n.includes("drink")) return "Drinks";
+        if (n.includes("cake") || n.includes("ice") || n.includes("sweet")) return "Dessert";
+        if (n.includes("fry") || n.includes("tikka") || n.includes("starter")) return "Starters";
         return "Main Course"; 
     };
 
-    // ✅ REFRESH ENGINE: Direct fetch bypasses state lag
     const refreshData = useCallback(async (manualId) => {
         const fetchId = manualId || mongoId || localStorage.getItem(`owner_id_${id}`);
         if (!fetchId || fetchId === "undefined") return;
@@ -147,16 +120,12 @@ const RestaurantAdmin = () => {
         window.location.reload();
     };
 
-    // ✅ FIXED BULK INSERTER: Uses local variables to prevent state loss
     const handleBulkInsert = async () => {
         const lines = bulkText.split("\n").filter(l => l.trim() !== "");
         const token = localStorage.getItem(`owner_token_${id}`);
-        const activeId = localStorage.getItem(`owner_id_${id}`); // Get ID directly from storage
+        const activeId = localStorage.getItem(`owner_id_${id}`);
 
-        if (!activeId || activeId === "undefined") {
-            return toast.error("Critical: Shop ID not found. Please logout & login again.");
-        }
-        
+        if (!activeId) return toast.error("Shop ID not found. Login again.");
         if (!lines.length) return toast.error("Enter items first");
 
         setIsLoading(true);
@@ -171,7 +140,7 @@ const RestaurantAdmin = () => {
                         price: parseFloat(price),
                         image: img || "",
                         category: autoCategory(name),
-                        restaurantId: activeId, // Use the direct ID variable
+                        restaurantId: activeId,
                         isAvailable: true 
                     }, { headers: { Authorization: `Bearer ${token}` } });
                 }
@@ -179,10 +148,10 @@ const RestaurantAdmin = () => {
             toast.dismiss(t);
             toast.success("All Items Live!");
             setBulkText("");
-            await refreshData(activeId); // Force the list to update immediately
+            await refreshData(activeId);
         } catch (err) {
             toast.dismiss(t);
-            toast.error("Failed to sync some items");
+            toast.error("Failed to sync items");
         } finally {
             setIsLoading(false);
         }
@@ -219,6 +188,32 @@ const RestaurantAdmin = () => {
         } catch (err) { toast.error("Error clearing inbox"); }
     };
 
+    // --- 🟢 ORDER LOGIC FOR "LIVE ORDERS" TAB ---
+    const updateOrderStatus = async (orderId, newStatus) => {
+        try {
+            await axios.put(`${API_BASE}/orders/${orderId}/status`, { status: newStatus });
+            toast.success(`Marked as ${newStatus}`);
+            refreshData(); 
+        } catch (err) {
+            toast.error("Update failed");
+        }
+    };
+
+    const printReceipt = async (orderId) => {
+        const element = document.getElementById(`receipt-${orderId}`);
+        if (!element) return;
+        try {
+            const canvas = await html2canvas(element, { scale: 2 });
+            const imgData = canvas.toDataURL('image/png');
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+            pdf.save(`Order-${orderId.slice(-4)}.pdf`);
+            toast.success("Receipt Printed");
+        } catch (err) { toast.error("Print failed"); }
+    };
+
     const generatePrintableQRs = () => {
         const printWindow = window.open('', '_blank');
         const qrCodesHtml = [];
@@ -246,7 +241,7 @@ const RestaurantAdmin = () => {
                     <FaStore size={40} color="#FF9933" style={{ marginBottom: '20px' }} />
                     <h1 style={{ fontSize: '20px', fontWeight: 900 }}>RESTRICTED AREA</h1>
                     <form onSubmit={handleLogin} style={{ marginTop: '20px' }}>
-                        <input type="password" placeholder="Access Key" value={password} onChange={e => setPassword(e.target.value)} className="input-dark" style={{ textAlign: 'center' }} autoFocus />
+                        <input type="password" placeholder="Access Key" value={password} onChange={e => setPassword(e.target.value)} className="input-dark" style={{ textAlign: 'center' }} autoFocus autoComplete="current-password" />
                         <button type="submit" className="btn-primary">AUTHENTICATE</button>
                     </form>
                 </div>
@@ -274,18 +269,105 @@ const RestaurantAdmin = () => {
                     <button onClick={() => { navigator.clipboard.writeText(publicMenuUrl); toast.success("Link Copied!"); }} className="btn-glass" style={{ padding: '8px' }}><FaCopy /></button>
                 </div>
 
-                <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
-                    <Link to={`/${id}/chef`} target="_blank" style={{ flex: 1 }}><button className="btn-glass" style={{ width: '100%', height: '50px' }}><FaUtensils /> KITCHEN</button></Link>
-                    <Link to={`/${id}/waiter`} target="_blank" style={{ flex: 1 }}><button className="btn-glass" style={{ width: '100%', height: '50px' }}><FaBell /> WAITER</button></Link>
-                </div>
-
-                <SetupWizard dishesCount={dishes.length} pushEnabled={Notification.permission === 'granted'} />
-
+                {/* ✅ BIG WIDGET NAVIGATION */}
                 <nav className="nav-tabs">
-                    <button onClick={() => setActiveTab("menu")} className={`tab-btn ${activeTab === "menu" ? 'active' : ''}`}>Menu Editor</button>
-                    <button onClick={() => setActiveTab("settings")} className={`tab-btn ${activeTab === "settings" ? 'active' : ''}`}>Business Tools</button>
+                    <button onClick={() => setActiveTab("orders")} className={`tab-btn ${activeTab === "orders" ? 'active' : ''}`}>
+                        <FaFire size={20} />
+                        Live Orders
+                    </button>
+                    
+                    <button onClick={() => setActiveTab("menu")} className={`tab-btn ${activeTab === "menu" ? 'active' : ''}`}>
+                        <FaUtensils size={20} />
+                        Menu Editor
+                    </button>
+
+                    <button onClick={() => setActiveTab("chef")} className={`tab-btn ${activeTab === "chef" ? 'active' : ''}`}>
+                        <FaConciergeBell size={20} />
+                        Kitchen Panel
+                    </button>
+
+                    <button onClick={() => setActiveTab("waiter")} className={`tab-btn ${activeTab === "waiter" ? 'active' : ''}`}>
+                        <FaUserTie size={20} />
+                        Waiter Panel
+                    </button>
+
+                    <button onClick={() => setActiveTab("settings")} className={`tab-btn ${activeTab === "settings" ? 'active' : ''}`} style={{gridColumn: 'span 2'}}>
+                        <FaHistory size={20} />
+                        Business Tools & Reports
+                    </button>
                 </nav>
 
+                {/* --- RENDER CONTENT BASED ON TAB --- */}
+
+                {/* 🟠 LIVE ORDERS TAB */}
+                {activeTab === "orders" && (
+                    <div style={{paddingBottom: 80}}>
+                        {inboxOrders.length === 0 ? (
+                            <div className="glass-card" style={{textAlign:'center', opacity:0.5}}>
+                                <FaCheck size={40} style={{marginBottom:10}}/>
+                                <p>All clear! No pending orders.</p>
+                            </div>
+                        ) : (
+                            inboxOrders.map(order => {
+                                const isLocked = !(order.status === 'Served' || order.status === 'Paid');
+                                const isOnline = order.paymentMethod?.toLowerCase() === 'online';
+                                return (
+                                    <div key={order._id} className="order-card">
+                                        {/* Hidden Receipt */}
+                                        <div id={`receipt-${order._id}`} style={{marginBottom:10, padding:10, borderBottom:'1px dashed #ccc'}}>
+                                            <div style={{display:'flex', justifyContent:'space-between', fontWeight:'bold'}}>
+                                                <span>Table {order.tableNum}</span>
+                                                <span style={{color:'#666'}}>{new Date(order.createdAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
+                                            </div>
+                                            <div style={{margin:'5px 0', fontSize:'13px'}}>{order.customerName}</div>
+                                            {order.items.map((it, i) => (
+                                                <div key={i} style={{display:'flex', justifyContent:'space-between', fontSize:'13px'}}>
+                                                    <span>{it.quantity} x {it.name}</span>
+                                                    <span>{it.price * it.quantity}</span>
+                                                </div>
+                                            ))}
+                                            <div style={{display:'flex', justifyContent:'space-between', fontWeight:'900', marginTop:5}}>
+                                                <span>Total</span>
+                                                <span>₹{order.totalAmount}</span>
+                                            </div>
+                                        </div>
+
+                                        <div style={{display:'flex', justifyContent:'space-between', fontWeight:'bold', marginBottom:10}}>
+                                            <span>Table {order.tableNum}</span>
+                                            <span style={{color: isOnline ? '#22c55e' : '#f97316', fontSize: 11, display:'flex', alignItems:'center', gap:4}}>
+                                                {isOnline ? <><FaCreditCard/> PAID ONLINE</> : <><FaMoneyBillWave/> CASH</>}
+                                            </span>
+                                        </div>
+
+                                        {/* Status Actions */}
+                                        <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:10}}>
+                                            {order.status === 'Pending' && <button onClick={()=>updateOrderStatus(order._id, 'Cooking')} className="status-btn" style={{background:'#f59e0b'}}><FaFire/> Cook</button>}
+                                            {order.status === 'Cooking' && <button onClick={()=>updateOrderStatus(order._id, 'Ready')} className="status-btn" style={{background:'#10b981'}}><FaConciergeBell/> Ready</button>}
+                                            {order.status === 'Ready' && <button onClick={()=>updateOrderStatus(order._id, 'Served')} className="status-btn" style={{background:'#3b82f6'}}><FaCheck/> Serve</button>}
+                                            {(order.status === 'Served' || order.status === 'Ready') && (
+                                                <button onClick={()=>updateOrderStatus(order._id, 'Paid')} className="status-btn" style={{background:'#22c55e', gridColumn:'span 2', justifyContent:'center'}}>
+                                                    <FaRupeeSign/> Mark Paid
+                                                </button>
+                                            )}
+                                            {order.status === 'Paid' && <div style={{gridColumn:'span 2', textAlign:'center', color:'#22c55e', fontWeight:'bold', padding:5}}>PAID ✅</div>}
+                                        </div>
+
+                                        {/* Locked Receipt */}
+                                        <button 
+                                            onClick={() => printReceipt(order._id)} 
+                                            disabled={isLocked} 
+                                            className={isLocked ? 'locked-btn' : 'unlock-btn'}
+                                        >
+                                            {isLocked ? <><FaLock/> Receipt Locked</> : <><FaPrint/> Print Receipt</>}
+                                        </button>
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
+                )}
+
+                {/* 🟠 MENU EDITOR TAB */}
                 {activeTab === "menu" && (
                     <>
                         <div className="glass-card">
@@ -327,6 +409,11 @@ const RestaurantAdmin = () => {
                     </>
                 )}
 
+                {/* 🟠 CHEF & WAITER EMBEDDED PAGES (WITH AUTH BYPASS) */}
+                {activeTab === "chef" && <ChefDashboard bypassAuth={true} providedMongoId={mongoId} />}
+                {activeTab === "waiter" && <WaiterDashboard bypassAuth={true} providedMongoId={mongoId} />}
+
+                {/* 🟠 SETTINGS TAB */}
                 {activeTab === "settings" && (
                     <>
                         <div className="glass-card">

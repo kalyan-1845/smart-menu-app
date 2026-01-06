@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
 import io from "socket.io-client"; 
-import { FaArrowLeft, FaTrash, FaCheckCircle, FaBell, FaChair, FaUtensils } from "react-icons/fa";
+import { FaArrowLeft, FaTrash, FaCheckCircle, FaBell, FaChair, FaUtensils, FaBoxOpen } from "react-icons/fa";
 import { toast } from "react-hot-toast";
 
 const SERVER_URL = "https://smart-menu-backend-5ge7.onrender.com";
@@ -13,9 +13,8 @@ const Cart = ({ cart, customerId, clearCart, removeFromCart, tableNum, setTableN
     const { restaurantId } = useParams(); 
     const navigate = useNavigate();
     
-    const [customerName, setCustomerName] = useState("");
+    // Auto-open modal if no table is selected
     const [showTableModal, setShowTableModal] = useState(!tableNum);
-    const [tempTable, setTempTable] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [orderSuccess, setOrderSuccess] = useState(false); 
     const [paymentChosen, setPaymentChosen] = useState(""); 
@@ -25,18 +24,17 @@ const Cart = ({ cart, customerId, clearCart, removeFromCart, tableNum, setTableN
     const finalTableNum = tableNum || localStorage.getItem("last_table_scanned");
     const totalPrice = cart.reduce((total, item) => total + (item.price * (item.quantity || 1)), 0);
 
-    // ✅ 2. SOCKET CONNECTION (STABILIZED FOR RENDER)
+    // ✅ 1. SOCKET CONNECTION (Polling for stability)
     useEffect(() => {
         if (restaurantId) {
-            // FIX: Force 'polling' to prevent "WebSocket closed" errors on Render
             socketRef.current = io(SERVER_URL, { 
-                transports: ['polling'], // <--- This fixes the red console errors
+                transports: ['polling'], 
                 withCredentials: true,
                 query: { restaurantId: restaurantId } 
             });
 
             socketRef.current.on('connect', () => {
-                console.log("✅ Socket Connected (Stable Mode)");
+                console.log("✅ Cart Socket Connected");
             });
 
             socketRef.current.emit("join-restaurant", restaurantId);
@@ -47,14 +45,15 @@ const Cart = ({ cart, customerId, clearCart, removeFromCart, tableNum, setTableN
         };
     }, [restaurantId]);
 
-    const handleTableSubmit = (e) => {
-        e.preventDefault();
-        if (!tempTable || tempTable < 1) return toast.error("Enter valid table");
-        setTableNum(tempTable);
-        localStorage.setItem("last_table_scanned", tempTable);
+    // ✅ 2. NEW: Handle Instant Table/Parcel Selection
+    const handleSelection = (value) => {
+        setTableNum(value);
+        localStorage.setItem("last_table_scanned", value);
         setShowTableModal(false);
+        toast.success(value === "Parcel" ? "Selected: Parcel Mode" : `Selected: Table ${value}`);
     };
 
+    // ✅ 3. CALL WAITER (Works perfectly with Parcel too)
     const handleCallWaiter = async () => {
         if (!finalTableNum) return setShowTableModal(true);
         setCallLoading(true);
@@ -62,19 +61,20 @@ const Cart = ({ cart, customerId, clearCart, removeFromCart, tableNum, setTableN
         try {
             socketRef.current.emit("call-waiter", {
                 restaurantId: restaurantId,
-                tableNumber: finalTableNum,
+                tableNumber: finalTableNum, // Sends "Parcel" or "1", "2" etc.
                 customerId: customerId,
                 _id: Date.now().toString()
             });
-            toast.success("Waiter notified!");
+            toast.success("Staff notified!");
         } catch (err) { toast.error("Call failed"); }
         finally { setCallLoading(false); }
     };
 
-    // 3. ATOMIC ORDER PROCESS
+    // ✅ 4. ORDER PROCESS (Auto-Names the customer)
     const processOrder = async (paymentType) => { 
         if (isSubmitting) return;
-        if (!customerName.trim()) return toast.error("Enter your name");
+        
+        // Force selection if not done
         if (!finalTableNum) return setShowTableModal(true);
         if (cart.length === 0) return toast.error("Cart is empty");
 
@@ -82,15 +82,17 @@ const Cart = ({ cart, customerId, clearCart, removeFromCart, tableNum, setTableN
         setPaymentChosen(paymentType);
 
         try {
-            // A. GET OWNER ID (Handling the 404)
-            // Note: If this fails, the Backend auth.js update hasn't been deployed yet.
+            // Get Restaurant ID
             const idRes = await axios.get(`${API_BASE}/auth/owner-id/${restaurantId}`);
             const realMongoId = idRes.data.id;
 
             const formattedPayment = paymentType === "CASH" ? "Cash" : "Online";
+            
+            // Auto-Generate Name based on selection
+            const autoName = finalTableNum === "Parcel" ? "Takeaway Order" : `Guest (Table ${finalTableNum})`;
 
             const payload = {
-                customerName,
+                customerName: autoName, // 🟢 No input needed
                 customerId: customerId,
                 tableNum: finalTableNum.toString(),
                 items: cart.map(i => ({ 
@@ -106,17 +108,15 @@ const Cart = ({ cart, customerId, clearCart, removeFromCart, tableNum, setTableN
                 restaurantId: realMongoId
             };
 
-            console.log("SENDING ORDER...", payload);
-
-            // B. SUBMIT ORDER
+            // Send to Backend
             const res = await axios.post(`${API_BASE}/orders?t=${Date.now()}`, payload);
             
-            // C. NOTIFY KITCHEN
+            // Notify Kitchen
             if (socketRef.current) socketRef.current.emit("new-order", res.data);
 
             setOrderSuccess(true);
             
-            // D. REDIRECT (Small delay to ensure socket message sends)
+            // Redirect
             setTimeout(() => {
                 clearCart(); 
                 navigate(`/track/${res.data._id}`); 
@@ -124,7 +124,7 @@ const Cart = ({ cart, customerId, clearCart, removeFromCart, tableNum, setTableN
 
         } catch (err) {
             console.error("ORDER ERROR:", err);
-            toast.error("Order Failed. Please try again.");
+            toast.error("Order Failed. Try again.");
             setIsSubmitting(false);
         }
     };
@@ -138,7 +138,7 @@ const Cart = ({ cart, customerId, clearCart, removeFromCart, tableNum, setTableN
                         <h2 style={styles.successTitle}>Order Sent!</h2>
                         <p style={styles.counterNote}>
                             Pay: <strong>{paymentChosen}</strong><br/>
-                            Please pay at the counter.
+                            {finalTableNum === "Parcel" ? "Collect at Counter" : "Wait at Table"}
                         </p>
                         <p style={styles.successSub}>Opening tracker...</p>
                         <div style={styles.loaderLine}></div>
@@ -146,15 +146,27 @@ const Cart = ({ cart, customerId, clearCart, removeFromCart, tableNum, setTableN
                 </div>
             )}
             
+            {/* ✅ NEW SELECTION MODAL (PARCEL + 10 TABLES) */}
             {showTableModal && (
                 <div style={styles.overlay}>
                     <div style={styles.tableCard}>
-                        <FaChair size={40} color="#f97316" style={{marginBottom:15}}/>
-                        <h2>Set Table</h2>
-                        <form onSubmit={handleTableSubmit}>
-                             <input style={styles.tableInput} type="number" autoFocus value={tempTable} onChange={e=>setTempTable(e.target.value)} required />
-                             <button style={styles.confirmBtn} type="submit">Confirm</button>
-                        </form>
+                        <h2 style={{marginTop:0, marginBottom:15, fontSize:18, fontWeight: 900}}>Dining Option</h2>
+                        
+                        {/* 🟥 PARCEL BUTTON */}
+                        <button onClick={() => handleSelection("Parcel")} style={styles.parcelBtn}>
+                            <FaBoxOpen size={20} /> PARCEL / TAKEAWAY
+                        </button>
+
+                        <div style={styles.divider}><span>OR SELECT TABLE</span></div>
+
+                        {/* 🔢 TABLE NUMBERS 1-10 */}
+                        <div style={styles.tableGrid}>
+                            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(num => (
+                                <button key={num} onClick={() => handleSelection(num)} style={styles.numBtn}>
+                                    {num}
+                                </button>
+                            ))}
+                        </div>
                     </div>
                 </div>
             )}
@@ -170,11 +182,18 @@ const Cart = ({ cart, customerId, clearCart, removeFromCart, tableNum, setTableN
             </div>
 
             <div style={styles.infoCard}>
-                <div onClick={() => setShowTableModal(true)} style={{display:'flex', justifyContent:'space-between', marginBottom:10}}>
-                    <span>Table: <b style={{color:'#f97316'}}>{finalTableNum || "Tap to Set"}</b></span>
-                    <button style={styles.changeBtn}>Edit</button>
+                <div onClick={() => setShowTableModal(true)} style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                    <div style={{display:'flex', alignItems:'center', gap:10}}>
+                        {finalTableNum === "Parcel" ? <FaBoxOpen color="#ef4444" size={20}/> : <FaChair color="#f97316" size={20}/>}
+                        <div style={{display:'flex', flexDirection:'column'}}>
+                            <span style={{fontSize:14, fontWeight:'bold', color:'white'}}>
+                                {finalTableNum === "Parcel" ? "Parcel Order" : `Dining at Table ${finalTableNum || "?"}`}
+                            </span>
+                            <span style={{fontSize:10, color:'#666'}}>Tap to change</span>
+                        </div>
+                    </div>
+                    <button style={styles.changeBtn}>Change</button>
                 </div>
-                <input style={styles.input} placeholder="Your Name" value={customerName} onChange={e => setCustomerName(e.target.value)} />
             </div>
 
             <div style={styles.list}>
@@ -222,16 +241,20 @@ const styles = {
     successTitle: { fontSize: '24px', fontWeight: '900', margin: '15px 0 5px' },
     counterNote: { color: '#22c55e', fontSize: '15px', margin: '10px 0', lineHeight: '1.5', fontWeight: '600' },
     successSub: { color: '#666', fontSize: '12px', margin: 0 },
-    tableCard: { background: '#111', padding: '30px', borderRadius: '24px', textAlign: 'center', border: '1px solid #333', width: '85%', maxWidth: '320px' },
-    tableInput: { width: '100%', padding: '15px', background: '#000', border: '1px solid #f97316', borderRadius: '12px', color: 'white', fontSize: '20px', textAlign: 'center', marginBottom: '15px', outline:'none' },
-    confirmBtn: { width: '100%', padding: '15px', background: '#f97316', color: 'white', border: 'none', borderRadius: '12px', fontWeight: 'bold' },
+    
+    // ✅ NEW SELECTION SCREEN STYLES
+    tableCard: { background: '#111', padding: '25px', borderRadius: '24px', textAlign: 'center', border: '1px solid #333', width: '90%', maxWidth: '350px' },
+    parcelBtn: { width: '100%', padding: '18px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '12px', fontWeight: '900', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', boxShadow: '0 4px 15px rgba(239, 68, 68, 0.4)', cursor:'pointer' },
+    divider: { margin: '20px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#555', fontSize: '10px', fontWeight: 'bold', letterSpacing: '1px' },
+    tableGrid: { display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '10px' },
+    numBtn: { padding: '15px 0', background: '#1a1a1a', border: '1px solid #333', borderRadius: '10px', color: 'white', fontWeight: '900', fontSize: '16px', cursor:'pointer' },
+
     header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '25px' },
     backBtn: { background: '#1a1a1a', border: '1px solid #333', color: 'white', padding: '12px', borderRadius: '12px', display:'flex' },
     callBtn: { background: '#ef4444', color: 'white', border: 'none', padding: '10px 15px', borderRadius: '12px', fontSize: '11px', fontWeight: '900', display: 'flex', alignItems: 'center' },
     title: { margin: 0, fontSize: '18px', fontWeight: '900' },
-    infoCard: { background: '#111', padding: '15px', borderRadius: '20px', marginBottom: '20px', border: '1px solid #222' },
-    changeBtn: { background: 'rgba(249, 115, 22, 0.1)', border: 'none', color: '#f97316', borderRadius: '8px', padding: '4px 10px', fontSize: '11px', fontWeight: 'bold' },
-    input: { width: '100%', padding: '14px', background: '#000', border: '1px solid #333', borderRadius: '12px', color: 'white', outline:'none' },
+    infoCard: { background: '#111', padding: '20px', borderRadius: '20px', marginBottom: '20px', border: '1px solid #222' },
+    changeBtn: { background: 'rgba(255, 255, 255, 0.1)', border: 'none', color: 'white', borderRadius: '8px', padding: '6px 12px', fontSize: '11px', fontWeight: 'bold' },
     list: { display: 'flex', flexDirection: 'column', gap: '10px' },
     item: { background: '#0a0a0a', padding: '15px', borderRadius: '18px', display: 'flex', alignItems: 'center', border: '1px solid #111' },
     delBtn: { background: 'rgba(239, 68, 68, 0.1)', border: 'none', color: '#ef4444', padding: '10px', borderRadius: '10px' },

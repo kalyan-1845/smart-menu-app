@@ -7,21 +7,21 @@ import html2canvas from 'html2canvas';
 import { 
     FaUserTie, FaCheck, FaSpinner, FaSignOutAlt, 
     FaConciergeBell, FaTruckLoading, FaVolumeUp, FaVolumeMute, 
-    FaLock, FaBell, FaPrint, FaRupeeSign, FaCheckDouble
+    FaLock, FaBell, FaPrint, FaRupeeSign, FaCheckDouble, FaCreditCard, FaMoneyBillWave
 } from "react-icons/fa";
 import { toast } from "react-hot-toast";
 
 const SERVER_URL = "https://smart-menu-backend-5ge7.onrender.com";
 const API_BASE = `${SERVER_URL}/api`;
 
-const WaiterDashboard = () => {
+const WaiterDashboard = ({ bypassAuth = false, providedMongoId = null }) => {
     const { id } = useParams(); 
-    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [isAuthenticated, setIsAuthenticated] = useState(bypassAuth);
     const [password, setPassword] = useState("");
     const [orders, setOrders] = useState([]); 
     const [serviceCalls, setServiceCalls] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [mongoId, setMongoId] = useState(null); 
+    const [mongoId, setMongoId] = useState(providedMongoId); 
     const [isMuted, setIsMuted] = useState(false);
     const [showAllOrders, setShowAllOrders] = useState(false); 
 
@@ -41,7 +41,6 @@ const WaiterDashboard = () => {
                 !["completed", "archived"].includes(o.status.toLowerCase())
             );
             
-            // Check for NEW "Ready" orders to play sound
             const currentReadyCount = orders.filter(o => o.status?.toLowerCase() === "ready").length;
             const newReadyCount = active.filter(o => o.status?.toLowerCase() === "ready").length;
 
@@ -58,25 +57,23 @@ const WaiterDashboard = () => {
     }, [orders.length, isMuted]);
 
     // ✅ 2. AUTHENTICATION
-    const handleLogin = (e) => {
-        if(e) e.preventDefault();
-        if (password === "bitebox18" || password.length > 3) {
-            setIsAuthenticated(true);
-            localStorage.setItem(`waiter_auth_${id}`, "true");
-            toast.success("Staff Terminal Active");
-        } else { toast.error("Invalid Security Key"); }
-    };
-
     useEffect(() => {
+        if (bypassAuth && providedMongoId) {
+            setMongoId(providedMongoId);
+            setIsAuthenticated(true);
+            forceSync(providedMongoId);
+            return;
+        }
         const authStatus = localStorage.getItem(`waiter_auth_${id}`);
         if (authStatus === "true") setIsAuthenticated(true);
-    }, [id]);
+    }, [id, bypassAuth, providedMongoId]);
 
     useEffect(() => {
-        if(!isAuthenticated) return;
+        if (!isAuthenticated) return;
+        if (bypassAuth && providedMongoId) return;
+
         const init = async () => {
             try {
-                // Allows login by Name (kalyanresto1) or ID
                 const res = await axios.get(`${API_BASE}/auth/restaurant/${id}?t=${Date.now()}`); 
                 if (res.data?._id || res.data?.id) {
                     const realId = res.data._id || res.data.id;
@@ -86,15 +83,23 @@ const WaiterDashboard = () => {
             } catch (e) { setLoading(false); }
         };
         init();
-    }, [id, isAuthenticated, forceSync]);
+    }, [id, isAuthenticated, forceSync, bypassAuth, providedMongoId]);
 
-    // ✅ 3. SOCKETS (Notifications)
+    const handleLogin = (e) => {
+        if(e) e.preventDefault();
+        if (password === "bitebox18" || password.length > 3) {
+            setIsAuthenticated(true);
+            localStorage.setItem(`waiter_auth_${id}`, "true");
+            toast.success("Staff Terminal Active");
+        } else { toast.error("Invalid Security Key"); }
+    };
+
+    // ✅ 3. SOCKETS (Polling Mode)
     useEffect(() => {
         if (!mongoId || !isAuthenticated) return;
         
-        // Use Polling first for stability on Render
         const socket = io(SERVER_URL, { 
-            transports: ['polling', 'websocket'], 
+            transports: ['polling'], 
             query: { restaurantId: mongoId } 
         });
         
@@ -103,14 +108,12 @@ const WaiterDashboard = () => {
             forceSync(mongoId);
         });
 
-        // Listen for Chef updates
         socket.on("new-order", () => forceSync(mongoId));
         socket.on("chef-ready-alert", () => {
             if(!isMuted) dingRef.current.play().catch(()=>{});
             forceSync(mongoId);
         });
         
-        // Listen for Customer Calls
         socket.on("new-waiter-call", () => {
             if(!isMuted) callRef.current.play().catch(()=>{});
             toast("New Table Call!", { icon: '🔔' });
@@ -122,7 +125,6 @@ const WaiterDashboard = () => {
         return () => { socket.disconnect(); clearInterval(backupTimer); };
     }, [mongoId, isAuthenticated, isMuted, forceSync]);
 
-    // ✅ 4. SERVER ACTIONS
     const handleServe = async (orderId) => {
         if ("vibrate" in navigator) navigator.vibrate(50);
         try {
@@ -145,7 +147,6 @@ const WaiterDashboard = () => {
         try { await axios.delete(`${API_BASE}/orders/calls/${callId}`); } catch (e) {}
     };
 
-    // ✅ 5. RECEIPT GENERATOR
     const printReceipt = async (orderId) => {
         const element = document.getElementById(`receipt-${orderId}`);
         if (!element) return;
@@ -161,7 +162,6 @@ const WaiterDashboard = () => {
         } catch (err) { toast.error("Print failed"); }
     };
 
-    // Filter Logic
     const displayedOrders = showAllOrders 
         ? orders 
         : orders.filter(o => o.status?.toLowerCase() === "ready" || o.status?.toLowerCase() === "served");
@@ -183,7 +183,6 @@ const WaiterDashboard = () => {
 
     return (
         <div style={styles.container}>
-            {/* 🛎️ FLOATING TABLE CALLS */}
             <div style={styles.callWrapper}>
                 {serviceCalls.map(call => (
                     <div key={call._id} style={styles.alertCard} className="pulse-red">
@@ -209,7 +208,6 @@ const WaiterDashboard = () => {
                 </div>
             </header>
 
-            {/* TOGGLE BAR */}
             <div style={styles.toolbar}>
                 <h3 style={styles.sectionLabel}>{showAllOrders ? "ALL ACTIVE TABLES" : "READY FOR PICKUP"}</h3>
                 <button onClick={() => setShowAllOrders(!showAllOrders)} style={{...styles.toggleBtn, background: showAllOrders ? '#f97316' : '#111'}}>
@@ -226,11 +224,10 @@ const WaiterDashboard = () => {
                 <div style={styles.grid}>
                     {displayedOrders.map(order => {
                         const isLocked = !(order.status === 'Served' || order.status === 'Paid');
+                        const isOnline = order.paymentMethod?.toLowerCase() === 'online';
                         
                         return (
                             <div key={order._id} style={{...styles.card, borderLeft: order.status === 'ready' ? '6px solid #22c55e' : (order.status === 'served' ? '6px solid #3b82f6' : '6px solid #eab308')}}>
-                                
-                                {/* ✅ HIDDEN RECEIPT TEMPLATE */}
                                 <div id={`receipt-${order._id}`} style={{position:'absolute', top:-9999, left:-9999, background:'white', color:'black', padding:20, width:300}}>
                                     <h3 style={{textAlign:'center'}}>RESTAURANT RECEIPT</h3>
                                     <p style={{textAlign:'center'}}>Table: {order.tableNum}</p>
@@ -241,8 +238,18 @@ const WaiterDashboard = () => {
                                     <p style={{textAlign:'center', fontSize:'10px', marginTop:10}}>Thank you for dining with us!</p>
                                 </div>
 
-                                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
-                                    <div style={styles.tableBig}>Table {order.tableNum}</div>
+                                <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start'}}>
+                                    <div>
+                                        <div style={styles.tableBig}>Table {order.tableNum}</div>
+                                        {/* PAYMENT BADGE */}
+                                        <div style={{
+                                            marginTop: 6, fontSize: 10, fontWeight: '900', 
+                                            color: isOnline ? '#22c55e' : '#f97316',
+                                            display: 'flex', alignItems: 'center', gap: 5
+                                        }}>
+                                            {isOnline ? <><FaCreditCard/> PAID ONLINE</> : <><FaMoneyBillWave/> CASH</>}
+                                        </div>
+                                    </div>
                                     <div style={{...styles.readyBadge, background: order.status === 'ready' ? '#22c55e' : (order.status === 'served' ? '#3b82f6' : '#eab308')}}>
                                         {order.status.toUpperCase()}
                                     </div>
@@ -257,24 +264,19 @@ const WaiterDashboard = () => {
                                     ))}
                                 </div>
 
-                                {/* ✅ ACTION BUTTONS */}
                                 <div style={{display:'grid', gap:'10px'}}>
-                                    
-                                    {/* SERVE BUTTON */}
                                     {order.status !== 'Served' && order.status !== 'Paid' && (
                                         <button onClick={() => handleServe(order._id)} style={styles.serveBtn}>
                                             <FaCheckDouble /> MARK AS SERVED
                                         </button>
                                     )}
 
-                                    {/* PAID BUTTON (Only if served) */}
                                     {order.status === 'Served' && (
                                         <button onClick={() => handleMarkPaid(order._id)} style={{...styles.serveBtn, background:'#10b981'}}>
                                             <FaRupeeSign /> MARK PAID
                                         </button>
                                     )}
 
-                                    {/* RECEIPT BUTTON (LOCKED UNTIL SERVED) */}
                                     <button 
                                         onClick={() => printReceipt(order._id)} 
                                         disabled={isLocked}

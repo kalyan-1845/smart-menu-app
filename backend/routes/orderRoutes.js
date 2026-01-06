@@ -1,11 +1,12 @@
 import express from 'express';
 import Order from '../models/Order.js';
+import Call from '../models/Call.js'; // ✅ Import Call Model
 import Owner from '../models/Owner.js';
 import jwt from 'jsonwebtoken';
 
 const router = express.Router();
 
-// --- 🛡️ MIDDLEWARE ---
+// --- 🛡️ MIDDLEWARE (Retained) ---
 const protect = async (req, res, next) => {
     let token;
     if (req.headers.authorization?.startsWith('Bearer')) {
@@ -25,49 +26,49 @@ const protect = async (req, res, next) => {
 };
 
 // ============================================================
-// 🛒 1. PLACE ORDER (FIXED)
+// 🛒 1. PLACE ORDER (Enhanced for Parcel)
 // ============================================================
 router.post('/', async (req, res) => {
     try {
-        // ✅ FIX 1: Added 'customerId' here so we don't lose it
         const { restaurantId, tableNum, items, totalAmount, customerName, paymentMethod, customerId } = req.body;
 
         const newOrder = new Order({
             restaurantId,
-            tableNum,
+            tableNum: tableNum.toString(), // ✅ Ensures "Parcel" is saved as String
             items,
             totalAmount,
             customerName: customerName || "Guest",
             paymentMethod: paymentMethod || "Cash",
-            customerId: customerId, // ✅ FIX 2: Saving it to database
-            status: "placed"
+            customerId: customerId,
+            status: "Pending" // ✅ Standardized for Chef Dashboard
         });
 
         const savedOrder = await newOrder.save();
 
         if (req.io) {
-            // Notify Kitchen
+            // Notify Kitchen (Chef)
             req.io.to(restaurantId).emit('new-order', savedOrder);
         }
 
         res.status(201).json(savedOrder);
     } catch (error) {
-        // ✅ FIX 3: Added console log so you can see the REAL error in VS Code
         console.error("❌ ORDER SAVE FAILED:", error.message); 
         res.status(500).json({ message: "Order Failed", error: error.message });
     }
 });
 
 // ============================================================
-// 📥 2. GET INBOX (Staff)
+// 📥 2. GET INBOX (Staff/Chef)
 // ============================================================
 router.get('/inbox', async (req, res) => {
     const { restaurantId } = req.query;
     try {
+        // Fetch orders that are NOT archived/downloaded
         const orders = await Order.find({ 
             restaurantId,
-            isDownloaded: { $ne: true }
+            status: { $nin: ['archived', 'completed'] } // Keep 'served' visible until cleared
         }).sort({ createdAt: -1 });
+        
         res.json(orders);
     } catch (error) {
         res.status(500).json({ message: "Fetch Failed" });
@@ -75,7 +76,7 @@ router.get('/inbox', async (req, res) => {
 });
 
 // ============================================================
-// 👨‍🍳 3. UPDATE STATUS & TRIGGER AUTO-DOWNLOAD
+// 👨‍🍳 3. UPDATE STATUS (Chef/Waiter)
 // ============================================================
 router.put('/:id', async (req, res) => {
     try {
@@ -88,15 +89,16 @@ router.put('/:id', async (req, res) => {
         );
 
         if (req.io) {
-            // 📢 BROADCAST TO CUSTOMER (This triggers the auto-download)
-            req.io.to(req.params.id).emit('chef-ready-alert', {
-                orderId: updatedOrder._id,
-                status: updatedOrder.status,
-                restaurantId: updatedOrder.restaurantId
-            });
+            // 📢 Alert Customer (OrderTracker)
+            req.io.to(req.params.id).emit('order-status-updated', updatedOrder);
 
-            // 📢 BROADCAST TO STAFF (To sync other dashboards)
-            req.io.to(updatedOrder.restaurantId.toString()).emit('order-updated', updatedOrder);
+            // 📢 Alert Chef/Waiter Dashboards
+            req.io.to(updatedOrder.restaurantId.toString()).emit('new-order', updatedOrder);
+
+            // Special: Ready Alert
+            if (status.toLowerCase() === 'ready') {
+                req.io.to(updatedOrder.restaurantId.toString()).emit('chef-ready-alert', updatedOrder);
+            }
         }
 
         res.json(updatedOrder);
@@ -106,14 +108,68 @@ router.put('/:id', async (req, res) => {
 });
 
 // ============================================================
-// 🧹 4. MARK DOWNLOADED
+// 🛎️ 4. SERVICE CALLS (Waiter Button Logic)
+// ============================================================
+
+// A. Create Call (Customer clicks button)
+router.post('/calls', async (req, res) => {
+    try {
+        const { restaurantId, tableNumber, type } = req.body;
+
+        const newCall = new Call({
+            restaurantId,
+            tableNumber: tableNumber.toString(),
+            type: type || 'help',
+            status: 'pending'
+        });
+
+        const savedCall = await newCall.save();
+
+        if (req.io) {
+            req.io.to(restaurantId).emit("new-waiter-call", savedCall);
+        }
+
+        res.status(201).json(savedCall);
+    } catch (error) {
+        console.error("Call Error:", error);
+        res.status(500).json({ message: "Failed to call waiter" });
+    }
+});
+
+// B. Get Active Calls (Waiter Dashboard)
+router.get('/calls', async (req, res) => {
+    try {
+        const { restaurantId } = req.query;
+        const calls = await Call.find({ 
+            restaurantId, 
+            status: 'pending' 
+        }).sort({ createdAt: -1 });
+        
+        res.json(calls);
+    } catch (error) {
+        res.status(500).json({ message: "Sync error" });
+    }
+});
+
+// C. Resolve Call (Waiter clicks checkmark)
+router.delete('/calls/:id', async (req, res) => {
+    try {
+        await Call.findByIdAndDelete(req.params.id);
+        res.json({ message: "Call resolved" });
+    } catch (error) {
+        res.status(500).json({ message: "Error resolving" });
+    }
+});
+
+// ============================================================
+// 🧹 5. MARK DOWNLOADED (Admin Panel)
 // ============================================================
 router.put('/mark-downloaded', async (req, res) => {
     try {
         const { restaurantId } = req.body;
         await Order.updateMany(
-            { restaurantId, isDownloaded: { $ne: true } },
-            { $set: { isDownloaded: true, status: 'archived' } }
+            { restaurantId, status: { $in: ['Served', 'Paid'] } },
+            { $set: { status: 'archived', isDownloaded: true } }
         );
         res.json({ success: true });
     } catch (error) {
@@ -122,7 +178,7 @@ router.put('/mark-downloaded', async (req, res) => {
 });
 
 // ============================================================
-// 🔍 5. GET SINGLE ORDER (For Tracker)
+// 🔍 6. GET SINGLE ORDER (For Tracker)
 // ============================================================
 router.get('/:id', async (req, res) => {
     try {

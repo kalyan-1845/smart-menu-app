@@ -1,12 +1,12 @@
 import jsPDF from "jspdf";
 
 export const generateCustomerReceipt = async (order, restaurant) => {
-    // 1. Get dynamic name
+    // 1. Get dynamic name or fallback
     const dynamicName = restaurant?.restaurantName || restaurant?.username || "BITEBOX KITCHEN";
 
     // 2. CALCULATE DYNAMIC HEIGHT
-    // Base height (header + footer) + (Items * 10mm per item)
-    const baseHeight = 160; 
+    // Base height (header + footer) + (Items * 8mm per item)
+    const baseHeight = 170; 
     const itemHeight = order.items.length * 8; 
     const docHeight = baseHeight + itemHeight;
 
@@ -19,8 +19,9 @@ export const generateCustomerReceipt = async (order, restaurant) => {
     const centerX = 40;
     const rightAlignX = 75;
     const leftAlignX = 5;
-    let y = 10; // Start higher up
+    let y = 10; // Start Y position
 
+    // Helper to load QR Code
     const loadImage = (url) => {
         return new Promise((resolve) => {
             const img = new Image();
@@ -36,14 +37,14 @@ export const generateCustomerReceipt = async (order, restaurant) => {
     const qrImage = await loadImage(qrUrl);
 
     // --- 1. HEADER ---
-    doc.setFontSize(14); // Slightly smaller for better fit
+    doc.setFontSize(14); 
     doc.setFont("helvetica", "bold");
     doc.setTextColor(0);
     
-    // Auto-split long restaurant names into multiple lines if needed
+    // Auto-split long restaurant names
     const titleLines = doc.splitTextToSize(dynamicName.toUpperCase(), 70);
     doc.text(titleLines, centerX, y, { align: "center" });
-    y += (titleLines.length * 5); // Adjust Y based on lines
+    y += (titleLines.length * 5); 
 
     doc.setFontSize(8);
     doc.setFont("helvetica", "normal");
@@ -56,14 +57,20 @@ export const generateCustomerReceipt = async (order, restaurant) => {
     doc.setLineDashPattern([1, 1], 0); 
     doc.line(leftAlignX, y, rightAlignX, y);
     
-    // --- 2. ORDER DETAILS ---
+    // --- 2. ORDER DETAILS (PARCEL LOGIC) ---
     y += 6;
     doc.setTextColor(0);
-    doc.setFontSize(9);
+    doc.setFontSize(10); // Slightly larger for visibility
     doc.setFont("helvetica", "bold");
     
-    // Use a grid layout for Table/Date
-    doc.text(`TABLE: ${order.tableNum}`, leftAlignX, y);
+    // ✅ CHECK FOR PARCEL OR TABLE
+    if (order.tableNum === "Parcel" || order.tableNum === "Takeaway") {
+        doc.text("📦 TAKEAWAY ORDER", leftAlignX, y); 
+    } else {
+        doc.text(`TABLE: ${order.tableNum}`, leftAlignX, y);
+    }
+
+    doc.setFontSize(9);
     doc.text(new Date().toLocaleDateString(), rightAlignX, y, { align: "right" });
     
     y += 5;
@@ -80,7 +87,7 @@ export const generateCustomerReceipt = async (order, restaurant) => {
     doc.setFontSize(8);
     doc.setFont("helvetica", "bold");
     doc.text("ITEM", leftAlignX, y);
-    doc.text("QTY", 50, y, { align: "center" }); // Fixed X for Qty
+    doc.text("QTY", 50, y, { align: "center" }); 
     doc.text("PRICE", rightAlignX, y, { align: "right" });
     
     y += 3;
@@ -89,10 +96,7 @@ export const generateCustomerReceipt = async (order, restaurant) => {
     // --- ITEMS LOOP ---
     order.items.forEach((item) => {
         y += 6;
-        
-        // Clean text handling for long names
-        const name = item.name.length > 20 ? item.name.substring(0, 18) + ".." : item.name;
-        
+        const name = item.name.length > 18 ? item.name.substring(0, 16) + ".." : item.name;
         doc.text(name, leftAlignX, y);
         doc.text(`${item.quantity}`, 50, y, { align: "center" });
         doc.text(`${(item.price * item.quantity).toFixed(2)}`, rightAlignX, y, { align: "right" });
@@ -111,7 +115,7 @@ export const generateCustomerReceipt = async (order, restaurant) => {
 
     y += 5;
     doc.text("Taxes:", leftAlignX, y);
-    doc.text("0.00", rightAlignX, y, { align: "right" }); // Explicitly showing 0.00 looks more professional
+    doc.text("0.00", rightAlignX, y, { align: "right" });
 
     y += 7;
     doc.setFontSize(12);
@@ -120,61 +124,57 @@ export const generateCustomerReceipt = async (order, restaurant) => {
     doc.setTextColor(0); 
     doc.text(`Rs. ${order.totalAmount}`, rightAlignX, y, { align: "right" });
 
-    // --- 5. PAYMENT STATUS (FIXED BOX) ---
-    y += 8;
+    // --- 5. PAYMENT STATUS (ENHANCED BOX) ---
+    y += 10;
     const isOnline = order.paymentMethod?.toLowerCase() === "online";
     
-    // Reset Line Dash for solid box
-    doc.setLineDashPattern([], 0); 
+    doc.setLineDashPattern([], 0); // Solid line for box
 
     if (isOnline) {
-        doc.setFillColor(240, 253, 244); // Light Green bg
-        doc.setDrawColor(34, 197, 94);   // Green border
-        doc.roundedRect(leftAlignX, y, 70, 10, 2, 2, "FD"); // FD = Fill and Draw
+        // GREEN BOX for Online Payment
+        doc.setFillColor(235, 255, 235); // Light Green
+        doc.setDrawColor(0, 150, 0);     // Dark Green Border
+        doc.roundedRect(leftAlignX, y, 70, 12, 2, 2, "FD"); 
         
-        doc.setTextColor(21, 128, 61); // Dark Green Text
-        doc.setFontSize(9);
+        doc.setTextColor(0, 120, 0); 
+        doc.setFontSize(10);
         doc.setFont("helvetica", "bold");
-        // Shortened text to ensure it fits
-        doc.text("PAID ONLINE", centerX, y + 6.5, { align: "center" });
+        doc.text("PAID ONLINE ✅", centerX, y + 8, { align: "center" });
     } else {
-        doc.setDrawColor(0); // Black border
-        doc.setFillColor(255, 255, 255); // White bg
-        doc.roundedRect(leftAlignX, y, 70, 10, 2, 2, "FD");
+        // WHITE BOX for Cash Payment
+        doc.setDrawColor(0); 
+        doc.setFillColor(255, 255, 255); 
+        doc.roundedRect(leftAlignX, y, 70, 12, 2, 2, "FD");
         
         doc.setTextColor(0);
-        doc.setFontSize(9);
+        doc.setFontSize(10);
         doc.setFont("helvetica", "bold");
-        doc.text("PAY CASH AT COUNTER", centerX, y + 6.5, { align: "center" });
+        doc.text("PAY CASH AT COUNTER 💵", centerX, y + 8, { align: "center" });
     }
 
-    // --- 6. FEEDBACK (FIXED STARS) ---
-    y += 18;
+    // --- 6. FOOTER ---
+    y += 20;
     doc.setTextColor(0);
     doc.setFontSize(8);
     doc.setFont("helvetica", "bold");
     doc.text("HOW WAS YOUR EXPERIENCE?", centerX, y, { align: "center" });
     
     y += 5;
-    doc.setFontSize(16);
+    doc.setFontSize(14);
     doc.setTextColor(150); 
-    // FIXED: Removed unicode stars (☆) because PDF doesn't support them by default.
-    // Using standard ASCII characters creates a cleaner look that won't break.
-    doc.text("* * * * *", centerX, y, { align: "center" });
+    doc.text("* * * * *", centerX, y, { align: "center" }); // 5 Stars
 
-    // --- 7. THANK YOU ---
-    y += 10;
+    y += 8;
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.setTextColor(0);
     doc.text("Thank you for visiting!", centerX, y, { align: "center" });
 
-    // --- 8. QR CODE & BRANDING ---
+    // --- 7. QR CODE ---
     if (qrImage) {
         y += 5;
-        // Centered QR code
         doc.addImage(qrImage, "PNG", centerX - 12, y, 24, 24);
-        y += 28; // Move Y past the image
+        y += 28; 
     } else {
         y += 10;
     }
@@ -184,7 +184,8 @@ export const generateCustomerReceipt = async (order, restaurant) => {
     doc.setTextColor(100); 
     doc.text("Powered by BiteBox AI", centerX, y, { align: "center" });
 
-    // --- 9. FINAL SAVE ---
-    const fileName = `${dynamicName.replace(/\s+/g, '_')}_Table_${order.tableNum}.pdf`;
+    // --- 8. SAVE FILE ---
+    const tableLabel = order.tableNum === "Parcel" ? "Parcel" : `Table_${order.tableNum}`;
+    const fileName = `${dynamicName.replace(/\s+/g, '_')}_${tableLabel}.pdf`;
     doc.save(fileName);
 };
