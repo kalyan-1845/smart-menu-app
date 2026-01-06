@@ -6,7 +6,7 @@ import { generateCustomerReceipt } from "../utils/ReceiptGenerator";
 import { 
     FaCheck, FaUtensils, FaConciergeBell, FaFlagCheckered,
     FaArrowLeft, FaDownload, FaSpinner, FaReceipt, 
-    FaTimes, FaBell, FaCashRegister, FaStar 
+    FaTimes, FaBell, FaCashRegister, FaStar, FaLock, FaQuestionCircle
 } from "react-icons/fa";
 import { toast } from "react-hot-toast";
 
@@ -14,7 +14,7 @@ const SERVER_URL = "https://smart-menu-backend-5ge7.onrender.com";
 const API_BASE = `${SERVER_URL}/api`;
 
 const OrderTracker = () => {
-    const { id } = useParams(); // 🎯 Unique Order ID from URL
+    const { id } = useParams(); 
     const navigate = useNavigate();
     const socketRef = useRef(null);
     
@@ -24,6 +24,7 @@ const OrderTracker = () => {
     const [hasDownloaded, setHasDownloaded] = useState(false);
     
     const [showFeedback, setShowFeedback] = useState(false);
+    const [showExitConfirm, setShowExitConfirm] = useState(false); // 🆕 EXIT CONFIRM STATE
     const [rating, setRating] = useState(0);
     const [submitted, setSubmitted] = useState(false);
 
@@ -44,7 +45,6 @@ const OrderTracker = () => {
             const res = await axios.get(`${API_BASE}/orders/${id}?t=${Date.now()}`); 
             setOrder(res.data);
             
-            // Only fetch restaurant info once to save data
             if(res.data.restaurantId && !restaurant) {
                 const resInfo = await axios.get(`${API_BASE}/auth/restaurant/${res.data.restaurantId}`);
                 setRestaurant(resInfo.data);
@@ -54,20 +54,18 @@ const OrderTracker = () => {
         }
     }, [id, restaurant]);
 
-    // ✅ 2. REAL-TIME SOCKET CONNECTION (Fixed)
+    // ✅ 2. REAL-TIME SOCKET CONNECTION
     useEffect(() => {
-        fetchOrderData(); // Initial Load
+        fetchOrderData(); 
         
         socketRef.current = io(SERVER_URL, { transports: ['websocket'] });
         
-        // ⚡️ CRITICAL FIX: Join the Restaurant's Room, NOT the Order ID room
         if (order?.restaurantId) {
             socketRef.current.emit('join-restaurant', order.restaurantId);
         }
 
-        // Listen for specific alerts for THIS order
         socketRef.current.on("order-status-updated", (data) => {
-            if (data.orderId === id) fetchOrderData(); // Instant Refresh
+            if (data.orderId === id) fetchOrderData(); 
         });
 
         socketRef.current.on("chef-ready-alert", (data) => {
@@ -78,14 +76,13 @@ const OrderTracker = () => {
             }
         });
 
-        // Backup Polling (Safety Net)
         const interval = setInterval(fetchOrderData, 8000); 
 
         return () => { 
             if(socketRef.current) socketRef.current.disconnect(); 
             clearInterval(interval); 
         };
-    }, [id, order?.restaurantId, fetchOrderData]); // Re-run when restaurantId is known
+    }, [id, order?.restaurantId, fetchOrderData]); 
 
     // 🛎️ WAITER CALL
     const handleCallWaiter = () => {
@@ -93,7 +90,6 @@ const OrderTracker = () => {
         setIsCalling(true);
         if ("vibrate" in navigator) navigator.vibrate(100);
 
-        // Send alert to Waiter Dashboard
         socketRef.current.emit("call-waiter", {
             restaurantId: order.restaurantId,
             tableNumber: order.tableNum,
@@ -102,17 +98,35 @@ const OrderTracker = () => {
         });
 
         toast.success("Staff Notified!");
-        setTimeout(() => setIsCalling(false), 10000); // 10s cooldown
+        setTimeout(() => setIsCalling(false), 10000); 
+    };
+
+    // 🆕 HANDLE BACK BUTTON CLICK
+    const handleBackClick = () => {
+        setShowExitConfirm(true); // Show the confirmation modal instead of leaving
+    };
+
+    // 🆕 HANDLE EXIT CONFIRMATION
+    const handleExitChoice = (choice) => {
+        if (choice === 'yes') {
+            // User wants to order more -> Go back to Menu
+            // We reconstruct the menu URL using the restaurant ID from the order
+            const menuUrl = `/menu/${restaurant?.username || order?.restaurantId}/${order?.tableNum}`;
+            navigate(menuUrl);
+        } else {
+            // User wants to stay -> Close modal
+            setShowExitConfirm(false);
+        }
     };
 
     // 🧾 AUTO-DOWNLOAD RECEIPT
     useEffect(() => {
-        if (order && (order.status.toLowerCase() === "served" || order.status.toLowerCase() === "completed")) {
+        if (order && (order.status.toLowerCase() === "served" || order.status.toLowerCase() === "paid")) {
             if (!hasDownloaded && restaurant) {
                 setTimeout(async () => {
                     await generateCustomerReceipt(order, restaurant);
                     setHasDownloaded(true);
-                    setTimeout(() => setShowFeedback(true), 2000); // Show feedback after receipt
+                    setTimeout(() => setShowFeedback(true), 2000); 
                 }, 1500);
             }
         }
@@ -127,13 +141,33 @@ const OrderTracker = () => {
     };
 
     const currentStep = order ? getStepIndex(order.status) : 0;
+    const isLocked = order ? !(order.status.toLowerCase() === "served" || order.status.toLowerCase() === "paid") : true;
 
     if (!order) return <div style={styles.center}><FaSpinner className="spin" size={30} color="#f97316"/></div>;
 
     return (
         <div style={styles.container}>
+            
+            {/* 🆕 EXIT CONFIRMATION MODAL */}
+            {showExitConfirm && (
+                <div style={styles.feedbackOverlay}>
+                    <div style={styles.feedbackCard} className="pop-in">
+                        <FaQuestionCircle size={50} color="#f97316" style={{marginBottom:15}}/>
+                        <h3 style={{margin:'0 0 10px 0'}}>Order More Items?</h3>
+                        <p style={{fontSize:'13px', color:'#666', marginBottom:'25px'}}>
+                            Do you want to go back to the menu to add more food?
+                        </p>
+                        <div style={{display:'flex', gap:'10px'}}>
+                            <button onClick={() => handleExitChoice('no')} style={styles.cancelBtn}>NO, STAY HERE</button>
+                            <button onClick={() => handleExitChoice('yes')} style={styles.confirmBtn}>YES, ORDER MORE</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <div style={styles.header}>
-                <button onClick={() => navigate(-1)} style={styles.backBtn}><FaArrowLeft /></button>
+                {/* 🎯 Updated Back Button to trigger Modal */}
+                <button onClick={handleBackClick} style={styles.backBtn}><FaArrowLeft /></button>
                 <div style={{ flex: 1 }}>
                     <h1 style={styles.title}>Live Tracker</h1>
                     <p style={styles.sub}>ID: #{id.slice(-6).toUpperCase()}</p>
@@ -192,7 +226,6 @@ const OrderTracker = () => {
                 <div style={styles.totalRow}><span>Total Payable</span><span style={styles.totalPrice}>₹{order.totalAmount}</span></div>
             </div>
 
-            {/* FEEDBACK MODAL */}
             {showFeedback && (
                 <div style={styles.feedbackOverlay}>
                     <div style={styles.feedbackCard} className="pop-in">
@@ -220,9 +253,15 @@ const OrderTracker = () => {
             <div style={styles.footer}>
                 <button 
                     onClick={() => generateCustomerReceipt(order, restaurant)} 
-                    style={styles.solidBtn}
+                    disabled={isLocked}
+                    style={{
+                        ...styles.solidBtn,
+                        background: isLocked ? '#333' : '#f97316',
+                        color: isLocked ? '#666' : 'white',
+                        cursor: isLocked ? 'not-allowed' : 'pointer'
+                    }}
                 >
-                    <FaDownload /> Download Receipt
+                    {isLocked ? <><FaLock /> Receipt Locked (Wait for Bill)</> : <><FaDownload /> Download Receipt</>}
                 </button>
             </div>
             <style>{`.spin { animation: spin 1s linear infinite; } @keyframes spin { 100% { transform: rotate(360deg); } } .pop-in { animation: pop 0.4s cubic-bezier(0.17, 0.89, 0.32, 1.49); }`}</style>
@@ -241,7 +280,7 @@ const styles = {
     container: { minHeight: "100vh", background: "#050505", color: "white", padding: "20px", paddingBottom: "120px", fontFamily: "'Inter', sans-serif" },
     center: { height: "100vh", display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#050505' },
     header: { display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '20px' },
-    backBtn: { width: '45px', height: '45px', background: '#111', border: '1px solid #333', borderRadius: '15px', color: 'white' },
+    backBtn: { width: '45px', height: '45px', background: '#111', border: '1px solid #333', borderRadius: '15px', color: 'white', cursor:'pointer' },
     callBtn: { width: '45px', height: '45px', background: '#ef4444', border: 'none', borderRadius: '15px', color: 'white' },
     payBanner: { background: 'rgba(34, 197, 94, 0.1)', border: '1px solid rgba(34, 197, 94, 0.2)', padding: '12px', borderRadius: '15px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '10px', color: '#22c55e', marginBottom: '20px' },
     title: { margin: 0, fontSize: '20px', fontWeight: '900' },
@@ -265,10 +304,13 @@ const styles = {
     totalRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '20px', fontWeight: '900' },
     totalPrice: { color: '#22c55e' },
     footer: { position: 'fixed', bottom: 0, left: 0, right: 0, padding: '20px', background: 'rgba(5,5,5,0.8)', backdropFilter: 'blur(20px)', zIndex: 100 },
-    solidBtn: { width: '100%', height: '58px', border: 'none', borderRadius: '18px', fontWeight: '900', fontSize:'14px', display:'flex', alignItems:'center', justifyContent:'center', gap:'10px', color: 'white', background: '#f97316' },
-    feedbackOverlay: { position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', zIndex:2000, display:'flex', alignItems:'center', justifyContent:'center', padding:'20px' },
+    solidBtn: { width: '100%', height: '58px', border: 'none', borderRadius: '18px', fontWeight: '900', fontSize:'14px', display:'flex', alignItems:'center', justifyContent:'center', gap:'10px' },
+    feedbackOverlay: { position:'fixed', inset:0, background:'rgba(0,0,0,0.95)', zIndex:2000, display:'flex', alignItems:'center', justifyContent:'center', padding:'20px' },
     feedbackCard: { background:'white', color:'black', borderRadius:'28px', padding:'30px', width:'100%', maxWidth:'320px', position:'relative', textAlign:'center' },
-    closeBtn: { position:'absolute', top:'15px', right:'15px', background:'none', border:'none', color:'#ccc', fontSize:'20px' }
+    closeBtn: { position:'absolute', top:'15px', right:'15px', background:'none', border:'none', color:'#ccc', fontSize:'20px' },
+    // 🆕 BUTTON STYLES FOR CONFIRM MODAL
+    confirmBtn: { flex: 1, padding: '14px', background: '#f97316', color: 'white', border: 'none', borderRadius: '12px', fontWeight: '900', cursor:'pointer' },
+    cancelBtn: { flex: 1, padding: '14px', background: '#f3f4f6', color: '#333', border: 'none', borderRadius: '12px', fontWeight: '900', cursor:'pointer' }
 };
 
 export default OrderTracker;
