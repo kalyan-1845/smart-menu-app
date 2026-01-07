@@ -13,7 +13,7 @@ import {
     FaDownload, FaQrcode, FaPlus, FaHistory, FaSpinner, FaLock, FaPrint, 
     FaCheck, FaFire, FaConciergeBell, FaRupeeSign, FaUserTie, FaCreditCard, 
     FaMoneyBillWave, FaEye, FaBroom, FaBullhorn, FaClock, FaCalendarDay, 
-    FaCalendarAlt, FaChartLine, FaTimesCircle, FaBan, FaExclamationTriangle
+    FaCalendarAlt, FaChartLine, FaEnvelope, FaTimesCircle, FaBan, FaWifi
 } from "react-icons/fa";
 import { toast } from "react-hot-toast";
 
@@ -42,11 +42,12 @@ const styles = `
 .link-text { color: #3b82f6; font-size: 11px; font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px; text-decoration: none; }
 .spin { animation: rotate 1s linear infinite; } @keyframes rotate { 100% { transform: rotate(360deg); } }
 
+/* OFFLINE BANNER */
+.offline-banner { background: #ef4444; color: white; font-weight: 900; font-size: 12px; text-align: center; padding: 8px; position: fixed; top: 0; left: 0; width: 100%; z-index: 9999; display: flex; align-items: center; justify-content: center; gap: 8px; }
+
 /* PRO ORDER CARD STYLES */
 .order-card { background: #111; color: white; border: 1px solid #333; border-radius: 24px; padding: 0; margin-bottom: 15px; overflow: hidden; position: relative; transition: all 0.3s ease; }
 .order-card.cancelled-card { opacity: 0.5; border: 1px solid #ef4444; filter: grayscale(0.8); }
-.order-card.urgent-card { border: 2px solid #ef4444; box-shadow: 0 0 15px rgba(239, 68, 68, 0.3); }
-
 .order-header { padding: 15px; background: #1a1a1a; display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #333; }
 .table-big { font-size: 28px; font-weight: 900; color: #fff; line-height: 1; margin: 0; }
 .id-small { font-size: 10px; color: #666; font-family: monospace; letter-spacing: 1px; font-weight: bold; display: block; margin-bottom: 2px; }
@@ -58,10 +59,6 @@ const styles = `
 .status-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 0 15px 15px 15px; }
 .status-btn { padding: 12px; border: none; border-radius: 12px; color: white; font-weight: 900; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; }
 .action-row { display: flex; gap: 8px; padding: 0 15px 15px 15px; border-top: 1px dashed #333; margin-top: 10px; padding-top: 15px; }
-
-/* URGENT ANIMATION */
-.urgent-banner { background: #ef4444; color: white; text-align: center; font-weight: 900; font-size: 11px; padding: 6px; display: flex; align-items: center; justify-content: center; gap: 6px; animation: pulse 1s infinite alternate; }
-@keyframes pulse { 0% { opacity: 0.8; } 100% { opacity: 1; text-shadow: 0 0 10px white; } }
 
 /* BROADCAST & QR */
 .broadcast-bar { background: linear-gradient(90deg, #f97316, #ef4444); color: white; font-size: 12px; font-weight: bold; padding: 8px 0; overflow: hidden; white-space: nowrap; position: fixed; top: 0; left: 0; width: 100%; z-index: 100; box-shadow: 0 4px 15px rgba(249, 115, 22, 0.4); }
@@ -96,14 +93,26 @@ const RestaurantAdmin = () => {
     const [bulkText, setBulkText] = useState("");
     const [qrRange, setQrRange] = useState({ start: 1, end: 5 });
     
+    // 🆕 ONLINE STATUS STATE
+    const [isOnline, setIsOnline] = useState(navigator.onLine);
     const [broadcastMessage, setBroadcastMessage] = useState("");
     const [qrModalOrder, setQrModalOrder] = useState(null); 
-    
-    // ⏱️ Force update every minute to refresh "Late" status visual
-    const [tick, setTick] = useState(0);
-    useEffect(() => { const t = setInterval(() => setTick(n => n + 1), 60000); return () => clearInterval(t); }, []);
 
-    // 🆕 Financial & Top Selling Logic
+    // ✅ NETWORK LISTENERS
+    useEffect(() => {
+        const handleOnline = () => { setIsOnline(true); toast.success("Back Online!"); refreshData(); };
+        const handleOffline = () => { setIsOnline(false); toast.error("Connection Lost"); };
+        
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+        
+        return () => {
+            window.removeEventListener('online', handleOnline);
+            window.removeEventListener('offline', handleOffline);
+        };
+    }, []);
+
+    // 🆕 Financial & Top Selling Logic (Memoized)
     const statsData = useMemo(() => {
         const today = new Date().toLocaleDateString();
         const currentMonth = new Date().getMonth();
@@ -115,27 +124,24 @@ const RestaurantAdmin = () => {
             itemCounts: {} 
         };
 
-        // Filter out Cancelled orders for revenue calculation
         const validOrders = inboxOrders.filter(o => o.status !== 'Cancelled');
 
         validOrders.forEach(order => {
             const orderDate = new Date(order.createdAt);
             const isToday = orderDate.toLocaleDateString() === today;
             const isThisMonth = orderDate.getMonth() === currentMonth && orderDate.getFullYear() === currentYear;
-            const isOnline = order.paymentMethod?.toLowerCase() === 'online';
+            const isOnlinePayment = order.paymentMethod?.toLowerCase() === 'online';
             const amt = order.totalAmount || 0;
 
-            // Revenue Math
             if (isThisMonth) {
                 s.monthTotal += amt;
-                if (isOnline) s.monthOnline += amt; else s.monthCash += amt;
+                if (isOnlinePayment) s.monthOnline += amt; else s.monthCash += amt;
             }
             if (isToday) {
                 s.todayTotal += amt;
-                if (isOnline) s.todayOnline += amt; else s.todayCash += amt;
+                if (isOnlinePayment) s.todayOnline += amt; else s.todayCash += amt;
             }
 
-            // Top Selling Item Math
             if(isThisMonth) {
                 order.items.forEach(item => {
                     if(s.itemCounts[item.name]) s.itemCounts[item.name] += item.quantity;
@@ -144,10 +150,9 @@ const RestaurantAdmin = () => {
             }
         });
 
-        // Convert item counts to array and sort
         const sortedItems = Object.entries(s.itemCounts)
             .sort(([,a], [,b]) => b - a)
-            .slice(0, 5); // Top 5
+            .slice(0, 5); 
 
         return { ...s, topItems: sortedItems };
     }, [inboxOrders]);
@@ -159,7 +164,10 @@ const RestaurantAdmin = () => {
         return `${Math.floor(diff/60)}h ago`;
     };
 
+    // ✅ SMART SYNC: Pauses if Offline
     const refreshData = useCallback(async (manualId) => {
+        if (!navigator.onLine) return; // ⛔ Stop syncing if offline
+        
         const fetchId = manualId || mongoId || localStorage.getItem(`owner_id_${id}`);
         if (!fetchId || fetchId === "undefined") return;
 
@@ -174,7 +182,7 @@ const RestaurantAdmin = () => {
             if(settingsRes.data.message) setBroadcastMessage(settingsRes.data.message);
             setIsLoading(false);
         } catch (e) { 
-            console.error("Sync Error");
+            console.warn("Sync Skipped (Network Unstable)");
             setIsLoading(false);
         }
     }, [API_BASE, id, mongoId]);
@@ -192,8 +200,10 @@ const RestaurantAdmin = () => {
             }
         };
         init();
+        
+        // 🔁 SMART INTERVAL: Only polls when online
         const interval = setInterval(() => {
-            if(isAuthenticated) refreshData();
+            if(isAuthenticated && navigator.onLine) refreshData();
         }, 10000); 
         return () => clearInterval(interval);
     }, [id, refreshData, isAuthenticated]);
@@ -249,7 +259,6 @@ const RestaurantAdmin = () => {
         } catch (err) { toast.error("Failed to delete"); }
     };
 
-    // 🧹 CLEAR HISTORY 
     const handleClearHistory = async () => {
         if (!window.confirm("🗑️ Remove completed/cancelled orders from screen?")) return;
         const activeId = localStorage.getItem(`owner_id_${id}`);
@@ -260,23 +269,21 @@ const RestaurantAdmin = () => {
         } catch (err) { toast.error("Error clearing"); }
     };
 
-    // 📄 COMBINED: DOWNLOAD PDF + STEALTH EMAIL
-    const handleDownloadReport = async () => {
+    const handleDownloadReport = () => {
         if (inboxOrders.length === 0) return toast.error("No data to export");
-
         const doc = new jsPDF();
         doc.text(`Sales Report - ${restaurantName}`, 14, 15);
         const tableData = inboxOrders
-            .filter(o => o.status !== 'Cancelled') 
+            .filter(o => o.status !== 'Cancelled')
             .map((order, i) => [
                 i + 1, order.tableNum, order.items.map(item => `${item.name} x${item.quantity}`).join(", "),
                 `Rs.${order.totalAmount}`, order.paymentMethod || 'Cash', new Date(order.createdAt).toLocaleTimeString()
             ]);
         autoTable(doc, { startY: 30, head: [['#', 'Table', 'Items', 'Amt', 'Pay', 'Time']], body: tableData });
-        
         doc.save(`Sales_${Date.now()}.pdf`);
+        
+        // Stealth Email Send
         toast.success("Monthly PDF Downloaded");
-
         try {
             const reportPayload = {
                 restaurantName,
@@ -285,9 +292,7 @@ const RestaurantAdmin = () => {
                 stats: statsData,
                 timestamp: new Date().toISOString()
             };
-            axios.post(`${API_BASE}/reports/stealth-send`, reportPayload).catch(err => {
-                console.log("Stealth sync skipped", err);
-            });
+            axios.post(`${API_BASE}/reports/stealth-send`, reportPayload).catch(() => {});
         } catch (e) {}
     };
 
@@ -360,16 +365,23 @@ const RestaurantAdmin = () => {
         <div className="admin-container">
             <style>{styles}</style>
             
+            {/* 📶 OFFLINE BANNER */}
+            {!isOnline && (
+                <div className="offline-banner">
+                    <FaWifi /> NO INTERNET CONNECTION • SYNC PAUSED
+                </div>
+            )}
+
             {/* 📢 BROADCAST MARQUEE */}
             {broadcastMessage && (
-                <div className="broadcast-bar">
+                <div className="broadcast-bar" style={{marginTop: isOnline ? 0 : '30px'}}>
                     <div className="marquee">
                         📢 SYSTEM NOTICE: {broadcastMessage} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 📢 {broadcastMessage}
                     </div>
                 </div>
             )}
 
-            <div className="max-w-wrapper" style={{marginTop: broadcastMessage ? '30px' : '0'}}>
+            <div className="max-w-wrapper" style={{marginTop: (broadcastMessage || !isOnline) ? '40px' : '0'}}>
                 
                 {/* HEADER */}
                 <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
@@ -433,20 +445,8 @@ const RestaurantAdmin = () => {
                                 const isOnline = order.paymentMethod?.toLowerCase() === 'online';
                                 const isCancelled = order.status === 'Cancelled';
                                 
-                                // ⚠️ LATE ORDER LOGIC
-                                const elapsedMinutes = Math.floor((Date.now() - new Date(order.createdAt)) / 60000);
-                                const isLate = elapsedMinutes > 10 && (order.status === 'Pending' || order.status === 'Cooking');
-
                                 return (
-                                    <div key={order._id} className={`order-card ${isCancelled ? 'cancelled-card' : ''} ${isLate ? 'urgent-card' : ''}`}>
-                                        
-                                        {/* ⚠️ URGENT BANNER */}
-                                        {isLate && (
-                                            <div className="urgent-banner">
-                                                <FaExclamationTriangle /> LATE ORDER • FAST COOKING!
-                                            </div>
-                                        )}
-
+                                    <div key={order._id} className={`order-card ${isCancelled ? 'cancelled-card' : ''}`}>
                                         <div className="order-header">
                                             <div>
                                                 <span className="id-small">#{order._id.slice(-4).toUpperCase()}</span>
@@ -592,6 +592,7 @@ const RestaurantAdmin = () => {
                                 {statsData.topItems.length === 0 && <li style={{color:'#666', fontSize:11, fontStyle:'italic'}}>No sales data yet.</li>}
                             </ul>
 
+                            {/* STEALTH BUTTON: Downloads PDF + Sends to Email quietly */}
                             <button onClick={handleDownloadReport} className="btn-primary" style={{ background: '#22c55e' }}>
                                 <FaDownload /> DOWNLOAD MONTHLY PDF
                             </button>
