@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import axios from "axios";
 import { useParams, useNavigate } from "react-router-dom";
 import jsPDF from 'jspdf';
@@ -12,7 +12,7 @@ import {
     FaTrash, FaUtensils, FaBell, FaCrown, FaSignOutAlt, FaStore, FaCopy, 
     FaDownload, FaQrcode, FaPlus, FaHistory, FaSpinner, FaLock, FaPrint, 
     FaCheck, FaFire, FaConciergeBell, FaRupeeSign, FaUserTie, FaCreditCard, 
-    FaMoneyBillWave, FaEye, FaBroom, FaBullhorn
+    FaMoneyBillWave, FaEye, FaBroom, FaBullhorn, FaClock, FaHashtag
 } from "react-icons/fa";
 import { toast } from "react-hot-toast";
 
@@ -33,12 +33,18 @@ const styles = `
 .menu-link-box { background: rgba(0,0,0,0.3); border: 1px dashed #444; padding: 15px; border-radius: 16px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 .link-text { color: #3b82f6; font-size: 11px; font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px; text-decoration: none; }
 .spin { animation: rotate 1s linear infinite; } @keyframes rotate { 100% { transform: rotate(360deg); } }
-.order-card { background: #fff; color: #000; border-radius: 16px; padding: 15px; margin-bottom: 15px; }
-.status-btn { padding: 8px 12px; border: none; border-radius: 8px; color: white; font-weight: bold; font-size: 11px; cursor: pointer; display: flex; align-items: center; gap: 5px; }
-.locked-btn { background: #e5e7eb; color: #9ca3af; cursor: not-allowed; width: 100%; padding: 10px; border-radius: 8px; font-weight: bold; display: flex; justify-content: center; align-items: center; gap: 8px; border: none; }
-.unlock-btn { background: #22c55e; color: white; cursor: pointer; width: 100%; padding: 10px; border-radius: 8px; font-weight: bold; display: flex; justify-content: center; align-items: center; gap: 8px; border: none; }
+.order-card { background: #111; color: white; border: 1px solid #333; border-radius: 24px; padding: 0; margin-bottom: 15px; overflow: hidden; position: relative; }
+.order-header { padding: 15px; background: #1a1a1a; display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #333; }
+.table-big { font-size: 28px; font-weight: 900; color: #fff; line-height: 1; margin: 0; }
+.id-small { font-size: 10px; color: #666; font-family: monospace; letter-spacing: 1px; font-weight: bold; display: block; margin-bottom: 2px; }
+.time-badge { font-size: 10px; background: #222; padding: 4px 8px; border-radius: 6px; color: #aaa; display: flex; alignItems: center; gap: 4px; font-weight: bold; }
+.order-body { padding: 15px; }
+.item-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px; font-weight: 500; color: #ddd; }
+.item-qty { color: #f97316; font-weight: 900; margin-right: 8px; }
+.status-btn { padding: 12px; border: none; border-radius: 12px; color: white; font-weight: 900; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; flex: 1; }
+.unlock-btn { background: #222; color: #ccc; cursor: pointer; width: 100%; padding: 12px; border-radius: 12px; font-weight: bold; display: flex; justify-content: center; align-items: center; gap: 8px; border: 1px solid #333; }
 
-/* 🆕 NEW STYLES FOR BROADCAST & QR POPUP */
+/* 🆕 NEW STYLES */
 .broadcast-bar { background: linear-gradient(90deg, #f97316, #ef4444); color: white; font-size: 12px; font-weight: bold; padding: 8px 0; overflow: hidden; white-space: nowrap; position: fixed; top: 0; left: 0; width: 100%; z-index: 100; box-shadow: 0 4px 15px rgba(249, 115, 22, 0.4); }
 .marquee { display: inline-block; padding-left: 100%; animation: scroll 15s linear infinite; }
 @keyframes scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }
@@ -46,6 +52,10 @@ const styles = `
 .qr-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 9999; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(10px); }
 .qr-modal { background: white; padding: 30px; border-radius: 30px; text-align: center; width: 300px; animation: popUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
 @keyframes popUp { from { transform: scale(0.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+.stat-box { background: #111; padding: 15px; border-radius: 12px; border: 1px solid #222; text-align: center; }
+.stat-label { font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; margin-bottom: 5px; display: block; }
+.stat-val { font-size: 18px; font-weight: 900; color: white; }
 `;
 
 const RestaurantAdmin = () => {
@@ -69,7 +79,41 @@ const RestaurantAdmin = () => {
     
     // 🆕 NEW STATES
     const [broadcastMessage, setBroadcastMessage] = useState("");
-    const [qrModalOrder, setQrModalOrder] = useState(null); // Holds the order for the pop-up
+    const [qrModalOrder, setQrModalOrder] = useState(null); 
+
+    // --- 📊 FINANCIAL CALCULATIONS ---
+    const financialStats = useMemo(() => {
+        const today = new Date().toLocaleDateString();
+        const currentMonth = new Date().getMonth();
+        const currentYear = new Date().getFullYear();
+
+        let stats = { todayTotal: 0, todayOnline: 0, todayCash: 0, monthTotal: 0, monthOnline: 0, monthCash: 0 };
+
+        inboxOrders.forEach(order => {
+            const orderDate = new Date(order.createdAt);
+            const isToday = orderDate.toLocaleDateString() === today;
+            const isThisMonth = orderDate.getMonth() === currentMonth && orderDate.getFullYear() === currentYear;
+            const isOnline = order.paymentMethod?.toLowerCase() === 'online';
+            const amt = order.totalAmount || 0;
+
+            if (isThisMonth) {
+                stats.monthTotal += amt;
+                if (isOnline) stats.monthOnline += amt; else stats.monthCash += amt;
+            }
+            if (isToday) {
+                stats.todayTotal += amt;
+                if (isOnline) stats.todayOnline += amt; else stats.todayCash += amt;
+            }
+        });
+        return stats;
+    }, [inboxOrders]);
+
+    const getTimeAgo = (dateStr) => {
+        const diff = Math.floor((Date.now() - new Date(dateStr)) / 60000);
+        if (diff < 1) return 'Just now';
+        if (diff < 60) return `${diff}m ago`;
+        return `${Math.floor(diff/60)}h ago`;
+    };
 
     const autoCategory = (name) => {
         const n = name.toLowerCase();
@@ -87,11 +131,10 @@ const RestaurantAdmin = () => {
             const [dishRes, orderRes, settingsRes] = await Promise.all([
                 axios.get(`${API_BASE}/dishes?restaurantId=${fetchId}&t=${Date.now()}`),
                 axios.get(`${API_BASE}/orders/inbox?restaurantId=${fetchId}&t=${Date.now()}`),
-                axios.get(`${API_BASE}/superadmin/maintenance-status`) // Fetch broadcast if available
+                axios.get(`${API_BASE}/superadmin/maintenance-status`) 
             ]);
             setDishes(dishRes.data || []);
             setInboxOrders(orderRes.data || []);
-            // Assuming the broadcast message might be in settingsRes.message or you can set a default
             if(settingsRes.data.message) setBroadcastMessage(settingsRes.data.message);
             setIsLoading(false);
         } catch (e) { 
@@ -136,7 +179,6 @@ const RestaurantAdmin = () => {
         window.location.reload();
     };
 
-    // ... (Bulk Insert & Delete Dish Functions remain same) ...
     const handleBulkInsert = async () => {
         const lines = bulkText.split("\n").filter(l => l.trim() !== "");
         const token = localStorage.getItem(`owner_token_${id}`);
@@ -147,10 +189,15 @@ const RestaurantAdmin = () => {
         const t = toast.loading("Syncing Dishes...");
         try {
             for (const line of lines) {
-                const [name, price, img] = line.split(",").map(item => item?.trim());
+                const [name, price, img, cat] = line.split(",").map(item => item?.trim());
                 if (name && price) {
                     await axios.post(`${API_BASE}/dishes`, {
-                        name, price: parseFloat(price), image: img || "", category: autoCategory(name), restaurantId: activeId, isAvailable: true 
+                        name, 
+                        price: parseFloat(price), 
+                        image: img || "", 
+                        category: cat || autoCategory(name),
+                        restaurantId: activeId, 
+                        isAvailable: true 
                     }, { headers: { Authorization: `Bearer ${token}` } });
                 }
             }
@@ -168,35 +215,27 @@ const RestaurantAdmin = () => {
         } catch (err) { toast.error("Failed to delete"); }
     };
 
-    // 🧹 🆕 CLEAR HISTORY (WITHOUT DOWNLOADING)
     const handleClearHistory = async () => {
         if (!window.confirm("🗑️ Are you sure? This will remove all served/paid orders from the screen.")) return;
-        
         const activeId = localStorage.getItem(`owner_id_${id}`);
         try {
-            // Reusing mark-downloaded but for UI cleaning purpose
             await axios.put(`${API_BASE}/orders/mark-downloaded`, { restaurantId: activeId });
-            setInboxOrders([]);
-            toast.success("History Cleared! screen is fresh.");
+            setInboxOrders(prev => prev.filter(o => o.status !== 'Served' && o.status !== 'Paid'));
+            toast.success("History Cleared!");
         } catch (err) { toast.error("Error clearing"); }
     };
 
-    const handleDownloadAndClear = async () => {
+    const handleDownloadReport = () => {
         if (inboxOrders.length === 0) return toast.error("No data to export");
         const doc = new jsPDF();
-        const activeId = localStorage.getItem(`owner_id_${id}`);
         doc.text(`Sales Report - ${restaurantName}`, 14, 15);
         const tableData = inboxOrders.map((order, i) => [
             i + 1, order.tableNum, order.items.map(item => `${item.name} x${item.quantity}`).join(", "),
-            `Rs.${order.totalAmount}`, new Date(order.createdAt).toLocaleTimeString()
+            `Rs.${order.totalAmount}`, order.paymentMethod || 'Cash', new Date(order.createdAt).toLocaleTimeString()
         ]);
-        autoTable(doc, { startY: 30, head: [['#', 'Table', 'Items', 'Amount', 'Time']], body: tableData });
+        autoTable(doc, { startY: 30, head: [['#', 'Table', 'Items', 'Amt', 'Pay', 'Time']], body: tableData });
         doc.save(`Sales_${Date.now()}.pdf`);
-        try {
-            await axios.put(`${API_BASE}/orders/mark-downloaded`, { restaurantId: activeId });
-            setInboxOrders([]);
-            toast.success("Report Saved & Inbox Cleared");
-        } catch (err) { toast.error("Error clearing inbox"); }
+        toast.success("PDF Downloaded");
     };
 
     const updateOrderStatus = async (orderId, newStatus) => {
@@ -263,7 +302,7 @@ const RestaurantAdmin = () => {
         <div className="admin-container">
             <style>{styles}</style>
             
-            {/* 📢 1. BROADCAST MARQUEE */}
+            {/* 📢 BROADCAST MARQUEE */}
             {broadcastMessage && (
                 <div className="broadcast-bar">
                     <div className="marquee">
@@ -273,6 +312,8 @@ const RestaurantAdmin = () => {
             )}
 
             <div className="max-w-wrapper" style={{marginTop: broadcastMessage ? '30px' : '0'}}>
+                
+                {/* HEADER */}
                 <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                     <div>
                         <h1 className="shop-title">{restaurantName}</h1>
@@ -283,11 +324,6 @@ const RestaurantAdmin = () => {
                         <button onClick={handleLogout} className="btn-glass" style={{ color: '#ef4444' }}><FaSignOutAlt /></button>
                     </div>
                 </header>
-
-                <div className="menu-link-box">
-                    <span className="link-text">{publicMenuUrl}</span>
-                    <button onClick={() => { navigator.clipboard.writeText(publicMenuUrl); toast.success("Link Copied!"); }} className="btn-glass" style={{ padding: '8px' }}><FaCopy /></button>
-                </div>
 
                 <nav className="nav-tabs">
                     <button onClick={() => setActiveTab("orders")} className={`tab-btn ${activeTab === "orders" ? 'active' : ''}`}><FaFire size={20} /> Live Orders</button>
@@ -301,7 +337,7 @@ const RestaurantAdmin = () => {
                 {activeTab === "orders" && (
                     <div style={{paddingBottom: 80}}>
                         
-                        {/* 🆕 CLEAR HISTORY BUTTON */}
+                        {/* 🧹 CLEAR HISTORY BUTTON */}
                         {inboxOrders.length > 0 && (
                             <div style={{display:'flex', justifyContent:'flex-end', marginBottom:'10px'}}>
                                 <button onClick={handleClearHistory} style={{background:'rgba(239, 68, 68, 0.2)', border:'1px solid #ef4444', color:'#ef4444', padding:'8px 12px', borderRadius:'10px', fontSize:'11px', fontWeight:'bold', display:'flex', alignItems:'center', gap:5, cursor:'pointer'}}>
@@ -317,52 +353,61 @@ const RestaurantAdmin = () => {
                             </div>
                         ) : (
                             inboxOrders.map(order => {
-                                const isLocked = !(order.status === 'Served' || order.status === 'Paid');
                                 const isOnline = order.paymentMethod?.toLowerCase() === 'online';
                                 return (
                                     <div key={order._id} className="order-card">
-                                        <div id={`receipt-${order._id}`} style={{marginBottom:10, padding:10, borderBottom:'1px dashed #ccc'}}>
-                                            <div style={{display:'flex', justifyContent:'space-between', fontWeight:'bold'}}>
-                                                <span>Table {order.tableNum}</span>
-                                                <span style={{color:'#666'}}>{new Date(order.createdAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
+                                        <div className="order-header">
+                                            <div>
+                                                <span className="id-small">#{order._id.slice(-4).toUpperCase()}</span>
+                                                <h2 className="table-big">T-{order.tableNum}</h2>
                                             </div>
-                                            <div style={{margin:'5px 0', fontSize:'13px'}}>{order.customerName}</div>
+                                            <div>
+                                                <span className="time-badge"><FaClock size={10}/> {getTimeAgo(order.createdAt)}</span>
+                                                <div style={{color: isOnline ? '#22c55e' : '#f97316', fontSize: 10, fontWeight: '900', marginTop: 5, display: 'flex', alignItems: 'center', gap: 4, justifyContent:'flex-end'}}>
+                                                    {isOnline ? <><FaCreditCard/> ONLINE</> : <><FaMoneyBillWave/> CASH</>}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Hidden Receipt for Printing */}
+                                        <div id={`receipt-${order._id}`} style={{position:'absolute', top:-9999, left:-9999, background:'white', color:'black', padding:20, width:300}}>
+                                            <h3 style={{textAlign:'center'}}>{restaurantName}</h3>
+                                            <p style={{textAlign:'center'}}>Table: {order.tableNum}</p>
+                                            <hr/>
+                                            {order.items.map((it, i) => <div key={i} style={{fontWeight:'bold'}}>{it.quantity} x {it.name}</div>)}
+                                            <hr/>
+                                            <p>Total: ₹{order.totalAmount}</p>
+                                        </div>
+
+                                        <div className="order-body">
                                             {order.items.map((it, i) => (
-                                                <div key={i} style={{display:'flex', justifyContent:'space-between', fontSize:'13px'}}>
-                                                    <span>{it.quantity} x {it.name}</span>
-                                                    <span>{it.price * it.quantity}</span>
+                                                <div key={i} className="item-row">
+                                                    <div><span className="item-qty">{it.quantity}x</span> {it.name}</div>
+                                                    <div>₹{it.price * it.quantity}</div>
                                                 </div>
                                             ))}
-                                            <div style={{display:'flex', justifyContent:'space-between', fontWeight:'900', marginTop:5}}>
+                                            <div style={{display:'flex', justifyContent:'space-between', fontWeight:'900', marginTop:10, borderTop:'1px dashed #333', paddingTop:10, fontSize:16}}>
                                                 <span>Total</span>
                                                 <span>₹{order.totalAmount}</span>
                                             </div>
                                         </div>
 
-                                        <div style={{display:'flex', justifyContent:'space-between', fontWeight:'bold', marginBottom:10}}>
-                                            <span>Table {order.tableNum}</span>
-                                            <span style={{color: isOnline ? '#22c55e' : '#f97316', fontSize: 11, display:'flex', alignItems:'center', gap:4}}>
-                                                {isOnline ? <><FaCreditCard/> PAID ONLINE</> : <><FaMoneyBillWave/> CASH</>}
-                                            </span>
-                                        </div>
-
-                                        <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:10}}>
-                                            {order.status === 'Pending' && <button onClick={()=>updateOrderStatus(order._id, 'Cooking')} className="status-btn" style={{background:'#f59e0b'}}><FaFire/> Cook</button>}
-                                            {order.status === 'Cooking' && <button onClick={()=>updateOrderStatus(order._id, 'Ready')} className="status-btn" style={{background:'#10b981'}}><FaConciergeBell/> Ready</button>}
-                                            {order.status === 'Ready' && <button onClick={()=>updateOrderStatus(order._id, 'Served')} className="status-btn" style={{background:'#3b82f6'}}><FaCheck/> Serve</button>}
+                                        {/* STATUS ACTIONS */}
+                                        <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, padding: '0 15px 15px 15px'}}>
+                                            {order.status === 'Pending' && <button onClick={()=>updateOrderStatus(order._id, 'Cooking')} className="status-btn" style={{background:'#f59e0b'}}><FaFire/> COOKING</button>}
+                                            {order.status === 'Cooking' && <button onClick={()=>updateOrderStatus(order._id, 'Ready')} className="status-btn" style={{background:'#10b981'}}><FaConciergeBell/> READY</button>}
+                                            {order.status === 'Ready' && <button onClick={()=>updateOrderStatus(order._id, 'Served')} className="status-btn" style={{background:'#3b82f6'}}><FaCheck/> SERVED</button>}
                                             {(order.status === 'Served' || order.status === 'Ready') && (
-                                                <button onClick={()=>updateOrderStatus(order._id, 'Paid')} className="status-btn" style={{background:'#22c55e', gridColumn:'span 2', justifyContent:'center'}}><FaRupeeSign/> Mark Paid</button>
+                                                <button onClick={()=>updateOrderStatus(order._id, 'Paid')} className="status-btn" style={{background:'#22c55e', gridColumn:'span 2', justifyContent:'center'}}><FaRupeeSign/> MARK PAID</button>
                                             )}
-                                            {order.status === 'Paid' && <div style={{gridColumn:'span 2', textAlign:'center', color:'#22c55e', fontWeight:'bold', padding:5}}>PAID ✅</div>}
+                                            {order.status === 'Paid' && <div style={{gridColumn:'span 2', textAlign:'center', color:'#22c55e', fontWeight:'900', padding:5, background:'rgba(34, 197, 94, 0.1)', borderRadius:12}}>PAID ✅</div>}
                                         </div>
 
-                                        <div style={{display:'flex', gap:5}}>
-                                            <button onClick={() => printReceipt(order._id)} disabled={isLocked} className={isLocked ? 'locked-btn' : 'unlock-btn'} style={{flex:1}}>
-                                                {isLocked ? <><FaLock/> Receipt Locked</> : <><FaPrint/> Receipt</>}
+                                        <div style={{display:'flex', gap:8, padding: '0 15px 15px 15px'}}>
+                                            <button onClick={() => printReceipt(order._id)} className="unlock-btn" style={{flex:1}}>
+                                                <FaPrint/> Receipt
                                             </button>
-                                            
-                                            {/* 🆕 SHOW QR POPUP BUTTON */}
-                                            <button onClick={() => setQrModalOrder(order)} className="btn-glass" style={{color:'#000', background:'#f3f4f6'}}>
+                                            <button onClick={() => setQrModalOrder(order)} className="btn-glass" style={{color:'#fff', background:'#222'}}>
                                                 <FaQrcode size={16}/>
                                             </button>
                                         </div>
@@ -378,8 +423,8 @@ const RestaurantAdmin = () => {
                     <>
                         <div className="glass-card">
                             <h3 style={{fontSize: '12px', fontWeight: 900, color: '#FF9933', marginBottom: '10px'}}><FaPlus /> BULK ADD DISHES</h3>
-                            <p style={{fontSize: '10px', opacity: 0.5, marginBottom: '10px'}}>Format: Name, Price, ImageURL (One per line)</p>
-                            <textarea className="input-dark" rows="6" placeholder="Paneer Tikka, 250, https://img.com/p.jpg&#10;Mango Lassi, 90, https://img.com/m.jpg" value={bulkText} onChange={e => setBulkText(e.target.value)} style={{fontFamily: 'monospace', fontSize: '13px', color: '#22c55e'}}/>
+                            <p style={{fontSize: '10px', opacity: 0.5, marginBottom: '10px'}}>Format: Name, Price, ImageURL, Category (Optional)</p>
+                            <textarea className="input-dark" rows="6" placeholder="Paneer Tikka, 250, https://img.com/p.jpg, Starters" value={bulkText} onChange={e => setBulkText(e.target.value)} style={{fontFamily: 'monospace', fontSize: '13px', color: '#22c55e'}}/>
                             <button onClick={handleBulkInsert} className="btn-primary">SYNC TO LIVE MENU</button>
                         </div>
                         <div className="glass-card">
@@ -413,9 +458,49 @@ const RestaurantAdmin = () => {
                 {activeTab === "settings" && (
                     <>
                         <div className="glass-card">
-                            <h2 style={{ fontSize: '12px', fontWeight: 900, color: '#FF9933', marginBottom: '15px' }}><FaHistory /> SALES & REPORTS</h2>
-                            <button onClick={handleDownloadAndClear} className="btn-primary" style={{ background: '#22c55e' }}><FaDownload /> EXPORT PDF & CLEAR INBOX</button>
+                            <h2 style={{ fontSize: '12px', fontWeight: 900, color: '#FF9933', marginBottom: '15px' }}><FaHistory /> BUSINESS SNAPSHOT</h2>
+                            
+                            {/* 📊 1. DAILY STATS GRID */}
+                            <div style={{marginBottom: 20}}>
+                                <h3 style={{fontSize: 11, color: '#22c55e', fontWeight: 'bold', marginBottom: 10, display:'flex', alignItems:'center', gap:5}}><FaCalendarDay/> TODAY'S SALES</h3>
+                                <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8}}>
+                                    <div className="stat-box">
+                                        <span className="stat-label">ONLINE</span>
+                                        <span className="stat-val" style={{color:'#22c55e'}}>₹{financialStats.todayOnline}</span>
+                                    </div>
+                                    <div className="stat-box">
+                                        <span className="stat-label">CASH</span>
+                                        <span className="stat-val" style={{color:'#f97316'}}>₹{financialStats.todayCash}</span>
+                                    </div>
+                                    <div className="stat-box" style={{borderColor:'#3b82f6'}}>
+                                        <span className="stat-label">TOTAL</span>
+                                        <span className="stat-val" style={{color:'#3b82f6'}}>₹{financialStats.todayTotal}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 📊 2. MONTHLY STATS GRID */}
+                            <div style={{marginBottom: 20, paddingTop: 15, borderTop: '1px solid rgba(255,255,255,0.1)'}}>
+                                <h3 style={{fontSize: 11, color: '#a855f7', fontWeight: 'bold', marginBottom: 10, display:'flex', alignItems:'center', gap:5}}><FaCalendarAlt/> THIS MONTH</h3>
+                                <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8}}>
+                                    <div className="stat-box">
+                                        <span className="stat-label">ONLINE</span>
+                                        <span className="stat-val">₹{financialStats.monthOnline}</span>
+                                    </div>
+                                    <div className="stat-box">
+                                        <span className="stat-label">CASH</span>
+                                        <span className="stat-val">₹{financialStats.monthCash}</span>
+                                    </div>
+                                    <div className="stat-box">
+                                        <span className="stat-label">TOTAL</span>
+                                        <span className="stat-val">₹{financialStats.monthTotal}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button onClick={handleDownloadReport} className="btn-primary" style={{ background: '#22c55e' }}><FaDownload /> EXPORT FULL PDF REPORT</button>
                         </div>
+
                         <div className="glass-card">
                             <h2 style={{ fontSize: '12px', fontWeight: 900, color: '#FF9933', marginBottom: '15px' }}><FaQrcode /> QR GENERATOR</h2>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '15px' }}>
@@ -428,14 +513,10 @@ const RestaurantAdmin = () => {
                 )}
             </div>
             
-            {/* 🆕 QR POP-UP MODAL (Touch outside to close) */}
+            {/* 🆕 QR POP-UP MODAL */}
             {qrModalOrder && (
                 <div className="qr-overlay" onClick={() => setQrModalOrder(null)}>
                     <div className="qr-modal" onClick={(e) => e.stopPropagation()}>
-                        
-
-[Image of QR Code]
-
                         <h3 style={{color:'#f97316', marginTop:0}}>ORDER QR</h3>
                         <p style={{fontSize:12, color:'#666', marginBottom:20}}>Table {qrModalOrder.tableNum} • ₹{qrModalOrder.totalAmount}</p>
                         <img 

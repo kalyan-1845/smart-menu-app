@@ -8,7 +8,7 @@ import InstallButton from "../components/InstallButton";
 import { 
     FaUtensils, FaVolumeUp, FaVolumeMute, FaCheck, FaBell, 
     FaSignOutAlt, FaSpinner, FaCheckDouble, FaConciergeBell,
-    FaLock, FaPrint, FaRupeeSign, FaCreditCard, FaMoneyBillWave
+    FaLock, FaPrint, FaRupeeSign, FaCreditCard, FaMoneyBillWave, FaClock
 } from "react-icons/fa";
 import { toast } from "react-hot-toast";
 
@@ -32,7 +32,12 @@ const ChefDashboard = ({ bypassAuth = false, providedMongoId = null }) => {
     const audioRef = useRef(new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"));
     const callSound = useRef(new Audio("https://assets.mixkit.co/active_storage/sfx/2190/2190-preview.mp3"));
 
-    // ✅ 1. SYNC ENGINE
+    const getTimeAgo = (dateStr) => {
+        const diff = Math.floor((Date.now() - new Date(dateStr)) / 60000);
+        if (diff < 1) return 'Just now';
+        return `${diff}m ago`;
+    };
+
     const forceSync = useCallback(async (rId) => {
         if (!rId) return;
         try {
@@ -54,7 +59,6 @@ const ChefDashboard = ({ bypassAuth = false, providedMongoId = null }) => {
         } catch (e) { console.error("Sync Failed"); }
     }, [orders.length, isMuted]);
 
-    // ✅ 2. AUTHENTICATION
     useEffect(() => {
         if (bypassAuth && providedMongoId) {
             setMongoId(providedMongoId);
@@ -87,7 +91,6 @@ const ChefDashboard = ({ bypassAuth = false, providedMongoId = null }) => {
         } catch (err) { toast.error("Invalid Access Key"); } finally { setAuthLoading(false); }
     };
 
-    // ✅ 3. SOCKET CONNECTION (Polling Mode)
     useEffect(() => {
         if (isAuthenticated && mongoId) {
             socketRef.current = io(SERVER_URL, { 
@@ -184,7 +187,7 @@ const ChefDashboard = ({ bypassAuth = false, providedMongoId = null }) => {
                     </button>
                     <button onClick={() => setIsMuted(!isMuted)} style={styles.iconButton}>{isMuted ? <FaVolumeMute color="#ef4444" /> : <FaVolumeUp color="#22c55e" />}</button>
                     <InstallButton />
-                    <button onClick={() => {localStorage.clear(); window.location.reload();}} style={styles.iconButtonRed}><FaSignOutAlt/></button>
+                    {!bypassAuth && <button onClick={() => {localStorage.clear(); window.location.reload();}} style={styles.iconButtonRed}><FaSignOutAlt/></button>}
                 </div>
             </header>
 
@@ -211,23 +214,22 @@ const ChefDashboard = ({ bypassAuth = false, providedMongoId = null }) => {
                                         <p>Time: {new Date(order.createdAt).toLocaleTimeString()}</p>
                                     </div>
 
-                                    {/* ✅ UPDATED HEADER WITH PAYMENT INFO */}
+                                    {/* ✅ BIG TABLE NUMBER HEADER */}
                                     <div style={styles.cardHeader}>
                                         <div>
-                                            <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
-                                                <h2 style={styles.tableNumber}>T-{order.tableNum}</h2>
-                                                <span style={{fontSize:11, color:'#666', fontWeight:'bold'}}>#{order._id.slice(-4).toUpperCase()}</span>
-                                            </div>
-                                            {/* PAYMENT BADGE */}
-                                            <div style={{
-                                                marginTop: 6, fontSize: 10, fontWeight: '900', 
-                                                color: isOnline ? '#22c55e' : '#f97316',
-                                                display: 'flex', alignItems: 'center', gap: 5
-                                            }}>
-                                                {isOnline ? <><FaCreditCard/> PAID ONLINE</> : <><FaMoneyBillWave/> CASH</>}
+                                            <div style={{display:'flex', flexDirection:'column'}}>
+                                                <span style={{fontSize:10, color:'#666', fontFamily:'monospace', fontWeight:'bold'}}>#{order._id.slice(-4).toUpperCase()}</span>
+                                                <h2 style={{fontSize: 28, fontWeight: '900', margin:0, color: 'white', lineHeight: 1}}>T-{order.tableNum}</h2>
                                             </div>
                                         </div>
-                                        <span style={{...styles.statusBadge, background: order.status.toLowerCase() === 'ready' ? '#22c55e' : (order.status.toLowerCase() === 'cooking' ? '#eab308' : '#222')}}>{order.status.toUpperCase()}</span>
+                                        <div style={{textAlign:'right'}}>
+                                            <span style={{...styles.statusBadge, background: order.status.toLowerCase() === 'ready' ? '#22c55e' : (order.status.toLowerCase() === 'cooking' ? '#eab308' : '#222')}}>
+                                                {order.status.toUpperCase()}
+                                            </span>
+                                            <div style={{fontSize:10, color:'#aaa', marginTop:5, fontWeight:'bold', display:'flex', alignItems:'center', justifyContent:'flex-end', gap:4}}>
+                                                <FaClock/> {getTimeAgo(order.createdAt)}
+                                            </div>
+                                        </div>
                                     </div>
 
                                     <div style={styles.itemsContainer}>
@@ -290,7 +292,6 @@ const styles = {
     grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '12px' },
     card: { background: '#0a0a0a', borderRadius: '24px', border: '1px solid #111', display: 'flex', flexDirection: 'column', overflow:'hidden' },
     cardHeader: { padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom:'1px solid #111' },
-    tableNumber: { fontSize: '24px', fontWeight: '900', margin:0, color:'#FF9933' },
     statusBadge: { padding: '6px 12px', borderRadius: '8px', fontSize: '10px', fontWeight: '900' },
     itemsContainer: { padding: '20px', flex: 1 },
     itemRow: { display: 'flex', gap:'12px', marginBottom: '10px', alignItems:'center' },
@@ -308,5 +309,4 @@ const styles = {
     attendBtn: { background: 'white', color: '#000', border: 'none', borderRadius: '10px', padding:'8px 12px' }
 };
 
-// ✅ EXPORT DEFAULT IS CRITICAL
 export default ChefDashboard;
