@@ -7,7 +7,8 @@ import html2canvas from 'html2canvas';
 import { 
     FaUserTie, FaCheck, FaSpinner, FaSignOutAlt, 
     FaConciergeBell, FaTruckLoading, FaVolumeUp, FaVolumeMute, 
-    FaLock, FaBell, FaPrint, FaRupeeSign, FaCheckDouble, FaCreditCard, FaMoneyBillWave
+    FaLock, FaBell, FaPrint, FaRupeeSign, FaCheckDouble, FaCreditCard, 
+    FaMoneyBillWave, FaUtensils, FaExclamationTriangle, FaClock
 } from "react-icons/fa";
 import { toast } from "react-hot-toast";
 
@@ -24,9 +25,20 @@ const WaiterDashboard = ({ bypassAuth = false, providedMongoId = null }) => {
     const [mongoId, setMongoId] = useState(providedMongoId); 
     const [isMuted, setIsMuted] = useState(false);
     const [showAllOrders, setShowAllOrders] = useState(false); 
+    const [showCallPopup, setShowCallPopup] = useState(null); 
+
+    // ⏱️ Force update every minute to refresh "Late" status visuals
+    const [tick, setTick] = useState(0);
+    useEffect(() => { const t = setInterval(() => setTick(n => n + 1), 60000); return () => clearInterval(t); }, []);
 
     const dingRef = useRef(new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"));
     const callRef = useRef(new Audio("https://assets.mixkit.co/active_storage/sfx/2190/2190-preview.mp3"));
+
+    const getTimeAgo = (dateStr) => {
+        const diff = Math.floor((Date.now() - new Date(dateStr)) / 60000);
+        if (diff < 1) return 'Just now';
+        return `${diff}m ago`;
+    };
 
     // ✅ 1. SYNC ENGINE
     const forceSync = useCallback(async (rId) => {
@@ -51,10 +63,19 @@ const WaiterDashboard = ({ bypassAuth = false, providedMongoId = null }) => {
             }
             
             setOrders(active);
-            setServiceCalls(callRes.data || []);
+            
+            // Handle Calls
+            const calls = callRes.data || [];
+            setServiceCalls(calls);
+            
+            if (calls.length > 0 && !showCallPopup) {
+                setShowCallPopup(calls[0]); 
+                if(!isMuted) callRef.current.play().catch(()=>{});
+            }
+
             setLoading(false);
         } catch (e) { console.error("Waiter Sync Error"); }
-    }, [orders.length, isMuted]);
+    }, [orders.length, isMuted, showCallPopup]);
 
     // ✅ 2. AUTHENTICATION
     useEffect(() => {
@@ -116,7 +137,6 @@ const WaiterDashboard = ({ bypassAuth = false, providedMongoId = null }) => {
         
         socket.on("new-waiter-call", () => {
             if(!isMuted) callRef.current.play().catch(()=>{});
-            toast("New Table Call!", { icon: '🔔' });
             if ("vibrate" in navigator) navigator.vibrate(500);
             forceSync(mongoId);
         });
@@ -143,6 +163,7 @@ const WaiterDashboard = ({ bypassAuth = false, providedMongoId = null }) => {
     };
 
     const resolveCall = async (callId) => {
+        setShowCallPopup(null); // Close popup
         setServiceCalls(prev => prev.filter(c => c._id !== callId));
         try { await axios.delete(`${API_BASE}/orders/calls/${callId}`); } catch (e) {}
     };
@@ -183,17 +204,20 @@ const WaiterDashboard = ({ bypassAuth = false, providedMongoId = null }) => {
 
     return (
         <div style={styles.container}>
-            <div style={styles.callWrapper}>
-                {serviceCalls.map(call => (
-                    <div key={call._id} style={styles.alertCard} className="pulse-red">
-                        <div style={{display:'flex', alignItems:'center', gap:'12px'}}>
-                            <span style={styles.tableBadge}>{call.tableNumber}</span>
-                            <span style={{fontWeight:'900', fontSize:'13px'}}>CALLING FOR SERVICE</span>
-                        </div>
-                        <button onClick={() => resolveCall(call._id)} style={styles.attendBtn}><FaCheck/></button>
+            
+            {/* 🆕 SERVICE CALL POPUP */}
+            {showCallPopup && (
+                <div style={styles.popupOverlay}>
+                    <div style={styles.popupCard}>
+                        <FaBell size={50} color="#ef4444" className="pulse-red" />
+                        <h1 style={{fontSize:'60px', margin:'10px 0', color:'#fff'}}>T-{showCallPopup.tableNumber}</h1>
+                        <p style={{fontSize:'18px', color:'#ccc', marginBottom:'30px'}}>CUSTOMER CALLING FOR SERVICE</p>
+                        <button onClick={() => resolveCall(showCallPopup._id)} style={styles.attendBigBtn}>
+                            <FaCheck size={20}/> I AM ATTENDING
+                        </button>
                     </div>
-                ))}
-            </div>
+                </div>
+            )}
 
             <header style={styles.header}>
                 <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
@@ -226,8 +250,25 @@ const WaiterDashboard = ({ bypassAuth = false, providedMongoId = null }) => {
                         const isLocked = !(order.status === 'Served' || order.status === 'Paid');
                         const isOnline = order.paymentMethod?.toLowerCase() === 'online';
                         
+                        // ⚠️ LATE ORDER LOGIC
+                        const elapsedMinutes = Math.floor((Date.now() - new Date(order.createdAt)) / 60000);
+                        const isLate = elapsedMinutes > 10 && order.status !== 'Served' && order.status !== 'Paid';
+                        
                         return (
-                            <div key={order._id} style={{...styles.card, borderLeft: order.status === 'ready' ? '6px solid #22c55e' : (order.status === 'served' ? '6px solid #3b82f6' : '6px solid #eab308')}}>
+                            <div key={order._id} style={{
+                                ...styles.card, 
+                                borderLeft: order.status === 'ready' ? '6px solid #22c55e' : (order.status === 'served' ? '6px solid #3b82f6' : '6px solid #eab308'),
+                                border: isLate ? '2px solid #ef4444' : '1px solid #111',
+                                boxShadow: isLate ? '0 0 15px rgba(239, 68, 68, 0.3)' : 'none'
+                            }}>
+                                
+                                {/* ⚠️ URGENT BANNER */}
+                                {isLate && (
+                                    <div style={styles.urgentBanner}>
+                                        <FaExclamationTriangle /> LATE ORDER • CHECK TABLE
+                                    </div>
+                                )}
+
                                 <div id={`receipt-${order._id}`} style={{position:'absolute', top:-9999, left:-9999, background:'white', color:'black', padding:20, width:300}}>
                                     <h3 style={{textAlign:'center'}}>RESTAURANT RECEIPT</h3>
                                     <p style={{textAlign:'center'}}>Table: {order.tableNum}</p>
@@ -250,16 +291,29 @@ const WaiterDashboard = ({ bypassAuth = false, providedMongoId = null }) => {
                                             {isOnline ? <><FaCreditCard/> PAID ONLINE</> : <><FaMoneyBillWave/> CASH</>}
                                         </div>
                                     </div>
-                                    <div style={{...styles.readyBadge, background: order.status === 'ready' ? '#22c55e' : (order.status === 'served' ? '#3b82f6' : '#eab308')}}>
-                                        {order.status.toUpperCase()}
+                                    <div style={{textAlign:'right'}}>
+                                        <div style={{...styles.readyBadge, background: order.status === 'ready' ? '#22c55e' : (order.status === 'served' ? '#3b82f6' : '#eab308')}}>
+                                            {order.status.toUpperCase()}
+                                        </div>
+                                        <div style={{fontSize:10, color: isLate ? '#ef4444' : '#666', marginTop:5, fontWeight:'bold', display:'flex', alignItems:'center', justifyContent:'flex-end', gap:4}}>
+                                            <FaClock/> {getTimeAgo(order.createdAt)}
+                                        </div>
                                     </div>
                                 </div>
                                 
+                                {/* ✅ BIG ITEMS + IMAGES */}
                                 <div style={styles.itemsBox}>
                                     {order.items?.map((item, i) => (
                                         <div key={i} style={styles.itemRow}>
-                                            <span style={{color:'#FF9933', fontWeight:'900'}}>{item.quantity}×</span>
-                                            <span>{item.name}</span>
+                                            <div style={styles.itemImage}>
+                                                {item.image ? <img src={item.image} alt="" style={{width:'100%', height:'100%', objectFit:'cover'}}/> : <FaUtensils color="#444"/>}
+                                            </div>
+                                            <div style={{flex:1}}>
+                                                <div style={{display:'flex', alignItems:'center', gap:8}}>
+                                                    <span style={{color:'#f97316', fontWeight:'900', fontSize:'20px'}}>{item.quantity}×</span>
+                                                    <span style={{fontSize:'16px', fontWeight:'700'}}>{item.name}</span>
+                                                </div>
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
@@ -300,7 +354,7 @@ const WaiterDashboard = ({ bypassAuth = false, providedMongoId = null }) => {
             <style>{`
                 .spin { animation: spin 1s linear infinite; } @keyframes spin { 100% { transform: rotate(360deg); } } 
                 .pulse-red { animation: pulse-red 1s infinite alternate; } 
-                @keyframes pulse-red { from { background: #ef4444; box-shadow: 0 0 10px #ef4444; } to { background: #b91c1c; box-shadow: 0 0 30px #ef4444; } } 
+                @keyframes pulse-red { from { transform: scale(1); background: #ef4444; } to { transform: scale(1.02); background: #b91c1c; } } 
                 * { -webkit-tap-highlight-color: transparent; }
             `}</style>
         </div>
@@ -313,21 +367,30 @@ const styles = {
     lockCard: { background: '#0a0a0a', border: '1px solid #111', padding: '40px 30px', borderRadius: '30px', textAlign: 'center', width: '100%', maxWidth: '350px' },
     lockInput: { width: '100%', background: '#000', border: '1px solid #222', padding: '15px', borderRadius: '15px', color: 'white', fontSize: '20px', textAlign: 'center', outline: 'none', marginBottom: '15px' },
     lockBtn: { width: '100%', background: '#f97316', color: 'white', border: 'none', padding: '18px', borderRadius: '15px', fontWeight: '900' },
-    callWrapper: { position: 'sticky', top: '10px', zIndex: 1100, width: '100%', maxWidth: '400px', margin: '0 auto 15px auto', display:'flex', flexDirection:'column', gap:'8px' },
-    alertCard: { padding: '16px', borderRadius: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid rgba(255,255,255,0.2)' },
-    tableBadge: { background:'white', color:'#ef4444', fontWeight:'900', padding:'8px 14px', borderRadius:'12px', fontSize: '18px' },
-    attendBtn: { background:'white', color:'#000', border:'none', borderRadius:'50%', width:'40px', height:'40px', display:'flex', alignItems:'center', justifyContent:'center' },
+    
+    // 🆕 POPUP STYLES
+    popupOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.9)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter:'blur(10px)' },
+    popupCard: { background: '#111', border: '2px solid #ef4444', padding: '40px', borderRadius: '30px', textAlign: 'center', width: '90%', maxWidth: '400px' },
+    attendBigBtn: { width: '100%', background: '#22c55e', color: 'white', border: 'none', padding: '20px', borderRadius: '15px', fontWeight: '900', fontSize: '16px', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:10 },
+
     header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', paddingBottom:'10px', borderBottom: '1px solid #111' },
     title: { margin: 0, fontSize: '16px', fontWeight: '900' },
     toolbar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' },
     sectionLabel: { fontSize: '10px', color: '#555', fontWeight: '900', letterSpacing: '1px', margin: 0 },
     toggleBtn: { border: '1px solid #333', color: 'white', padding: '6px 12px', borderRadius: '8px', fontSize: '10px', fontWeight: '900' },
     grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '15px' },
-    card: { background: '#0a0a0a', borderRadius: '24px', padding: '20px', border: '1px solid #111' },
+    card: { background: '#0a0a0a', borderRadius: '24px', padding: '20px', border: '1px solid #111', transition: 'all 0.3s ease' },
+    
+    // ⚠️ NEW URGENT BANNER STYLE
+    urgentBanner: { background: '#ef4444', color: 'white', padding: '8px', textAlign: 'center', fontWeight: '900', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', borderRadius: '8px', marginBottom: '15px', animation: 'pulse-red 1s infinite alternate' },
+
     tableBig: { fontSize: '22px', fontWeight: '900', color: '#FF9933' },
     readyBadge: { color: 'white', fontSize: '10px', fontWeight: '900', padding: '4px 10px', borderRadius: '12px' },
+    
     itemsBox: { background: '#000', padding: '12px', borderRadius: '15px', margin: '15px 0' },
-    itemRow: { display:'flex', gap:'10px', marginBottom:'5px', fontSize:'14px' },
+    itemRow: { display: 'flex', gap:'12px', marginBottom: '10px', alignItems:'center' },
+    itemImage: { width: 40, height: 40, borderRadius: 8, overflow: 'hidden', background:'#222', display:'flex', alignItems:'center', justifyContent:'center' },
+
     serveBtn: { width: '100%', padding: '16px', background: '#22c55e', color: 'white', border: 'none', borderRadius: '15px', fontWeight: '900', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px', cursor:'pointer' },
     iconBtn: { background:'#111', border:'1px solid #222', color:'white', borderRadius:'12px', padding:'10px', display:'flex', alignItems:'center' },
     emptyState: { textAlign:'center', marginTop:'100px', opacity:0.2 }

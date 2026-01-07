@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { 
     FaShieldAlt, FaPhone, FaCalendarAlt, FaUtensils, FaUserTie, 
     FaGhost, FaSave, FaSearch, FaDownload, FaExclamationTriangle, 
-    FaCheckCircle, FaSignOutAlt, FaTrash, FaRedo, FaEdit, FaKey, FaPlus, FaTimes
+    FaCheckCircle, FaSignOutAlt, FaTrash, FaRedo, FaEdit, FaKey, FaPlus, FaTimes,
+    FaBullhorn, FaSync, FaSortAmountDown
 } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -17,25 +18,32 @@ const SuperAdmin = () => {
     const [clients, setClients] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
-    const [selected, setSelected] = useState(null); // Active Modal Client
+    const [selected, setSelected] = useState(null); 
     const [noteDraft, setNoteDraft] = useState("");
+    
+    // 🆕 SYSTEM WIDE SETTINGS
+    const [broadcastMsg, setBroadcastMsg] = useState("");
+    const [maintenanceMode, setMaintenanceMode] = useState(false);
     
     // Forms
     const [editForm, setEditForm] = useState({ name: "", username: "", password: "", phone: "" });
     const [createForm, setCreateForm] = useState({ restaurantName: "", username: "", password: "" });
     const [showCreateModal, setShowCreateModal] = useState(false);
 
-    // --- 🔄 1. MASTER SYNC (Fixes "Not Opening" Issue) ---
+    // --- 🔄 1. MASTER SYNC ---
     const refreshData = useCallback(async () => {
         const token = localStorage.getItem('admin_token');
         if (!token) return navigate("/super-login");
 
         try {
-            const res = await axios.get(`${API_URL}/api/superadmin/ceo-sync`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            // Assume backend returns: { _id, restaurantName, username, itemCount, lastActive, totalRevenue, ... }
-            setClients(res.data);
+            const [clientRes, sysRes] = await Promise.all([
+                axios.get(`${API_URL}/api/superadmin/ceo-sync`, { headers: { Authorization: `Bearer ${token}` } }),
+                axios.get(`${API_URL}/api/superadmin/system-status`) // Get global settings
+            ]);
+
+            setClients(clientRes.data);
+            setBroadcastMsg(sysRes.data.message || "");
+            setMaintenanceMode(sysRes.data.maintenance || false);
             setLoading(false);
         } catch (e) {
             console.error("Sync Error:", e);
@@ -50,13 +58,25 @@ const SuperAdmin = () => {
         refreshData();
     }, [refreshData]);
 
-    // --- 🆕 2. REGISTER NEW RESTAURANT ---
+    // --- 📢 2. GLOBAL BROADCAST & MAINTENANCE ---
+    const updateSystemSettings = async () => {
+        try {
+            const token = localStorage.getItem('admin_token');
+            await axios.put(`${API_URL}/api/superadmin/system-status`, {
+                message: broadcastMsg,
+                maintenance: maintenanceMode
+            }, { headers: { Authorization: `Bearer ${token}` } });
+            toast.success("Global System Updated 🌍");
+        } catch (e) { toast.error("System Update Failed"); }
+    };
+
+    // --- 🆕 3. REGISTER NEW RESTAURANT ---
     const handleRegister = async () => {
         if(!createForm.username || !createForm.password) return toast.error("Fill all fields");
         try {
             const token = localStorage.getItem('admin_token');
             await axios.post(`${API_URL}/api/auth/register`, createForm, {
-                headers: { Authorization: `Bearer ${token}` } // Send generic auth if needed, or open route
+                headers: { Authorization: `Bearer ${token}` }
             });
             toast.success("New Restaurant Created! 🚀");
             setShowCreateModal(false);
@@ -65,7 +85,7 @@ const SuperAdmin = () => {
         } catch (e) { toast.error(e.response?.data?.message || "Registration Failed"); }
     };
 
-    // --- 🟢 3. OPEN EDIT MODAL ---
+    // --- 🟢 4. OPEN EDIT MODAL ---
     const openClientModal = (client) => {
         setSelected(client);
         setNoteDraft(client.ceoNotes || "");
@@ -73,18 +93,18 @@ const SuperAdmin = () => {
             name: client.restaurantName, 
             username: client.username, 
             phone: client.phoneNumber || "",
-            password: "" // Keep blank to not change
+            password: "" 
         }); 
     };
 
-    // --- 💾 4. UPDATE DETAILS & PASSWORD ---
+    // --- 💾 5. UPDATE DETAILS & PASSWORD ---
     const handleUpdateClient = async () => {
         try {
             await axios.put(`${API_URL}/api/superadmin/client/${selected._id}`, {
                 restaurantName: editForm.name,
                 username: editForm.username,
                 phoneNumber: editForm.phone,
-                password: editForm.password // Only updates if not empty
+                password: editForm.password 
             }, {
                 headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` }
             });
@@ -94,7 +114,7 @@ const SuperAdmin = () => {
         } catch (e) { toast.error("Update Failed"); }
     };
 
-    // --- 🗑️ 5. DELETE ACCOUNT ---
+    // --- 🗑️ 6. DELETE ACCOUNT ---
     const handleDeleteClient = async () => {
         if (!window.confirm(`⚠️ DELETE ${selected.restaurantName.toUpperCase()} PERMANENTLY?`)) return;
         if (!window.confirm("⛔ FINAL WARNING: This data will be lost forever.")) return;
@@ -109,7 +129,7 @@ const SuperAdmin = () => {
         } catch (e) { toast.error("Delete Failed"); }
     };
 
-    // --- 🔄 6. RESET DATA (Orders/Revenue) ---
+    // --- 🔄 7. RESET DATA ---
     const handleResetData = async () => {
         if(!window.confirm("⚠️ Factory Reset: Clear all orders and revenue?")) return;
         try {
@@ -121,10 +141,10 @@ const SuperAdmin = () => {
         } catch (e) { toast.error("Reset Failed"); }
     };
 
-    // --- ⚡ 7. TOGGLES & GOD MODE ---
+    // --- ⚡ 8. TOGGLES & GOD MODE ---
     const toggleSwitch = async (id, field, currentVal) => {
         try {
-            setSelected(prev => ({ ...prev, settings: { ...prev.settings, [field.split('.')[1]]: !currentVal } })); // UI Optimistic
+            setSelected(prev => ({ ...prev, settings: { ...prev.settings, [field.split('.')[1]]: !currentVal } })); 
             await axios.put(`${API_URL}/api/superadmin/control/${id}`, 
                 { field, value: !currentVal },
                 { headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` } }
@@ -179,12 +199,43 @@ const SuperAdmin = () => {
                     <p style={styles.sub}>Master Control Center</p>
                 </div>
                 <div style={styles.headerActions}>
+                    <button onClick={refreshData} style={styles.iconBtn}><FaSync/></button>
                     <button onClick={() => setShowCreateModal(true)} style={styles.createBtn}><FaPlus/> NEW RESTAURANT</button>
                     <button onClick={() => { localStorage.removeItem('admin_token'); navigate('/super-login'); }} style={styles.logoutBtn}><FaSignOutAlt/></button>
                 </div>
             </div>
 
-            <input style={styles.search} placeholder="Search Client..." onChange={(e) => setSearchTerm(e.target.value)} />
+            {/* --- 📢 SYSTEM CONTROL BAR --- */}
+            <div style={styles.broadcastBar}>
+                <div style={{flex: 1, display:'flex', gap:10, alignItems:'center'}}>
+                    <FaBullhorn color="#f97316" />
+                    <input 
+                        style={styles.broadcastInput} 
+                        placeholder="Global Announcement Message (Scrolls on all dashboards)" 
+                        value={broadcastMsg}
+                        onChange={(e) => setBroadcastMsg(e.target.value)}
+                    />
+                </div>
+                <div style={{display:'flex', alignItems:'center', gap:10}}>
+                    <label style={{fontSize:10, fontWeight:'bold', color: maintenanceMode ? '#ef4444' : '#666'}}>
+                        MAINTENANCE MODE
+                    </label>
+                    <div 
+                        onClick={() => setMaintenanceMode(!maintenanceMode)}
+                        style={{...styles.toggle, background: maintenanceMode ? '#ef4444' : '#333'}}
+                    >
+                        <div style={{...styles.knob, transform: maintenanceMode ? 'translateX(18px)' : 'translateX(0)'}} />
+                    </div>
+                    <button onClick={updateSystemSettings} style={styles.saveSysBtn}>UPDATE SYSTEM</button>
+                </div>
+            </div>
+
+            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10}}>
+                <input style={styles.search} placeholder="Search Client..." onChange={(e) => setSearchTerm(e.target.value)} />
+                <div style={{fontSize:12, color:'#666', display:'flex', alignItems:'center', gap:5}}>
+                    <FaSortAmountDown/> {filtered.length} Results
+                </div>
+            </div>
 
             {/* --- METRICS --- */}
             <div style={styles.statsRow}>
@@ -299,9 +350,17 @@ const styles = {
     title: { fontSize: '20px', fontWeight: '900', margin: 0, display:'flex', alignItems:'center', gap:'10px' },
     sub: { fontSize: '12px', color: '#666', margin: 0 },
     headerActions: { display: 'flex', gap: '10px' },
+    iconBtn: { background:'#111', border:'1px solid #333', color:'#fff', padding:'10px', borderRadius:'8px', cursor:'pointer' },
     createBtn: { background: '#22c55e', color: '#000', border: 'none', padding: '10px 15px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' },
     logoutBtn: { background: '#333', color: '#fff', border: 'none', padding: '10px', borderRadius: '8px', cursor: 'pointer' },
-    search: { background: '#111', border: '1px solid #333', padding: '12px', borderRadius: '8px', color: '#fff', width: '100%', marginBottom: '20px' },
+    
+    broadcastBar: { background: '#0a0a0a', border: '1px solid #222', padding: '15px', borderRadius: '12px', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 15, flexWrap: 'wrap' },
+    broadcastInput: { background: 'transparent', border: 'none', color: '#fff', fontSize: '14px', width: '100%', outline: 'none' },
+    toggle: { width: '40px', height: '20px', borderRadius: '20px', position: 'relative', cursor: 'pointer', transition: '0.3s' },
+    knob: { width: '16px', height: '16px', background: 'white', borderRadius: '50%', position: 'absolute', top: '2px', left: '2px', transition: '0.3s' },
+    saveSysBtn: { background: '#f97316', color: '#000', border: 'none', padding: '5px 12px', borderRadius: '6px', fontWeight: 'bold', fontSize: '10px', cursor: 'pointer' },
+
+    search: { background: '#111', border: '1px solid #333', padding: '12px', borderRadius: '8px', color: '#fff', width: '100%', flex:1, marginRight:10 },
     
     statsRow: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px', marginBottom: '30px' },
     statCard: { background: '#0a0a0a', border: '1px solid #1a1a1a', padding: '15px', borderRadius: '12px' },

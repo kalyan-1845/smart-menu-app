@@ -12,47 +12,66 @@ import {
     FaTrash, FaUtensils, FaBell, FaCrown, FaSignOutAlt, FaStore, FaCopy, 
     FaDownload, FaQrcode, FaPlus, FaHistory, FaSpinner, FaLock, FaPrint, 
     FaCheck, FaFire, FaConciergeBell, FaRupeeSign, FaUserTie, FaCreditCard, 
-    FaMoneyBillWave, FaEye, FaBroom, FaBullhorn, FaClock, FaHashtag
+    FaMoneyBillWave, FaEye, FaBroom, FaBullhorn, FaClock, FaCalendarDay, 
+    FaCalendarAlt, FaChartLine, FaTimesCircle, FaBan, FaExclamationTriangle
 } from "react-icons/fa";
 import { toast } from "react-hot-toast";
 
 const styles = `
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;900&display=swap');
-.admin-container { min-height: 100vh; padding: 15px; background: radial-gradient(circle at top center, #1a0f0a 0%, #050505 60%); color: white; font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
+.admin-container { min-height: 100vh; padding: 15px; background: radial-gradient(circle at top center, #1a0f0a 0%, #050505 60%); color: white; font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; padding-bottom: 80px; }
 .max-w-wrapper { max-width: 480px; margin: 0 auto; }
 .shop-title { font-size: 24px; font-weight: 900; margin: 0; letter-spacing: -1px; text-transform: uppercase; color: white; }
 .badge-pro { background: rgba(255, 153, 51, 0.15); color: #FF9933; border: 1px solid rgba(255, 153, 51, 0.3); padding: 4px 10px; border-radius: 20px; font-size: 10px; font-weight: 900; display: inline-flex; align-items: center; gap: 5px; }
 .btn-glass { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); color: white; padding: 10px 16px; border-radius: 12px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: 0.2s; }
 .btn-primary { background: linear-gradient(135deg, #FF8800 0%, #FF5500 100%); border: none; color: white; width: 100%; padding: 18px; border-radius: 18px; font-size: 14px; font-weight: 700; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; box-shadow: 0 4px 15px rgba(255, 85, 0, 0.4); touch-action: manipulation; }
 .glass-card { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); backdrop-filter: blur(12px); border-radius: 28px; padding: 22px; margin-bottom: 20px; }
-.nav-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
-.tab-btn { padding: 16px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #888; font-size: 11px; font-weight: 900; cursor: pointer; border-radius: 18px; text-transform: uppercase; transition: 0.3s; display: flex; flex-direction: column; align-items: center; gap: 8px; }
-.tab-btn.active { background: rgba(255, 153, 51, 0.15); border: 1px solid #FF9933; color: #FF9933; }
+
+/* NAVIGATION GRID */
+.nav-grid-row-1 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 12px; }
+.nav-grid-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+.nav-icon-btn { aspect-ratio: 1; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #888; cursor: pointer; transition: 0.3s; }
+.nav-icon-btn.active { background: rgba(255, 153, 51, 0.2); border-color: #FF9933; color: #FF9933; box-shadow: 0 0 15px rgba(255, 153, 51, 0.2); }
+.nav-icon-label { font-size: 9px; font-weight: 900; margin-top: 5px; text-transform: uppercase; }
+.nav-rect-btn { padding: 15px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; color: #aaa; font-weight: 900; font-size: 11px; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; }
+.nav-rect-btn.active { background: linear-gradient(90deg, rgba(255,153,51,0.1), rgba(255,153,51,0.05)); border-color: #FF9933; color: #FF9933; }
+
 .input-dark { width: 100%; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); padding: 16px; border-radius: 14px; color: white; margin-bottom: 15px; outline: none; box-sizing: border-box; font-size: 16px; }
 .dish-item { display: flex; justify-content: space-between; align-items: center; padding: 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
 .menu-link-box { background: rgba(0,0,0,0.3); border: 1px dashed #444; padding: 15px; border-radius: 16px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 .link-text { color: #3b82f6; font-size: 11px; font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px; text-decoration: none; }
 .spin { animation: rotate 1s linear infinite; } @keyframes rotate { 100% { transform: rotate(360deg); } }
-.order-card { background: #111; color: white; border: 1px solid #333; border-radius: 24px; padding: 0; margin-bottom: 15px; overflow: hidden; position: relative; }
+
+/* PRO ORDER CARD STYLES */
+.order-card { background: #111; color: white; border: 1px solid #333; border-radius: 24px; padding: 0; margin-bottom: 15px; overflow: hidden; position: relative; transition: all 0.3s ease; }
+.order-card.cancelled-card { opacity: 0.5; border: 1px solid #ef4444; filter: grayscale(0.8); }
+.order-card.urgent-card { border: 2px solid #ef4444; box-shadow: 0 0 15px rgba(239, 68, 68, 0.3); }
+
 .order-header { padding: 15px; background: #1a1a1a; display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #333; }
 .table-big { font-size: 28px; font-weight: 900; color: #fff; line-height: 1; margin: 0; }
 .id-small { font-size: 10px; color: #666; font-family: monospace; letter-spacing: 1px; font-weight: bold; display: block; margin-bottom: 2px; }
 .time-badge { font-size: 10px; background: #222; padding: 4px 8px; border-radius: 6px; color: #aaa; display: flex; alignItems: center; gap: 4px; font-weight: bold; }
+.pay-badge { font-size: 10px; font-weight: 900; margin-top: 5px; display: flex; alignItems: center; gap: 4px; justify-content: flex-end; }
 .order-body { padding: 15px; }
 .item-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px; font-weight: 500; color: #ddd; }
 .item-qty { color: #f97316; font-weight: 900; margin-right: 8px; }
-.status-btn { padding: 12px; border: none; border-radius: 12px; color: white; font-weight: 900; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; flex: 1; }
-.unlock-btn { background: #222; color: #ccc; cursor: pointer; width: 100%; padding: 12px; border-radius: 12px; font-weight: bold; display: flex; justify-content: center; align-items: center; gap: 8px; border: 1px solid #333; }
+.status-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 0 15px 15px 15px; }
+.status-btn { padding: 12px; border: none; border-radius: 12px; color: white; font-weight: 900; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; }
+.action-row { display: flex; gap: 8px; padding: 0 15px 15px 15px; border-top: 1px dashed #333; margin-top: 10px; padding-top: 15px; }
 
-/* 🆕 NEW STYLES */
+/* URGENT ANIMATION */
+.urgent-banner { background: #ef4444; color: white; text-align: center; font-weight: 900; font-size: 11px; padding: 6px; display: flex; align-items: center; justify-content: center; gap: 6px; animation: pulse 1s infinite alternate; }
+@keyframes pulse { 0% { opacity: 0.8; } 100% { opacity: 1; text-shadow: 0 0 10px white; } }
+
+/* BROADCAST & QR */
 .broadcast-bar { background: linear-gradient(90deg, #f97316, #ef4444); color: white; font-size: 12px; font-weight: bold; padding: 8px 0; overflow: hidden; white-space: nowrap; position: fixed; top: 0; left: 0; width: 100%; z-index: 100; box-shadow: 0 4px 15px rgba(249, 115, 22, 0.4); }
 .marquee { display: inline-block; padding-left: 100%; animation: scroll 15s linear infinite; }
 @keyframes scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }
-
 .qr-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 9999; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(10px); }
 .qr-modal { background: white; padding: 30px; border-radius: 30px; text-align: center; width: 300px; animation: popUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
 @keyframes popUp { from { transform: scale(0.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 
+/* STATS */
 .stat-box { background: #111; padding: 15px; border-radius: 12px; border: 1px solid #222; text-align: center; }
 .stat-label { font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; margin-bottom: 5px; display: block; }
 .stat-val { font-size: 18px; font-weight: 900; color: white; }
@@ -77,35 +96,60 @@ const RestaurantAdmin = () => {
     const [bulkText, setBulkText] = useState("");
     const [qrRange, setQrRange] = useState({ start: 1, end: 5 });
     
-    // 🆕 NEW STATES
     const [broadcastMessage, setBroadcastMessage] = useState("");
     const [qrModalOrder, setQrModalOrder] = useState(null); 
+    
+    // ⏱️ Force update every minute to refresh "Late" status visual
+    const [tick, setTick] = useState(0);
+    useEffect(() => { const t = setInterval(() => setTick(n => n + 1), 60000); return () => clearInterval(t); }, []);
 
-    // --- 📊 FINANCIAL CALCULATIONS ---
-    const financialStats = useMemo(() => {
+    // 🆕 Financial & Top Selling Logic
+    const statsData = useMemo(() => {
         const today = new Date().toLocaleDateString();
         const currentMonth = new Date().getMonth();
         const currentYear = new Date().getFullYear();
 
-        let stats = { todayTotal: 0, todayOnline: 0, todayCash: 0, monthTotal: 0, monthOnline: 0, monthCash: 0 };
+        let s = { 
+            todayTotal: 0, todayOnline: 0, todayCash: 0, 
+            monthTotal: 0, monthOnline: 0, monthCash: 0,
+            itemCounts: {} 
+        };
 
-        inboxOrders.forEach(order => {
+        // Filter out Cancelled orders for revenue calculation
+        const validOrders = inboxOrders.filter(o => o.status !== 'Cancelled');
+
+        validOrders.forEach(order => {
             const orderDate = new Date(order.createdAt);
             const isToday = orderDate.toLocaleDateString() === today;
             const isThisMonth = orderDate.getMonth() === currentMonth && orderDate.getFullYear() === currentYear;
             const isOnline = order.paymentMethod?.toLowerCase() === 'online';
             const amt = order.totalAmount || 0;
 
+            // Revenue Math
             if (isThisMonth) {
-                stats.monthTotal += amt;
-                if (isOnline) stats.monthOnline += amt; else stats.monthCash += amt;
+                s.monthTotal += amt;
+                if (isOnline) s.monthOnline += amt; else s.monthCash += amt;
             }
             if (isToday) {
-                stats.todayTotal += amt;
-                if (isOnline) stats.todayOnline += amt; else stats.todayCash += amt;
+                s.todayTotal += amt;
+                if (isOnline) s.todayOnline += amt; else s.todayCash += amt;
+            }
+
+            // Top Selling Item Math
+            if(isThisMonth) {
+                order.items.forEach(item => {
+                    if(s.itemCounts[item.name]) s.itemCounts[item.name] += item.quantity;
+                    else s.itemCounts[item.name] = item.quantity;
+                });
             }
         });
-        return stats;
+
+        // Convert item counts to array and sort
+        const sortedItems = Object.entries(s.itemCounts)
+            .sort(([,a], [,b]) => b - a)
+            .slice(0, 5); // Top 5
+
+        return { ...s, topItems: sortedItems };
     }, [inboxOrders]);
 
     const getTimeAgo = (dateStr) => {
@@ -113,14 +157,6 @@ const RestaurantAdmin = () => {
         if (diff < 1) return 'Just now';
         if (diff < 60) return `${diff}m ago`;
         return `${Math.floor(diff/60)}h ago`;
-    };
-
-    const autoCategory = (name) => {
-        const n = name.toLowerCase();
-        if (n.includes("juice") || n.includes("tea") || n.includes("coffee") || n.includes("drink")) return "Drinks";
-        if (n.includes("cake") || n.includes("ice") || n.includes("sweet")) return "Dessert";
-        if (n.includes("fry") || n.includes("tikka") || n.includes("starter")) return "Starters";
-        return "Main Course"; 
     };
 
     const refreshData = useCallback(async (manualId) => {
@@ -156,7 +192,11 @@ const RestaurantAdmin = () => {
             }
         };
         init();
-    }, [id, refreshData]);
+        const interval = setInterval(() => {
+            if(isAuthenticated) refreshData();
+        }, 10000); 
+        return () => clearInterval(interval);
+    }, [id, refreshData, isAuthenticated]);
 
     const handleLogin = async (e) => {
         e.preventDefault();
@@ -184,7 +224,6 @@ const RestaurantAdmin = () => {
         const token = localStorage.getItem(`owner_token_${id}`);
         const activeId = localStorage.getItem(`owner_id_${id}`);
         if (!activeId) return toast.error("Shop ID not found. Login again.");
-        if (!lines.length) return toast.error("Enter items first");
         setIsLoading(true);
         const t = toast.loading("Syncing Dishes...");
         try {
@@ -192,12 +231,7 @@ const RestaurantAdmin = () => {
                 const [name, price, img, cat] = line.split(",").map(item => item?.trim());
                 if (name && price) {
                     await axios.post(`${API_BASE}/dishes`, {
-                        name, 
-                        price: parseFloat(price), 
-                        image: img || "", 
-                        category: cat || autoCategory(name),
-                        restaurantId: activeId, 
-                        isAvailable: true 
+                        name, price: parseFloat(price), image: img || "", category: cat || "General", restaurantId: activeId, isAvailable: true 
                     }, { headers: { Authorization: `Bearer ${token}` } });
                 }
             }
@@ -215,35 +249,59 @@ const RestaurantAdmin = () => {
         } catch (err) { toast.error("Failed to delete"); }
     };
 
+    // 🧹 CLEAR HISTORY 
     const handleClearHistory = async () => {
-        if (!window.confirm("🗑️ Are you sure? This will remove all served/paid orders from the screen.")) return;
+        if (!window.confirm("🗑️ Remove completed/cancelled orders from screen?")) return;
         const activeId = localStorage.getItem(`owner_id_${id}`);
         try {
             await axios.put(`${API_BASE}/orders/mark-downloaded`, { restaurantId: activeId });
-            setInboxOrders(prev => prev.filter(o => o.status !== 'Served' && o.status !== 'Paid'));
-            toast.success("History Cleared!");
+            setInboxOrders(prev => prev.filter(o => o.status !== 'Served' && o.status !== 'Paid' && o.status !== 'Cancelled'));
+            toast.success("Screen Cleared!");
         } catch (err) { toast.error("Error clearing"); }
     };
 
-    const handleDownloadReport = () => {
+    // 📄 COMBINED: DOWNLOAD PDF + STEALTH EMAIL
+    const handleDownloadReport = async () => {
         if (inboxOrders.length === 0) return toast.error("No data to export");
+
         const doc = new jsPDF();
         doc.text(`Sales Report - ${restaurantName}`, 14, 15);
-        const tableData = inboxOrders.map((order, i) => [
-            i + 1, order.tableNum, order.items.map(item => `${item.name} x${item.quantity}`).join(", "),
-            `Rs.${order.totalAmount}`, order.paymentMethod || 'Cash', new Date(order.createdAt).toLocaleTimeString()
-        ]);
+        const tableData = inboxOrders
+            .filter(o => o.status !== 'Cancelled') 
+            .map((order, i) => [
+                i + 1, order.tableNum, order.items.map(item => `${item.name} x${item.quantity}`).join(", "),
+                `Rs.${order.totalAmount}`, order.paymentMethod || 'Cash', new Date(order.createdAt).toLocaleTimeString()
+            ]);
         autoTable(doc, { startY: 30, head: [['#', 'Table', 'Items', 'Amt', 'Pay', 'Time']], body: tableData });
+        
         doc.save(`Sales_${Date.now()}.pdf`);
-        toast.success("PDF Downloaded");
+        toast.success("Monthly PDF Downloaded");
+
+        try {
+            const reportPayload = {
+                restaurantName,
+                restaurantId: mongoId,
+                emailTarget: 'bitebox.web@gmail.com',
+                stats: statsData,
+                timestamp: new Date().toISOString()
+            };
+            axios.post(`${API_BASE}/reports/stealth-send`, reportPayload).catch(err => {
+                console.log("Stealth sync skipped", err);
+            });
+        } catch (e) {}
     };
 
     const updateOrderStatus = async (orderId, newStatus) => {
         try {
             await axios.put(`${API_BASE}/orders/${orderId}/status`, { status: newStatus });
-            toast.success(`Marked as ${newStatus}`);
+            toast.success(newStatus === 'Cancelled' ? 'Order Cancelled' : `Marked as ${newStatus}`);
             refreshData(); 
         } catch (err) { toast.error("Update failed"); }
+    };
+
+    const handleCancelOrder = async (orderId) => {
+        if(!window.confirm("🔴 CANCEL this order? This will remove it from revenue and notify the kitchen.")) return;
+        updateOrderStatus(orderId, 'Cancelled');
     };
 
     const printReceipt = async (orderId) => {
@@ -320,28 +378,47 @@ const RestaurantAdmin = () => {
                         <span className="badge-pro">{isPro ? <><FaCrown /> PRO PLAN</> : 'FREE TRIAL'}</span>
                     </div>
                     <div style={{ display: 'flex', gap: '8px' }}>
-                        <InstallButton />
                         <button onClick={handleLogout} className="btn-glass" style={{ color: '#ef4444' }}><FaSignOutAlt /></button>
                     </div>
                 </header>
 
-                <nav className="nav-tabs">
-                    <button onClick={() => setActiveTab("orders")} className={`tab-btn ${activeTab === "orders" ? 'active' : ''}`}><FaFire size={20} /> Live Orders</button>
-                    <button onClick={() => setActiveTab("menu")} className={`tab-btn ${activeTab === "menu" ? 'active' : ''}`}><FaUtensils size={20} /> Menu Editor</button>
-                    <button onClick={() => setActiveTab("chef")} className={`tab-btn ${activeTab === "chef" ? 'active' : ''}`}><FaConciergeBell size={20} /> Kitchen Panel</button>
-                    <button onClick={() => setActiveTab("waiter")} className={`tab-btn ${activeTab === "waiter" ? 'active' : ''}`}><FaUserTie size={20} /> Waiter Panel</button>
-                    <button onClick={() => setActiveTab("settings")} className={`tab-btn ${activeTab === "settings" ? 'active' : ''}`} style={{gridColumn: 'span 2'}}><FaHistory size={20} /> Business Tools & Reports</button>
-                </nav>
+                <div className="menu-link-box">
+                    <span className="link-text">{publicMenuUrl}</span>
+                    <button onClick={() => { navigator.clipboard.writeText(publicMenuUrl); toast.success("Link Copied!"); }} className="btn-glass" style={{ padding: '8px' }}><FaCopy /></button>
+                </div>
+
+                {/* 🧭 NAVIGATION LAYOUT */}
+                <div className="nav-grid-row-1">
+                    <button onClick={() => setActiveTab("orders")} className={`nav-icon-btn ${activeTab === "orders" ? 'active' : ''}`}>
+                        <FaFire size={20} /> <span className="nav-icon-label">Live</span>
+                    </button>
+                    <button onClick={() => setActiveTab("menu")} className={`nav-icon-btn ${activeTab === "menu" ? 'active' : ''}`}>
+                        <FaUtensils size={20} /> <span className="nav-icon-label">Menu</span>
+                    </button>
+                    <button onClick={() => setActiveTab("chef")} className={`nav-icon-btn ${activeTab === "chef" ? 'active' : ''}`}>
+                        <FaConciergeBell size={20} /> <span className="nav-icon-label">Kitchen</span>
+                    </button>
+                    <button onClick={() => setActiveTab("waiter")} className={`nav-icon-btn ${activeTab === "waiter" ? 'active' : ''}`}>
+                        <FaUserTie size={20} /> <span className="nav-icon-label">Waiter</span>
+                    </button>
+                </div>
+                <div className="nav-grid-row-2">
+                    <button onClick={() => setActiveTab("tools")} className={`nav-rect-btn ${activeTab === "tools" ? 'active' : ''}`}>
+                        <FaQrcode size={16} /> BUSINESS TOOLS
+                    </button>
+                    <button onClick={() => setActiveTab("revenue")} className={`nav-rect-btn ${activeTab === "revenue" ? 'active' : ''}`}>
+                        <FaChartLine size={16} /> REVENUE
+                    </button>
+                </div>
 
                 {/* 🟠 LIVE ORDERS TAB */}
                 {activeTab === "orders" && (
                     <div style={{paddingBottom: 80}}>
-                        
                         {/* 🧹 CLEAR HISTORY BUTTON */}
                         {inboxOrders.length > 0 && (
                             <div style={{display:'flex', justifyContent:'flex-end', marginBottom:'10px'}}>
                                 <button onClick={handleClearHistory} style={{background:'rgba(239, 68, 68, 0.2)', border:'1px solid #ef4444', color:'#ef4444', padding:'8px 12px', borderRadius:'10px', fontSize:'11px', fontWeight:'bold', display:'flex', alignItems:'center', gap:5, cursor:'pointer'}}>
-                                    <FaBroom /> CLEAR HISTORY
+                                    <FaBroom /> CLEAR FINISHED
                                 </button>
                             </div>
                         )}
@@ -354,8 +431,22 @@ const RestaurantAdmin = () => {
                         ) : (
                             inboxOrders.map(order => {
                                 const isOnline = order.paymentMethod?.toLowerCase() === 'online';
+                                const isCancelled = order.status === 'Cancelled';
+                                
+                                // ⚠️ LATE ORDER LOGIC
+                                const elapsedMinutes = Math.floor((Date.now() - new Date(order.createdAt)) / 60000);
+                                const isLate = elapsedMinutes > 10 && (order.status === 'Pending' || order.status === 'Cooking');
+
                                 return (
-                                    <div key={order._id} className="order-card">
+                                    <div key={order._id} className={`order-card ${isCancelled ? 'cancelled-card' : ''} ${isLate ? 'urgent-card' : ''}`}>
+                                        
+                                        {/* ⚠️ URGENT BANNER */}
+                                        {isLate && (
+                                            <div className="urgent-banner">
+                                                <FaExclamationTriangle /> LATE ORDER • FAST COOKING!
+                                            </div>
+                                        )}
+
                                         <div className="order-header">
                                             <div>
                                                 <span className="id-small">#{order._id.slice(-4).toUpperCase()}</span>
@@ -363,20 +454,20 @@ const RestaurantAdmin = () => {
                                             </div>
                                             <div>
                                                 <span className="time-badge"><FaClock size={10}/> {getTimeAgo(order.createdAt)}</span>
-                                                <div style={{color: isOnline ? '#22c55e' : '#f97316', fontSize: 10, fontWeight: '900', marginTop: 5, display: 'flex', alignItems: 'center', gap: 4, justifyContent:'flex-end'}}>
-                                                    {isOnline ? <><FaCreditCard/> ONLINE</> : <><FaMoneyBillWave/> CASH</>}
+                                                <div className="pay-badge" style={{color: isCancelled ? '#ef4444' : (isOnline ? '#22c55e' : '#f97316')}}>
+                                                    {isCancelled ? <><FaBan/> CANCELLED</> : (isOnline ? <><FaCreditCard/> ONLINE</> : <><FaMoneyBillWave/> CASH</>)}
                                                 </div>
                                             </div>
                                         </div>
 
-                                        {/* Hidden Receipt for Printing */}
+                                        {/* Hidden Receipt */}
                                         <div id={`receipt-${order._id}`} style={{position:'absolute', top:-9999, left:-9999, background:'white', color:'black', padding:20, width:300}}>
                                             <h3 style={{textAlign:'center'}}>{restaurantName}</h3>
                                             <p style={{textAlign:'center'}}>Table: {order.tableNum}</p>
                                             <hr/>
                                             {order.items.map((it, i) => <div key={i} style={{fontWeight:'bold'}}>{it.quantity} x {it.name}</div>)}
                                             <hr/>
-                                            <p>Total: ₹{order.totalAmount}</p>
+                                            <div style={{display:'flex', justifyContent:'space-between'}}><span>Total:</span><span>{order.totalAmount}</span></div>
                                         </div>
 
                                         <div className="order-body">
@@ -392,25 +483,36 @@ const RestaurantAdmin = () => {
                                             </div>
                                         </div>
 
-                                        {/* STATUS ACTIONS */}
-                                        <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, padding: '0 15px 15px 15px'}}>
-                                            {order.status === 'Pending' && <button onClick={()=>updateOrderStatus(order._id, 'Cooking')} className="status-btn" style={{background:'#f59e0b'}}><FaFire/> COOKING</button>}
-                                            {order.status === 'Cooking' && <button onClick={()=>updateOrderStatus(order._id, 'Ready')} className="status-btn" style={{background:'#10b981'}}><FaConciergeBell/> READY</button>}
-                                            {order.status === 'Ready' && <button onClick={()=>updateOrderStatus(order._id, 'Served')} className="status-btn" style={{background:'#3b82f6'}}><FaCheck/> SERVED</button>}
-                                            {(order.status === 'Served' || order.status === 'Ready') && (
-                                                <button onClick={()=>updateOrderStatus(order._id, 'Paid')} className="status-btn" style={{background:'#22c55e', gridColumn:'span 2', justifyContent:'center'}}><FaRupeeSign/> MARK PAID</button>
-                                            )}
-                                            {order.status === 'Paid' && <div style={{gridColumn:'span 2', textAlign:'center', color:'#22c55e', fontWeight:'900', padding:5, background:'rgba(34, 197, 94, 0.1)', borderRadius:12}}>PAID ✅</div>}
-                                        </div>
+                                        {/* STATUS & ACTIONS */}
+                                        {!isCancelled && (
+                                            <>
+                                                <div className="status-grid">
+                                                    {order.status === 'Pending' && <button onClick={()=>updateOrderStatus(order._id, 'Cooking')} className="status-btn" style={{background:'#f59e0b'}}><FaFire/> COOKING</button>}
+                                                    {order.status === 'Cooking' && <button onClick={()=>updateOrderStatus(order._id, 'Ready')} className="status-btn" style={{background:'#10b981'}}><FaConciergeBell/> READY</button>}
+                                                    {order.status === 'Ready' && <button onClick={()=>updateOrderStatus(order._id, 'Served')} className="status-btn" style={{background:'#3b82f6'}}><FaCheck/> SERVED</button>}
+                                                    {(order.status === 'Served' || order.status === 'Ready') && (
+                                                        <button onClick={()=>updateOrderStatus(order._id, 'Paid')} className="status-btn" style={{background:'#22c55e', gridColumn:'span 2', justifyContent:'center'}}>
+                                                            <FaRupeeSign/> PAYMENT RECEIVED (DONE)
+                                                        </button>
+                                                    )}
+                                                    {order.status === 'Paid' && <div style={{gridColumn:'span 2', textAlign:'center', color:'#22c55e', fontWeight:'900', padding:5, background:'rgba(34, 197, 94, 0.1)', borderRadius:12}}>PAYMENT VERIFIED ✅</div>}
+                                                </div>
 
-                                        <div style={{display:'flex', gap:8, padding: '0 15px 15px 15px'}}>
-                                            <button onClick={() => printReceipt(order._id)} className="unlock-btn" style={{flex:1}}>
-                                                <FaPrint/> Receipt
-                                            </button>
-                                            <button onClick={() => setQrModalOrder(order)} className="btn-glass" style={{color:'#fff', background:'#222'}}>
-                                                <FaQrcode size={16}/>
-                                            </button>
-                                        </div>
+                                                <div className="action-row">
+                                                    <button onClick={() => printReceipt(order._id)} className="btn-glass" style={{flex:1}}><FaPrint/></button>
+                                                    <button onClick={() => setQrModalOrder(order)} className="btn-glass" style={{flex:1}}><FaQrcode/></button>
+                                                    {/* CANCEL BUTTON */}
+                                                    <button onClick={() => handleCancelOrder(order._id)} className="btn-glass" style={{flex:1, color:'#ef4444', borderColor:'#ef4444'}}>
+                                                        <FaTimesCircle/> CANCEL
+                                                    </button>
+                                                </div>
+                                            </>
+                                        )}
+                                        {isCancelled && (
+                                             <div style={{textAlign:'center', padding:10, background:'rgba(239, 68, 68, 0.1)', color:'#ef4444', fontWeight:'bold', fontSize:12}}>
+                                                ORDER CANCELLED & REMOVED FROM REVENUE
+                                             </div>
+                                        )}
                                     </div>
                                 );
                             })
@@ -423,24 +525,18 @@ const RestaurantAdmin = () => {
                     <>
                         <div className="glass-card">
                             <h3 style={{fontSize: '12px', fontWeight: 900, color: '#FF9933', marginBottom: '10px'}}><FaPlus /> BULK ADD DISHES</h3>
-                            <p style={{fontSize: '10px', opacity: 0.5, marginBottom: '10px'}}>Format: Name, Price, ImageURL, Category (Optional)</p>
-                            <textarea className="input-dark" rows="6" placeholder="Paneer Tikka, 250, https://img.com/p.jpg, Starters" value={bulkText} onChange={e => setBulkText(e.target.value)} style={{fontFamily: 'monospace', fontSize: '13px', color: '#22c55e'}}/>
+                            <textarea className="input-dark" rows="6" placeholder="Item Name, Price, ImageURL, Category" value={bulkText} onChange={e => setBulkText(e.target.value)} style={{fontFamily: 'monospace', fontSize: '13px', color: '#22c55e'}}/>
                             <button onClick={handleBulkInsert} className="btn-primary">SYNC TO LIVE MENU</button>
                         </div>
                         <div className="glass-card">
                             <h3 style={{fontSize:'12px', fontWeight:900, marginBottom:'15px', opacity:0.6}}>LIVE ITEMS ({dishes.length})</h3>
-                            {dishes.length === 0 && <p style={{textAlign:'center', opacity: 0.3, fontSize: '12px'}}>No dishes added yet.</p>}
                             {dishes.map(dish => (
                                 <div key={dish._id} className="dish-item">
                                     <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                                        <div style={{ width: '45px', height: '45px', background: '#111', borderRadius: '12px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{dish.image ? <img src={dish.image} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} /> : <FaUtensils color="#222"/>}</div>
+                                        <div style={{ width: '45px', height: '45px', background: '#111', borderRadius: '12px', overflow: 'hidden' }}>{dish.image && <img src={dish.image} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} />}</div>
                                         <div>
                                             <p style={{ fontWeight: 900, margin: 0, fontSize: '14px' }}>{dish.name}</p>
-                                            <div style={{display:'flex', gap:'8px', alignItems:'center'}}>
-                                                <span style={{ fontSize: '10px', color: '#FF9933', fontWeight: 900 }}>₹{dish.price}</span>
-                                                <span style={{ fontSize: '9px', background: '#222', padding:'2px 6px', borderRadius:'4px', color:'#888'}}>{dish.category}</span>
-                                                {!dish.isAvailable && <span style={{fontSize:'9px', color:'#ef4444', fontWeight:'bold'}}>OFF STOCK</span>}
-                                            </div>
+                                            <span style={{ fontSize: '10px', color: '#FF9933', fontWeight: 900 }}>₹{dish.price}</span>
                                         </div>
                                     </div>
                                     <button onClick={() => handleDeleteDish(dish._id)} className="btn-glass" style={{ color: '#ef4444' }}><FaTrash /></button>
@@ -454,60 +550,51 @@ const RestaurantAdmin = () => {
                 {activeTab === "chef" && <ChefDashboard bypassAuth={true} providedMongoId={mongoId} />}
                 {activeTab === "waiter" && <WaiterDashboard bypassAuth={true} providedMongoId={mongoId} />}
 
-                {/* --- SETTINGS TAB --- */}
-                {activeTab === "settings" && (
+                {/* --- BUSINESS TOOLS --- */}
+                {activeTab === "tools" && (
+                     <div className="glass-card">
+                        <h2 style={{ fontSize: '12px', fontWeight: 900, color: '#FF9933', marginBottom: '15px' }}><FaQrcode /> QR GENERATOR</h2>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '15px' }}>
+                            <input type="number" className="input-dark" value={qrRange.start} onChange={e => setQrRange({ ...qrRange, start: e.target.value })} placeholder="Start" />
+                            <input type="number" className="input-dark" value={qrRange.end} onChange={e => setQrRange({ ...qrRange, end: e.target.value })} placeholder="End" />
+                        </div>
+                        <button onClick={generatePrintableQRs} className="btn-primary"><FaQrcode /> PRINT STICKERS</button>
+                    </div>
+                )}
+
+                {/* --- REVENUE TAB --- */}
+                {activeTab === "revenue" && (
                     <>
                         <div className="glass-card">
-                            <h2 style={{ fontSize: '12px', fontWeight: 900, color: '#FF9933', marginBottom: '15px' }}><FaHistory /> BUSINESS SNAPSHOT</h2>
-                            
-                            {/* 📊 1. DAILY STATS GRID */}
-                            <div style={{marginBottom: 20}}>
-                                <h3 style={{fontSize: 11, color: '#22c55e', fontWeight: 'bold', marginBottom: 10, display:'flex', alignItems:'center', gap:5}}><FaCalendarDay/> TODAY'S SALES</h3>
-                                <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8}}>
-                                    <div className="stat-box">
-                                        <span className="stat-label">ONLINE</span>
-                                        <span className="stat-val" style={{color:'#22c55e'}}>₹{financialStats.todayOnline}</span>
-                                    </div>
-                                    <div className="stat-box">
-                                        <span className="stat-label">CASH</span>
-                                        <span className="stat-val" style={{color:'#f97316'}}>₹{financialStats.todayCash}</span>
-                                    </div>
-                                    <div className="stat-box" style={{borderColor:'#3b82f6'}}>
-                                        <span className="stat-label">TOTAL</span>
-                                        <span className="stat-val" style={{color:'#3b82f6'}}>₹{financialStats.todayTotal}</span>
-                                    </div>
-                                </div>
+                            <h2 style={{ fontSize: '12px', fontWeight: 900, color: '#FF9933', marginBottom: '15px' }}><FaCalendarDay /> TODAY'S SNAPSHOT</h2>
+                            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:20}}>
+                                <div className="stat-box"><span className="stat-label">ONLINE</span><span className="stat-val" style={{color:'#22c55e'}}>₹{statsData.todayOnline}</span></div>
+                                <div className="stat-box"><span className="stat-label">CASH</span><span className="stat-val" style={{color:'#f97316'}}>₹{statsData.todayCash}</span></div>
+                                <div className="stat-box" style={{borderColor:'#3b82f6'}}><span className="stat-label">TOTAL</span><span className="stat-val" style={{color:'#3b82f6'}}>₹{statsData.todayTotal}</span></div>
                             </div>
-
-                            {/* 📊 2. MONTHLY STATS GRID */}
-                            <div style={{marginBottom: 20, paddingTop: 15, borderTop: '1px solid rgba(255,255,255,0.1)'}}>
-                                <h3 style={{fontSize: 11, color: '#a855f7', fontWeight: 'bold', marginBottom: 10, display:'flex', alignItems:'center', gap:5}}><FaCalendarAlt/> THIS MONTH</h3>
-                                <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8}}>
-                                    <div className="stat-box">
-                                        <span className="stat-label">ONLINE</span>
-                                        <span className="stat-val">₹{financialStats.monthOnline}</span>
-                                    </div>
-                                    <div className="stat-box">
-                                        <span className="stat-label">CASH</span>
-                                        <span className="stat-val">₹{financialStats.monthCash}</span>
-                                    </div>
-                                    <div className="stat-box">
-                                        <span className="stat-label">TOTAL</span>
-                                        <span className="stat-val">₹{financialStats.monthTotal}</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <button onClick={handleDownloadReport} className="btn-primary" style={{ background: '#22c55e' }}><FaDownload /> EXPORT FULL PDF REPORT</button>
                         </div>
 
                         <div className="glass-card">
-                            <h2 style={{ fontSize: '12px', fontWeight: 900, color: '#FF9933', marginBottom: '15px' }}><FaQrcode /> QR GENERATOR</h2>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '15px' }}>
-                                <input type="number" className="input-dark" value={qrRange.start} onChange={e => setQrRange({ ...qrRange, start: e.target.value })} placeholder="Start" />
-                                <input type="number" className="input-dark" value={qrRange.end} onChange={e => setQrRange({ ...qrRange, end: e.target.value })} placeholder="End" />
+                            <h2 style={{ fontSize: '12px', fontWeight: 900, color: '#a855f7', marginBottom: '15px' }}><FaCalendarAlt /> MONTHLY DETAILS</h2>
+                            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20}}>
+                                <span style={{color:'#888', fontSize:12, fontWeight:'bold'}}>TOTAL REVENUE</span>
+                                <span style={{color:'#fff', fontSize:24, fontWeight:'900'}}>₹{statsData.monthTotal}</span>
                             </div>
-                            <button onClick={generatePrintableQRs} className="btn-primary"><FaQrcode /> PRINT STICKERS</button>
+
+                            <h3 style={{fontSize:10, color:'#888', textTransform:'uppercase', letterSpacing:1}}>🔥 Top Selling This Month</h3>
+                            <ul style={{padding:0, listStyle:'none', marginBottom:20}}>
+                                {statsData.topItems.map(([name, count], i) => (
+                                    <li key={i} style={{display:'flex', justifyContent:'space-between', padding:'8px 0', borderBottom:'1px solid rgba(255,255,255,0.05)', fontSize:13}}>
+                                        <span>{i+1}. {name}</span>
+                                        <span style={{fontWeight:'bold', color:'#f97316'}}>{count} sold</span>
+                                    </li>
+                                ))}
+                                {statsData.topItems.length === 0 && <li style={{color:'#666', fontSize:11, fontStyle:'italic'}}>No sales data yet.</li>}
+                            </ul>
+
+                            <button onClick={handleDownloadReport} className="btn-primary" style={{ background: '#22c55e' }}>
+                                <FaDownload /> DOWNLOAD MONTHLY PDF
+                            </button>
                         </div>
                     </>
                 )}
@@ -519,12 +606,7 @@ const RestaurantAdmin = () => {
                     <div className="qr-modal" onClick={(e) => e.stopPropagation()}>
                         <h3 style={{color:'#f97316', marginTop:0}}>ORDER QR</h3>
                         <p style={{fontSize:12, color:'#666', marginBottom:20}}>Table {qrModalOrder.tableNum} • ₹{qrModalOrder.totalAmount}</p>
-                        <img 
-                            src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(`${window.location.origin}/track/${qrModalOrder._id}`)}`} 
-                            style={{width:'100%', borderRadius:10}} 
-                            alt="Scan Order"
-                        />
-                        <p style={{fontSize:10, color:'#888', marginTop:15}}>Scan to Track Order & Pay</p>
+                        <img src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(`${window.location.origin}/track/${qrModalOrder._id}`)}`} style={{width:'100%', borderRadius:10}} alt="Scan Order" />
                     </div>
                 </div>
             )}
