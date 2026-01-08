@@ -145,7 +145,7 @@ const LandingPage = () => {
       {/* --- NAVBAR --- */}
       <nav className="navbar">
         <Link to="/" className="brand">
-          <FaBox color="#f97316" /> BiteBox<span>.</span>
+          <FaBox color="#f97316" /> Kovixa<span>.</span>
         </Link>
         <div className="nav-links">
           <Link to="/login">Partner Login</Link>
@@ -156,11 +156,11 @@ const LandingPage = () => {
       {/* --- HERO SECTION --- */}
       <section className="hero">
         <div className="live-badge animate-in">
-            <div className="dot"></div> BITEBOX NETWORK IS LIVE
+            <div className="dot"></div> KOVIXA NETWORK IS LIVE
         </div>
         <h1 className="animate-in">Modernize Your <br /><span style={{color: 'var(--primary)'}}>Restaurant Growth.</span></h1>
         <p className="animate-in" style={{animationDelay: '0.1s'}}>
-          Stop using paper. Start using data. BiteBox provides QR ordering, 
+          Stop using paper. Start using data. Kovixa provides QR ordering, 
           live kitchen tracking, and CEO-level analytics for smart food owners.
         </p>
         <div className="animate-in" style={{animationDelay: '0.2s'}}>
@@ -191,9 +191,9 @@ const LandingPage = () => {
       {/* --- FOOTER --- */}
       <footer style={{padding: '80px 20px', textAlign: 'center', borderTop: '1px solid #111'}}>
         <div style={{display:'flex', alignItems:'center', justifyContent:'center', gap:'10px', marginBottom: '20px'}}>
-            <FaBox color="#f97316" size={24}/> <span style={{fontWeight: 900, fontSize: '20px'}}>BiteBox</span>
+            <FaBox color="#f97316" size={24}/> <span style={{fontWeight: 900, fontSize: '20px'}}>Kovixa</span>
         </div>
-        <p style={{color: '#444', fontSize: '13px', marginBottom: '30px'}}>© {new Date().getFullYear()} BiteBox SaaS Cloud. Built for Industrial Scale.</p>
+        <p style={{color: '#444', fontSize: '13px', marginBottom: '30px'}}>© {new Date().getFullYear()} Kovixa SaaS Cloud. Built for Industrial Scale.</p>
         
         <div style={{display:'flex', justifyContent:'center', gap:'40px'}}>
             <Link to="/login" style={styles.footerLink}>LOGIN</Link>

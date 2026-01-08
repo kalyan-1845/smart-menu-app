@@ -46,7 +46,7 @@ const LoadingSpinner = () => {
     <div style={styles.overlay}>
       <div style={styles.spinnerContainer}>
         <div style={styles.loader}></div>
-        <h2 style={styles.text}>BITEBOX</h2>
+        <h2 style={styles.text}>KOVIXA</h2>
         <p style={styles.subtext}>Preparing your menu...</p>
       </div>
       <style>{`

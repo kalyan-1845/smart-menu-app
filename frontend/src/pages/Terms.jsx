@@ -34,7 +34,7 @@ const Terms = () => {
             <FaShieldAlt color="#f97316" size={24} />
             <h2>Terms of Service</h2>
           </div>
-          <p>By using <strong>BiteBox SaaS</strong>, you agree to the following conditions:</p>
+          <p>By using <strong>Kovixa SaaS</strong>, you agree to the following conditions:</p>
           <ul style={styles.list}>
             <li><strong>Account Security:</strong> You are responsible for keeping your Master Key and PINs secure.</li>
             <li><strong>Service Usage:</strong> Fake registrations will result in a permanent ban.</li>
@@ -57,7 +57,7 @@ const Terms = () => {
         </section>
 
         <footer style={styles.footer}>
-          <p>© {new Date().getFullYear()} BiteBox Cloud OS. Purged & Secured.</p>
+          <p>© {new Date().getFullYear()} Kovixa Cloud OS. Purged & Secured.</p>
         </footer>
       </div>
     </div>

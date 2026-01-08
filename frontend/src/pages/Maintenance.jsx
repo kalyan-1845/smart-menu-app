@@ -33,12 +33,12 @@ const Maintenance = () => {
       `}</style>
       <div style={styles.content}>
         <div style={styles.iconWrapper}><FaTools className="gear-spin" size={60} color="#f97316" /></div>
-        <div style={styles.brand}><FaBox color="#f97316" /> BiteBox OS</div>
+        <div style={styles.brand}><FaBox color="#f97316" /> Kovixa OS</div>
         <h1 style={styles.title}>System Upgrade</h1>
         <p style={styles.text}>Orders are temporarily paused. We will resume shortly.</p>
         <div style={styles.timeBox}><FaClock color="#f97316" /><span>15-30 minutes</span></div>
       </div>
-      <footer style={styles.footer}>BiteBox Global Network</footer>
+      <footer style={styles.footer}>Kovixa Global Network</footer>
     </div>
   );
 };

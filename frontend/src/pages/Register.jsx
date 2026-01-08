@@ -48,7 +48,7 @@ const Register = () => {
       freeAccessDate.setFullYear(freeAccessDate.getFullYear() + 100); 
 
       // 3. Auto-Generate DB-Safe Unique Email
-      const autoEmail = `${cleanUsername}@bitebox.local`;
+      const autoEmail = `${cleanUsername}@kovixa.local`;
 
       const payload = {
         restaurantName: formData.restaurantName.trim(),
@@ -85,7 +85,7 @@ const Register = () => {
     <div style={styles.container}>
       <div style={styles.card}>
         <div style={styles.header}>
-          <h1 style={styles.title}>BiteBox</h1>
+          <h1 style={styles.title}>Kovixa</h1>
           <p style={styles.sub}>Create your Free Forever account</p>
         </div>
 

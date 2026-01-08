@@ -41,7 +41,7 @@ const OrderSuccess = () => {
             {/* Receipt Card */}
             <div ref={receiptRef} style={s.receipt}>
                 <div style={{textAlign:'center', borderBottom:'2px dashed #000', paddingBottom: '15px', marginBottom: '20px'}}>
-                    <h2 style={{margin:0, letterSpacing:'2px'}}>BITEBOX</h2>
+                    <h2 style={{margin:0, letterSpacing:'2px'}}>KOVIXA</h2>
                     <p style={{margin:0, fontSize:'12px', fontWeight:'700'}}>TAX INVOICE</p>
                     <small style={{color:'#666'}}>{new Date().toLocaleString()}</small>
                 </div>

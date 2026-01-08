@@ -8,7 +8,7 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js')
       .then(reg => {
-        console.log('✅ BiteBox Service Worker Active:', reg.scope);
+        console.log('✅ Kovixa Service Worker Active:', reg.scope);
 
         // Update logic: ensures the app stays fresh for Chefs and Waiters
         reg.onupdatefound = () => {
@@ -24,7 +24,7 @@ if ('serviceWorker' in navigator) {
                 installingWorker.postMessage({ type: 'SKIP_WAITING' });
                 window.location.reload();
               } else {
-                console.log('✨ BiteBox is ready for offline use.');
+                console.log('✨ Kovixa is ready for offline use.');
               }
             }
           };

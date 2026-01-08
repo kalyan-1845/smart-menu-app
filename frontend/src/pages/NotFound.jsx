@@ -36,7 +36,7 @@ const NotFound = () => {
       </div>
       
       <footer style={styles.footer}>
-        BiteBox Cloud OS • Error Reference: NULL_ROUTE
+        Kovixa Cloud OS • Error Reference: NULL_ROUTE
       </footer>
     </div>
   );

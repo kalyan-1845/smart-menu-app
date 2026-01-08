@@ -1,7 +1,7 @@
 {
-  "short_name": "BiteBox",
-  "name": "BiteBox Smart Menu",
-  "id": "/bitebox-pwa",
+  "short_name": "KOVIXA",
+  "name": "KOVIXA Smart Menu",
+  "id": "/kovixa-pwa",
   "description": "Next-Gen QR Ordering & Kitchen Display System",
   "start_url": "/",
   "scope": "/",

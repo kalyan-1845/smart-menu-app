@@ -57,7 +57,7 @@ cron.schedule('59 23 * * *', async () => {
 
             // --- 📱 SEND EMAIL ---
             const mailOptions = {
-                from: `"BiteBox AI" <${process.env.REPORT_EMAIL}>`,
+                from: `"Kovixa AI" <${process.env.REPORT_EMAIL}>`,
                 to: owner.email,
                 subject: `🌙 Nightly Report: ${owner.restaurantName}`,
                 html: `

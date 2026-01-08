@@ -15,7 +15,7 @@ const privateKey = process.env.VAPID_PRIVATE_KEY;
 if (publicKey && privateKey) {
     try {
         webpush.setVapidDetails(
-            'mailto:support@bitebox.com',
+            'mailto:bitebox.web@gmail.com',
             publicKey,
             privateKey
         );

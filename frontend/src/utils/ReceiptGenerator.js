@@ -2,7 +2,7 @@ import jsPDF from "jspdf";
 
 export const generateCustomerReceipt = async (order, restaurant) => {
     // 1. Get dynamic name or fallback
-    const dynamicName = restaurant?.restaurantName || restaurant?.username || "BITEBOX KITCHEN";
+    const dynamicName = restaurant?.restaurantName || restaurant?.username || "KOVIXA KITCHEN";
 
     // 2. CALCULATE DYNAMIC HEIGHT
     // Base height (header + footer) + (Items * 8mm per item)
@@ -182,7 +182,7 @@ export const generateCustomerReceipt = async (order, restaurant) => {
     doc.setFontSize(7);
     doc.setFont("helvetica", "italic");
     doc.setTextColor(100); 
-    doc.text("Powered by BiteBox AI", centerX, y, { align: "center" });
+    doc.text("Powered by Kovixa AI", centerX, y, { align: "center" });
 
     // --- 8. SAVE FILE ---
     const tableLabel = order.tableNum === "Parcel" ? "Parcel" : `Table_${order.tableNum}`;

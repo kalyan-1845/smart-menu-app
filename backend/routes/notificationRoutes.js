@@ -7,7 +7,7 @@ const router = express.Router();
 
 // --- 🔑 WEB PUSH CONFIG ---
 webpush.setVapidDetails(
-    'mailto:support@bitebox.com',
+    'mailto:support@kovixa.com',
     process.env.VAPID_PUBLIC_KEY,
     process.env.VAPID_PRIVATE_KEY
 );

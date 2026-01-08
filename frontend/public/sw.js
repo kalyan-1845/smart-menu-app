@@ -1,4 +1,4 @@
-const CACHE_NAME = 'bitebox-forever-v5.2'; // ⬆️ Bumping version to force "Forever" update
+const CACHE_NAME = 'kovixa-forever-v5.2'; // ⬆️ Bumping version to force "Forever" update
 
 // 1. Install Event - Force immediate takeover
 self.addEventListener('install', (event) => {

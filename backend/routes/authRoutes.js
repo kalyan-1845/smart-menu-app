@@ -12,7 +12,7 @@ const privateKey = process.env.VAPID_PRIVATE_KEY;
 
 if (publicKey && privateKey) {
     try {
-        webpush.setVapidDetails('mailto:support@bitebox.com', publicKey, privateKey);
+        webpush.setVapidDetails('mailto:bitebox.web@gmail.com', publicKey, privateKey);
         console.log("✅ Auth Routes: Push Initialized");
     } catch (err) { console.error("❌ VAPID Config Error"); }
 }

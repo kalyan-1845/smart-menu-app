@@ -154,7 +154,7 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/superadmin', superAdminRoutes);
 app.use('/api/broadcast', broadcastRoutes);
 
-app.get('/', (req, res) => res.send('BiteBox API v8 (All Routes Fixed) Running...'));
+app.get('/', (req, res) => res.send('Kovixa API v8 (All Routes Fixed) Running...'));
 
 // --- SOCKET EVENTS ---
 io.on('connection', (socket) => {

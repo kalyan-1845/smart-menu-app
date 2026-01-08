@@ -12,7 +12,7 @@ const ProjectFlyer = () => {
         {/* --- HEADER --- */}
         <header style={styles.header}>
           <div style={styles.brandBox}>
-            <h1 style={styles.lalaTitle}>BITEBOX</h1>
+            <h1 style={styles.lalaTitle}>KOVIXA</h1>
             <span style={styles.tagline}>SMART RESTO SOLUTIONS</span>
           </div>
           <div style={styles.developerInfo}>

@@ -288,7 +288,7 @@ const RestaurantAdmin = () => {
             const reportPayload = {
                 restaurantName,
                 restaurantId: mongoId,
-                emailTarget: 'bitebox.web@gmail.com',
+                emailTarget: 'kovixa.web@gmail.com',
                 stats: statsData,
                 timestamp: new Date().toISOString()
             };
