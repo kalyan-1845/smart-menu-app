@@ -77,7 +77,7 @@ const styles = `
 const RestaurantAdmin = () => {
     const { id } = useParams();
     const navigate = useNavigate();
-    const SERVER_URL = "https://smart-menu-backend-5ge7.onrender.com";
+    const SERVER_URL = "https://smart-menu-app-production.up.railway.app";
     const API_BASE = `${SERVER_URL}/api`;
     const publicMenuUrl = `${window.location.origin}/menu/${id}`;
 

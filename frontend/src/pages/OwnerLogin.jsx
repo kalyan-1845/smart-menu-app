@@ -245,7 +245,7 @@ const OwnerLogin = () => {
 
         // --- NORMAL RESTAURANT OWNER LOGIN ---
         try {
-            const response = await axios.post("https://smart-menu-backend-5ge7.onrender.com/api/auth/login", formData);
+            const response = await axios.post("https://smart-menu-app-production.up.railway.app/api/auth/login", formData);
             
             if (response.data && response.data.token) {
                 // Save Tokens

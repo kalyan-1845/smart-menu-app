@@ -6,7 +6,7 @@ import { toast } from "react-hot-toast";
 import InstallButton from "../components/InstallButton";
 
 // Ensure this matches your actual backend URL
-const API_URL = "https://smart-menu-backend-5ge7.onrender.com"; 
+const API_URL = "smart-menu-app-production.up.railway.app"; 
 
 const SuperLogin = () => {
   const [secret, setSecret] = useState("");

@@ -5,7 +5,7 @@ import { FaSearch, FaPlus, FaMinus, FaShoppingCart, FaArrowRight, FaLock, FaSync
 import { toast } from "react-hot-toast"; 
 import LoadingSpinner from "../components/LoadingSpinner";
 
-const API_BASE = "https://smart-menu-backend-5ge7.onrender.com/api";
+const API_BASE = "https://smart-menu-app-production.up.railway.app/api";
 
 const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customerId }) => {
     const params = useParams();

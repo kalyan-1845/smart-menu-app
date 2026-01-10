@@ -12,7 +12,7 @@ import {
 } from "react-icons/fa";
 import { toast } from "react-hot-toast";
 
-const SERVER_URL = "https://smart-menu-backend-5ge7.onrender.com";
+const SERVER_URL = "https://smart-menu-app-production.up.railway.app";
 const API_BASE = `${SERVER_URL}/api`;
 
 const ChefDashboard = ({ bypassAuth = false, providedMongoId = null }) => {

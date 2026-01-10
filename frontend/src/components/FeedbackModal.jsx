@@ -74,7 +74,7 @@ const FeedbackModal = ({ dish, onClose }) => {
     const handleSubmit = async () => {
         if (rating === 0) return toast.error("Please select stars!");
         try {
-            await axios.post(`https://smart-menu-backend-5ge7.onrender.com/api/dishes/rate/${dish._id}`, {
+            await axios.post(`https://smart-menu-app-production.up.railway.app/api/dishes/rate/${dish._id}`, {
                 rating,
                 comment
             });

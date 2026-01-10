@@ -9,7 +9,7 @@ import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { toast } from "react-hot-toast";
 
-const API_URL = "https://smart-menu-backend-5ge7.onrender.com";
+const API_URL = "https://smart-menu-app-production.up.railway.app";
 
 const SuperAdmin = () => {
     const navigate = useNavigate();

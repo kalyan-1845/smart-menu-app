@@ -6,7 +6,7 @@ import { FaStore, FaUser, FaLock, FaArrowRight, FaSpinner } from "react-icons/fa
 // Dynamic API Selection: High Speed for Local / Reliable for Production
 const API_BASE = window.location.hostname === "localhost" 
     ? "http://localhost:5000/api" 
-    : "https://smart-menu-backend-5ge7.onrender.com/api";
+    : "https://smart-menu-app-production.up.railway.app/api";
 
 const Register = () => {
   const navigate = useNavigate();

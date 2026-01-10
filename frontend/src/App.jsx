@@ -24,7 +24,7 @@ import WaiterDashboard from "./pages/WaiterDashboard";
 import RoleLogin from "./pages/RoleLogin"; 
 import ProjectFlyer from "./pages/ProjectFlyer"; // 👈 IMPORTED FLYER
 
-const API_BASE = "https://smart-menu-backend-5ge7.onrender.com/api";
+const API_BASE = "https://smart-menu-app-production.up.railway.app/api";
 
 const ScrollToTop = () => {
   const { pathname } = useLocation();
