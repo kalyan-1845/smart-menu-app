@@ -5,11 +5,9 @@ import mongoose from 'mongoose';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import rateLimit from 'express-rate-limit';
-import https from "https"; 
-import compression from 'compression'; 
+import compression from 'compression';
 
 // --- IMPORT ROUTES ---
-// (Ensure these files exist in your /routes folder)
 import authRoutes from './routes/authRoutes.js';
 import dishRoutes from './routes/dishRoutes.js';
 import orderRoutes from './routes/orderRoutes.js';
@@ -18,63 +16,52 @@ import broadcastRoutes from './routes/broadcastRoutes.js';
 
 const app = express();
 
-// ✅ FIX 1: TRUST PROXY (Critical for Render/Heroku)
-app.set('trust proxy', 1); 
+// ✅ TRUST PROXY (Railway OK)
+app.set('trust proxy', 1);
 
 const httpServer = createServer(app);
 
-// ✅ FIX 2: TURBO KEEP-ALIVE
-httpServer.keepAliveTimeout = 120 * 1000; 
+// ✅ KEEP-ALIVE (OK)
+httpServer.keepAliveTimeout = 120 * 1000;
 httpServer.headersTimeout = 120 * 1000;
 
 app.use(compression());
 
-// --- 🔒 SECURITY: ALLOWED ORIGINS ---
-const allowedOrigins = [
-    "http://localhost:5173",
-    "http://localhost:3000",          
-    "https://smartmenuss.netlify.app",
-    "https://694915c413d9f40008f38924--smartmenuss.netlify.app",
-    "*" 
-];
+// ✅ CLEAN & SAFE CORS (NO CONFLICT)
+app.use(cors({
+    origin: [
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "https://smartmenuss.netlify.app",
+        "https://694915c413d9f40008f38924--smartmenuss.netlify.app"
+    ],
+    credentials: true
+}));
 
-// ☢️ NUCLEAR CORS FIX
-app.use((req, res, next) => {
-    const origin = req.headers.origin;
-    if (allowedOrigins.includes(origin) || !origin) {
-        res.setHeader("Access-Control-Allow-Origin", origin || "*");
-    } else {
-        res.setHeader("Access-Control-Allow-Origin", "*");
-    }
-    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, Origin, X-Requested-With, Accept");
-    res.header("Access-Control-Allow-Credentials", "true");
-    if (req.method === "OPTIONS") { return res.status(200).end(); }
-    next();
-});
+app.use(express.json({ limit: '10mb' }));
 
-app.use(cors({ origin: true, credentials: true }));
-app.use(express.json({ limit: '10mb' })); 
-
-// 🛡️ Rate Limiter
+// 🛡️ RATE LIMITER
 const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, 
-    max: 3000, 
+    windowMs: 15 * 60 * 1000,
+    max: 3000,
     standardHeaders: true,
     legacyHeaders: false
 });
-app.use("/api/", limiter); 
+app.use("/api/", limiter);
 
-// 🔌 SOCKET.IO SETUP
+// 🔌 SOCKET.IO
 const io = new Server(httpServer, {
     cors: {
-        origin: "*", 
+        origin: [
+            "http://localhost:5173",
+            "https://smartmenuss.netlify.app",
+            "https://694915c413d9f40008f38924--smartmenuss.netlify.app"
+        ],
         methods: ["GET", "POST", "PUT", "DELETE"],
-        allowedHeaders: ["Content-Type", "Authorization"],
         credentials: true
     },
-    transports: ['polling', 'websocket'], 
-    pingTimeout: 60000, 
+    transports: ['polling', 'websocket'],
+    pingTimeout: 60000,
     pingInterval: 25000
 });
 
@@ -85,66 +72,64 @@ app.use((req, res, next) => {
 
 // --- 🏗️ DATABASE CONNECTION ---
 mongoose.connect(process.env.MONGO_URI, {
-    maxPoolSize: 50,           
-    minPoolSize: 5,             
-    socketTimeoutMS: 45000,      
+    maxPoolSize: 50,
+    minPoolSize: 5,
+    socketTimeoutMS: 45000,
     serverSelectionTimeoutMS: 5000,
-    family: 4 
+    family: 4
 })
 .then(() => console.log("✅ MongoDB Connected"))
 .catch((err) => console.error("❌ MongoDB Error:", err));
 
-// --- 🛠️ MISSING ROUTES (FIXED HERE) ---
+// --- FIXED INLINE ROUTES ---
 
-// 1. ✅ FIX ORDER STATUS UPDATE (404 Error)
-// We inject this directly here to ensure it overrides any router issues
 app.put('/api/orders/:id/status', async (req, res) => {
     try {
         const { id } = req.params;
         const { status } = req.body;
-        
-        // Dynamic Model Loader (Prevents schema errors)
+
         let Order;
-        try { Order = mongoose.model('Order'); } 
-        catch { Order = mongoose.model('Order', new mongoose.Schema({ status: String, restaurantId: String }, { strict: false })); }
+        try { Order = mongoose.model('Order'); }
+        catch {
+            Order = mongoose.model(
+                'Order',
+                new mongoose.Schema({ status: String, restaurantId: String }, { strict: false })
+            );
+        }
 
         const order = await Order.findByIdAndUpdate(id, { status }, { new: true });
-        
+
         if (order) {
-            io.to(order.restaurantId).emit('new-order', order); // Refresh Dashboards
+            io.to(order.restaurantId).emit('new-order', order);
             if (status === 'Ready') {
-                io.to(order.restaurantId).emit('chef-ready-alert', order); // Ding Sound
+                io.to(order.restaurantId).emit('chef-ready-alert', order);
             }
         }
         res.json(order);
     } catch (e) {
-        console.error("Update Status Error:", e);
         res.status(500).json({ error: e.message });
     }
 });
 
-// 2. ✅ FIX STEALTH REPORT (404 Error)
 app.post('/api/reports/stealth-send', async (req, res) => {
-    console.log("📧 STEALTH REPORT RECEIVED:", req.body.restaurantName);
-    // In a real app, you would use Nodemailer here to send the email.
-    // For now, we return success so the frontend stops erroring.
     res.json({ success: true, message: "Report Queued" });
 });
 
-// 3. ✅ FIX MARK DOWNLOADED
 app.put('/api/orders/mark-downloaded', async (req, res) => {
     try {
         const { restaurantId } = req.body;
-        let Order;
-        try { Order = mongoose.model('Order'); } catch { return res.status(500).json({error: "Model error"}); }
+        const Order = mongoose.model('Order');
 
         await Order.updateMany(
             { restaurantId, status: { $in: ['Served', 'Paid', 'Cancelled'] } },
             { $set: { status: 'Archived' } }
         );
+
         io.to(restaurantId).emit('new-order');
         res.json({ success: true });
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
 });
 
 // --- STANDARD ROUTES ---
@@ -154,7 +139,9 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/superadmin', superAdminRoutes);
 app.use('/api/broadcast', broadcastRoutes);
 
-app.get('/', (req, res) => res.send('Kovixa API v8 (All Routes Fixed) Running...'));
+app.get('/', (req, res) =>
+    res.send('Kovixa API v8 (Railway Ready) Running...')
+);
 
 // --- SOCKET EVENTS ---
 io.on('connection', (socket) => {
@@ -162,23 +149,20 @@ io.on('connection', (socket) => {
     if (rid) socket.join(rid);
 
     socket.on('join-restaurant', (restaurantId) => socket.join(restaurantId));
-    
+
     socket.on("call-waiter", (data) => {
-        if(data.restaurantId) io.to(data.restaurantId).emit("new-waiter-call", data);
+        if (data.restaurantId) io.to(data.restaurantId).emit("new-waiter-call", data);
     });
 
     socket.on("new-order", (data) => {
-        if(data.restaurantId) io.to(data.restaurantId).emit("new-order", data);
+        if (data.restaurantId) io.to(data.restaurantId).emit("new-order", data);
     });
 });
 
-// ✅ SELF PING (Keep Alive)
-const pingUrl = "https://smart-menu-backend-5ge7.onrender.com/"; 
-setInterval(() => {
-    https.get(pingUrl, (res) => res.on('data', () => {})).on("error", () => {});
-}, 300000); 
+// ❌ REMOVED SELF-PING (Render only, wastes Railway credits)
 
 const PORT = process.env.PORT || 5000;
-httpServer.listen(PORT, () => {
-    console.log(`🚀 Server running on port ${PORT}`);
+
+httpServer.listen(PORT, "0.0.0.0", () => {
+  console.log(`🚀 Server running on port ${PORT}`);
 });
