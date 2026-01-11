@@ -5,7 +5,7 @@ import axios from "axios";
 import { toast } from "react-hot-toast";
 import InstallButton from "../components/InstallButton";
 
-// ✅ FIX: Added 'https://' to the URL
+// ✅ FIX: You MUST have 'https://' here for it to work!
 const API_URL = "https://smart-menu-app-production.up.railway.app"; 
 
 const SuperLogin = () => {
@@ -18,27 +18,29 @@ const SuperLogin = () => {
     setLoading(true);
 
     try {
-      // 🚀 SEND PASSWORD TO SERVER
+      // 1. Send Password to Server
       const res = await axios.post(`${API_URL}/api/superadmin/login`, { 
         password: secret 
       });
 
+      // 2. If Server says "Success":
       if (res.data.success) {
-        // ✅ Save the exact token name SuperAdmin.jsx looks for
+        // Save the key that App.js looks for ("admin_token")
         localStorage.setItem("admin_token", res.data.token);
         
         toast.success("Welcome, CEO.");
         
-        // Smooth entry delay
+        // 3. Go to Dashboard
         setTimeout(() => {
           navigate("/superadmin"); 
         }, 500);
       }
     } catch (err) {
-      console.error(err);
-      toast.error("ACCESS DENIED: Incorrect Key");
-      setSecret(""); // Clear input
-      if ("vibrate" in navigator) navigator.vibrate([100, 50, 100]); // Haptic Error
+      console.error("Login Failed:", err);
+      // Give a clear error message
+      const msg = err.response?.data?.message || "Connection Failed (Check URL)";
+      toast.error(msg);
+      setSecret(""); 
     } finally {
       setLoading(false);
     }
