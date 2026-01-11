@@ -9,6 +9,7 @@ import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { toast } from "react-hot-toast";
 
+// ✅ Correct Backend URL
 const API_URL = "https://smart-menu-app-production.up.railway.app";
 
 const SuperAdmin = () => {
@@ -48,10 +49,15 @@ const SuperAdmin = () => {
             setMaintenanceMode(sysRes.data.maintenance || false);
             setLoading(false);
         } catch (e) {
+            console.error("Sync Error:", e);
             if(e.response && e.response.status === 401) {
                 toast.error("Session Expired");
+                localStorage.removeItem('admin_token');
                 navigate("/super-login");
+            } else {
+                toast.error("Connection Error");
             }
+            setLoading(false);
         }
     }, [navigate]);
 

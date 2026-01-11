@@ -1,13 +1,13 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import Owner from '../models/Owner.js';
-import Order from '../models/Order.js'; // Needed for stats & reset
+import Order from '../models/Order.js'; 
 import Settings from '../models/Settings.js'; 
 
 const router = express.Router();
 
-// 🔐 MASTER PASSWORD CONFIGURATION
-const MASTER_PASSWORD = "vasudevsrinivas"; 
+// 🔐 CONFIGURATION
+// (Master Password removed as it was only used for login)
 const JWT_SECRET = process.env.JWT_SECRET || "super_secret_key";
 
 // --- MIDDLEWARE TO PROTECT ROUTES ---
@@ -25,19 +25,8 @@ const protect = (req, res, next) => {
 };
 
 // ==========================================
-// 1. 🔑 SUPER LOGIN
+// 1. [REMOVED] SUPER LOGIN ROUTE
 // ==========================================
-router.post('/login', (req, res) => {
-    const { password } = req.body;
-
-    if (password === MASTER_PASSWORD) {
-        // Generate Token
-        const token = jwt.sign({ role: 'superadmin' }, JWT_SECRET, { expiresIn: '7d' });
-        return res.json({ success: true, token });
-    } else {
-        return res.status(401).json({ success: false, message: "Invalid Password" });
-    }
-});
 
 // ==========================================
 // 2. 🔄 CEO SYNC (Dashboard Data)

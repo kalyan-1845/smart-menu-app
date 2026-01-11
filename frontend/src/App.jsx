@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, useLocation, useNavigate } from "react-router-dom";
 import axios from "axios";
 
 // --- EXISTING IMPORTS ---
@@ -9,13 +9,12 @@ import Cart from "./pages/Cart";
 import OrderTracker from "./pages/OrderTracker";
 import OwnerLogin from "./pages/OwnerLogin"; 
 import Register from "./pages/Register";    
-import SuperLogin from "./pages/SuperLogin"; 
 import Terms from './pages/Terms';
 import Maintenance from './pages/Maintenance';
 import NotFound from './pages/NotFound';
 
 // --- STAFF PANELS ---
-import SuperAdmin from "./pages/SuperAdmin";
+import SuperAdmin from "./pages/SuperAdmin"; // ✅ This now handles both Login & Dashboard
 import RestaurantAdmin from "./pages/RestaurantAdmin";
 import ChefDashboard from "./pages/ChefDashboard"; 
 import WaiterDashboard from "./pages/WaiterDashboard";
@@ -33,13 +32,10 @@ const ScrollToTop = () => {
 };
 
 // --- 🚦 SMART ROUTER COMPONENT ---
-// This acts as the "Traffic Cop" when the app opens.
-// It sends Chefs to the kitchen, Waiters to tables, and Owners to the office.
 const SmartHome = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Check if the user has a saved role from a previous login
     const lastRole = localStorage.getItem("kovixa_last_role");
     const lastId = localStorage.getItem("kovixa_last_id");
 
@@ -52,15 +48,9 @@ const SmartHome = () => {
         navigate(`/${lastId}/waiter`, { replace: true });
       }
     }
-    // If no role is found, stay on Landing Page
   }, [navigate]);
 
   return <LandingPage />;
-};
-
-const ProtectedSuperAdmin = ({ children }) => {
-  const isAuthenticated = localStorage.getItem("superAdminAuth") === "true";
-  return isAuthenticated ? children : <Navigate to="/super-login" replace />;
 };
 
 const GlobalStyles = () => (
@@ -155,8 +145,6 @@ function App() {
       <GlobalStyles />
       <ScrollToTop />
       <Routes>
-        {/* --- 🚦 PUBLIC & SMART HOME --- */}
-        {/* If installed as an App, this decides where the user goes */}
         <Route path="/" element={<SmartHome />} /> 
         
         <Route path="/ProjectFlyer" element={<ProjectFlyer />} />
@@ -165,7 +153,6 @@ function App() {
         <Route path="/register" element={<Register />} />
         <Route path="/terms" element={<Terms />} />
           
-        {/* --- CUSTOMER MENU FLOW --- */}
         <Route path="/menu/:restaurantId" element={
             <div className="page-transition">
               <Menu 
@@ -191,7 +178,6 @@ function App() {
             </div>
         } />
 
-        {/* --- CART FLOW --- */}
         <Route path="/:restaurantId/cart/:customerId" element={
             <div className="page-transition">
               <Cart 
@@ -209,24 +195,18 @@ function App() {
             </div>
         } />
         
-        {/* --- TRACKING FLOW --- */}
         <Route path="/track/:id" element={<div className="page-transition"><OrderTracker /></div>} />
         
-        {/* --- 🏢 ADMIN & STAFF (SEPARATE APP ROUTES) --- */}
-        <Route path="/super-login" element={<SuperLogin />} />
-        <Route path="/superadmin" element={<ProtectedSuperAdmin><SuperAdmin /></ProtectedSuperAdmin>} />
+        {/* --- 🏢 ADMIN & STAFF --- */}
+        {/* ✅ REMOVED /super-login path */}
+        {/* ✅ SuperAdmin component now handles the login logic internally */}
+        <Route path="/superadmin" element={<SuperAdmin />} />
         
-        {/* 👑 Owner App (Full Access) */}
         <Route path="/:id/admin" element={<RestaurantAdmin />} />
-        
-        {/* 👨‍🍳 Chef App (Kitchen Only) */}
         <Route path="/:id/chef" element={<ChefDashboard />} />
-        <Route path="/:id/kitchen" element={<ChefDashboard />} /> {/* Alias */}
-        
-        {/* 🤵 Waiter App (Service Only) */}
+        <Route path="/:id/kitchen" element={<ChefDashboard />} />
         <Route path="/:id/waiter" element={<WaiterDashboard />} />
 
-        {/* --- 404 PAGE --- */}
         <Route path="*" element={<NotFound />} />
       </Routes>
     </Router>
