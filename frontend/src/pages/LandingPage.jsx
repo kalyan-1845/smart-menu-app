@@ -1,28 +1,25 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { FaUtensils, FaQrcode, FaChartLine, FaBars, FaTimes, FaArrowRight, FaBox, FaShieldAlt, FaGlobe } from "react-icons/fa";
+import { FaUtensils, FaQrcode, FaArrowRight, FaBox, FaGlobe, FaBars, FaTimes } from "react-icons/fa";
 
 const LandingPage = () => {
-  const [menuOpen, setMenuOpen] = useState(false);
   const [showPopup, setShowPopup] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
 
+  // 🔄 AUTO-DETECT SCREEN SIZE
   useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', handleResize);
+    
     const timer = setTimeout(() => {
       setShowPopup(true);
     }, 500); 
-    return () => clearTimeout(timer);
+    
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      clearTimeout(timer);
+    };
   }, []);
-
-  // ✅ SCOPED STYLES OBJECT FOR THE NEW LINKS
-  const styles = {
-    footerLink: {
-      color: '#666',
-      textDecoration: 'none',
-      fontSize: '12px',
-      fontWeight: 700,
-      transition: '0.2s'
-    }
-  };
 
   return (
     <div className="landing-container">
@@ -45,6 +42,31 @@ const LandingPage = () => {
 
         .animate-in { animation: fadeInUp 0.8s ease forwards; }
 
+        /* --- 📱 MOBILE MODE (9:16) --- */
+        @media (max-width: 768px) {
+          .navbar { padding: 15px 20px; }
+          .nav-links { display: none; } /* Hide desktop links */
+          .hero h1 { font-size: 42px; line-height: 1.1; }
+          .hero p { font-size: 16px; padding: 0 10px; }
+          .features-grid { grid-template-columns: 1fr; padding: 40px 20px; }
+          .footer-links { flex-direction: column; gap: 20px; }
+        }
+
+        /* --- 💻 LAPTOP MODE (16:9) --- */
+        @media (min-width: 769px) {
+          .navbar { padding: 25px 5%; }
+          .hero { padding: 140px 0 100px; }
+          .hero h1 { font-size: 80px; letter-spacing: -3px; }
+          .hero p { font-size: 20px; max-width: 700px; }
+          .features-grid { 
+            grid-template-columns: repeat(3, 1fr); 
+            gap: 40px; 
+            max-width: 1400px; 
+            padding: 80px 5%; 
+          }
+          .footer-links { flex-direction: row; gap: 50px; }
+        }
+
         /* WELCOME POPUP */
         .popup-overlay {
           position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -56,7 +78,10 @@ const LandingPage = () => {
           background: var(--card-bg); padding: 50px 30px; border-radius: 40px;
           border: 1px solid #222; text-align: center;
           max-width: 90%; width: 400px;
+          animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
+        @keyframes popIn { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
         .popup-logo { font-size: 50px; color: var(--primary); margin-bottom: 20px; }
         .popup-text { font-size: 32px; font-weight: 900; margin-bottom: 5px; }
         .popup-subtext { color: var(--primary); font-weight: 800; font-size: 14px; letter-spacing: 3px; margin-bottom: 30px; }
@@ -64,65 +89,71 @@ const LandingPage = () => {
         /* NAVBAR */
         .navbar {
           display: flex; justify-content: space-between; align-items: center;
-          padding: 20px 5%; background: rgba(5, 5, 5, 0.8);
-          backdrop-filter: blur(12px); position: sticky; top: 0; z-index: 100;
-          border-bottom: 1px solid #111;
+          background: rgba(5, 5, 5, 0.8); backdrop-filter: blur(12px); 
+          position: sticky; top: 0; z-index: 100; border-bottom: 1px solid #111;
         }
-        .brand { font-size: 22px; font-weight: 900; display: flex; align-items: center; gap: 10px; color: #fff; text-decoration: none; }
+        .brand { font-size: 24px; font-weight: 900; display: flex; align-items: center; gap: 10px; color: #fff; text-decoration: none; }
         .brand span { color: var(--primary); }
         
-        .nav-links { display: flex; gap: 30px; align-items: center; }
+        .nav-links { display: flex; gap: 40px; align-items: center; }
         .nav-links a { text-decoration: none; color: #a1a1aa; font-weight: 600; font-size: 14px; transition: 0.2s; }
         .nav-links a:hover { color: var(--primary); }
         
         /* HERO */
         .hero {
-          text-align: center; padding: 120px 20px;
-          background: radial-gradient(circle at top, rgba(249,115,22,0.12) 0%, rgba(5,5,5,1) 60%);
+          text-align: center; 
+          background: radial-gradient(circle at 50% 0%, rgba(249,115,22,0.15) 0%, rgba(5,5,5,1) 70%);
+          display: flex; flex-direction: column; align-items: center;
         }
         .live-badge {
-            background: rgba(34, 197, 94, 0.1); color: #22c55e;
-            padding: 6px 15px; border-radius: 50px; font-size: 12px;
-            font-weight: 800; display: inline-flex; align-items: center; gap: 8px;
-            margin-bottom: 25px; border: 1px solid rgba(34, 197, 94, 0.2);
+          background: rgba(34, 197, 94, 0.1); color: #22c55e;
+          padding: 6px 15px; border-radius: 50px; font-size: 12px;
+          font-weight: 800; display: inline-flex; align-items: center; gap: 8px;
+          margin-bottom: 30px; border: 1px solid rgba(34, 197, 94, 0.2);
         }
         .dot { width: 8px; height: 8px; background: #22c55e; border-radius: 50%; animation: blink 1.5s infinite; }
         @keyframes blink { 0% { opacity: 0.3; } 50% { opacity: 1; } 100% { opacity: 0.3; } }
 
-        .hero h1 { font-size: clamp(40px, 8vw, 72px); line-height: 1.1; font-weight: 900; margin-bottom: 25px; letter-spacing: -2px; }
-        .hero p { color: var(--text-muted); font-size: 18px; max-width: 650px; margin: 0 auto 45px; line-height: 1.7; }
+        .hero h1 { font-weight: 900; margin-bottom: 25px; color: #fff; }
+        .hero p { color: var(--text-muted); margin-bottom: 45px; line-height: 1.6; }
         
         .btn-primary {
           background: var(--primary); color: white; padding: 16px 32px;
           border-radius: 14px; font-weight: 800; text-decoration: none;
           display: inline-flex; align-items: center; gap: 10px; transition: 0.3s; border: none;
+          cursor: pointer;
         }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(249,115,22,0.3); }
+        
         .btn-outline {
           background: #111; color: white; padding: 15px 30px;
           border: 1px solid #222; border-radius: 14px; font-weight: 700;
-          text-decoration: none; margin-left: 15px; transition: 0.2s;
+          text-decoration: none; margin-left: 15px; transition: 0.2s; cursor: pointer;
         }
+        .btn-outline:hover { border-color: var(--primary); color: var(--primary); }
 
-        .features-grid {
-          display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-          gap: 20px; padding: 60px 5%; max-width: 1300px; margin: 0 auto;
-        }
+        .features-grid { margin: 0 auto; }
         .feature-card {
           background: var(--card-bg); padding: 40px; border-radius: 30px;
-          border: 1px solid #111; transition: 0.4s;
+          border: 1px solid #1a1a1a; transition: 0.4s;
+          display: flex; flex-direction: column; align-items: flex-start;
         }
         .feature-card:hover { border-color: #333; transform: translateY(-10px); background: #111; }
         .icon-box {
-          width: 55px; height: 55px; background: rgba(249, 115, 22, 0.1);
+          width: 60px; height: 60px; background: rgba(249, 115, 22, 0.1);
           color: var(--primary); display: flex; align-items: center;
-          justify-content: center; border-radius: 14px; font-size: 24px; margin-bottom: 25px;
+          justify-content: center; border-radius: 16px; font-size: 26px; margin-bottom: 25px;
         }
+        .feature-title { font-size: 22px; font-weight: 800; margin-bottom: 10px; color: #fff; }
+        .feature-desc { font-size: 15px; color: #888; line-height: 1.6; }
 
-        @media (max-width: 768px) {
-          .nav-links { display: none; }
-          .hero { padding: 80px 20px; }
-          .btn-outline { margin-left: 0; margin-top: 15px; display: block; }
-        }
+        /* FOOTER */
+        .footer { padding: 80px 20px; text-align: center; border-top: 1px solid #111; background: #080808; }
+        .footer-logo { display: flex; alignItems: center; justifyContent: center; gap: 10px; margin-bottom: 20px; }
+        .footer-links { display: flex; justifyContent: center; margin-top: 30px; }
+        .footer-link { color: #666; text-decoration: none; font-size: 13px; font-weight: 700; transition: 0.2s; text-transform: uppercase; letter-spacing: 1px; }
+        .footer-link:hover { color: #fff; }
+
       `}</style>
 
       {/* --- WELCOME POPUP --- */}
@@ -149,8 +180,12 @@ const LandingPage = () => {
         </Link>
         <div className="nav-links">
           <Link to="/login">Partner Login</Link>
-          <Link to="/register" className="btn-primary" style={{padding:'10px 20px', borderRadius:'10px', fontSize:'13px'}}>Create Account</Link>
+          <Link to="/super-login">Network Status</Link>
+          <Link to="/register" className="btn-primary" style={{padding:'12px 24px', borderRadius:'12px', fontSize:'14px'}}>
+            Create Account
+          </Link>
         </div>
+        {/* Mobile Menu Icon could go here */}
       </nav>
 
       {/* --- HERO SECTION --- */}
@@ -158,14 +193,21 @@ const LandingPage = () => {
         <div className="live-badge animate-in">
             <div className="dot"></div> KOVIXA NETWORK IS LIVE
         </div>
-        <h1 className="animate-in">Modernize Your <br /><span style={{color: 'var(--primary)'}}>Restaurant Growth.</span></h1>
+        <h1 className="animate-in">
+          Modernize Your <br />
+          <span style={{color: 'var(--primary)'}}>Restaurant Growth.</span>
+        </h1>
         <p className="animate-in" style={{animationDelay: '0.1s'}}>
           Stop using paper. Start using data. Kovixa provides QR ordering, 
           live kitchen tracking, and CEO-level analytics for smart food owners.
         </p>
-        <div className="animate-in" style={{animationDelay: '0.2s'}}>
-          <Link to="/register" className="btn-primary">Get Started Free <FaArrowRight size={12} /></Link>
-          <Link to="/login" className="btn-outline">Watch Demo</Link>
+        <div className="animate-in" style={{animationDelay: '0.2s', display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: isMobile ? '15px' : '0'}}>
+          <Link to="/register" className="btn-primary" style={{justifyContent: 'center'}}>
+            Get Started Free <FaArrowRight size={12} />
+          </Link>
+          <Link to="/login" className={`btn-outline ${isMobile ? '' : 'ml-4'}`} style={{textAlign: 'center', marginLeft: isMobile ? 0 : '15px'}}>
+            Watch Demo
+          </Link>
         </div>
       </section>
 
@@ -189,17 +231,18 @@ const LandingPage = () => {
       </section>
 
       {/* --- FOOTER --- */}
-      <footer style={{padding: '80px 20px', textAlign: 'center', borderTop: '1px solid #111'}}>
-        <div style={{display:'flex', alignItems:'center', justifyContent:'center', gap:'10px', marginBottom: '20px'}}>
-            <FaBox color="#f97316" size={24}/> <span style={{fontWeight: 900, fontSize: '20px'}}>Kovixa</span>
+      <footer className="footer">
+        <div className="footer-logo">
+            <FaBox color="#f97316" size={24}/> 
+            <span style={{fontWeight: 900, fontSize: '20px', color:'#fff'}}>Kovixa</span>
         </div>
-        <p style={{color: '#444', fontSize: '13px', marginBottom: '30px'}}>© {new Date().getFullYear()} Kovixa SaaS Cloud. Built for Industrial Scale.</p>
+        <p style={{color: '#444', fontSize: '13px'}}>© {new Date().getFullYear()} Kovixa SaaS Cloud. Built for Industrial Scale.</p>
         
-        <div style={{display:'flex', justifyContent:'center', gap:'40px'}}>
-            <Link to="/login" style={styles.footerLink}>LOGIN</Link>
-            <Link to="/register" style={styles.footerLink}>REGISTER</Link>
-            <Link to="/terms" style={styles.footerLink}>TERMS & PRIVACY</Link>
-            <Link to="/super-login" style={styles.footerLink}>NETWORK CONTROL</Link>
+        <div className="footer-links">
+            <Link to="/login" className="footer-link">LOGIN</Link>
+            <Link to="/register" className="footer-link">REGISTER</Link>
+            <Link to="/terms" className="footer-link">TERMS & PRIVACY</Link>
+            <Link to="/super-login" className="footer-link">NETWORK CONTROL</Link>
         </div>
       </footer>
     </div>

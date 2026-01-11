@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { 
-    FaShieldAlt, FaPhone, FaCalendarAlt, FaUtensils, FaUserTie, 
-    FaGhost, FaSave, FaSearch, FaDownload, FaExclamationTriangle, 
-    FaCheckCircle, FaSignOutAlt, FaTrash, FaRedo, FaEdit, FaKey, FaPlus, FaTimes,
-    FaBullhorn, FaSync, FaSortAmountDown
+    FaShieldAlt, FaPhone, FaUtensils, FaUserTie, 
+    FaGhost, FaSave, FaSearch, FaExclamationTriangle, 
+    FaSignOutAlt, FaTrash, FaRedo, FaEdit, FaKey, FaPlus, FaTimes,
+    FaBullhorn, FaSync, FaSortAmountDown, FaCircle
 } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -14,23 +14,25 @@ const API_URL = "https://smart-menu-app-production.up.railway.app";
 const SuperAdmin = () => {
     const navigate = useNavigate();
     
-    // --- STATE ---
+    // --- 1. STATE MANAGEMENT ---
     const [clients, setClients] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
     const [selected, setSelected] = useState(null); 
     const [noteDraft, setNoteDraft] = useState("");
     
-    // 🆕 SYSTEM WIDE SETTINGS
+    // System Settings
     const [broadcastMsg, setBroadcastMsg] = useState("");
     const [maintenanceMode, setMaintenanceMode] = useState(false);
     
     // Forms
-    const [editForm, setEditForm] = useState({ name: "", username: "", password: "", phone: "" });
     const [createForm, setCreateForm] = useState({ restaurantName: "", username: "", password: "" });
     const [showCreateModal, setShowCreateModal] = useState(false);
+    const [newPassword, setNewPassword] = useState(""); // For quick reset
 
-    // --- 🔄 1. MASTER SYNC ---
+    // --- 2. API LOGIC ---
+
+    // Sync Data
     const refreshData = useCallback(async () => {
         const token = localStorage.getItem('admin_token');
         if (!token) return navigate("/super-login");
@@ -38,7 +40,7 @@ const SuperAdmin = () => {
         try {
             const [clientRes, sysRes] = await Promise.all([
                 axios.get(`${API_URL}/api/superadmin/ceo-sync`, { headers: { Authorization: `Bearer ${token}` } }),
-                axios.get(`${API_URL}/api/superadmin/system-status`) // Get global settings
+                axios.get(`${API_URL}/api/superadmin/system-status`) 
             ]);
 
             setClients(clientRes.data);
@@ -46,7 +48,6 @@ const SuperAdmin = () => {
             setMaintenanceMode(sysRes.data.maintenance || false);
             setLoading(false);
         } catch (e) {
-            console.error("Sync Error:", e);
             if(e.response && e.response.status === 401) {
                 toast.error("Session Expired");
                 navigate("/super-login");
@@ -54,102 +55,69 @@ const SuperAdmin = () => {
         }
     }, [navigate]);
 
-    useEffect(() => {
-        refreshData();
-    }, [refreshData]);
+    useEffect(() => { refreshData(); }, [refreshData]);
 
-    // --- 📢 2. GLOBAL BROADCAST & MAINTENANCE ---
+    // System Updates
     const updateSystemSettings = async () => {
         try {
-            const token = localStorage.getItem('admin_token');
             await axios.put(`${API_URL}/api/superadmin/system-status`, {
                 message: broadcastMsg,
                 maintenance: maintenanceMode
-            }, { headers: { Authorization: `Bearer ${token}` } });
+            }, { headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` } });
             toast.success("Global System Updated 🌍");
         } catch (e) { toast.error("System Update Failed"); }
     };
 
-    // --- 🆕 3. REGISTER NEW RESTAURANT ---
+    // Create Client
     const handleRegister = async () => {
         if(!createForm.username || !createForm.password) return toast.error("Fill all fields");
         try {
-            const token = localStorage.getItem('admin_token');
             await axios.post(`${API_URL}/api/auth/register`, createForm, {
-                headers: { Authorization: `Bearer ${token}` }
+                headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` }
             });
-            toast.success("New Restaurant Created! 🚀");
+            toast.success("Restaurant Created! 🚀");
             setShowCreateModal(false);
             setCreateForm({ restaurantName: "", username: "", password: "" });
             refreshData();
-        } catch (e) { toast.error(e.response?.data?.message || "Registration Failed"); }
+        } catch (e) { toast.error("Registration Failed"); }
     };
 
-    // --- 🟢 4. OPEN EDIT MODAL ---
+    // Client Actions
     const openClientModal = (client) => {
         setSelected(client);
         setNoteDraft(client.ceoNotes || "");
-        setEditForm({ 
-            name: client.restaurantName, 
-            username: client.username, 
-            phone: client.phoneNumber || "",
-            password: "" 
-        }); 
+        setNewPassword(""); 
     };
 
-    // --- 💾 5. UPDATE DETAILS & PASSWORD ---
     const handleUpdateClient = async () => {
         try {
             await axios.put(`${API_URL}/api/superadmin/client/${selected._id}`, {
-                restaurantName: editForm.name,
-                username: editForm.username,
-                phoneNumber: editForm.phone,
-                password: editForm.password 
-            }, {
-                headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` }
-            });
+                restaurantName: selected.restaurantName,
+                username: selected.username,
+                phoneNumber: selected.phoneNumber
+            }, { headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` } });
             toast.success("Details Updated ✅");
             refreshData();
-            setSelected(null);
         } catch (e) { toast.error("Update Failed"); }
     };
 
-    // --- 🗑️ 6. DELETE ACCOUNT ---
-    const handleDeleteClient = async () => {
-        if (!window.confirm(`⚠️ DELETE ${selected.restaurantName.toUpperCase()} PERMANENTLY?`)) return;
-        if (!window.confirm("⛔ FINAL WARNING: This data will be lost forever.")) return;
-        
+    const handlePasswordReset = async () => {
+        if (!newPassword) return toast.error("Enter a password");
         try {
-            await axios.delete(`${API_URL}/api/superadmin/client/${selected._id}`, {
-                headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` }
-            });
-            toast.success("Account Deleted 🗑️");
-            setSelected(null);
-            refreshData();
-        } catch (e) { toast.error("Delete Failed"); }
-    };
-
-    // --- 🔄 7. RESET DATA ---
-    const handleResetData = async () => {
-        if(!window.confirm("⚠️ Factory Reset: Clear all orders and revenue?")) return;
-        try {
-            await axios.post(`${API_URL}/api/superadmin/client/${selected._id}/reset`, {}, {
-                headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` }
-            });
-            toast.success("Data Wiped Successfully 🔄");
-            refreshData();
+            await axios.put(`${API_URL}/api/superadmin/client/${selected._id}`, { password: newPassword }, 
+            { headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` } });
+            toast.success("Password Changed 🔒");
+            setNewPassword("");
         } catch (e) { toast.error("Reset Failed"); }
     };
 
-    // --- ⚡ 8. TOGGLES & GOD MODE ---
     const toggleSwitch = async (id, field, currentVal) => {
         try {
             setSelected(prev => ({ ...prev, settings: { ...prev.settings, [field.split('.')[1]]: !currentVal } })); 
-            await axios.put(`${API_URL}/api/superadmin/control/${id}`, 
-                { field, value: !currentVal },
+            await axios.put(`${API_URL}/api/superadmin/control/${id}`, { field, value: !currentVal },
                 { headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` } }
             );
-            toast.success("System Updated");
+            toast.success("Setting Updated");
             refreshData(); 
         } catch (e) { toast.error("Switch Failed"); }
     };
@@ -166,6 +134,29 @@ const SuperAdmin = () => {
         } catch (e) { toast.error("God Mode Failed"); }
     };
 
+    const handleResetData = async () => {
+        if(!window.confirm("⚠️ Factory Reset: Clear all orders and revenue?")) return;
+        try {
+            await axios.post(`${API_URL}/api/superadmin/client/${selected._id}/reset`, {}, {
+                headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` }
+            });
+            toast.success("Data Wiped 🔄");
+            refreshData();
+        } catch (e) { toast.error("Reset Failed"); }
+    };
+
+    const handleDeleteClient = async () => {
+        if (!window.confirm("⛔ DELETE ACCOUNT PERMANENTLY?")) return;
+        try {
+            await axios.delete(`${API_URL}/api/superadmin/client/${selected._id}`, {
+                headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` }
+            });
+            toast.success("Account Deleted 🗑️");
+            setSelected(null);
+            refreshData();
+        } catch (e) { toast.error("Delete Failed"); }
+    };
+
     const saveNotes = async (id) => {
         await axios.put(`${API_URL}/api/superadmin/notes/${id}`, { notes: noteDraft }, {
             headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` }
@@ -174,7 +165,7 @@ const SuperAdmin = () => {
         refreshData();
     };
 
-    // --- 🔍 FILTER & METRICS ---
+    // --- 3. METRICS ---
     const filtered = clients.filter(c => 
         c.restaurantName?.toLowerCase().includes(searchTerm.toLowerCase()) || 
         c.username?.includes(searchTerm)
@@ -205,31 +196,22 @@ const SuperAdmin = () => {
                 </div>
             </div>
 
-            {/* --- 📢 SYSTEM CONTROL BAR --- */}
+            {/* --- SYSTEM CONTROL --- */}
             <div style={styles.broadcastBar}>
                 <div style={{flex: 1, display:'flex', gap:10, alignItems:'center'}}>
                     <FaBullhorn color="#f97316" />
-                    <input 
-                        style={styles.broadcastInput} 
-                        placeholder="Global Announcement Message (Scrolls on all dashboards)" 
-                        value={broadcastMsg}
-                        onChange={(e) => setBroadcastMsg(e.target.value)}
-                    />
+                    <input style={styles.broadcastInput} placeholder="Global System Broadcast Message..." value={broadcastMsg} onChange={(e) => setBroadcastMsg(e.target.value)} />
                 </div>
                 <div style={{display:'flex', alignItems:'center', gap:10}}>
-                    <label style={{fontSize:10, fontWeight:'bold', color: maintenanceMode ? '#ef4444' : '#666'}}>
-                        MAINTENANCE MODE
-                    </label>
-                    <div 
-                        onClick={() => setMaintenanceMode(!maintenanceMode)}
-                        style={{...styles.toggle, background: maintenanceMode ? '#ef4444' : '#333'}}
-                    >
+                    <label style={{fontSize:10, fontWeight:'bold', color: maintenanceMode ? '#ef4444' : '#666'}}>MAINTENANCE</label>
+                    <div onClick={() => setMaintenanceMode(!maintenanceMode)} style={{...styles.toggle, background: maintenanceMode ? '#ef4444' : '#333'}}>
                         <div style={{...styles.knob, transform: maintenanceMode ? 'translateX(18px)' : 'translateX(0)'}} />
                     </div>
-                    <button onClick={updateSystemSettings} style={styles.saveSysBtn}>UPDATE SYSTEM</button>
+                    <button onClick={updateSystemSettings} style={styles.saveSysBtn}>UPDATE</button>
                 </div>
             </div>
 
+            {/* --- SEARCH & STATS --- */}
             <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10}}>
                 <input style={styles.search} placeholder="Search Client..." onChange={(e) => setSearchTerm(e.target.value)} />
                 <div style={{fontSize:12, color:'#666', display:'flex', alignItems:'center', gap:5}}>
@@ -237,7 +219,6 @@ const SuperAdmin = () => {
                 </div>
             </div>
 
-            {/* --- METRICS --- */}
             <div style={styles.statsRow}>
                 <div style={styles.statCard}><span>TOTAL CLIENTS</span><h2>{metrics.total}</h2></div>
                 <div style={styles.statCard}><span>ACTIVE TODAY</span><h2 style={{color:'#22c55e'}}>{metrics.active}</h2></div>
@@ -245,19 +226,18 @@ const SuperAdmin = () => {
                 <div style={styles.statCard}><span>EST. MRR</span><h2 style={{color:'#f97316'}}>₹{metrics.mrr.toLocaleString()}</h2></div>
             </div>
 
-            {/* --- LIST --- */}
+            {/* --- CLIENT LIST --- */}
             <div style={styles.grid}>
                 {filtered.map(c => (
                     <div key={c._id} style={styles.card} onClick={() => openClientModal(c)}>
                         <div style={styles.cardHeader}>
                             <h3>{c.restaurantName}</h3>
                             <span style={{...styles.badge, background: c.health?.includes("Healthy") ? '#064e3b' : '#450a0a', color: c.health?.includes("Healthy") ? '#4ade80' : '#f87171'}}>
-                                {c.health === "🟢 Healthy" ? "ONLINE" : "OFFLINE"}
+                                <FaCircle size={6} style={{marginRight:5}} /> {c.health === "🟢 Healthy" ? "ONLINE" : "OFFLINE"}
                             </span>
                         </div>
                         <div style={styles.cardBody}>
                             <p><strong>User:</strong> {c.username}</p>
-                            <p><strong>Items Added:</strong> {c.itemCount || 0}</p>
                             <p><strong>Plan:</strong> {c.settings?.isPro ? <span style={{color:'#f97316'}}>👑 PRO</span> : "TRIAL"}</p>
                             <p style={{fontSize:'10px', marginTop:'5px', color:'#555'}}>Active: {c.lastActive || "Never"}</p>
                         </div>
@@ -265,13 +245,15 @@ const SuperAdmin = () => {
                 ))}
             </div>
 
-            {/* --- CREATE MODAL --- */}
+            {/* --- MODALS --- */}
+            
+            {/* 1. CREATE MODAL */}
             {showCreateModal && (
                 <div style={styles.overlay}>
                     <div style={styles.modal}>
                         <h2 style={{marginTop:0}}>🚀 Register New Restaurant</h2>
                         <input style={styles.input} placeholder="Restaurant Name" value={createForm.restaurantName} onChange={e => setCreateForm({...createForm, restaurantName: e.target.value})} />
-                        <input style={styles.input} placeholder="Username (Login ID)" value={createForm.username} onChange={e => setCreateForm({...createForm, username: e.target.value})} />
+                        <input style={styles.input} placeholder="Username" value={createForm.username} onChange={e => setCreateForm({...createForm, username: e.target.value})} />
                         <input style={styles.input} placeholder="Password" value={createForm.password} onChange={e => setCreateForm({...createForm, password: e.target.value})} />
                         <div style={{display:'flex', gap:10, marginTop:10}}>
                             <button onClick={handleRegister} style={styles.saveBtn}>CREATE ACCOUNT</button>
@@ -281,30 +263,26 @@ const SuperAdmin = () => {
                 </div>
             )}
 
-            {/* --- EDIT / CONTROL MODAL --- */}
+            {/* 2. MANAGEMENT MODAL */}
             {selected && (
                 <div style={styles.overlay}>
                     <div style={styles.modal}>
                         <div style={styles.modalTop}>
-                            <h2>Manage: {selected.restaurantName}</h2>
+                            <h2>{selected.restaurantName}</h2>
                             <button onClick={() => setSelected(null)} style={{background:'none', border:'none', color:'white', fontSize:'20px'}}><FaTimes/></button>
                         </div>
 
                         <div style={styles.scrollContent}>
-                            {/* ✏️ EDIT SECTION */}
+                            {/* A. EDIT INFO */}
                             <div style={styles.section}>
-                                <label style={styles.label}>📝 EDIT DETAILS & PASSWORD</label>
-                                <input style={styles.input} value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} placeholder="Restaurant Name" />
-                                <input style={styles.input} value={editForm.username} onChange={e => setEditForm({...editForm, username: e.target.value})} placeholder="Username" />
-                                <input style={styles.input} value={editForm.phone} onChange={e => setEditForm({...editForm, phone: e.target.value})} placeholder="Phone Number" />
-                                <div style={{position:'relative'}}>
-                                    <FaKey style={{position:'absolute', top:12, right:12, color:'#666'}}/>
-                                    <input style={styles.input} value={editForm.password} onChange={e => setEditForm({...editForm, password: e.target.value})} placeholder="Enter New Password to Reset" type="text" />
-                                </div>
+                                <label style={styles.label}>📝 BASIC DETAILS</label>
+                                <input style={styles.input} value={selected.restaurantName} onChange={e => setSelected({...selected, restaurantName: e.target.value})} placeholder="Name" />
+                                <input style={styles.input} value={selected.username} onChange={e => setSelected({...selected, username: e.target.value})} placeholder="Username" />
+                                <input style={styles.input} value={selected.phoneNumber || ""} onChange={e => setSelected({...selected, phoneNumber: e.target.value})} placeholder="Phone" />
                                 <button onClick={handleUpdateClient} style={styles.updateBtn}>UPDATE INFO</button>
                             </div>
 
-                            {/* ⚡ SWITCHES */}
+                            {/* B. SAAS CONTROLS */}
                             <div style={styles.switchGrid}>
                                 <button onClick={() => toggleSwitch(selected._id, 'settings.menuActive', selected.settings?.menuActive)}
                                     style={{...styles.swBtn, background: selected.settings?.menuActive ? '#111' : '#450a0a', border: selected.settings?.menuActive ? '1px solid #333' : '1px solid #f00'}}>
@@ -319,18 +297,27 @@ const SuperAdmin = () => {
                                 </button>
                             </div>
 
-                            {/* 📝 NOTES */}
+                            {/* C. PASSWORD RESET */}
+                            <div style={styles.section}>
+                                <label style={styles.label}>🔑 RESET PASSWORD</label>
+                                <div style={{display:'flex', gap:10}}>
+                                    <input style={{...styles.input, marginBottom:0}} value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="New Password" type="text" />
+                                    <button onClick={handlePasswordReset} style={{...styles.saveBtn, width:'auto', padding:'0 20px'}}>SAVE</button>
+                                </div>
+                            </div>
+
+                            {/* D. NOTES */}
                             <div style={styles.section}>
                                 <label style={styles.label}>📓 PRIVATE NOTES</label>
                                 <textarea value={noteDraft} onChange={(e) => setNoteDraft(e.target.value)} style={styles.textarea}/>
                                 <button onClick={() => saveNotes(selected._id)} style={styles.saveBtn}>SAVE NOTES</button>
                             </div>
 
-                            {/* ⚠️ DANGER ZONE */}
+                            {/* E. DANGER ZONE */}
                             <div style={styles.dangerZone}>
                                 <label style={{...styles.label, color:'#ef4444'}}>⛔ DANGER ZONE</label>
                                 <div style={{display:'flex', gap:'10px'}}>
-                                    <button onClick={handleResetData} style={styles.dangerBtn}><FaRedo/> RESET ORDERS</button>
+                                    <button onClick={handleResetData} style={styles.dangerBtn}><FaRedo/> RESET DATA</button>
                                     <button onClick={handleDeleteClient} style={styles.dangerBtn}><FaTrash/> DELETE ACCOUNT</button>
                                 </div>
                             </div>

@@ -158,6 +158,8 @@ const WaiterDashboard = ({ bypassAuth = false, providedMongoId = null }) => {
         try {
             await axios.put(`${API_BASE}/orders/${orderId}`, { status: "Paid" });
             toast.success("Order Closed & Paid", { icon: '💰' });
+            // Ideally, we remove it from local state immediately to prevent double clicks
+            setOrders(prev => prev.filter(o => o._id !== orderId));
             forceSync(mongoId);
         } catch (e) { forceSync(mongoId); }
     };
@@ -319,12 +321,14 @@ const WaiterDashboard = ({ bypassAuth = false, providedMongoId = null }) => {
                                 </div>
 
                                 <div style={{display:'grid', gap:'10px'}}>
+                                    {/* 🛡️ STRICT WORKFLOW: Once served, "Serve" button disappears. Only "Paid" remains. */}
                                     {order.status !== 'Served' && order.status !== 'Paid' && (
                                         <button onClick={() => handleServe(order._id)} style={styles.serveBtn}>
                                             <FaCheckDouble /> MARK AS SERVED
                                         </button>
                                     )}
 
+                                    {/* 🛡️ FINAL STEP: Once Paid, it's done. */}
                                     {order.status === 'Served' && (
                                         <button onClick={() => handleMarkPaid(order._id)} style={{...styles.serveBtn, background:'#10b981'}}>
                                             <FaRupeeSign /> MARK PAID

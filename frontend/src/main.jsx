@@ -1,6 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
+import './index.css' // Ensure your global CSS is imported here
 import { Toaster } from 'react-hot-toast';
 
 // --- 🛠️ INDUSTRIAL SERVICE WORKER REGISTRATION ---

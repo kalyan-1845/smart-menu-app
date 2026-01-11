@@ -8,7 +8,7 @@ import InstallButton from "../components/InstallButton";
 import { 
     FaUtensils, FaVolumeUp, FaVolumeMute, FaCheck, FaBell, 
     FaSignOutAlt, FaSpinner, FaCheckDouble, FaConciergeBell,
-    FaLock, FaPrint, FaClock, FaImage, FaExclamationTriangle
+    FaLock, FaPrint, FaClock, FaImage, FaExclamationTriangle, FaWifi
 } from "react-icons/fa";
 import { toast } from "react-hot-toast";
 
@@ -27,6 +27,9 @@ const ChefDashboard = ({ bypassAuth = false, providedMongoId = null }) => {
     const [alertsActive, setAlertsActive] = useState(true); 
     const [activeTab, setActiveTab] = useState("orders");
     const [mongoId, setMongoId] = useState(providedMongoId);
+    
+    // 🆕 ONLINE STATUS
+    const [isOnline, setIsOnline] = useState(navigator.onLine);
     const socketRef = useRef(null);
 
     // ⏱️ Force update every minute to refresh "Late" status visuals
@@ -36,6 +39,18 @@ const ChefDashboard = ({ bypassAuth = false, providedMongoId = null }) => {
     const audioRef = useRef(new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"));
     const callSound = useRef(new Audio("https://assets.mixkit.co/active_storage/sfx/2190/2190-preview.mp3"));
 
+    // ✅ NETWORK LISTENERS
+    useEffect(() => {
+        const handleOnline = () => { setIsOnline(true); toast.success("Kitchen Online"); forceSync(mongoId); };
+        const handleOffline = () => { setIsOnline(false); toast.error("Connection Lost"); };
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+        return () => {
+            window.removeEventListener('online', handleOnline);
+            window.removeEventListener('offline', handleOffline);
+        };
+    }, [mongoId]);
+
     const getTimeAgo = (dateStr) => {
         const diff = Math.floor((Date.now() - new Date(dateStr)) / 60000);
         if (diff < 1) return 'Just now';
@@ -43,21 +58,25 @@ const ChefDashboard = ({ bypassAuth = false, providedMongoId = null }) => {
     };
 
     const forceSync = useCallback(async (rId) => {
-        if (!rId) return;
+        if (!rId || !navigator.onLine) return; // Stop if offline
         try {
             const [orderRes, dishRes] = await Promise.all([
                 axios.get(`${API_BASE}/orders/inbox?restaurantId=${rId}&t=${Date.now()}`),
                 axios.get(`${API_BASE}/dishes?restaurantId=${rId}&t=${Date.now()}`)
             ]);
             
-            const activeOrders = orderRes.data.filter(o => 
-                !["served", "completed", "archived"].includes(o.status.toLowerCase())
-            );
+            // 🛡️ STRICT FILTER: Only show Pending, Cooking, or Ready.
+            // Served/Paid/Cancelled orders disappear INSTANTLY.
+            const activeOrders = orderRes.data.filter(o => {
+                const s = o.status.toLowerCase();
+                return s === 'pending' || s === 'cooking' || s === 'ready';
+            });
 
             if (activeOrders.length > orders.length && !isMuted) {
                 audioRef.current.play().catch(()=>{});
             }
 
+            // Sort: Oldest orders FIRST (First In, First Out)
             setOrders(activeOrders.sort((a,b) => new Date(a.createdAt) - new Date(b.createdAt)));
             setDishes(dishRes.data || []);
         } catch (e) { console.error("Sync Failed"); }
@@ -123,7 +142,9 @@ const ChefDashboard = ({ bypassAuth = false, providedMongoId = null }) => {
     const updateStatus = async (order, nextStatus) => {
         try {
             await axios.put(`${API_BASE}/orders/${order._id}`, { status: nextStatus });
+            
             if (nextStatus === "served") {
+                // Remove immediately from UI for instant feedback
                 setOrders(prev => prev.filter(o => o._id !== order._id));
                 toast.success(`Table ${order.tableNum} Served`);
             } else {
@@ -171,6 +192,14 @@ const ChefDashboard = ({ bypassAuth = false, providedMongoId = null }) => {
 
     return (
         <div style={styles.dashboardContainer}>
+            
+            {/* 📶 OFFLINE BANNER */}
+            {!isOnline && (
+                <div style={styles.offlineBanner}>
+                    <FaWifi /> NO INTERNET • SYNC PAUSED
+                </div>
+            )}
+
             <div style={styles.alertWrapper}>
                 {serviceCalls.map((call, idx) => (
                     <div key={idx} style={styles.alertBanner} className="pulse-red">
@@ -206,7 +235,7 @@ const ChefDashboard = ({ bypassAuth = false, providedMongoId = null }) => {
                         orders.map((order) => {
                             // ⚠️ LATE ORDER LOGIC
                             const elapsedMinutes = Math.floor((Date.now() - new Date(order.createdAt)) / 60000);
-                            const isLate = elapsedMinutes > 10 && (order.status.toLowerCase() === 'pending' || order.status.toLowerCase() === 'cooking');
+                            const isLate = elapsedMinutes > 10;
 
                             return (
                                 <div key={order._id} style={{
@@ -268,7 +297,7 @@ const ChefDashboard = ({ bypassAuth = false, providedMongoId = null }) => {
 
                                     <div style={styles.actionContainer}>
                                         {order.status.toLowerCase() === "ready" ? (
-                                            <button onClick={() => updateStatus(order, "served")} style={{...styles.actionBtn, background:'#22c55e', color:'white'}}><FaCheckDouble /> MARK SERVED</button>
+                                            <button onClick={() => updateStatus(order, "served")} style={{...styles.actionBtn, background:'#22c55e', color:'white'}}><FaCheckDouble /> MARK PICKED UP</button>
                                         ) : (
                                             <button onClick={() => updateStatus(order, order.status.toLowerCase() === 'cooking' ? "ready" : "cooking")} style={{...styles.actionBtn, background: order.status.toLowerCase() === 'cooking' ? '#eab308' : '#f97316', color: order.status.toLowerCase() === 'cooking' ? 'black' : 'white'}}>
                                                 {order.status.toLowerCase() === "cooking" ? "READY FOR PICKUP" : "START PREPARING"}
@@ -325,6 +354,10 @@ const styles = {
     tabButton: { flex: 1, padding: '16px', borderRadius: '15px', border: '1px solid #222', color: 'white', fontWeight: '900', fontSize: '11px' },
     grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '12px' },
     card: { background: '#0a0a0a', borderRadius: '24px', border: '1px solid #111', display: 'flex', flexDirection: 'column', overflow:'hidden', transition:'all 0.3s ease' },
+    
+    // 📶 NEW OFFLINE BANNER
+    offlineBanner: { background: '#ef4444', color: 'white', fontWeight: '900', fontSize: '12px', textAlign: 'center', padding: '8px', marginBottom: '10px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' },
+
     urgentBanner: { background: '#ef4444', color: 'white', padding: '8px', textAlign: 'center', fontWeight: '900', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', animation: 'pulse-red 1s infinite alternate' },
     cardHeader: { padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom:'1px solid #111', background:'#111' },
     statusBadge: { padding: '6px 12px', borderRadius: '8px', fontSize: '10px', fontWeight: '900' },

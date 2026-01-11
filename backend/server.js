@@ -16,98 +16,58 @@ import broadcastRoutes from "./routes/broadcastRoutes.js";
 
 const app = express();
 
-// ✅ TRUST PROXY (Render/Railway OK)
+// ✅ TRUST PROXY (Critical for Render/Railway)
 app.set("trust proxy", 1);
 
 const httpServer = createServer(app);
 
-// ✅ KEEP-ALIVE (OK)
+// ✅ KEEP-ALIVE (Prevents random disconnects)
 httpServer.keepAliveTimeout = 120 * 1000;
 httpServer.headersTimeout = 120 * 1000;
 
 app.use(compression());
 
-/* =========================================================
-   ✅✅ CORS FIX (MAIN FIX)
-   - allow Netlify origin
-   - allow Authorization header (very important)
-   - allow OPTIONS preflight
-   ========================================================= */
-const allowedOrigins = [
-  "http://localhost:5173",
-  "http://localhost:3000",
-  "https://smartmenuss.netlify.app",
-  "https://694915c413d9f40008f38924--smartmenuss.netlify.app",
-];
+// ☢️ NUCLEAR CORS: Allow EVERYTHING (Fixes mobile/network handshake issues)
+app.use(cors({
+  origin: true, // Reflects the request origin
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+}));
 
-app.use(
-  cors({
-    origin: function (origin, callback) {
-      // allow requests with no origin (like curl/postman)
-      if (!origin) return callback(null, true);
-
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      } else {
-        return callback(new Error("❌ Not allowed by CORS: " + origin));
-      }
-    },
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-    exposedHeaders: ["Authorization"],
-  })
-);
-
-// ✅ Preflight MUST succeed
-app.options("*", cors());
-
-// ✅ Always respond to OPTIONS fast (avoid rate-limit blocking OPTIONS)
-app.use((req, res, next) => {
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(204);
-  }
-  next();
-});
+// ✅ Force OPTIONS to always succeed immediately
+app.options("*", (req, res) => res.sendStatus(200));
 
 app.use(express.json({ limit: "10mb" }));
 
-/* =========================================================
-   🛡️ RATE LIMITER
-   ========================================================= */
+// 🛡️ Rate Limiter
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 3000,
+  max: 3000, // High limit for busy restaurants
   standardHeaders: true,
   legacyHeaders: false,
 });
-
 app.use("/api/", limiter);
 
-/* =========================================================
-   🔌 SOCKET.IO
-   ========================================================= */
+// 🔌 SOCKET.IO SETUP
 const io = new Server(httpServer, {
   cors: {
-    origin: allowedOrigins,
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    credentials: true,
+    origin: "*", // Allow all origins for sockets
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true
   },
   transports: ["polling", "websocket"],
   pingTimeout: 60000,
   pingInterval: 25000,
 });
 
-// attach io into req
 app.use((req, res, next) => {
   req.io = io;
   next();
 });
 
-/* =========================================================
-   --- 🏗️ DATABASE CONNECTION ---
-   ========================================================= */
+// --- 🏗️ DATABASE CONNECTION ---
 mongoose
   .connect(process.env.MONGO_URI, {
     maxPoolSize: 50,
@@ -119,47 +79,37 @@ mongoose
   .then(() => console.log("✅ MongoDB Connected"))
   .catch((err) => console.error("❌ MongoDB Error:", err));
 
-/* =========================================================
-   --- FIXED INLINE ROUTES ---
-   ========================================================= */
+// --- 🛠️ INLINE ROUTES (Direct Fixes) ---
 
+// 1. UPDATE STATUS
 app.put("/api/orders/:id/status", async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
-
+    
+    // Dynamic Model Loading
     let Order;
-    try {
-      Order = mongoose.model("Order");
-    } catch {
-      Order = mongoose.model(
-        "Order",
-        new mongoose.Schema(
-          { status: String, restaurantId: String },
-          { strict: false }
-        )
-      );
-    }
+    try { Order = mongoose.model("Order"); } 
+    catch { Order = mongoose.model("Order", new mongoose.Schema({}, { strict: false })); }
 
     const order = await Order.findByIdAndUpdate(id, { status }, { new: true });
 
     if (order) {
       io.to(order.restaurantId).emit("new-order", order);
-      if (status === "Ready") {
-        io.to(order.restaurantId).emit("chef-ready-alert", order);
-      }
+      if (status === "Ready") io.to(order.restaurantId).emit("chef-ready-alert", order);
     }
-
     res.json(order);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
+// 2. STEALTH EMAIL
 app.post("/api/reports/stealth-send", async (req, res) => {
   res.json({ success: true, message: "Report Queued" });
 });
 
+// 3. MARK DOWNLOADED
 app.put("/api/orders/mark-downloaded", async (req, res) => {
   try {
     const { restaurantId } = req.body;
@@ -177,42 +127,30 @@ app.put("/api/orders/mark-downloaded", async (req, res) => {
   }
 });
 
-/* =========================================================
-   --- STANDARD ROUTES ---
-   ========================================================= */
+// --- STANDARD ROUTES ---
 app.use("/api/auth", authRoutes);
 app.use("/api/dishes", dishRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/superadmin", superAdminRoutes);
 app.use("/api/broadcast", broadcastRoutes);
 
-app.get("/", (req, res) => {
-  res.send("Kovixa API v8 Running ✅");
-});
+app.get("/", (req, res) => res.send("Kovixa API v9 (Stable) Running ✅"));
 
-/* =========================================================
-   --- SOCKET EVENTS ---
-   ========================================================= */
+// --- SOCKET EVENTS ---
 io.on("connection", (socket) => {
   const rid = socket.handshake.query.restaurantId;
   if (rid) socket.join(rid);
 
-  socket.on("join-restaurant", (restaurantId) => socket.join(restaurantId));
-
+  socket.on("join-restaurant", (id) => socket.join(id));
   socket.on("call-waiter", (data) => {
     if (data.restaurantId) io.to(data.restaurantId).emit("new-waiter-call", data);
   });
-
   socket.on("new-order", (data) => {
     if (data.restaurantId) io.to(data.restaurantId).emit("new-order", data);
   });
 });
 
-/* =========================================================
-   START SERVER
-   ========================================================= */
 const PORT = process.env.PORT || 5000;
-
 httpServer.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
