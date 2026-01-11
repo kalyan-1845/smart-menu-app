@@ -1,29 +1,33 @@
 import React, { useState, useEffect } from "react";
 import { FaRocket, FaTimes, FaDownload } from "react-icons/fa";
+import { useLocation, useParams } from "react-router-dom";
 
 const InstallButton = () => {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [isVisible, setIsVisible] = useState(false);
+  const location = useLocation();
+  const { id } = useParams(); // Get Restaurant ID if available
 
   useEffect(() => {
-    // 🕵️‍♂️ SMART LOGIC: DETECT QR CODE VS MANUAL ENTRY
+    // 🕵️‍♂️ SMART LOGIC: DETECT QR CODE VS REPEAT USER
     const path = window.location.pathname;
-    const parts = path.split('/').filter(p => p !== ""); // Remove empty strings
+    const parts = path.split('/').filter(p => p !== "");
 
-    // 1. If scanning a QR (e.g., /menu/restaurantID/table5), parts.length is 3.
-    //    We HIDE the popup because they are just eating once.
+    // 1. HIDE for Customers eating once (QR Scans)
+    //    Format: /menu/:id/:table
     const isQRScan = path.includes('/menu/') && parts.length >= 3;
 
-    // 2. If entering manually (e.g., /admin, /chef, /menu/restaurantID), we SHOW it.
+    // 2. SHOW for Staff (Admin, Chef, Waiter)
     if (isQRScan) {
       console.log("QR Scan detected - Suppressing Install Prompt");
       return; 
     }
 
+    // 3. Listen for browser install event
     const handler = (e) => {
       e.preventDefault(); 
       setDeferredPrompt(e);
-      // Wait 3 seconds, then show popup
+      // Wait 3 seconds so it doesn't annoy them immediately
       setTimeout(() => setIsVisible(true), 3000);
     };
 
@@ -33,7 +37,26 @@ const InstallButton = () => {
 
   const handleInstallClick = async () => {
     if (!deferredPrompt) return;
+
+    // 🚀 CRITICAL STEP: SAVE CONTEXT BEFORE INSTALLING
+    // This ensures the installed app opens to the right screen immediately.
+    const path = location.pathname;
+    
+    if (id) {
+        localStorage.setItem("kovixa_last_id", id);
+        
+        if (path.includes("/chef") || path.includes("/kitchen")) {
+            localStorage.setItem("kovixa_last_role", "chef");
+        } else if (path.includes("/waiter")) {
+            localStorage.setItem("kovixa_last_role", "waiter");
+        } else if (path.includes("/admin")) {
+            localStorage.setItem("kovixa_last_role", "owner");
+        }
+    }
+
+    // Show the browser prompt
     deferredPrompt.prompt();
+    
     const { outcome } = await deferredPrompt.userChoice;
     if (outcome === "accepted") {
       setDeferredPrompt(null);
@@ -57,7 +80,11 @@ const InstallButton = () => {
           </div>
           <div style={{ flex: 1 }}>
             <h3 style={styles.title}>Install App</h3>
-            <p style={styles.text}>Add to Home Screen for fullscreen & speed.</p>
+            <p style={styles.text}>
+                {location.pathname.includes('chef') ? "Get the Kitchen Display App" : 
+                 location.pathname.includes('waiter') ? "Get the Waiter App" : 
+                 "Add to Home Screen for fullscreen access."}
+            </p>
           </div>
         </div>
 

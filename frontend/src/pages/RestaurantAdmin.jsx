@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import axios from "axios";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas'; 
 import autoTable from 'jspdf-autotable';
@@ -13,7 +13,7 @@ import {
     FaDownload, FaQrcode, FaPlus, FaHistory, FaSpinner, FaLock, FaPrint, 
     FaCheck, FaFire, FaConciergeBell, FaRupeeSign, FaUserTie, FaCreditCard, 
     FaMoneyBillWave, FaEye, FaBroom, FaBullhorn, FaClock, FaCalendarDay, 
-    FaCalendarAlt, FaChartLine, FaEnvelope, FaTimesCircle, FaBan, FaWifi, FaSave
+    FaCalendarAlt, FaChartLine, FaEnvelope, FaTimesCircle, FaBan, FaWifi, FaSave, FaLink
 } from "react-icons/fa";
 import { toast } from "react-hot-toast";
 
@@ -40,21 +40,28 @@ const RestaurantAdmin = () => {
     const SERVER_URL = "https://smart-menu-app-production.up.railway.app";
     const API_BASE = `${SERVER_URL}/api`;
     const publicMenuUrl = `${window.location.origin}/menu/${id}`;
+    
+    // Links for Staff
+    const chefLink = `${window.location.origin}/${id}/chef`;
+    const waiterLink = `${window.location.origin}/${id}/waiter`;
 
     // --- 1. STATE MANAGEMENT ---
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [password, setPassword] = useState("");
-    const [activeTab, setActiveTab] = useState("orders");
     
-    // Data State
+    // ✅ SMART TAB SYSTEM
+    const [searchParams, setSearchParams] = useSearchParams();
+    const [activeTab, setActiveTab] = useState(() => {
+        return searchParams.get("tab") || localStorage.getItem(`last_tab_${id}`) || "orders";
+    });
+
     const [restaurantName, setRestaurantName] = useState(id);
     const [dishes, setDishes] = useState([]);
     const [inboxOrders, setInboxOrders] = useState([]);
     const [isPro, setIsPro] = useState(false);
     const [mongoId, setMongoId] = useState(null); 
     
-    // UI State
     const [newItem, setNewItem] = useState({ name: "", price: "", image: "", category: "Starters (Veg)" });
     const [isCustomCategory, setIsCustomCategory] = useState(false);
     const [customCategory, setCustomCategory] = useState("");
@@ -62,6 +69,12 @@ const RestaurantAdmin = () => {
     const [broadcastMessage, setBroadcastMessage] = useState("");
     const [qrModalOrder, setQrModalOrder] = useState(null); 
     const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+    // --- TAB PERSISTENCE ---
+    useEffect(() => {
+        localStorage.setItem(`last_tab_${id}`, activeTab);
+        setSearchParams({ tab: activeTab }, { replace: true });
+    }, [activeTab, id, setSearchParams]);
 
     // --- 2. NETWORK & SYNC LOGIC ---
     useEffect(() => {
@@ -200,7 +213,7 @@ const RestaurantAdmin = () => {
         updateOrderStatus(orderId, 'Cancelled');
     };
 
-    // --- 5. HELPERS ---
+    // --- 5. HELPERS & RENDER ---
     const statsData = useMemo(() => {
         const today = new Date().toLocaleDateString();
         const currentMonth = new Date().getMonth();
@@ -491,7 +504,7 @@ const RestaurantAdmin = () => {
                 {activeTab === "chef" && <ChefDashboard bypassAuth={true} providedMongoId={mongoId} />}
                 {activeTab === "waiter" && <WaiterDashboard bypassAuth={true} providedMongoId={mongoId} />}
 
-                {/* BUSINESS TOOLS */}
+                {/* BUSINESS TOOLS - UPDATED WITH STAFF LINKS */}
                 {activeTab === "tools" && (
                      <div className="glass-card">
                         <h2 style={{ fontSize: '12px', fontWeight: 900, color: '#FF9933', marginBottom: '15px' }}><FaQrcode /> QR GENERATOR</h2>
@@ -499,7 +512,29 @@ const RestaurantAdmin = () => {
                             <input type="number" className="input-dark" value={qrRange.start} onChange={e => setQrRange({ ...qrRange, start: e.target.value })} placeholder="Start" />
                             <input type="number" className="input-dark" value={qrRange.end} onChange={e => setQrRange({ ...qrRange, end: e.target.value })} placeholder="End" />
                         </div>
-                        <button onClick={generatePrintableQRs} className="btn-primary"><FaQrcode /> PRINT STICKERS</button>
+                        <button onClick={generatePrintableQRs} className="btn-primary" style={{marginBottom: 20}}><FaQrcode /> PRINT STICKERS</button>
+
+                        <hr style={{borderColor: 'rgba(255,255,255,0.1)', margin: '20px 0'}} />
+
+                        <h2 style={{ fontSize: '12px', fontWeight: 900, color: '#a855f7', marginBottom: '15px' }}><FaLink /> STAFF APP LINKS</h2>
+                        
+                        {/* CHEF LINK */}
+                        <div className="menu-link-box" style={{marginBottom: 10}}>
+                            <div>
+                                <span style={{display:'block', fontSize: 10, color: '#888', fontWeight: 'bold'}}>CHEF DASHBOARD</span>
+                                <span className="link-text" style={{color: '#f97316'}}>{chefLink}</span>
+                            </div>
+                            <button onClick={() => { navigator.clipboard.writeText(chefLink); toast.success("Chef Link Copied!"); }} className="btn-glass" style={{ padding: '8px' }}><FaCopy /></button>
+                        </div>
+
+                        {/* WAITER LINK */}
+                        <div className="menu-link-box">
+                            <div>
+                                <span style={{display:'block', fontSize: 10, color: '#888', fontWeight: 'bold'}}>WAITER DASHBOARD</span>
+                                <span className="link-text" style={{color: '#22c55e'}}>{waiterLink}</span>
+                            </div>
+                            <button onClick={() => { navigator.clipboard.writeText(waiterLink); toast.success("Waiter Link Copied!"); }} className="btn-glass" style={{ padding: '8px' }}><FaCopy /></button>
+                        </div>
                     </div>
                 )}
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import axios from "axios";
 
 // --- EXISTING IMPORTS ---
@@ -22,7 +22,7 @@ import WaiterDashboard from "./pages/WaiterDashboard";
 
 // ✅ NEW IMPORTS
 import RoleLogin from "./pages/RoleLogin"; 
-import ProjectFlyer from "./pages/ProjectFlyer"; // 👈 IMPORTED FLYER
+import ProjectFlyer from "./pages/ProjectFlyer"; 
 
 const API_BASE = "https://smart-menu-app-production.up.railway.app/api";
 
@@ -30,6 +30,32 @@ const ScrollToTop = () => {
   const { pathname } = useLocation();
   useEffect(() => { window.scrollTo(0, 0); }, [pathname]);
   return null;
+};
+
+// --- 🚦 SMART ROUTER COMPONENT ---
+// This acts as the "Traffic Cop" when the app opens.
+// It sends Chefs to the kitchen, Waiters to tables, and Owners to the office.
+const SmartHome = () => {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    // Check if the user has a saved role from a previous login
+    const lastRole = localStorage.getItem("kovixa_last_role");
+    const lastId = localStorage.getItem("kovixa_last_id");
+
+    if (lastId) {
+      if (lastRole === "owner") {
+        navigate(`/${lastId}/admin`, { replace: true });
+      } else if (lastRole === "chef") {
+        navigate(`/${lastId}/chef`, { replace: true });
+      } else if (lastRole === "waiter") {
+        navigate(`/${lastId}/waiter`, { replace: true });
+      }
+    }
+    // If no role is found, stay on Landing Page
+  }, [navigate]);
+
+  return <LandingPage />;
 };
 
 const ProtectedSuperAdmin = ({ children }) => {
@@ -129,15 +155,12 @@ function App() {
       <GlobalStyles />
       <ScrollToTop />
       <Routes>
-        {/* --- PUBLIC PAGES --- */}
-        <Route path="/" element={<LandingPage />} /> 
+        {/* --- 🚦 PUBLIC & SMART HOME --- */}
+        {/* If installed as an App, this decides where the user goes */}
+        <Route path="/" element={<SmartHome />} /> 
         
-        {/* ✅ ADDED PROJECT FLYER ROUTE HERE */}
         <Route path="/ProjectFlyer" element={<ProjectFlyer />} />
-        
-        {/* ✅ ROLE LOGIN PORTAL */}
         <Route path="/portal" element={<RoleLogin />} />
-
         <Route path="/login" element={<OwnerLogin />} />
         <Route path="/register" element={<Register />} />
         <Route path="/terms" element={<Terms />} />
@@ -189,13 +212,18 @@ function App() {
         {/* --- TRACKING FLOW --- */}
         <Route path="/track/:id" element={<div className="page-transition"><OrderTracker /></div>} />
         
-        {/* --- ADMIN & STAFF --- */}
+        {/* --- 🏢 ADMIN & STAFF (SEPARATE APP ROUTES) --- */}
         <Route path="/super-login" element={<SuperLogin />} />
         <Route path="/superadmin" element={<ProtectedSuperAdmin><SuperAdmin /></ProtectedSuperAdmin>} />
         
+        {/* 👑 Owner App (Full Access) */}
         <Route path="/:id/admin" element={<RestaurantAdmin />} />
+        
+        {/* 👨‍🍳 Chef App (Kitchen Only) */}
         <Route path="/:id/chef" element={<ChefDashboard />} />
-        <Route path="/:id/kitchen" element={<ChefDashboard />} />
+        <Route path="/:id/kitchen" element={<ChefDashboard />} /> {/* Alias */}
+        
+        {/* 🤵 Waiter App (Service Only) */}
         <Route path="/:id/waiter" element={<WaiterDashboard />} />
 
         {/* --- 404 PAGE --- */}
