@@ -19,7 +19,7 @@ const SuperAdmin = () => {
     const [loginLoading, setLoginLoading] = useState(false);
 
     const [clients, setClients] = useState([]);
-    const [reviews, setReviews] = useState([]); 
+    const [reviews, setReviews] = useState([]); // ⭐ NEW: Reviews State
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
     
@@ -48,7 +48,7 @@ const SuperAdmin = () => {
         return () => socket.disconnect();
     }, [token]);
 
-    // --- LOGIN ---
+    // --- 🔐 LOGIN LOGIC ---
     const handleLogin = async (e) => {
         e.preventDefault();
         setLoginLoading(true);
@@ -68,6 +68,7 @@ const SuperAdmin = () => {
         if (!token) return;
         const start = Date.now();
         try {
+            // ✅ Fetching Reviews here
             const [clientRes, sysRes, pulseRes, reviewRes] = await Promise.all([
                 axios.get(`${API_URL}/api/superadmin/ceo-sync`, { headers: { Authorization: `Bearer ${token}` } }),
                 axios.get(`${API_URL}/api/superadmin/system-status`),
@@ -79,7 +80,7 @@ const SuperAdmin = () => {
             setBroadcastMsg(sysRes.data.message || "");
             setMaintenanceMode(sysRes.data.maintenance || false);
             setGlobalBanner(sysRes.data.globalBanner || "");
-            setReviews(reviewRes.data);
+            setReviews(reviewRes.data); // ⭐ Save Reviews
             
             const latency = Date.now() - start;
             setServerPulse({ ...pulseRes.data, latency: `${latency}ms` });
@@ -116,6 +117,7 @@ const SuperAdmin = () => {
         } catch (e) { toast.error("Failed"); }
     };
 
+    // Standard CRUD
     const handleRegister = async () => { try { await axios.post(`${API_URL}/api/auth/register`, createForm); toast.success("Created! 🚀"); setShowCreateModal(false); refreshData(); } catch(e){ toast.error("Failed"); } };
     const handleUpdateClient = async () => { try { await axios.put(`${API_URL}/api/superadmin/client/${selected._id}`, selected, { headers: { Authorization: `Bearer ${token}` } }); toast.success("Updated"); refreshData(); } catch(e){} };
     const handlePasswordReset = async () => { try { await axios.put(`${API_URL}/api/superadmin/client/${selected._id}`, { password: newPassword }, { headers: { Authorization: `Bearer ${token}` } }); toast.success("Reset 🔒"); setNewPassword(""); } catch(e){} };
@@ -135,7 +137,9 @@ const SuperAdmin = () => {
         };
     }, [clients]);
 
+    // 🔐 SHOW LOGIN SCREEN IF NO TOKEN
     if (!token) return <LoginScreen secret={secret} setSecret={setSecret} handleLogin={handleLogin} loading={loginLoading} />;
+    
     if (loading) return <div style={styles.center}><FaShieldAlt className="spin" size={80} color="#f97316"/></div>;
 
     return (
@@ -214,7 +218,7 @@ const SuperAdmin = () => {
 
                 {/* RIGHT: SIDEBAR */}
                 <div style={{display:'flex', flexDirection:'column', gap:25, width: 380}}>
-                    {/* 🕵️‍♂️ ORDERS */}
+                    {/* 🕵️‍♂️ LIVE ORDERS */}
                     <div style={styles.spyglass}>
                         <h3 style={styles.sideTitle}><FaEye/> LIVE ORDERS FEED</h3>
                         <div style={styles.feedContainer}>
@@ -224,9 +228,9 @@ const SuperAdmin = () => {
                         </div>
                     </div>
 
-                    {/* ⭐ REVIEWS */}
+                    {/* ⭐ REVIEWS (PUBLIC FEEDBACK) */}
                     <div style={styles.spyglass}>
-                        <h3 style={styles.sideTitle}><FaCommentDots/> LATEST REVIEWS</h3>
+                        <h3 style={styles.sideTitle}><FaCommentDots/> CUSTOMER FEEDBACK</h3>
                         <div style={styles.feedContainer}>
                             {reviews.length === 0 ? <p style={{fontSize:14, color:'#666', textAlign:'center', marginTop:20}}>No reviews yet.</p> : 
                                 reviews.map((r) => (
