@@ -5,8 +5,8 @@ import axios from "axios";
 import { toast } from "react-hot-toast";
 import InstallButton from "../components/InstallButton";
 
-// Ensure this matches your actual backend URL
-const API_URL = "smart-menu-app-production.up.railway.app"; 
+// ✅ FIX: Added 'https://' to the URL
+const API_URL = "https://smart-menu-app-production.up.railway.app"; 
 
 const SuperLogin = () => {
   const [secret, setSecret] = useState("");
@@ -18,7 +18,7 @@ const SuperLogin = () => {
     setLoading(true);
 
     try {
-      // 🚀 SEND PASSWORD TO SERVER TO GET REAL TOKEN
+      // 🚀 SEND PASSWORD TO SERVER
       const res = await axios.post(`${API_URL}/api/superadmin/login`, { 
         password: secret 
       });

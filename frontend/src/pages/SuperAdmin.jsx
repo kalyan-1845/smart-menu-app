@@ -113,7 +113,9 @@ const SuperAdmin = () => {
 
     const toggleSwitch = async (id, field, currentVal) => {
         try {
+            // Optimistic Update
             setSelected(prev => ({ ...prev, settings: { ...prev.settings, [field.split('.')[1]]: !currentVal } })); 
+            
             await axios.put(`${API_URL}/api/superadmin/control/${id}`, { field, value: !currentVal },
                 { headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` } }
             );
@@ -127,8 +129,12 @@ const SuperAdmin = () => {
             const res = await axios.get(`${API_URL}/api/superadmin/ghost-login/${id}`, {
                 headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` }
             });
+            
+            // ✅ Save Owner Token & Redirect
             localStorage.setItem(`owner_token_${username}`, res.data.token);
             localStorage.setItem(`owner_id_${username}`, res.data.ownerId); 
+            
+            // Open in new tab so you don't lose admin access
             window.open(`/${username}/admin`, '_blank');
             toast.success(`Accessing ${username}...`);
         } catch (e) { toast.error("God Mode Failed"); }

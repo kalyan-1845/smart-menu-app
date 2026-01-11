@@ -1,17 +1,16 @@
-import mongoose from 'mongoose';
+import mongoose from "mongoose";
 
 const settingsSchema = new mongoose.Schema({
-    maintenanceMode: { type: Boolean, default: false },
-    broadcastMessage: { type: String, default: "" }
+  maintenanceMode: { type: Boolean, default: false },
+  broadcastMessage: { type: String, default: "" },
 });
 
-// Helper to ensure only one settings document exists
-settingsSchema.statics.getSettings = async function() {
-    let settings = await this.findOne();
-    if (!settings) {
-        settings = await this.create({ maintenanceMode: false });
-    }
-    return settings;
+// Helper to always get the single settings document
+settingsSchema.statics.getSettings = async function () {
+  const settings = await this.findOne();
+  if (settings) return settings;
+  return await this.create({});
 };
 
-export default mongoose.models.Settings || mongoose.model('Settings', settingsSchema);
+const Settings = mongoose.model("Settings", settingsSchema);
+export default Settings;
