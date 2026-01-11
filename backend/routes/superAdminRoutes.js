@@ -1,5 +1,8 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
+import webpush from 'web-push'; 
+import mongoose from 'mongoose';
+import os from 'os'; 
 import Owner from '../models/Owner.js';
 import Order from '../models/Order.js'; 
 import Settings from '../models/Settings.js'; 
@@ -9,6 +12,40 @@ const router = express.Router();
 // 🔐 MASTER KEY
 const MASTER_PASSWORD = "vasudevsrinivas"; 
 const JWT_SECRET = process.env.JWT_SECRET || "super_secret_key";
+
+// --- 📲 PUSH CONFIG ---
+const publicKey = process.env.VAPID_PUBLIC_KEY;
+const privateKey = process.env.VAPID_PRIVATE_KEY;
+if (publicKey && privateKey) {
+    try { webpush.setVapidDetails('mailto:bitebox.web@gmail.com', publicKey, privateKey); } 
+    catch (err) { console.error("VAPID Error:", err.message); }
+}
+
+// =========================================================
+// 🌍 PUBLIC ROUTES (MUST BE AT TOP TO FIX 404)
+// =========================================================
+
+// ✅ 1. MAINTENANCE STATUS (Fixed Position)
+router.get('/maintenance-status', async (req, res) => {
+    try {
+        const settings = await Settings.getSettings();
+        res.json({ enabled: settings.maintenanceMode || false });
+    } catch (e) { res.json({ enabled: false }); }
+});
+
+// ✅ 2. SERVER PULSE
+router.get('/server-pulse', async (req, res) => {
+    try {
+        const uptime = os.uptime();
+        const dbStatus = (global.mongoose && global.mongoose.connection.readyState === 1) ? "Connected" : "Unknown"; 
+        const memory = process.memoryUsage().heapUsed / 1024 / 1024;
+        res.json({ 
+            uptime: `${Math.floor(uptime / 3600)}h`, 
+            dbStatus, 
+            memory: `${Math.round(memory)}MB` 
+        });
+    } catch (e) { res.json({ uptime: "0h", dbStatus: "Error", memory: "0MB" }); }
+});
 
 // --- MIDDLEWARE ---
 const protect = (req, res, next) => {
@@ -22,8 +59,10 @@ const protect = (req, res, next) => {
 };
 
 // =========================================================
-// 🔑 1. LOGIN (Required for Frontend)
+// 🔒 PROTECTED ROUTES
 // =========================================================
+
+// 3. LOGIN
 router.post('/login', (req, res) => {
     if (req.body.password === MASTER_PASSWORD) {
         const token = jwt.sign({ role: 'superadmin' }, JWT_SECRET, { expiresIn: '7d' });
@@ -32,117 +71,155 @@ router.post('/login', (req, res) => {
     return res.status(401).json({ success: false, message: "Invalid Password" });
 });
 
-// =========================================================
-// 🔄 2. CEO SYNC (Real Revenue & Activity Stats)
-// =========================================================
+// 4. CEO SYNC (With Revenue & Ratings)
 router.get('/ceo-sync', protect, async (req, res) => {
     try {
         const clients = await Owner.find({}).select('-password').sort({ createdAt: -1 }).lean();
-        
-        // Date Logic for "Monthly" stats
         const now = new Date();
         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
         const detailedClients = await Promise.all(clients.map(async (c) => {
-            // A. REAL TOTAL REVENUE (All time, non-cancelled orders)
             const totalRev = await Order.aggregate([
                 { $match: { restaurantId: c._id, status: { $ne: "Cancelled" } } },
                 { $group: { _id: null, total: { $sum: "$totalAmount" } } }
             ]);
-
-            // B. REAL MONTHLY REVENUE (Since 1st of this month)
             const monthRev = await Order.aggregate([
                 { $match: { restaurantId: c._id, createdAt: { $gte: startOfMonth }, status: { $ne: "Cancelled" } } },
                 { $group: { _id: null, total: { $sum: "$totalAmount" } } }
             ]);
+            
+            // ⭐ Calc Average Rating
+            const ratingStats = await Order.aggregate([
+                { $match: { restaurantId: c._id, rating: { $exists: true } } },
+                { $group: { _id: null, avg: { $avg: "$rating" }, count: { $sum: 1 } } }
+            ]);
 
-            // C. ACTIVITY STATS
             const lastActiveMs = c.updatedAt ? (Date.now() - new Date(c.updatedAt)) : 0;
             const daysSinceActive = Math.floor(lastActiveMs / (1000 * 60 * 60 * 24));
             
             let health = "🟢 Healthy";
-            if (c.settings && !c.settings.menuActive) health = "🔴 Suspended"; // Kill switch active
-            else if (daysSinceActive > 7) health = "🟡 Idle"; // No updates for 7 days
+            if (c.settings && !c.settings.menuActive) health = "🔴 Suspended"; 
+            else if (daysSinceActive > 7) health = "🟡 Idle"; 
 
             return { 
                 ...c, 
                 health, 
                 totalRevenue: totalRev[0]?.total || 0,
                 monthlyRevenue: monthRev[0]?.total || 0,
-                daysActive: daysSinceActive,
+                rating: ratingStats[0]?.avg?.toFixed(1) || "N/A",
+                reviewCount: ratingStats[0]?.count || 0,
                 lastActiveStr: daysSinceActive === 0 ? "Today" : `${daysSinceActive}d ago`
             };
         }));
-
         res.json(detailedClients);
-    } catch (error) { 
-        console.error(error);
-        res.status(500).json({ message: "Sync Failed" }); 
-    }
+    } catch (error) { res.status(500).json({ message: "Sync Failed" }); }
 });
 
-// =========================================================
-// 🌍 3. SYSTEM BROADCAST & MAINTENANCE
-// =========================================================
+// ⭐ 5. REVIEWS FEED (New Endpoint)
+router.get('/reviews', protect, async (req, res) => {
+    try {
+        // Fetch last 50 rated orders
+        const reviews = await Order.find({ rating: { $exists: true, $ne: null } })
+            .sort({ createdAt: -1 })
+            .limit(50)
+            .lean();
+
+        // Map restaurant names (Optimization: could use .populate if schemas linked, manual lookup safer here)
+        const ownerIds = [...new Set(reviews.map(r => r.restaurantId))];
+        const owners = await Owner.find({ _id: { $in: ownerIds } }).select('restaurantName');
+        const ownerMap = {};
+        owners.forEach(o => ownerMap[o._id.toString()] = o.restaurantName);
+
+        const processed = reviews.map(r => ({
+            _id: r._id,
+            restaurantName: ownerMap[r.restaurantId.toString()] || "Unknown",
+            rating: r.rating,
+            feedback: r.feedback || r.review || "No comment", // Adapts to your Order schema
+            date: r.createdAt
+        }));
+
+        res.json(processed);
+    } catch (e) { res.status(500).json({ message: "Reviews Failed" }); }
+});
+
+// 6. SYSTEM BROADCAST
 router.get('/system-status', async (req, res) => {
     try {
         const settings = await Settings.getSettings();
-        res.json({ message: settings.broadcastMessage || "", maintenance: settings.maintenanceMode || false });
+        res.json({ 
+            message: settings.broadcastMessage || "", 
+            maintenance: settings.maintenanceMode || false,
+            globalBanner: settings.globalBanner || ""
+        });
     } catch (e) { res.json({ message: "", maintenance: false }); }
 });
 
 router.put('/system-status', protect, async (req, res) => {
     try {
-        const { message, maintenance } = req.body;
+        const { message, maintenance, globalBanner } = req.body;
         const settings = await Settings.getSettings();
+        const oldMessage = settings.broadcastMessage;
+        
         settings.broadcastMessage = message;
         settings.maintenanceMode = maintenance;
+        settings.globalBanner = globalBanner; 
         await settings.save();
+
+        if (message && message !== oldMessage && publicKey && privateKey) {
+            const allOwners = await Owner.find({ "pushSubscriptions.0": { $exists: true } });
+            const payload = JSON.stringify({ title: "📢 CEO Announcement", body: message, url: "/" });
+            allOwners.forEach(owner => {
+                owner.pushSubscriptions.forEach(sub => webpush.sendNotification(sub, payload).catch(e => {}));
+            });
+        }
         res.json({ success: true });
     } catch (e) { res.status(500).json({ message: "Update Failed" }); }
 });
 
-// =========================================================
-// 👻 4. GHOST LOGIN (God Mode)
-// =========================================================
-router.get('/ghost-login/:id', protect, async (req, res) => {
+// 7. TIME WARP
+router.put('/client/:id/extend', protect, async (req, res) => {
     try {
+        const { days } = req.body;
         const user = await Owner.findById(req.params.id);
         if (!user) return res.status(404).json({ message: "User not found" });
-        // Generate a valid token for THIS user
-        const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: '1h' });
-        res.json({ token, ownerId: user._id, username: user.username });
-    } catch (e) { res.status(500).json({ message: "Ghost Protocol Error" }); }
+
+        let baseDate = new Date(user.trialEndsAt);
+        if (baseDate < new Date()) baseDate = new Date(); 
+
+        const newExpiry = new Date(baseDate.setDate(baseDate.getDate() + parseInt(days)));
+        
+        if (days < -100) {
+             const yesterday = new Date();
+             yesterday.setDate(yesterday.getDate() - 1);
+             user.trialEndsAt = yesterday;
+        } else {
+             user.trialEndsAt = newExpiry;
+        }
+        user.isPro = user.trialEndsAt > new Date();
+        await user.save();
+        res.json({ success: true, trialEndsAt: user.trialEndsAt, isPro: user.isPro });
+    } catch (e) { res.status(500).json({ message: "Time Warp Failed" }); }
 });
 
-// =========================================================
-// 💀 5. KILL SWITCH & CONTROLS
-// =========================================================
+// 8. CRUD
+router.get('/ghost-login/:id', protect, async (req, res) => {
+    const user = await Owner.findById(req.params.id);
+    const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: '1h' });
+    res.json({ token, ownerId: user._id, username: user.username });
+});
+
 router.put('/control/:id', protect, async (req, res) => {
-    try {
-        const { field, value } = req.body;
-        await Owner.findByIdAndUpdate(req.params.id, { $set: { [field]: value } });
-        res.json({ success: true });
-    } catch (e) { res.status(500).json({ message: "Switch Failed" }); }
+    await Owner.findByIdAndUpdate(req.params.id, { $set: { [req.body.field]: req.body.value } });
+    res.json({ success: true });
 });
 
-// =========================================================
-// 📝 6. UPDATE CLIENT (Password Reset etc)
-// =========================================================
 router.put('/client/:id', protect, async (req, res) => {
-    try {
-        const { restaurantName, username, phoneNumber, password } = req.body;
-        const updateData = { restaurantName, username, phoneNumber };
-        // Only hash/update password if provided
-        if (password && password.trim() !== "") updateData.password = password; 
-        await Owner.findByIdAndUpdate(req.params.id, updateData);
-        res.json({ success: true });
-    } catch (e) { res.status(500).json({ message: "Update Failed" }); }
+    const { password, ...data } = req.body;
+    if (password) data.password = password;
+    await Owner.findByIdAndUpdate(req.params.id, data);
+    res.json({ success: true });
 });
 
-// =========================================================
-// 🗑️ 7. DELETE & RESET DATA
-// =========================================================
 router.delete('/client/:id', protect, async (req, res) => {
     await Owner.findByIdAndDelete(req.params.id);
     await Order.deleteMany({ restaurantId: req.params.id });
