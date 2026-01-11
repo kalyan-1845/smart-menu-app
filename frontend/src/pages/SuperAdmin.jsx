@@ -1,47 +1,62 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { 
-    FaShieldAlt, FaPhone, FaUtensils, FaUserTie, 
-    FaGhost, FaSave, FaSearch, FaExclamationTriangle, 
+    FaShieldAlt, FaPhone, FaUtensils, FaGhost, FaSearch, 
     FaSignOutAlt, FaTrash, FaRedo, FaEdit, FaKey, FaPlus, FaTimes,
-    FaBullhorn, FaSync, FaSortAmountDown, FaCircle
+    FaBullhorn, FaSync, FaSortAmountDown, FaCircle, 
+    FaUserSecret, FaLock, FaArrowRight, FaSpinner, FaMoneyBillWave
 } from "react-icons/fa";
-import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { toast } from "react-hot-toast";
 
-// ✅ Correct Backend URL
 const API_URL = "https://smart-menu-app-production.up.railway.app";
 
 const SuperAdmin = () => {
-    const navigate = useNavigate();
-    
-    // --- 1. STATE MANAGEMENT ---
+    // --- STATE ---
+    const [token, setToken] = useState(localStorage.getItem('admin_token'));
+    const [secret, setSecret] = useState("");
+    const [loginLoading, setLoginLoading] = useState(false);
+
     const [clients, setClients] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
-    const [selected, setSelected] = useState(null); 
-    const [noteDraft, setNoteDraft] = useState("");
     
-    // System Settings
+    // Broadcast & System
     const [broadcastMsg, setBroadcastMsg] = useState("");
     const [maintenanceMode, setMaintenanceMode] = useState(false);
-    
-    // Forms
+
+    // Selected Client & Forms
+    const [selected, setSelected] = useState(null); 
+    const [noteDraft, setNoteDraft] = useState("");
     const [createForm, setCreateForm] = useState({ restaurantName: "", username: "", password: "" });
     const [showCreateModal, setShowCreateModal] = useState(false);
-    const [newPassword, setNewPassword] = useState(""); // For quick reset
+    const [newPassword, setNewPassword] = useState(""); 
 
-    // --- 2. API LOGIC ---
+    // =================================================
+    // 🔐 1. LOGIN
+    // =================================================
+    const handleLogin = async (e) => {
+        e.preventDefault();
+        setLoginLoading(true);
+        try {
+            const res = await axios.post(`${API_URL}/api/superadmin/login`, { password: secret });
+            if (res.data.success) {
+                localStorage.setItem("admin_token", res.data.token);
+                setToken(res.data.token);
+                toast.success("Welcome, CEO.");
+            }
+        } catch (err) { toast.error("ACCESS DENIED"); setSecret(""); }
+        finally { setLoginLoading(false); }
+    };
 
-    // Sync Data
+    // =================================================
+    // 🔄 2. SYNC DATA (Parallel Fetching)
+    // =================================================
     const refreshData = useCallback(async () => {
-        const token = localStorage.getItem('admin_token');
-        if (!token) return navigate("/super-login");
-
+        if (!token) return;
         try {
             const [clientRes, sysRes] = await Promise.all([
                 axios.get(`${API_URL}/api/superadmin/ceo-sync`, { headers: { Authorization: `Bearer ${token}` } }),
-                axios.get(`${API_URL}/api/superadmin/system-status`) 
+                axios.get(`${API_URL}/api/superadmin/system-status`)
             ]);
 
             setClients(clientRes.data);
@@ -50,37 +65,34 @@ const SuperAdmin = () => {
             setLoading(false);
         } catch (e) {
             console.error("Sync Error:", e);
-            if(e.response && e.response.status === 401) {
-                toast.error("Session Expired");
+            if(e.response?.status === 401) {
                 localStorage.removeItem('admin_token');
-                navigate("/super-login");
-            } else {
-                toast.error("Connection Error");
+                setToken(null);
             }
             setLoading(false);
         }
-    }, [navigate]);
+    }, [token]);
 
     useEffect(() => { refreshData(); }, [refreshData]);
 
-    // System Updates
+    // =================================================
+    // 🛠️ 3. ACTIONS
+    // =================================================
+    
     const updateSystemSettings = async () => {
         try {
             await axios.put(`${API_URL}/api/superadmin/system-status`, {
                 message: broadcastMsg,
                 maintenance: maintenanceMode
-            }, { headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` } });
-            toast.success("Global System Updated 🌍");
-        } catch (e) { toast.error("System Update Failed"); }
+            }, { headers: { Authorization: `Bearer ${token}` } });
+            toast.success("Broadcast Updated 📢");
+        } catch (e) { toast.error("Update Failed"); }
     };
 
-    // Create Client
     const handleRegister = async () => {
         if(!createForm.username || !createForm.password) return toast.error("Fill all fields");
         try {
-            await axios.post(`${API_URL}/api/auth/register`, createForm, {
-                headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` }
-            });
+            await axios.post(`${API_URL}/api/auth/register`, createForm); // Uses public route
             toast.success("Restaurant Created! 🚀");
             setShowCreateModal(false);
             setCreateForm({ restaurantName: "", username: "", password: "" });
@@ -88,7 +100,6 @@ const SuperAdmin = () => {
         } catch (e) { toast.error("Registration Failed"); }
     };
 
-    // Client Actions
     const openClientModal = (client) => {
         setSelected(client);
         setNoteDraft(client.ceoNotes || "");
@@ -101,8 +112,8 @@ const SuperAdmin = () => {
                 restaurantName: selected.restaurantName,
                 username: selected.username,
                 phoneNumber: selected.phoneNumber
-            }, { headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` } });
-            toast.success("Details Updated ✅");
+            }, { headers: { Authorization: `Bearer ${token}` } });
+            toast.success("Updated ✅");
             refreshData();
         } catch (e) { toast.error("Update Failed"); }
     };
@@ -111,21 +122,20 @@ const SuperAdmin = () => {
         if (!newPassword) return toast.error("Enter a password");
         try {
             await axios.put(`${API_URL}/api/superadmin/client/${selected._id}`, { password: newPassword }, 
-            { headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` } });
-            toast.success("Password Changed 🔒");
+            { headers: { Authorization: `Bearer ${token}` } });
+            toast.success("Password Reset 🔒");
             setNewPassword("");
         } catch (e) { toast.error("Reset Failed"); }
     };
 
     const toggleSwitch = async (id, field, currentVal) => {
         try {
-            // Optimistic Update
+            // Optimistic UI Update
             setSelected(prev => ({ ...prev, settings: { ...prev.settings, [field.split('.')[1]]: !currentVal } })); 
-            
             await axios.put(`${API_URL}/api/superadmin/control/${id}`, { field, value: !currentVal },
-                { headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` } }
+                { headers: { Authorization: `Bearer ${token}` } }
             );
-            toast.success("Setting Updated");
+            toast.success("Setting Toggled");
             refreshData(); 
         } catch (e) { toast.error("Switch Failed"); }
     };
@@ -133,24 +143,20 @@ const SuperAdmin = () => {
     const enterGodMode = async (id, username) => {
         try {
             const res = await axios.get(`${API_URL}/api/superadmin/ghost-login/${id}`, {
-                headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` }
+                headers: { Authorization: `Bearer ${token}` }
             });
-            
-            // ✅ Save Owner Token & Redirect
             localStorage.setItem(`owner_token_${username}`, res.data.token);
             localStorage.setItem(`owner_id_${username}`, res.data.ownerId); 
-            
-            // Open in new tab so you don't lose admin access
             window.open(`/${username}/admin`, '_blank');
-            toast.success(`Accessing ${username}...`);
+            toast.success(`Entering ${username}...`);
         } catch (e) { toast.error("God Mode Failed"); }
     };
 
     const handleResetData = async () => {
-        if(!window.confirm("⚠️ Factory Reset: Clear all orders and revenue?")) return;
+        if(!window.confirm("⚠️ WIPE ALL ORDERS? This cannot be undone.")) return;
         try {
             await axios.post(`${API_URL}/api/superadmin/client/${selected._id}/reset`, {}, {
-                headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` }
+                headers: { Authorization: `Bearer ${token}` }
             });
             toast.success("Data Wiped 🔄");
             refreshData();
@@ -161,7 +167,7 @@ const SuperAdmin = () => {
         if (!window.confirm("⛔ DELETE ACCOUNT PERMANENTLY?")) return;
         try {
             await axios.delete(`${API_URL}/api/superadmin/client/${selected._id}`, {
-                headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` }
+                headers: { Authorization: `Bearer ${token}` }
             });
             toast.success("Account Deleted 🗑️");
             setSelected(null);
@@ -171,13 +177,15 @@ const SuperAdmin = () => {
 
     const saveNotes = async (id) => {
         await axios.put(`${API_URL}/api/superadmin/notes/${id}`, { notes: noteDraft }, {
-            headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` }
+            headers: { Authorization: `Bearer ${token}` }
         });
         toast.success("Notes Saved");
         refreshData();
     };
 
-    // --- 3. METRICS ---
+    const formatCurrency = (val) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val);
+
+    // --- METRICS & FILTER ---
     const filtered = clients.filter(c => 
         c.restaurantName?.toLowerCase().includes(searchTerm.toLowerCase()) || 
         c.username?.includes(searchTerm)
@@ -185,60 +193,72 @@ const SuperAdmin = () => {
 
     const metrics = useMemo(() => {
         const total = clients.length;
-        const active = clients.filter(c => c.health && c.health.includes("Healthy")).length;
-        const paid = clients.filter(c => c.settings?.isPro).length;
-        const mrr = paid * 999;
-        return { total, active, paid, mrr };
+        const totalRev = clients.reduce((sum, c) => sum + (c.totalRevenue || 0), 0);
+        const monthlyRev = clients.reduce((sum, c) => sum + (c.monthlyRevenue || 0), 0);
+        return { total, totalRev, monthlyRev };
     }, [clients]);
+
+    // =================================================
+    // 🖥️ RENDER
+    // =================================================
+    if (!token) {
+        return (
+            <div style={styles.center}>
+                <div style={styles.loginCard}>
+                    <FaUserSecret size={50} color="#f97316" style={{ marginBottom: "20px" }} />
+                    <h1 style={styles.loginTitle}>CEO ACCESS</h1>
+                    <form onSubmit={handleLogin}>
+                        <div style={{position: "relative", marginBottom: "20px"}}>
+                            <FaLock style={{position: "absolute", left: "15px", top: "18px", color: "#444"}} />
+                            <input type="password" placeholder="Master Key" value={secret} autoFocus onChange={(e) => setSecret(e.target.value)} style={styles.loginInput} />
+                        </div>
+                        <button type="submit" disabled={loginLoading} style={styles.loginBtn}>
+                            {loginLoading ? <FaSpinner className="spin"/> : <>ENTER PANEL <FaArrowRight /></>}
+                        </button>
+                    </form>
+                </div>
+                <style>{`.spin { animation: spin 1s linear infinite; } @keyframes spin { 100% { transform: rotate(360deg); } }`}</style>
+            </div>
+        );
+    }
 
     if (loading) return <div style={styles.center}><FaShieldAlt className="spin" size={50} color="#f97316"/></div>;
 
     return (
         <div style={styles.container}>
-            {/* --- HEADER --- */}
+            {/* HEADER */}
             <div style={styles.header}>
-                <div>
-                    <h1 style={styles.title}><FaShieldAlt color="#f97316"/> CEO DASHBOARD</h1>
-                    <p style={styles.sub}>Master Control Center</p>
-                </div>
+                <div><h1 style={styles.title}><FaShieldAlt color="#f97316"/> CEO DASHBOARD</h1></div>
                 <div style={styles.headerActions}>
                     <button onClick={refreshData} style={styles.iconBtn}><FaSync/></button>
                     <button onClick={() => setShowCreateModal(true)} style={styles.createBtn}><FaPlus/> NEW RESTAURANT</button>
-                    <button onClick={() => { localStorage.removeItem('admin_token'); navigate('/super-login'); }} style={styles.logoutBtn}><FaSignOutAlt/></button>
+                    <button onClick={() => { localStorage.removeItem('admin_token'); setToken(null); }} style={styles.logoutBtn}><FaSignOutAlt/></button>
                 </div>
             </div>
 
-            {/* --- SYSTEM CONTROL --- */}
+            {/* BROADCAST */}
             <div style={styles.broadcastBar}>
                 <div style={{flex: 1, display:'flex', gap:10, alignItems:'center'}}>
                     <FaBullhorn color="#f97316" />
-                    <input style={styles.broadcastInput} placeholder="Global System Broadcast Message..." value={broadcastMsg} onChange={(e) => setBroadcastMsg(e.target.value)} />
+                    <input style={styles.broadcastInput} placeholder="Global Broadcast Message..." value={broadcastMsg} onChange={(e) => setBroadcastMsg(e.target.value)} />
                 </div>
                 <div style={{display:'flex', alignItems:'center', gap:10}}>
                     <label style={{fontSize:10, fontWeight:'bold', color: maintenanceMode ? '#ef4444' : '#666'}}>MAINTENANCE</label>
                     <div onClick={() => setMaintenanceMode(!maintenanceMode)} style={{...styles.toggle, background: maintenanceMode ? '#ef4444' : '#333'}}>
                         <div style={{...styles.knob, transform: maintenanceMode ? 'translateX(18px)' : 'translateX(0)'}} />
                     </div>
-                    <button onClick={updateSystemSettings} style={styles.saveSysBtn}>UPDATE</button>
+                    <button onClick={updateSystemSettings} style={styles.saveSysBtn}>SAVE</button>
                 </div>
             </div>
 
-            {/* --- SEARCH & STATS --- */}
-            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10}}>
-                <input style={styles.search} placeholder="Search Client..." onChange={(e) => setSearchTerm(e.target.value)} />
-                <div style={{fontSize:12, color:'#666', display:'flex', alignItems:'center', gap:5}}>
-                    <FaSortAmountDown/> {filtered.length} Results
-                </div>
-            </div>
-
+            {/* STATS */}
             <div style={styles.statsRow}>
                 <div style={styles.statCard}><span>TOTAL CLIENTS</span><h2>{metrics.total}</h2></div>
-                <div style={styles.statCard}><span>ACTIVE TODAY</span><h2 style={{color:'#22c55e'}}>{metrics.active}</h2></div>
-                <div style={styles.statCard}><span>PRO USERS</span><h2>{metrics.paid}</h2></div>
-                <div style={styles.statCard}><span>EST. MRR</span><h2 style={{color:'#f97316'}}>₹{metrics.mrr.toLocaleString()}</h2></div>
+                <div style={styles.statCard}><span>TOTAL REVENUE</span><h2 style={{color:'#22c55e'}}>{formatCurrency(metrics.totalRev)}</h2></div>
+                <div style={styles.statCard}><span>THIS MONTH</span><h2 style={{color:'#f97316'}}>{formatCurrency(metrics.monthlyRev)}</h2></div>
             </div>
 
-            {/* --- CLIENT LIST --- */}
+            {/* LIST */}
             <div style={styles.grid}>
                 {filtered.map(c => (
                     <div key={c._id} style={styles.card} onClick={() => openClientModal(c)}>
@@ -250,15 +270,16 @@ const SuperAdmin = () => {
                         </div>
                         <div style={styles.cardBody}>
                             <p><strong>User:</strong> {c.username}</p>
-                            <p><strong>Plan:</strong> {c.settings?.isPro ? <span style={{color:'#f97316'}}>👑 PRO</span> : "TRIAL"}</p>
-                            <p style={{fontSize:'10px', marginTop:'5px', color:'#555'}}>Active: {c.lastActive || "Never"}</p>
+                            <p style={{fontSize:11, color:'#666'}}>Active: {c.lastActiveStr}</p>
+                            <div style={{marginTop: 10, paddingTop: 10, borderTop: '1px solid #222', display:'flex', justifyContent:'space-between'}}>
+                                <div><span style={{fontSize:9, color:'#666'}}>MONTHLY</span><div style={{color:'#f97316', fontWeight:'bold'}}>{formatCurrency(c.monthlyRevenue)}</div></div>
+                                <div style={{textAlign:'right'}}><span style={{fontSize:9, color:'#666'}}>TOTAL</span><div style={{color:'#fff', fontWeight:'bold'}}>{formatCurrency(c.totalRevenue)}</div></div>
+                            </div>
                         </div>
                     </div>
                 ))}
             </div>
 
-            {/* --- MODALS --- */}
-            
             {/* 1. CREATE MODAL */}
             {showCreateModal && (
                 <div style={styles.overlay}>
@@ -275,7 +296,7 @@ const SuperAdmin = () => {
                 </div>
             )}
 
-            {/* 2. MANAGEMENT MODAL */}
+            {/* 2. MANAGE MODAL */}
             {selected && (
                 <div style={styles.overlay}>
                     <div style={styles.modal}>
@@ -283,51 +304,32 @@ const SuperAdmin = () => {
                             <h2>{selected.restaurantName}</h2>
                             <button onClick={() => setSelected(null)} style={{background:'none', border:'none', color:'white', fontSize:'20px'}}><FaTimes/></button>
                         </div>
-
                         <div style={styles.scrollContent}>
-                            {/* A. EDIT INFO */}
-                            <div style={styles.section}>
-                                <label style={styles.label}>📝 BASIC DETAILS</label>
-                                <input style={styles.input} value={selected.restaurantName} onChange={e => setSelected({...selected, restaurantName: e.target.value})} placeholder="Name" />
-                                <input style={styles.input} value={selected.username} onChange={e => setSelected({...selected, username: e.target.value})} placeholder="Username" />
-                                <input style={styles.input} value={selected.phoneNumber || ""} onChange={e => setSelected({...selected, phoneNumber: e.target.value})} placeholder="Phone" />
-                                <button onClick={handleUpdateClient} style={styles.updateBtn}>UPDATE INFO</button>
-                            </div>
-
-                            {/* B. SAAS CONTROLS */}
+                            {/* Actions Grid */}
                             <div style={styles.switchGrid}>
                                 <button onClick={() => toggleSwitch(selected._id, 'settings.menuActive', selected.settings?.menuActive)}
                                     style={{...styles.swBtn, background: selected.settings?.menuActive ? '#111' : '#450a0a', border: selected.settings?.menuActive ? '1px solid #333' : '1px solid #f00'}}>
                                     <FaUtensils color={selected.settings?.menuActive ? '#22c55e' : '#666'} /> {selected.settings?.menuActive ? "MENU LIVE" : "KILLED"}
                                 </button>
-                                <button onClick={() => toggleSwitch(selected._id, 'settings.isPro', selected.settings?.isPro)}
-                                    style={{...styles.swBtn, border: '1px solid #f97316'}}>
-                                    {selected.settings?.isPro ? "⬇️ DOWNGRADE" : "👑 UPGRADE PRO"}
-                                </button>
-                                <button onClick={() => enterGodMode(selected._id, selected.username)} style={{...styles.swBtn, background:'#f97316', color:'black', gridColumn:'span 2'}}>
-                                    <FaGhost /> LOGIN AS OWNER (GOD MODE)
+                                <button onClick={() => enterGodMode(selected._id, selected.username)} style={{...styles.swBtn, background:'#f97316', color:'black'}}>
+                                    <FaGhost /> GHOST LOGIN
                                 </button>
                             </div>
 
-                            {/* C. PASSWORD RESET */}
+                            {/* Details & Reset */}
                             <div style={styles.section}>
-                                <label style={styles.label}>🔑 RESET PASSWORD</label>
+                                <label style={styles.label}>DETAILS & PASSWORD RESET</label>
+                                <input style={styles.input} value={selected.restaurantName} onChange={e => setSelected({...selected, restaurantName: e.target.value})} placeholder="Name" />
+                                <input style={styles.input} value={selected.username} onChange={e => setSelected({...selected, username: e.target.value})} placeholder="Username" />
                                 <div style={{display:'flex', gap:10}}>
-                                    <input style={{...styles.input, marginBottom:0}} value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="New Password" type="text" />
+                                    <input style={{...styles.input, marginBottom:0}} value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="New Password (Override)" type="text" />
                                     <button onClick={handlePasswordReset} style={{...styles.saveBtn, width:'auto', padding:'0 20px'}}>SAVE</button>
                                 </div>
                             </div>
 
-                            {/* D. NOTES */}
-                            <div style={styles.section}>
-                                <label style={styles.label}>📓 PRIVATE NOTES</label>
-                                <textarea value={noteDraft} onChange={(e) => setNoteDraft(e.target.value)} style={styles.textarea}/>
-                                <button onClick={() => saveNotes(selected._id)} style={styles.saveBtn}>SAVE NOTES</button>
-                            </div>
-
-                            {/* E. DANGER ZONE */}
+                            {/* Danger */}
                             <div style={styles.dangerZone}>
-                                <label style={{...styles.label, color:'#ef4444'}}>⛔ DANGER ZONE</label>
+                                <label style={{...styles.label, color:'#ef4444'}}>DANGER ZONE</label>
                                 <div style={{display:'flex', gap:'10px'}}>
                                     <button onClick={handleResetData} style={styles.dangerBtn}><FaRedo/> RESET DATA</button>
                                     <button onClick={handleDeleteClient} style={styles.dangerBtn}><FaTrash/> DELETE ACCOUNT</button>
@@ -345,9 +347,8 @@ const SuperAdmin = () => {
 const styles = {
     container: { background: '#050505', minHeight: '100vh', padding: '20px', color: '#fff', fontFamily: 'Inter, sans-serif' },
     center: { height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#050505' },
-    header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap:'wrap', gap:10 },
+    header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' },
     title: { fontSize: '20px', fontWeight: '900', margin: 0, display:'flex', alignItems:'center', gap:'10px' },
-    sub: { fontSize: '12px', color: '#666', margin: 0 },
     headerActions: { display: 'flex', gap: '10px' },
     iconBtn: { background:'#111', border:'1px solid #333', color:'#fff', padding:'10px', borderRadius:'8px', cursor:'pointer' },
     createBtn: { background: '#22c55e', color: '#000', border: 'none', padding: '10px 15px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' },
@@ -359,8 +360,6 @@ const styles = {
     knob: { width: '16px', height: '16px', background: 'white', borderRadius: '50%', position: 'absolute', top: '2px', left: '2px', transition: '0.3s' },
     saveSysBtn: { background: '#f97316', color: '#000', border: 'none', padding: '5px 12px', borderRadius: '6px', fontWeight: 'bold', fontSize: '10px', cursor: 'pointer' },
 
-    search: { background: '#111', border: '1px solid #333', padding: '12px', borderRadius: '8px', color: '#fff', width: '100%', flex:1, marginRight:10 },
-    
     statsRow: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px', marginBottom: '30px' },
     statCard: { background: '#0a0a0a', border: '1px solid #1a1a1a', padding: '15px', borderRadius: '12px' },
     
@@ -388,7 +387,13 @@ const styles = {
     saveBtn: { background: '#22c55e', border: 'none', color: '#000', width: '100%', padding: '10px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' },
     
     dangerZone: { marginTop: '20px', borderTop: '1px solid #450a0a', paddingTop: '15px', background: 'rgba(69, 10, 10, 0.2)', padding: '15px', borderRadius: '10px' },
-    dangerBtn: { flex: 1, background: '#450a0a', border: '1px solid #ef4444', color: '#ef4444', padding: '12px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', fontSize: '11px' }
+    dangerBtn: { flex: 1, background: '#450a0a', border: '1px solid #ef4444', color: '#ef4444', padding: '12px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', fontSize: '11px' },
+    
+    // Login Styles
+    loginCard: { width: "90%", maxWidth: "350px", padding: "40px", background: "#0a0a0a", borderRadius: "24px", border: "1px solid #222", textAlign: "center" },
+    loginTitle: { fontSize: "24px", fontWeight: "900", margin: "0 0 10px 0", letterSpacing: '-1px' },
+    loginInput: { width: "100%", padding: "16px 16px 16px 45px", background: "#000", border: "1px solid #222", borderRadius: "14px", color: "white", outline: "none", boxSizing: 'border-box', fontSize: '18px' },
+    loginBtn: { width: "100%", padding: "16px", background: "#f97316", border: "none", borderRadius: "14px", color: 'white', fontWeight: "900", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", transition: '0.2s' }
 };
 
 export default SuperAdmin;
