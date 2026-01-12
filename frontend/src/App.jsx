@@ -14,10 +14,8 @@ import Maintenance from './pages/Maintenance';
 import NotFound from './pages/NotFound';
 
 // --- STAFF PANELS ---
-import SuperAdmin from "./pages/SuperAdmin"; // ✅ This now handles both Login & Dashboard
+import SuperAdmin from "./pages/SuperAdmin"; 
 import RestaurantAdmin from "./pages/RestaurantAdmin";
-import ChefDashboard from "./pages/ChefDashboard"; 
-import WaiterDashboard from "./pages/WaiterDashboard";
 
 // ✅ NEW IMPORTS
 import RoleLogin from "./pages/RoleLogin"; 
@@ -42,11 +40,7 @@ const SmartHome = () => {
     if (lastId) {
       if (lastRole === "owner") {
         navigate(`/${lastId}/admin`, { replace: true });
-      } else if (lastRole === "chef") {
-        navigate(`/${lastId}/chef`, { replace: true });
-      } else if (lastRole === "waiter") {
-        navigate(`/${lastId}/waiter`, { replace: true });
-      }
+      } 
     }
   }, [navigate]);
 
@@ -198,15 +192,9 @@ function App() {
         <Route path="/track/:id" element={<div className="page-transition"><OrderTracker /></div>} />
         
         {/* --- 🏢 ADMIN & STAFF --- */}
-        {/* ✅ REMOVED /super-login path */}
-        {/* ✅ SuperAdmin component now handles the login logic internally */}
         <Route path="/superadmin" element={<SuperAdmin />} />
-        
         <Route path="/:id/admin" element={<RestaurantAdmin />} />
-        <Route path="/:id/chef" element={<ChefDashboard />} />
-        <Route path="/:id/kitchen" element={<ChefDashboard />} />
-        <Route path="/:id/waiter" element={<WaiterDashboard />} />
-
+        
         <Route path="*" element={<NotFound />} />
       </Routes>
     </Router>
