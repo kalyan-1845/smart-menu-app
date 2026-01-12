@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useMemo } from "react";
 import axios from "axios";
 import { useParams, useSearchParams } from "react-router-dom";
 import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable'; // Ensure this is installed: npm install jspdf-autotable
+import autoTable from 'jspdf-autotable';
 import InstallButton from "../components/InstallButton";
 
 import { 
@@ -33,7 +33,6 @@ const RestaurantAdmin = () => {
     const { id } = useParams();
     const SERVER_URL = "https://smart-menu-app-production.up.railway.app";
     const API_BASE = `${SERVER_URL}/api`;
-    const publicMenuUrl = `${window.location.origin}/menu/${id}`;
     
     // --- STATE ---
     const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -74,7 +73,6 @@ const RestaurantAdmin = () => {
                 axios.get(`${API_BASE}/orders/inbox?restaurantId=${fetchId}&t=${Date.now()}`, config)
             ]);
             setDishes(dishRes.data || []);
-            // Keep completed orders in memory for the stats tab, but filter for table view
             setInboxOrders(orderRes.data || []);
             setIsLoading(false);
         } catch (e) { 
@@ -127,15 +125,12 @@ const RestaurantAdmin = () => {
     };
 
     // --- DATA PROCESSING ---
-    
-    // 1. Grid View Data (Only Active Orders)
     const tableData = useMemo(() => {
         const map = {};
         for(let i = parseInt(qrRange.start); i <= parseInt(qrRange.end); i++) {
             map[i] = { tableNum: i, orders: [], totalAmount: 0, status: 'Free' };
         }
         
-        // Filter only active orders for the live dashboard
         const activeOrders = inboxOrders.filter(o => o.status !== 'Completed' && o.status !== 'Cancelled');
 
         activeOrders.forEach(order => {
@@ -149,10 +144,8 @@ const RestaurantAdmin = () => {
         return map;
     }, [inboxOrders, qrRange]);
 
-    [cite_start]// 2. Revenue Stats (All Orders Today) [cite: 1]
     const dailyStats = useMemo(() => {
         const todayStr = new Date().toLocaleDateString();
-        // Use all orders (including completed) for revenue calculation
         const todayOrders = inboxOrders.filter(o => 
             new Date(o.createdAt).toLocaleDateString() === todayStr && 
             o.status !== 'Cancelled'
@@ -191,15 +184,13 @@ const RestaurantAdmin = () => {
         } catch (err) { toast.error("Failed"); }
     };
 
-    // --- REPORT EXPORT ---
     const handleDownloadPDF = () => {
         if (dailyStats.orders.length === 0) return toast.error("No orders today to export.");
 
         const doc = new jsPDF();
         
-        // Header
         doc.setFontSize(18);
-        doc.setTextColor(41, 128, 185); // Blue color
+        doc.setTextColor(41, 128, 185);
         doc.text(restaurantName.toUpperCase(), 14, 15);
         
         doc.setFontSize(12);
@@ -207,17 +198,14 @@ const RestaurantAdmin = () => {
         doc.text(`Daily Sales Report - ${new Date().toLocaleDateString()}`, 14, 25);
         doc.text(`Total Revenue: Rs. ${dailyStats.revenue}`, 14, 32);
 
-        [cite_start]// Table Data Preparation [cite: 2]
         const tableBody = dailyStats.orders.map((order, index) => {
-            // Concatenate all items into one string for the "Items" column
             const itemsString = order.items.map(i => `${i.name} x${i.quantity}`).join(', ');
-            
             return [
-                index + 1, // #
-                `Table ${order.tableNum}\n${itemsString}`, // Table & Items
-                `Rs.${order.totalAmount}`, // Amt
-                order.paymentMethod || 'Online', // Pay (Default to Online/Cash)
-                new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) // Time
+                index + 1,
+                `Table ${order.tableNum}\n${itemsString}`,
+                `Rs.${order.totalAmount}`,
+                order.paymentMethod || 'Online',
+                new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
             ];
         });
 
@@ -227,11 +215,11 @@ const RestaurantAdmin = () => {
             startY: 40,
             theme: 'grid',
             styles: { fontSize: 10, cellPadding: 3, valign: 'middle' },
-            headStyles: { fillColor: [41, 128, 185], textColor: 255, fontStyle: 'bold' }, // Blue Header
-            alternateRowStyles: { fillColor: [240, 248, 255] }, // Light blue rows
+            headStyles: { fillColor: [41, 128, 185], textColor: 255, fontStyle: 'bold' },
+            alternateRowStyles: { fillColor: [240, 248, 255] },
             columnStyles: {
                 0: { cellWidth: 15 },
-                1: { cellWidth: 90 }, // Wide column for items
+                1: { cellWidth: 90 },
                 2: { cellWidth: 25, halign: 'right' },
                 3: { cellWidth: 25, halign: 'center' },
                 4: { cellWidth: 25, halign: 'right' }
@@ -242,7 +230,6 @@ const RestaurantAdmin = () => {
         toast.success("PDF Report Downloaded");
     };
 
-    // --- PRINTING ---
     const printKOT = (order) => {
         const win = window.open('', '', 'width=300,height=600');
         win.document.write(`<html><body style="font-family:monospace;width:280px;font-size:14px;"><div style="text-align:center;font-weight:bold;">${restaurantName.toUpperCase()}</div><div style="text-align:center;">KOT #${order._id.slice(-4).toUpperCase()}</div><div style="text-align:center;">TABLE: ${order.tableNum}</div><hr/><table style="width:100%;text-align:left;"><tr><th>Item</th><th style="text-align:right">Qty</th></tr>${order.items.map(i=>`<tr><td>${i.name}</td><td style="text-align:right;font-weight:bold;">${i.quantity}</td></tr>`).join('')}</table><hr/><div style="text-align:center;font-weight:bold;">CHEF COPY</div></body></html>`);
@@ -315,7 +302,6 @@ const RestaurantAdmin = () => {
                     <button onClick={() => setActiveTab("revenue")} className={`nav-btn ${activeTab === "revenue" ? 'active' : ''}`}><FaChartLine size={22} /> <span>Stats</span></button>
                 </div>
 
-                {/* 🟢 TABLE GRID */}
                 {activeTab === "orders" && (
                     <div className="table-grid">
                         {Object.values(tableData).map((table) => (
@@ -335,7 +321,6 @@ const RestaurantAdmin = () => {
                     </div>
                 )}
 
-                {/* 📝 MENU EDITOR */}
                 {activeTab === "menu" && (
                     <div className="menu-layout">
                         <div className="glass-card">
@@ -367,7 +352,6 @@ const RestaurantAdmin = () => {
                     </div>
                 )}
 
-                {/* 🛠 TOOLS */}
                 {activeTab === "tools" && (
                     <div className="glass-card">
                         <h2 className="section-title"><FaQrcode/> TABLE MANAGEMENT</h2>
@@ -387,7 +371,6 @@ const RestaurantAdmin = () => {
                     </div>
                 )}
 
-                {/* 📊 REVENUE & STATS */}
                 {activeTab === "revenue" && (
                     <div className="glass-card">
                         <h2 className="section-title"><FaChartLine/> DAILY SNAPSHOT</h2>
@@ -406,15 +389,10 @@ const RestaurantAdmin = () => {
                         <button onClick={handleDownloadPDF} className="btn-primary" style={{marginTop:20, background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)'}}>
                             <FaFilePdf size={18}/> DOWNLOAD DAILY REPORT
                         </button>
-
-                        <div style={{marginTop: 20, fontSize: 12, color: '#94a3b8', textAlign: 'center'}}>
-                            Exports a detailed PDF with Table #, Items, Amount & Time.
-                        </div>
                     </div>
                 )}
             </div>
 
-            {/* 🛑 MODAL: TABLE DETAILS */}
             {selectedTable && (
                 <div className="qr-overlay" onClick={() => setSelectedTable(null)}>
                     <div className="qr-modal" onClick={e => e.stopPropagation()}>
