@@ -1,12 +1,12 @@
 import express from 'express';
 import Order from '../models/Order.js';
-import Call from '../models/Call.js'; // ✅ Import Call Model
+import Call from '../models/Call.js'; 
 import Owner from '../models/Owner.js';
 import jwt from 'jsonwebtoken';
 
 const router = express.Router();
 
-// --- 🛡️ MIDDLEWARE (Retained) ---
+// --- 🛡️ MIDDLEWARE ---
 const protect = async (req, res, next) => {
     let token;
     if (req.headers.authorization?.startsWith('Bearer')) {
@@ -26,7 +26,7 @@ const protect = async (req, res, next) => {
 };
 
 // ============================================================
-// 🛒 1. PLACE ORDER (Enhanced for Parcel)
+// 🛒 1. PLACE ORDER
 // ============================================================
 router.post('/', async (req, res) => {
     try {
@@ -34,19 +34,19 @@ router.post('/', async (req, res) => {
 
         const newOrder = new Order({
             restaurantId,
-            tableNum: tableNum.toString(), // ✅ Ensures "Parcel" is saved as String
+            tableNum: tableNum.toString(), // Handles "Parcel" or "1"
             items,
             totalAmount,
             customerName: customerName || "Guest",
-            paymentMethod: paymentMethod || "Cash",
+            paymentMethod: paymentMethod || "Pay Later",
             customerId: customerId,
-            status: "Pending" // ✅ Standardized for Chef Dashboard
+            status: "Pending"
         });
 
         const savedOrder = await newOrder.save();
 
         if (req.io) {
-            // Notify Kitchen (Chef)
+            // Notify Admin Dashboard
             req.io.to(restaurantId).emit('new-order', savedOrder);
         }
 
@@ -58,15 +58,16 @@ router.post('/', async (req, res) => {
 });
 
 // ============================================================
-// 📥 2. GET INBOX (Staff/Chef)
+// 📥 2. GET INBOX (Admin Dashboard)
 // ============================================================
 router.get('/inbox', async (req, res) => {
     const { restaurantId } = req.query;
     try {
-        // Fetch orders that are NOT archived/downloaded
+        // ✅ UPDATED: We INCLUDE 'completed' orders so the Stats Panel can calculate revenue.
+        // The Frontend filters them out for the Table Grid view.
         const orders = await Order.find({ 
             restaurantId,
-            status: { $nin: ['archived', 'completed'] } // Keep 'served' visible until cleared
+            status: { $nin: ['archived'] } // Only hide archived (deleted/cleared) orders
         }).sort({ createdAt: -1 });
         
         res.json(orders);
@@ -76,9 +77,10 @@ router.get('/inbox', async (req, res) => {
 });
 
 // ============================================================
-// 👨‍🍳 3. UPDATE STATUS (Chef/Waiter)
+// 👨‍🍳 3. UPDATE STATUS (Complete Table / Cancel)
 // ============================================================
-router.put('/:id', async (req, res) => {
+// ✅ UPDATED URL: Matches frontend `axios.put(..., /status)`
+router.put('/:id/status', async (req, res) => {
     try {
         const { status } = req.body; 
         
@@ -89,16 +91,8 @@ router.put('/:id', async (req, res) => {
         );
 
         if (req.io) {
-            // 📢 Alert Customer (OrderTracker)
-            req.io.to(req.params.id).emit('order-status-updated', updatedOrder);
-
-            // 📢 Alert Chef/Waiter Dashboards
+            // Alert Admin Dashboard to refresh
             req.io.to(updatedOrder.restaurantId.toString()).emit('new-order', updatedOrder);
-
-            // Special: Ready Alert
-            if (status.toLowerCase() === 'ready') {
-                req.io.to(updatedOrder.restaurantId.toString()).emit('chef-ready-alert', updatedOrder);
-            }
         }
 
         res.json(updatedOrder);
@@ -108,10 +102,9 @@ router.put('/:id', async (req, res) => {
 });
 
 // ============================================================
-// 🛎️ 4. SERVICE CALLS (Waiter Button Logic)
+// 🛎️ 4. SERVICE CALLS
 // ============================================================
 
-// A. Create Call (Customer clicks button)
 router.post('/calls', async (req, res) => {
     try {
         const { restaurantId, tableNumber, type } = req.body;
@@ -136,7 +129,6 @@ router.post('/calls', async (req, res) => {
     }
 });
 
-// B. Get Active Calls (Waiter Dashboard)
 router.get('/calls', async (req, res) => {
     try {
         const { restaurantId } = req.query;
@@ -151,7 +143,6 @@ router.get('/calls', async (req, res) => {
     }
 });
 
-// C. Resolve Call (Waiter clicks checkmark)
 router.delete('/calls/:id', async (req, res) => {
     try {
         await Call.findByIdAndDelete(req.params.id);
@@ -162,13 +153,14 @@ router.delete('/calls/:id', async (req, res) => {
 });
 
 // ============================================================
-// 🧹 5. MARK DOWNLOADED (Admin Panel)
+// 🧹 5. MARK DOWNLOADED (Clear History)
 // ============================================================
 router.put('/mark-downloaded', async (req, res) => {
     try {
         const { restaurantId } = req.body;
+        // ✅ UPDATED: Archives 'Completed' orders too (when owner clicks Clear History)
         await Order.updateMany(
-            { restaurantId, status: { $in: ['Served', 'Paid'] } },
+            { restaurantId, status: { $in: ['Served', 'Paid', 'Completed', 'Cancelled'] } },
             { $set: { status: 'archived', isDownloaded: true } }
         );
         res.json({ success: true });
@@ -178,7 +170,7 @@ router.put('/mark-downloaded', async (req, res) => {
 });
 
 // ============================================================
-// 🔍 6. GET SINGLE ORDER (For Tracker)
+// 🔍 6. GET SINGLE ORDER
 // ============================================================
 router.get('/:id', async (req, res) => {
     try {

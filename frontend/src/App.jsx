@@ -6,7 +6,6 @@ import axios from "axios";
 import LandingPage from "./pages/LandingPage"; 
 import Menu from "./pages/Menu"; 
 import Cart from "./pages/Cart";
-import OrderTracker from "./pages/OrderTracker";
 import OwnerLogin from "./pages/OwnerLogin"; 
 import Register from "./pages/Register";    
 import Terms from './pages/Terms';
@@ -189,7 +188,7 @@ function App() {
             </div>
         } />
         
-        <Route path="/track/:id" element={<div className="page-transition"><OrderTracker /></div>} />
+        {/* ❌ REMOVED: /track/:id route */}
         
         {/* --- 🏢 ADMIN & STAFF --- */}
         <Route path="/superadmin" element={<SuperAdmin />} />

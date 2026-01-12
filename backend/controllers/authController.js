@@ -1,48 +1,101 @@
-// backend/controllers/authController.js
-import Owner from '../models/Owner.js';
+import express from 'express';
+import jwt from 'jsonwebtoken';
+import webpush from 'web-push'; 
+import Owner from '../models/Owner.js'; 
+import { getRestaurantPublic } from '../controllers/authController.js'; // ✅ Import the new controller
 
-/**
- * 🌐 GET RESTAURANT PUBLIC DATA
- * Optimized for high-speed URL resolution (Username or ID)
- */
-export const getRestaurantPublic = async (req, res) => {
+const router = express.Router();
+
+// --- 🔑 WEB PUSH CONFIG ---
+const publicKey = process.env.VAPID_PUBLIC_KEY;
+const privateKey = process.env.VAPID_PRIVATE_KEY;
+
+if (publicKey && privateKey) {
     try {
-        const { id } = req.params;
-        let restaurant;
+        webpush.setVapidDetails('mailto:support@kovixa.com', publicKey, privateKey);
+    } catch (err) { console.error("VAPID Config Error"); }
+}
 
-        // 🧠 PERFORMANCE: Check cache-friendly Username first
-        // Most public traffic will use the /menu/:username route
-        const isMongoId = id.match(/^[0-9a-fA-F]{24}$/);
-
-        // .lean() is 3x faster as it skips Mongoose overhead
-        // .select() only the 4 fields the frontend actually needs
-        const projection = 'restaurantName username isPro status ratings';
-
-        if (isMongoId) {
-            restaurant = await Owner.findById(id).select(projection).lean();
-        } else {
-            restaurant = await Owner.findOne({ username: id }).select(projection).lean();
-        }
-
-        // 🛡️ SECURITY & SUSPENSION GUARD
-        if (!restaurant) {
-            return res.status(404).json({ message: "Restaurant Not Found" });
-        }
-
-        if (restaurant.status === 'suspended') {
-            return res.status(403).json({ 
-                status: "suspended",
-                message: "This menu is temporarily unavailable. Contact owner." 
-            });
-        }
-
-        // ⚡ SPEED BOOST: Browser Caching
-        // Tells the customer's phone to "remember" this restaurant info for 5 minutes
-        res.set('Cache-Control', 'public, max-age=300');
-        
-        res.json(restaurant);
-    } catch (error) {
-        console.error("Critical URL Resolution Error:", error.message);
-        res.status(500).json({ message: "Server Node Error" });
-    }
+const generateToken = (id) => {
+    return jwt.sign({ id }, process.env.JWT_SECRET || 'fallback_secret', { expiresIn: '30d' });
 };
+
+// --- 🌐 PUBLIC RESTAURANT DATA (Optimized Controller) ---
+router.get('/restaurant/:id', getRestaurantPublic);
+
+// --- 🎯 OWNER-ID LOOKUP (Crucial for Menu.js) ---
+router.get('/owner-id/:username', async (req, res) => {
+    try {
+        // Simple, fast lookup for internal ID resolution
+        const owner = await Owner.findOne({ 
+            username: req.params.username.toLowerCase() 
+        }).select('_id');
+
+        if (!owner) return res.status(404).json({ message: "Not found" });
+        res.json({ id: owner._id }); 
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+// --- 📝 REGISTER ---
+router.post('/register', async (req, res) => {
+    try {
+        let { restaurantName, username, email, password } = req.body;
+        if (!email) email = `${username.toLowerCase()}@smartmenu.local`; 
+
+        const userExists = await Owner.findOne({ $or: [{ username: username.toLowerCase() }, { email }] });
+        if (userExists) return res.status(400).json({ message: 'User already exists.' });
+
+        const user = await Owner.create({ 
+            restaurantName, 
+            username: username.toLowerCase(), 
+            email, 
+            password, 
+            isPro: true
+        });
+        
+        res.status(201).json({
+            _id: user._id,
+            username: user.username,
+            token: generateToken(user._id)
+        });
+    } catch (error) { res.status(400).json({ message: error.message }); }
+});
+
+// --- 🔑 LOGIN ---
+router.post('/login', async (req, res) => {
+    const { username, password } = req.body;
+    try {
+        const user = await Owner.findOne({ username: username.toLowerCase() });
+        if (user && (await user.matchPassword(password))) {
+            res.json({
+                _id: user._id,
+                username: user.username,
+                restaurantName: user.restaurantName,
+                token: generateToken(user._id),
+                isPro: user.isPro
+            });
+        } else { res.status(401).json({ message: 'Invalid credentials' }); }
+    } catch (error) { res.status(500).json({ message: error.message }); }
+});
+
+// --- 📲 SAVE PUSH SUBSCRIPTION ---
+router.post('/save-subscription', async (req, res) => {
+    const { restaurantId, subscription } = req.body;
+    try {
+        const user = await Owner.findById(restaurantId);
+        if (user) {
+            const exists = user.pushSubscriptions.find(s => s.endpoint === subscription.endpoint);
+            if (!exists) {
+                user.pushSubscriptions.push(subscription);
+                await user.save();
+            }
+            res.status(200).json({ success: true });
+        } else {
+            res.status(404).json({ message: "User not found" });
+        }
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+export default router;

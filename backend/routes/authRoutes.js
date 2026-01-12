@@ -12,7 +12,8 @@ const privateKey = process.env.VAPID_PRIVATE_KEY;
 
 if (publicKey && privateKey) {
     try {
-        webpush.setVapidDetails('mailto:bitebox.web@gmail.com', publicKey, privateKey);
+        // Updated to match notificationRoutes.js for consistency
+        webpush.setVapidDetails('mailto:support@kovixa.com', publicKey, privateKey);
         console.log("✅ Auth Routes: Push Initialized");
     } catch (err) { console.error("❌ VAPID Config Error"); }
 }
@@ -28,6 +29,7 @@ router.post('/save-subscription', async (req, res) => {
         const user = await Owner.findById(restaurantId);
         if (!user) return res.status(404).json({ message: "Restaurant not found" });
 
+        // Prevent duplicate subscriptions
         const exists = user.pushSubscriptions.find(s => s.endpoint === subscription.endpoint);
         if (!exists) {
             user.pushSubscriptions.push(subscription);
@@ -83,7 +85,7 @@ router.post('/login', async (req, res) => {
     } catch (error) { res.status(500).json({ message: error.message }); }
 });
 
-// --- ✅ VERIFY ROLE (Chef & Waiter PIN System) ---
+// --- ✅ VERIFY ROLE (Optional now, but kept for legacy support) ---
 router.post('/verify-role', async (req, res) => {
     try {
         const { role, username, password } = req.body;
@@ -105,7 +107,7 @@ router.post('/verify-role', async (req, res) => {
 });
 
 // ============================================================
-// 🎯 CRITICAL FIX: OWNER-ID LOOKUP (For Menu.jsx Sync)
+// 🎯 OWNER-ID LOOKUP (Crucial for Menu.js)
 // ============================================================
 router.get('/owner-id/:username', async (req, res) => {
     try {
@@ -123,7 +125,7 @@ router.get('/owner-id/:username', async (req, res) => {
 });
 
 // ============================================================
-// 🌐 WAITER/CUSTOMER RESTAURANT LOOKUP (Fixed 404)
+// 🌐 RESTAURANT DETAILS LOOKUP
 // ============================================================
 router.get('/restaurant/:id', async (req, res) => {
     // 1. Kill Cache to prevent old data issues
@@ -137,7 +139,6 @@ router.get('/restaurant/:id', async (req, res) => {
         if (mongoose.Types.ObjectId.isValid(id)) {
             owner = await Owner.findById(id).select('username restaurantName isPro');
         } else {
-            // This fixes the "kalyanresto1" 404 error
             owner = await Owner.findOne({ username: id.toLowerCase() }).select('username restaurantName isPro');
         }
 
@@ -145,8 +146,8 @@ router.get('/restaurant/:id', async (req, res) => {
         
         // 3. Send back explicitly formatted data
         res.json({
-            id: owner._id,          // <--- Critical for Waiter App
-            _id: owner._id,         // <--- Fallback
+            id: owner._id,
+            _id: owner._id,
             username: owner.username,
             restaurantName: owner.restaurantName,
             isPro: owner.isPro

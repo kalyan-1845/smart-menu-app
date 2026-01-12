@@ -5,51 +5,57 @@ import { FaLock, FaStore, FaKey, FaArrowRight } from "react-icons/fa";
 
 // --- INLINE STYLES ---
 const styles = `
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
 /* --- CONTAINER & BACKGROUND --- */
 .login-container {
-    background-color: #050505;
+    background-color: #020617; /* Deep Slate */
+    background-image: 
+        linear-gradient(to right, rgba(30, 41, 59, 0.3) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(30, 41, 59, 0.3) 1px, transparent 1px);
+    background-size: 40px 40px;
     min-height: 100vh;
     display: flex;
     align-items: center;
     justify-content: center;
     position: relative;
     overflow: hidden;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-family: 'Plus Jakarta Sans', sans-serif;
     padding: 20px;
 }
 
-/* Ambient Orange Glows */
+/* Ambient Blue Glows */
 .glow-spot {
     position: absolute;
-    width: 300px;
-    height: 300px;
+    width: 400px;
+    height: 400px;
     border-radius: 50%;
-    filter: blur(80px);
+    filter: blur(100px);
     z-index: 0;
     pointer-events: none;
 }
 .top-left {
-    top: -100px;
-    left: -100px;
-    background: radial-gradient(circle, rgba(255, 82, 0, 0.15) 0%, transparent 70%);
+    top: -150px;
+    left: -150px;
+    background: radial-gradient(circle, rgba(59, 130, 246, 0.2) 0%, transparent 70%);
 }
 .bottom-right {
-    bottom: -100px;
-    right: -100px;
-    background: radial-gradient(circle, rgba(255, 173, 0, 0.1) 0%, transparent 70%);
+    bottom: -150px;
+    right: -150px;
+    background: radial-gradient(circle, rgba(6, 182, 212, 0.15) 0%, transparent 70%);
 }
 
 /* --- GLASS CARD --- */
 .login-card {
-    background: linear-gradient(180deg, rgba(30, 30, 30, 0.6) 0%, rgba(10, 10, 10, 0.8) 100%);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
+    background: rgba(15, 23, 42, 0.7);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 24px;
-    padding: 40px 30px;
+    padding: 40px 35px;
     width: 100%;
-    max-width: 400px;
-    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+    max-width: 420px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
     z-index: 1;
     position: relative;
 }
@@ -57,33 +63,33 @@ const styles = `
 /* --- HEADER --- */
 .login-header {
     text-align: center;
-    margin-bottom: 30px;
+    margin-bottom: 35px;
 }
 
 .icon-wrapper {
-    width: 60px; height: 60px;
-    background: rgba(255, 82, 0, 0.1);
-    border-radius: 50%;
+    width: 64px; height: 64px;
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(6, 182, 212, 0.1));
+    border-radius: 16px;
     display: flex; align-items: center; justify-content: center;
-    margin: 0 auto 15px auto;
-    border: 1px solid rgba(255, 82, 0, 0.2);
-    box-shadow: 0 0 20px rgba(255, 82, 0, 0.1);
+    margin: 0 auto 20px auto;
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    box-shadow: 0 0 30px rgba(59, 130, 246, 0.15);
 }
 
-.lock-icon { font-size: 24px; color: #FF5200; }
+.lock-icon { font-size: 24px; color: #3b82f6; }
 
 h1 {
-    font-size: 28px;
+    font-size: 26px;
     color: white;
-    margin: 0 0 10px 0;
+    margin: 0 0 8px 0;
     font-weight: 800;
     letter-spacing: -0.5px;
 }
 
 .login-header p {
-    color: #888;
+    color: #94a3b8;
     font-size: 14px;
-    line-height: 1.5;
+    line-height: 1.6;
 }
 
 /* --- FORM INPUTS --- */
@@ -91,12 +97,12 @@ h1 {
 
 .input-group label {
     display: block;
-    color: #aaa;
+    color: #cbd5e1;
     font-size: 12px;
     text-transform: uppercase;
-    letter-spacing: 1px;
+    letter-spacing: 0.5px;
     margin-bottom: 8px;
-    font-weight: 600;
+    font-weight: 700;
 }
 
 .input-wrapper {
@@ -106,62 +112,66 @@ h1 {
 
 .input-icon {
     position: absolute;
-    left: 15px;
-    color: #666;
-    font-size: 14px;
+    left: 16px;
+    color: #64748b;
+    font-size: 16px;
     z-index: 2;
+    transition: color 0.3s;
 }
+
+.input-wrapper:focus-within .input-icon { color: #3b82f6; }
 
 .input-wrapper input {
     width: 100%;
-    background: #0f0f0f;
-    border: 1px solid #333;
-    padding: 14px 14px 14px 40px; /* Space for icon */
+    background: #0f172a;
+    border: 1px solid #1e293b;
+    padding: 16px 16px 16px 45px; /* Space for icon */
     border-radius: 12px;
     color: white;
     font-size: 15px;
     outline: none;
-    transition: all 0.3s ease;
+    transition: all 0.2s ease;
+    font-weight: 500;
 }
 
 .input-wrapper input:focus {
-    border-color: #FF5200;
-    background: #1a1a1a;
-    box-shadow: 0 0 0 4px rgba(255, 82, 0, 0.1);
+    border-color: #3b82f6;
+    background: #0f172a;
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
 }
 
-.input-wrapper input::placeholder { color: #444; }
+.input-wrapper input::placeholder { color: #475569; }
 
 /* --- BUTTON & ERROR --- */
 .error-message {
-    background: rgba(255, 68, 68, 0.1);
-    border: 1px solid rgba(255, 68, 68, 0.2);
-    color: #ff6b6b;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    color: #f87171;
     padding: 12px;
     border-radius: 10px;
     font-size: 13px;
     text-align: center;
     margin-bottom: 20px;
+    font-weight: 600;
 }
 
 .login-btn {
     width: 100%;
-    background: linear-gradient(135deg, #d34400 0%, #FF5200 100%);
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
     color: white;
     border: none;
     padding: 16px;
-    border-radius: 14px;
+    border-radius: 12px;
     font-size: 15px;
     font-weight: 700;
     cursor: pointer;
     display: flex; align-items: center; justify-content: center; gap: 10px;
     transition: transform 0.2s, box-shadow 0.2s;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
 }
 
 .login-btn:hover {
-    box-shadow: 0 5px 20px rgba(255, 82, 0, 0.3);
+    box-shadow: 0 8px 20px rgba(37, 99, 235, 0.4);
     transform: translateY(-2px);
 }
 
@@ -173,29 +183,32 @@ h1 {
 .login-footer {
     margin-top: 30px;
     text-align: center;
-    border-top: 1px solid rgba(255,255,255,0.1);
-    padding-top: 20px;
+    border-top: 1px solid rgba(255,255,255,0.05);
+    padding-top: 25px;
 }
 
-.login-footer p { color: #666; font-size: 13px; margin-bottom: 15px; }
+.login-footer p { color: #64748b; font-size: 13px; margin-bottom: 20px; font-weight: 500; }
 
 .register-link {
-    color: #FF9933;
+    color: #3b82f6;
     text-decoration: none;
-    font-weight: bold;
+    font-weight: 700;
     margin-left: 5px;
+    transition: 0.2s;
 }
-.register-link:hover { text-decoration: underline; }
+.register-link:hover { color: #60a5fa; text-decoration: underline; }
 
 .secure-badge {
-    display: inline-block;
-    font-size: 10px;
-    color: #444;
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 11px;
+    color: #475569;
     text-transform: uppercase;
-    letter-spacing: 1px;
+    letter-spacing: 0.5px;
     background: rgba(255,255,255,0.03);
-    padding: 6px 12px;
+    padding: 6px 14px;
     border-radius: 20px;
+    font-weight: 700;
+    border: 1px solid rgba(255,255,255,0.02);
 }
 
 /* Spinner Animation */
@@ -233,24 +246,13 @@ const OwnerLogin = () => {
         setError("");
         setLoading(true);
 
-        // --- 🔒 SUPER ADMIN MASTER KEY CHECK ---
-        // This runs FIRST. If matched, it bypasses the backend login.
-        if (formData.username === "srinivas" && formData.password === "srividyabb1972") {
-            // alert("⚡ Welcome, Super Admin!"); // Optional Alert
-            localStorage.setItem("superAdminAuth", "true");
-            navigate("/superadmin");
-            setLoading(false);
-            return; // Stop execution here
-        }
-
-        // --- NORMAL RESTAURANT OWNER LOGIN ---
         try {
             const response = await axios.post("https://smart-menu-app-production.up.railway.app/api/auth/login", formData);
             
             if (response.data && response.data.token) {
                 // Save Tokens
                 localStorage.setItem("ownerToken", response.data.token);
-                localStorage.setItem("activeResId", response.data._id); // Unified ID key
+                localStorage.setItem("activeResId", response.data._id);
                 localStorage.setItem("ownerUsername", response.data.username);
                 
                 // Redirect to Admin Dashboard
@@ -260,7 +262,7 @@ const OwnerLogin = () => {
             }
         } catch (err) {
             console.error(err);
-            setError(err.response?.data?.message || "Login failed. Check credentials.");
+            setError(err.response?.data?.message || "Invalid credentials. Please try again.");
         } finally {
             setLoading(false);
         }
@@ -274,16 +276,16 @@ const OwnerLogin = () => {
                 <div className="glow-spot top-left"></div>
                 <div className="glow-spot bottom-right"></div>
 
-                <div className="login-card glass-panel">
+                <div className="login-card">
                     <div className="login-header">
                         <div className="icon-wrapper">
                             <FaLock className="lock-icon" />
                         </div>
-                        <h1>Staff Access</h1>
+                        <h1>Owner Portal</h1>
                         <p>
                             {restaurantId 
-                                ? <span>Login to manage <strong style={{color:'#f97316'}}>{restaurantId}</strong></span>
-                                : "Enter credentials to unlock the Owner Dashboard."
+                                ? <span>Login to manage <strong style={{color:'#3b82f6'}}>{restaurantId}</strong></span>
+                                : "Enter your credentials to access the secure dashboard."
                             }
                         </p>
                     </div>
@@ -308,7 +310,7 @@ const OwnerLogin = () => {
                         </div>
 
                         <div className="input-group">
-                            <label>Staff Password</label>
+                            <label>Password</label>
                             <div className="input-wrapper">
                                 <FaKey className="input-icon" />
                                 <input 
@@ -326,15 +328,15 @@ const OwnerLogin = () => {
                         {error && <div className="error-message">{error}</div>}
 
                         <button type="submit" className="login-btn" disabled={loading}>
-                            {loading ? <span className="spinner"></span> : <>Unlock Dashboards <FaArrowRight /></>}
+                            {loading ? <span className="spinner"></span> : <>ACCESS DASHBOARD <FaArrowRight /></>}
                         </button>
                     </form>
 
                     <div className="login-footer">
                         {!restaurantId && (
-                            <p>New Restaurant Owner? <Link to="/register" className="register-link">Register Business</Link></p>
+                            <p>New Business? <Link to="/register" className="register-link">Create Account</Link></p>
                         )}
-                        <span className="secure-badge">Smart Menu v2.0 • 100% Secure</span>
+                        <span className="secure-badge"><FaLock size={10}/> 256-BIT SECURE LOGIN</span>
                     </div>
                 </div>
             </div>

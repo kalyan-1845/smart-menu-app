@@ -71,16 +71,26 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customer
         return () => clearInterval(stockInterval);
     }, [currentRestId]);
 
+    // ✅ SESSION & TABLE HANDLING (Isolated Cart Logic)
     useEffect(() => {
         const lastRest = localStorage.getItem("last_rest_scanned");
+        
+        // If restaurant changes, clear local cart to avoid mixing data
         if (lastRest !== currentRestId) {
-            if (setCart) setCart([]);
+            if (setCart) setCart([]); 
             localStorage.setItem("last_rest_scanned", currentRestId || "");
         }
+
+        // Set Table Logic
         if (currentTable) {
             localStorage.setItem("last_table_scanned", currentTable);
             if (setTableNum) setTableNum(currentTable);
+        } else {
+            // Retrieve last known table if not in URL (for cart persistence)
+            const savedTable = localStorage.getItem("last_table_scanned");
+            if (savedTable && setTableNum) setTableNum(savedTable);
         }
+
         if (setRestaurantId) setRestaurantId(currentRestId);
     }, [currentRestId, currentTable, setRestaurantId, setTableNum, setCart]);
 
@@ -101,9 +111,9 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customer
     const totalQty = useMemo(() => cart.reduce((acc, item) => acc + item.quantity, 0), [cart]);
     const totalPrice = useMemo(() => cart.reduce((acc, item) => acc + (item.price * item.quantity), 0), [cart]);
 
+    // ✅ UNIQUE CART LINK (Per Customer ID)
     const cartLink = `/${currentRestId}/cart/${customerId}`;
 
-    // ✅ NEW: Handle Cart Click safely
     const handleCartClick = () => {
         if (totalQty === 0) {
             toast.error("Cart is empty! Add items first.");
@@ -142,7 +152,7 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customer
                 <FaSyncAlt className={refreshing ? "spin" : ""} style={{color: '#f97316'}} />
             </div>
 
-            {/* 🟠 STYLISH MARQUEE UI ADDED HERE */}
+            {/* 🟠 MARQUEE UI */}
             <div style={styles.marqueeWrapper}>
                 <div style={styles.marqueeContent}>
                     <span>✦ JAI SHREE RAM ✦ JAI SHREE RAM ✦ JAI SHREE RAM ✦ JAI SHREE RAM ✦ </span>
@@ -205,6 +215,7 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customer
                                     style={styles.img} 
                                     loading="lazy" 
                                     decoding="async"
+                                    onError={(e) => { e.target.onerror = null; e.target.src = "https://placehold.co/100?text=Yummy"; }}
                                 />
                                 {!isAvailable && <div style={styles.soldOut}>OUT OF STOCK</div>}
                             </div>
@@ -236,6 +247,7 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customer
                 })}
             </div>
 
+            {/* ✅ FIXED FLOATING CART FOR CUSTOMER */}
             {totalQty > 0 && (
                 <div style={styles.floatBarContainer} className="slide-up">
                     <div onClick={() => navigate(cartLink)} style={{...styles.floatBar, cursor: 'pointer'}}>
@@ -243,7 +255,9 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customer
                             <span style={styles.floatQty}>{totalQty} ITEMS</span>
                             <span style={styles.floatPrice}>₹{totalPrice}</span>
                         </div>
-                        <div style={styles.viewCart}>View Cart <FaArrowRight style={{marginLeft:8}}/></div>
+                        <div style={styles.viewCart}>
+                            View Cart <FaArrowRight style={{marginLeft:8}}/>
+                        </div>
                     </div>
                 </div>
             )}
@@ -254,7 +268,6 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customer
                 .slide-up { animation: slideUp 0.3s ease-out; }
                 @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
                 
-                /* MARQUEE ANIMATION */
                 @keyframes scroll {
                     0% { transform: translateX(0); }
                     100% { transform: translateX(-50%); }
@@ -272,9 +285,9 @@ const styles = {
     center: { display:'flex', height:'100vh', alignItems:'center', justifyContent:'center', flexDirection:'column' },
     pullLoader: { width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', overflow: 'hidden', transition: '0.2s' },
     
-    // 🟠 STYLISH DIVINE MARQUEE STYLES
+    // Marquee
     marqueeWrapper: { 
-        background: 'linear-gradient(90deg, #4a2c0f, #1a0b00, #4a2c0f)', // Saffron gradient
+        background: 'linear-gradient(90deg, #4a2c0f, #1a0b00, #4a2c0f)', 
         borderBottom: '2px solid #f97316', 
         padding: '10px 0', 
         overflow: 'hidden', 
@@ -284,12 +297,12 @@ const styles = {
     marqueeContent: { 
         display: 'inline-block', 
         paddingLeft: '100%', 
-        animation: 'scroll 25s linear infinite', // Slightly slower for elegance
+        animation: 'scroll 25s linear infinite', 
         color: '#ffedd5', 
         fontSize: '12px', 
         fontWeight: '900', 
         letterSpacing: '3px',
-        textShadow: '0 0 10px rgba(249, 115, 22, 0.8)' // Neon glow effect
+        textShadow: '0 0 10px rgba(249, 115, 22, 0.8)'
     },
 
     hero: { padding: "25px 20px", background: "linear-gradient(180deg, #0f0f0f 0%, #050505 100%)" },
@@ -318,6 +331,8 @@ const styles = {
     counter: { display: "flex", alignItems: "center", justifyContent: "space-between", background: "#111", borderRadius: "12px", width: "90px", border: '1px solid #f97316' },
     countBtn: { width: "30px", height: "35px", background: "transparent", border: "none", color: "#f97316", display: "flex", alignItems: "center", justifyContent: "center" },
     qtyNum: { fontWeight: "900", color: "white", fontSize: '14px' },
+    
+    // Fixed Cart Bar
     floatBarContainer: { position: "fixed", bottom: "30px", left: "0", right: "0", padding: "0 20px", zIndex: 1000 },
     floatBar: { background: "#22c55e", padding: "18px 25px", borderRadius: "24px", display: "flex", justifyContent: "space-between", alignItems: "center", textDecoration: "none", boxShadow: "0 20px 40px rgba(0,0,0,0.4)" },
     floatInfo: { display: "flex", flexDirection: "column" },
