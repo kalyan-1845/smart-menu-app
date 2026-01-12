@@ -7,7 +7,7 @@ import InstallButton from "../components/InstallButton";
 
 import { 
     FaTrash, FaUtensils, FaSignOutAlt, FaStore, FaCopy, 
-    FaQrcode, FaPlus, FaSpinner, FaPrint, 
+    FaQrcode, FaPlus, FaSpinner, FaPrint, FaBullhorn,
     FaCheck, FaFire, FaChartLine, FaWifi, FaTimes, FaReceipt, FaFilePdf, FaBoxOpen, FaExclamationTriangle
 } from "react-icons/fa";
 import { toast } from "react-hot-toast";
@@ -28,16 +28,20 @@ const RestaurantAdmin = () => {
     const [restaurantName, setRestaurantName] = useState(id);
     const [dishes, setDishes] = useState([]);
     const [inboxOrders, setInboxOrders] = useState([]);
-    const [inventory, setInventory] = useState([]); // 🆕 Inventory State
+    const [inventory, setInventory] = useState([]); 
     const [mongoId, setMongoId] = useState(null); 
     const [newItem, setNewItem] = useState({ name: "", price: "", image: "", category: "Starters (Veg)" });
-    const [newStockItem, setNewStockItem] = useState({ itemName: "", currentStock: "", unit: "kg", lowStockThreshold: 5 }); // 🆕 Stock Form
+    const [newStockItem, setNewStockItem] = useState({ itemName: "", currentStock: "", unit: "kg", lowStockThreshold: 5 });
     const [isCustomCategory, setIsCustomCategory] = useState(false);
     const [customCategory, setCustomCategory] = useState("");
     const [qrRange, setQrRange] = useState({ start: 1, end: 12 });
     const [selectedTable, setSelectedTable] = useState(null);
 
-    // --- SYNC ---
+    // --- SYSTEM STATE (Broadcast & Maintenance) ---
+    const [systemBroadcast, setSystemBroadcast] = useState("");
+    const [isMaintenance, setIsMaintenance] = useState(false);
+
+    // --- SYNC DATA ---
     const refreshData = useCallback(async (manualId) => {
         const fetchId = manualId || mongoId || localStorage.getItem(`owner_id_${id}`);
         const token = localStorage.getItem(`owner_token_${id}`); 
@@ -45,14 +49,21 @@ const RestaurantAdmin = () => {
 
         try {
             const config = { headers: { Authorization: `Bearer ${token}` } };
-            const [dishRes, orderRes, invRes] = await Promise.all([
+            const [dishRes, orderRes, invRes, sysRes] = await Promise.all([
                 axios.get(`${API_BASE}/dishes?restaurantId=${fetchId}&t=${Date.now()}`, config),
                 axios.get(`${API_BASE}/orders/inbox?restaurantId=${fetchId}&t=${Date.now()}`, config),
-                axios.get(`${API_BASE}/inventory?restaurantId=${fetchId}`, config) // 🆕 Fetch Stock
+                axios.get(`${API_BASE}/inventory?restaurantId=${fetchId}`, config),
+                axios.get(`${API_BASE}/superadmin/system-status`) // ✅ Check System Status
             ]);
+            
             setDishes(dishRes.data || []);
             setInboxOrders(orderRes.data || []);
             setInventory(invRes.data || []);
+            
+            // Update System Global Info
+            setSystemBroadcast(sysRes.data.message || "");
+            setIsMaintenance(sysRes.data.maintenance || false);
+
             setIsLoading(false);
         } catch (e) { 
             setIsLoading(false);
@@ -68,9 +79,26 @@ const RestaurantAdmin = () => {
             setIsAuthenticated(true);
             refreshData(savedId);
         } else setIsLoading(false);
+
+        const sysInterval = setInterval(() => refreshData(), 30000); // Check for orders/broadcast every 30s
+        return () => clearInterval(sysInterval);
     }, [id, refreshData]);
 
     // --- ACTIONS ---
+    const handleLogin = async (e) => {
+        e.preventDefault();
+        try {
+            const res = await axios.post(`${API_BASE}/auth/login`, { username: id, password });
+            localStorage.setItem(`owner_token_${id}`, res.data.token);
+            localStorage.setItem(`owner_id_${id}`, res.data._id);
+            setMongoId(res.data._id);
+            setRestaurantName(res.data.restaurantName);
+            setIsAuthenticated(true);
+            refreshData(res.data._id);
+            toast.success("Login Successful");
+        } catch (err) { toast.error("Invalid Key"); }
+    };
+
     const handleAddItem = async () => {
         if (!newItem.name || !newItem.price) return toast.error("Name & Price Required");
         const finalCategory = isCustomCategory ? customCategory : newItem.category;
@@ -86,7 +114,6 @@ const RestaurantAdmin = () => {
         } catch (err) { toast.error("Failed to add item"); }
     };
 
-    // 🆕 INVENTORY ACTION
     const handleAddInventory = async () => {
         if (!newStockItem.itemName || !newStockItem.currentStock) return toast.error("Fill all fields");
         const token = localStorage.getItem(`owner_token_${id}`);
@@ -98,7 +125,17 @@ const RestaurantAdmin = () => {
         } catch (err) { toast.error("Failed to add stock"); }
     };
 
-    // --- RENDERERS ---
+    const handleDeleteDish = async (dishId) => {
+        if (!window.confirm("Delete this dish?")) return;
+        const token = localStorage.getItem(`owner_token_${id}`);
+        try {
+            await axios.delete(`${API_BASE}/dishes/${dishId}`, { headers: { Authorization: `Bearer ${token}` } });
+            toast.success("Dish Deleted");
+            refreshData(mongoId);
+        } catch (err) { toast.error("Delete Failed"); }
+    };
+
+    // --- RENDER LOGIC ---
     const tableData = useMemo(() => {
         const map = {};
         for(let i = parseInt(qrRange.start); i <= parseInt(qrRange.end); i++) {
@@ -115,18 +152,58 @@ const RestaurantAdmin = () => {
         return map;
     }, [inboxOrders, qrRange]);
 
-    if (isLoading) return <div className="admin-container"><div className="flex-center"><FaSpinner className="spin" size={40} color="#3b82f6"/></div></div>;
+    const printKOT = (order) => {
+        const win = window.open('', '', 'width=300,height=600');
+        win.document.write(`<html><body style="font-family:monospace;width:280px;padding:10px;"><h3 style="text-align:center;margin:0;">${restaurantName}</h3><p style="text-align:center;margin:5px 0;">KITCHEN ORDER</p><hr/><p>Table: <b>${order.tableNum}</b></p><hr/><table style="width:100%;">${order.items.map(i => `<tr><td>${i.name}</td><td style="text-align:right;">x${i.quantity}</td></tr>`).join('')}</table><hr/><p style="text-align:center;font-size:10px;">${new Date().toLocaleTimeString()}</p></body></html>`);
+        win.document.close(); win.print(); win.close();
+    };
+
+    const printBill = (tableNum, orders) => {
+        const total = orders.reduce((sum, o) => sum + o.totalAmount, 0);
+        const win = window.open('', '', 'width=300,height=600');
+        win.document.write(`<html><body style="font-family:monospace;width:280px;padding:10px;"><h2 style="text-align:center;margin:0;">${restaurantName}</h2><hr/><p>Table: ${tableNum}</p><hr/><table style="width:100%;text-align:left;"><tr><th>Item</th><th>Qty</th><th>Price</th></tr>${orders.flatMap(o => o.items).map(i => `<tr><td>${i.name}</td><td>${i.quantity}</td><td>${i.price*i.quantity}</td></tr>`).join('')}</table><hr/><h3>Total: ₹${total}</h3><hr/><p style="text-align:center;">Visit Again!</p></body></html>`);
+        win.document.close(); win.print(); win.close();
+    };
+
+    const handleCompleteTable = async (tableNum, orders) => {
+        if(!window.confirm(`Close Table ${tableNum}?`)) return;
+        try {
+            await Promise.all(orders.map(o => axios.put(`${API_BASE}/orders/${o._id}/status`, { status: 'Completed' })));
+            toast.success(`Table ${tableNum} Closed`);
+            setSelectedTable(null); refreshData();
+        } catch(e) { toast.error("Error closing"); }
+    };
+
+    // --- SCREENS ---
+    if (isMaintenance) return (
+        <div style={styles.maintenanceScreen}>
+            <FaExclamationTriangle size={80} color="#f97316"/>
+            <h1>SYSTEM MAINTENANCE</h1>
+            <p>CEO has initiated a system update. We will be back online shortly.</p>
+        </div>
+    );
+
+    if (isLoading) return <div className="admin-container"><div className="flex-center" style={{height:'80vh'}}><FaSpinner className="spin" size={40} color="#3b82f6"/></div></div>;
 
     if (!isAuthenticated) return (
-        <div className="admin-container"><style>{styles}</style>
-            <div className="flex-center"><div className="glass-card text-center" style={{width:'350px'}}><FaStore size={50} color="#3b82f6" className="mb-20"/><h1>ADMIN LOGIN</h1><form onSubmit={(e) => {e.preventDefault(); handleLogin(e)}} className="mt-25"><input type="password" placeholder="Access Key" value={password} onChange={e=>setPassword(e.target.value)} className="input-dark" autoFocus/><button type="submit" className="btn-primary">LOGIN</button></form></div></div>
+        <div className="admin-container">
+            <style>{globalStyles}</style>
+            <div className="flex-center" style={{height:'90vh'}}><div className="glass-card text-center" style={{width:'350px'}}><FaStore size={50} color="#3b82f6" className="mb-20"/><h1>ADMIN LOGIN</h1><form onSubmit={handleLogin} className="mt-25"><input type="password" placeholder="Access Key" value={password} onChange={e=>setPassword(e.target.value)} className="input-dark" autoFocus/><button type="submit" className="btn-primary">LOGIN</button></form></div></div>
         </div>
     );
 
     return (
         <div className="admin-container">
-            <style>{styles}</style>
+            <style>{globalStyles}</style>
             <div className="max-w-wrapper">
+                
+                {/* GLOBAL BROADCAST BAR */}
+                {systemBroadcast && (
+                    <div className="broadcast-banner">
+                        <FaBullhorn /> <span>CEO BROADCAST: {systemBroadcast}</span>
+                    </div>
+                )}
+
                 <header className="app-header">
                     <div><h1 className="shop-title">{restaurantName}</h1><span className="badge-pro">PREMIUM ADMIN</span></div>
                     <button onClick={() => {localStorage.removeItem(`owner_token_${id}`); window.location.reload();}} className="btn-glass danger"><FaSignOutAlt/></button>
@@ -139,7 +216,6 @@ const RestaurantAdmin = () => {
                     <button onClick={() => setActiveTab("revenue")} className={`nav-btn ${activeTab === "revenue" ? 'active' : ''}`}><FaChartLine /> <span>Stats</span></button>
                 </div>
 
-                {/* --- TABLES TAB --- */}
                 {activeTab === "orders" && (
                     <div className="table-grid">
                         {Object.values(tableData).map((table) => (
@@ -151,7 +227,6 @@ const RestaurantAdmin = () => {
                     </div>
                 )}
 
-                {/* --- INVENTORY TAB (NEW) --- */}
                 {activeTab === "inventory" && (
                     <div className="menu-layout">
                         <div className="glass-card">
@@ -188,7 +263,6 @@ const RestaurantAdmin = () => {
                     </div>
                 )}
                 
-                {/* --- MENU TAB (Existing) --- */}
                 {activeTab === "menu" && (
                     <div className="menu-layout">
                         <div className="glass-card">
@@ -200,13 +274,12 @@ const RestaurantAdmin = () => {
                         </div>
                         <div className="glass-card h-600">
                              <h3 className="section-title">ACTIVE DISHES</h3>
-                            {dishes.map(dish => (<div key={dish._id} className="dish-item"><div className="flex-center gap-12"><div className="img-box">{dish.image && <img src={dish.image} alt=""/>}</div><div><div className="fw-700">{dish.name}</div><div className="blue-text fw-bold">₹{dish.price}</div></div></div><button onClick={()=>handleDeleteDish(dish._id)} className="btn-icon-danger"><FaTrash/></button></div>))}
+                            {dishes.map(dish => (<div key={dish._id} className="dish-item"><div className="flex gap-12"><div className="img-box">{dish.image && <img src={dish.image} alt=""/>}</div><div><div className="fw-700">{dish.name}</div><div className="blue-text fw-bold">₹{dish.price}</div></div></div><button onClick={()=>handleDeleteDish(dish._id)} className="btn-icon-danger"><FaTrash/></button></div>))}
                         </div>
                     </div>
                 )}
             </div>
 
-            {/* --- MODAL (Existing) --- */}
             {selectedTable && (
                 <div className="qr-overlay" onClick={() => setSelectedTable(null)}>
                     <div className="qr-modal" onClick={e => e.stopPropagation()}>
@@ -234,10 +307,48 @@ const RestaurantAdmin = () => {
     );
 };
 
-const styles = `
+const styles = {
+    maintenanceScreen: {
+        height: '100vh', 
+        background: '#020617', 
+        display: 'flex', 
+        flexDirection: 'column',
+        alignItems: 'center', 
+        justifyContent: 'center', 
+        textAlign: 'center', 
+        color: 'white', 
+        padding: 40,
+        fontFamily: 'Plus Jakarta Sans, sans-serif'
+    }
+};
+
+const globalStyles = `
 .admin-container { min-height: 100vh; padding: 20px; background: #020617; color: white; font-family: 'Plus Jakarta Sans', sans-serif; padding-bottom: 90px; }
 .max-w-wrapper { width: 100%; max-width: 100%; margin: 0 auto; }
 @media (min-width: 1024px) { .max-w-wrapper { padding: 0 60px; } }
+
+/* Broadcast Banner */
+.broadcast-banner {
+    background: rgba(249, 115, 22, 0.1); 
+    border: 1px solid #f97316; 
+    color: #f97316; 
+    padding: 15px; 
+    border-radius: 12px; 
+    margin-bottom: 25px; 
+    font-size: 14px; 
+    font-weight: 800; 
+    display: flex; 
+    align-items: center; 
+    gap: 12px;
+    animation: pulseGlow 2s infinite;
+}
+@keyframes pulseGlow {
+    0% { box-shadow: 0 0 0px rgba(249, 115, 22, 0); }
+    50% { box-shadow: 0 0 15px rgba(249, 115, 22, 0.2); }
+    100% { box-shadow: 0 0 0px rgba(249, 115, 22, 0); }
+}
+
+.flex { display: flex; align-items: center; }
 .flex-center { display: flex; align-items: center; justify-content: center; }
 .flex-end { display: flex; justify-content: flex-end; }
 .gap-12 { gap: 12px; }
@@ -273,6 +384,7 @@ const styles = `
 .btn-primary { background: #3b82f6; border: none; color: white; width: 100%; padding: 18px; border-radius: 14px; font-weight: 700; cursor: pointer; font-size: 16px; }
 .btn-glass { background: rgba(255,255,255,0.05); border: 1px solid #334155; color: white; padding: 8px 15px; border-radius: 10px; cursor: pointer; }
 .btn-glass.danger { color: #ef4444; border-color: #ef4444; }
+.btn-icon-danger { background: rgba(239, 68, 68, 0.1); color: #ef4444; border: none; padding: 10px; border-radius: 10px; cursor: pointer; }
 
 .dish-item { display: flex; justify-content: space-between; align-items: center; padding: 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
 .img-box { width: 50px; height: 50px; background: #0f172a; border-radius: 10px; overflow: hidden; }
@@ -288,6 +400,8 @@ const styles = `
 .btn-action.blue { background: #3b82f6; }
 .btn-action.green { background: #10b981; }
 .total-val { color: #34d399; font-size: 28px; font-weight: 800; }
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 `;
 
 export default RestaurantAdmin;
