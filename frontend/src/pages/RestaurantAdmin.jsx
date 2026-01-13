@@ -16,7 +16,7 @@ const CATEGORY_LIST = ["Starters (Veg)", "Starters (Non-Veg)", "Main Course (Veg
 
 const RestaurantAdmin = () => {
     const { id } = useParams();
-    const SERVER_URL = "https://smart-menu-app-production.up.railway.app";
+    const SERVER_URL = "https://kovixa-backend-v99.up.railway.app";
     const API_BASE = `${SERVER_URL}/api`;
     
     // --- STATE ---
