@@ -1,57 +1,40 @@
-import express from 'express';
+import Owner from '../models/Owner.js';
 import jwt from 'jsonwebtoken';
-import webpush from 'web-push'; 
-import Owner from '../models/Owner.js'; 
-import { getRestaurantPublic } from '../controllers/authController.js'; // ✅ Import the new controller
+import mongoose from 'mongoose';
 
-const router = express.Router();
-
-// --- 🔑 WEB PUSH CONFIG ---
-const publicKey = process.env.VAPID_PUBLIC_KEY;
-const privateKey = process.env.VAPID_PRIVATE_KEY;
-
-if (publicKey && privateKey) {
-    try {
-        webpush.setVapidDetails('mailto:support@kovixa.com', publicKey, privateKey);
-    } catch (err) { console.error("VAPID Config Error"); }
-}
-
+// --- 🛡️ TOKEN GENERATOR ---
 const generateToken = (id) => {
     return jwt.sign({ id }, process.env.JWT_SECRET || 'fallback_secret', { expiresIn: '30d' });
 };
 
-// --- 🌐 PUBLIC RESTAURANT DATA (Optimized Controller) ---
-router.get('/restaurant/:id', getRestaurantPublic);
-
-// --- 🎯 OWNER-ID LOOKUP (Crucial for Menu.js) ---
-router.get('/owner-id/:username', async (req, res) => {
-    try {
-        // Simple, fast lookup for internal ID resolution
-        const owner = await Owner.findOne({ 
-            username: req.params.username.toLowerCase() 
-        }).select('_id');
-
-        if (!owner) return res.status(404).json({ message: "Not found" });
-        res.json({ id: owner._id }); 
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
-});
-
-// --- 📝 REGISTER ---
-router.post('/register', async (req, res) => {
+// --- 📝 REGISTER OWNER ---
+export const registerOwner = async (req, res) => {
     try {
         let { restaurantName, username, email, password } = req.body;
-        if (!email) email = `${username.toLowerCase()}@smartmenu.local`; 
 
-        const userExists = await Owner.findOne({ $or: [{ username: username.toLowerCase() }, { email }] });
-        if (userExists) return res.status(400).json({ message: 'User already exists.' });
+        // 1. Sanitize: Force lowercase for unique ID
+        const cleanUsername = username.trim().toLowerCase();
+        
+        // 2. Auto-email if missing (Matches your Register.jsx logic)
+        if (!email) email = `${cleanUsername}@kovixa.local`; 
 
+        // 3. Duplicate Check
+        const userExists = await Owner.findOne({ 
+            $or: [{ username: cleanUsername }, { email }] 
+        });
+        if (userExists) return res.status(400).json({ message: 'Unique ID or Email already taken.' });
+
+        // 4. Set 100-Year Access Date
+        const freeAccessDate = new Date();
+        freeAccessDate.setFullYear(freeAccessDate.getFullYear() + 100); 
+
+        // 5. Create Owner
         const user = await Owner.create({ 
-            restaurantName, 
-            username: username.toLowerCase(), 
+            restaurantName: restaurantName.trim(), 
+            username: cleanUsername, 
             email, 
             password, 
+            trialEndsAt: freeAccessDate, 
             isPro: true
         });
         
@@ -60,14 +43,18 @@ router.post('/register', async (req, res) => {
             username: user.username,
             token: generateToken(user._id)
         });
-    } catch (error) { res.status(400).json({ message: error.message }); }
-});
+    } catch (error) { 
+        res.status(400).json({ message: error.message }); 
+    }
+};
 
-// --- 🔑 LOGIN ---
-router.post('/login', async (req, res) => {
+// --- 🔑 LOGIN OWNER ---
+export const loginOwner = async (req, res) => {
     const { username, password } = req.body;
     try {
         const user = await Owner.findOne({ username: username.toLowerCase() });
+
+        // matchPassword is a method defined in your Owner model
         if (user && (await user.matchPassword(password))) {
             res.json({
                 _id: user._id,
@@ -76,26 +63,54 @@ router.post('/login', async (req, res) => {
                 token: generateToken(user._id),
                 isPro: user.isPro
             });
-        } else { res.status(401).json({ message: 'Invalid credentials' }); }
-    } catch (error) { res.status(500).json({ message: error.message }); }
-});
-
-// --- 📲 SAVE PUSH SUBSCRIPTION ---
-router.post('/save-subscription', async (req, res) => {
-    const { restaurantId, subscription } = req.body;
-    try {
-        const user = await Owner.findById(restaurantId);
-        if (user) {
-            const exists = user.pushSubscriptions.find(s => s.endpoint === subscription.endpoint);
-            if (!exists) {
-                user.pushSubscriptions.push(subscription);
-                await user.save();
-            }
-            res.status(200).json({ success: true });
-        } else {
-            res.status(404).json({ message: "User not found" });
+        } else { 
+            res.status(401).json({ message: 'Invalid credentials. Check your ID and Password.' }); 
         }
-    } catch (err) { res.status(500).json({ error: err.message }); }
-});
+    } catch (error) { 
+        res.status(500).json({ message: "Server Error during login." }); 
+    }
+};
 
-export default router;
+// --- 🔍 GET OWNER ID BY USERNAME (For Menu Logic) ---
+export const getOwnerIdByUsername = async (req, res) => {
+    try {
+        const owner = await Owner.findOne({ 
+            username: req.params.username.toLowerCase() 
+        }).select('_id');
+
+        if (!owner) return res.status(404).json({ message: "Restaurant ID not found" });
+        
+        res.json({ id: owner._id }); 
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// --- 🌐 GET RESTAURANT DETAILS (With Cache Killing) ---
+export const getRestaurantDetails = async (req, res) => {
+    // Kill cache to prevent browser from showing old data
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    
+    try {
+        const { id } = req.params;
+        let owner;
+
+        // Check if searching by MongoDB _id or Username
+        if (mongoose.Types.ObjectId.isValid(id)) {
+            owner = await Owner.findById(id).select('username restaurantName isPro');
+        } else {
+            owner = await Owner.findOne({ username: id.toLowerCase() }).select('username restaurantName isPro');
+        }
+
+        if (!owner) return res.status(404).json({ message: 'Restaurant not found' });
+        
+        res.json({
+            id: owner._id,
+            username: owner.username,
+            restaurantName: owner.restaurantName,
+            isPro: owner.isPro
+        });
+    } catch (error) { 
+        res.status(500).json({ message: error.message }); 
+    }
+};
