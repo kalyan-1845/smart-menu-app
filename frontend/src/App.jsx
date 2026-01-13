@@ -20,7 +20,7 @@ import RestaurantAdmin from "./pages/RestaurantAdmin";
 import RoleLogin from "./pages/RoleLogin"; 
 import ProjectFlyer from "./pages/ProjectFlyer"; 
 
-const API_BASE = "https://kovixa-backend-v99-production-a1b2.up.railway.app/api";
+const API_BASE = "https://smart-menu-app-production.up.railway.app/api";
 
 const ScrollToTop = () => {
   const { pathname } = useLocation();

@@ -16,8 +16,7 @@ const CATEGORY_LIST = ["Starters (Veg)", "Starters (Non-Veg)", "Main Course (Veg
 
 const RestaurantAdmin = () => {
     const { id } = useParams();
-    // ✅ FIXED: Using the new working domain
-    const SERVER_URL = "https://kovixa-backend-v99-production-a1b2.up.railway.app";
+    const SERVER_URL = "https://smart-menu-app-production.up.railway.app";
     const API_BASE = `${SERVER_URL}/api`;
     
     // --- STATE ---
@@ -38,35 +37,15 @@ const RestaurantAdmin = () => {
     const [qrRange, setQrRange] = useState({ start: 1, end: 12 });
     const [selectedTable, setSelectedTable] = useState(null);
 
-    // --- 📶 OFFLINE & SYSTEM STATE ---
-    const [isOnline, setIsOnline] = useState(navigator.onLine);
+    // --- SYSTEM STATE (Broadcast & Maintenance) ---
     const [systemBroadcast, setSystemBroadcast] = useState("");
     const [isMaintenance, setIsMaintenance] = useState(false);
 
-    // Monitor Network Status
-    useEffect(() => {
-        const handleOnline = () => { setIsOnline(true); toast.success("Back Online! Syncing..."); refreshData(); };
-        const handleOffline = () => { setIsOnline(false); toast.error("Offline Mode: Data may be outdated."); };
-        window.addEventListener('online', handleOnline);
-        window.addEventListener('offline', handleOffline);
-        return () => { window.removeEventListener('online', handleOnline); window.removeEventListener('offline', handleOffline); };
-    }, []);
-
-    // --- SYNC DATA (With Offline Cache) ---
+    // --- SYNC DATA ---
     const refreshData = useCallback(async (manualId) => {
         const fetchId = manualId || mongoId || localStorage.getItem(`owner_id_${id}`);
         const token = localStorage.getItem(`owner_token_${id}`); 
         if (!fetchId) return;
-
-        // 🛡️ OFFLINE CACHE LOGIC: If offline, load from LocalStorage immediately
-        if (!navigator.onLine) {
-            const cachedOrders = localStorage.getItem(`offline_orders_${fetchId}`);
-            const cachedDishes = localStorage.getItem(`offline_dishes_${fetchId}`);
-            if (cachedOrders) setInboxOrders(JSON.parse(cachedOrders));
-            if (cachedDishes) setDishes(JSON.parse(cachedDishes));
-            setIsLoading(false);
-            return;
-        }
 
         try {
             const config = { headers: { Authorization: `Bearer ${token}` } };
@@ -74,19 +53,16 @@ const RestaurantAdmin = () => {
                 axios.get(`${API_BASE}/dishes?restaurantId=${fetchId}&t=${Date.now()}`, config),
                 axios.get(`${API_BASE}/orders/inbox?restaurantId=${fetchId}&t=${Date.now()}`, config),
                 axios.get(`${API_BASE}/inventory?restaurantId=${fetchId}`, config),
-                axios.get(`${API_BASE}/superadmin/system-status`) 
+                axios.get(`${API_BASE}/superadmin/system-status`) // ✅ Check System Status
             ]);
             
-            // Update State
             setDishes(dishRes.data || []);
             setInboxOrders(orderRes.data || []);
             setInventory(invRes.data || []);
+            
+            // Update System Global Info
             setSystemBroadcast(sysRes.data.message || "");
             setIsMaintenance(sysRes.data.maintenance || false);
-
-            // ✅ Save to Offline Cache
-            localStorage.setItem(`offline_orders_${fetchId}`, JSON.stringify(orderRes.data));
-            localStorage.setItem(`offline_dishes_${fetchId}`, JSON.stringify(dishRes.data));
 
             setIsLoading(false);
         } catch (e) { 
@@ -104,7 +80,7 @@ const RestaurantAdmin = () => {
             refreshData(savedId);
         } else setIsLoading(false);
 
-        const sysInterval = setInterval(() => refreshData(), 30000); 
+        const sysInterval = setInterval(() => refreshData(), 30000); // Check for orders/broadcast every 30s
         return () => clearInterval(sysInterval);
     }, [id, refreshData]);
 
@@ -221,14 +197,7 @@ const RestaurantAdmin = () => {
             <style>{globalStyles}</style>
             <div className="max-w-wrapper">
                 
-                {/* 📶 OFFLINE BANNER */}
-                {!isOnline && (
-                    <div className="offline-banner">
-                        <FaWifi /> <span>OFFLINE MODE: Using stored data. Printing still works.</span>
-                    </div>
-                )}
-
-                {/* 📢 GLOBAL BROADCAST BAR */}
+                {/* GLOBAL BROADCAST BAR */}
                 {systemBroadcast && (
                     <div className="broadcast-banner">
                         <FaBullhorn /> <span>CEO BROADCAST: {systemBroadcast}</span>
@@ -339,7 +308,18 @@ const RestaurantAdmin = () => {
 };
 
 const styles = {
-    maintenanceScreen: { height: '100vh', background: '#020617', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', color: 'white', padding: 40, fontFamily: 'Plus Jakarta Sans, sans-serif' }
+    maintenanceScreen: {
+        height: '100vh', 
+        background: '#020617', 
+        display: 'flex', 
+        flexDirection: 'column',
+        alignItems: 'center', 
+        justifyContent: 'center', 
+        textAlign: 'center', 
+        color: 'white', 
+        padding: 40,
+        fontFamily: 'Plus Jakarta Sans, sans-serif'
+    }
 };
 
 const globalStyles = `
@@ -347,14 +327,26 @@ const globalStyles = `
 .max-w-wrapper { width: 100%; max-width: 100%; margin: 0 auto; }
 @media (min-width: 1024px) { .max-w-wrapper { padding: 0 60px; } }
 
-/* Offline & Broadcast Banners */
-.broadcast-banner, .offline-banner {
-    background: rgba(249, 115, 22, 0.1); border: 1px solid #f97316; color: #f97316; 
-    padding: 15px; border-radius: 12px; margin-bottom: 20px; font-size: 14px; 
-    font-weight: 800; display: flex; align-items: center; gap: 12px;
+/* Broadcast Banner */
+.broadcast-banner {
+    background: rgba(249, 115, 22, 0.1); 
+    border: 1px solid #f97316; 
+    color: #f97316; 
+    padding: 15px; 
+    border-radius: 12px; 
+    margin-bottom: 25px; 
+    font-size: 14px; 
+    font-weight: 800; 
+    display: flex; 
+    align-items: center; 
+    gap: 12px;
+    animation: pulseGlow 2s infinite;
 }
-.offline-banner { background: rgba(239, 68, 68, 0.1); border-color: #ef4444; color: #ef4444; animation: flash 1.5s infinite; }
-@keyframes flash { 50% { opacity: 0.6; } }
+@keyframes pulseGlow {
+    0% { box-shadow: 0 0 0px rgba(249, 115, 22, 0); }
+    50% { box-shadow: 0 0 15px rgba(249, 115, 22, 0.2); }
+    100% { box-shadow: 0 0 0px rgba(249, 115, 22, 0); }
+}
 
 .flex { display: flex; align-items: center; }
 .flex-center { display: flex; align-items: center; justify-content: center; }
@@ -376,6 +368,7 @@ const globalStyles = `
 .nav-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 40px; }
 .nav-btn { background: #0f172a; border: 1px solid #1e293b; border-radius: 16px; height: 100px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #64748b; cursor: pointer; transition: 0.2s; font-size: 16px; }
 .nav-btn.active { border-color: #3b82f6; color: #60a5fa; background: rgba(37, 99, 235, 0.1); }
+.nav-btn svg { font-size: 24px; margin-bottom: 5px; }
 
 .table-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 25px; }
 .table-box { aspect-ratio: 1; border-radius: 24px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; border: 2px solid transparent; transition: 0.2s; }
@@ -390,6 +383,7 @@ const globalStyles = `
 .input-dark { width: 100%; background: #0f172a; border: 1px solid #1e293b; padding: 16px; border-radius: 12px; color: white; margin-bottom: 15px; font-size: 16px; }
 .btn-primary { background: #3b82f6; border: none; color: white; width: 100%; padding: 18px; border-radius: 14px; font-weight: 700; cursor: pointer; font-size: 16px; }
 .btn-glass { background: rgba(255,255,255,0.05); border: 1px solid #334155; color: white; padding: 8px 15px; border-radius: 10px; cursor: pointer; }
+.btn-glass.danger { color: #ef4444; border-color: #ef4444; }
 .btn-icon-danger { background: rgba(239, 68, 68, 0.1); color: #ef4444; border: none; padding: 10px; border-radius: 10px; cursor: pointer; }
 
 .dish-item { display: flex; justify-content: space-between; align-items: center; padding: 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
