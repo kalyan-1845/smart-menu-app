@@ -1,3 +1,4 @@
+// models/Owner.js
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 
@@ -6,35 +7,22 @@ const ownerSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true },
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
-  
-  // ✅ Phone Number (Matches your new controller)
-  phoneNumber: { type: String, default: "" },
-
+  phoneNumber: { type: String, default: "" }, 
   isPro: { type: Boolean, default: false },
   trialEndsAt: { type: Date },
-  
-  // Push Notifications
   pushSubscriptions: { type: Array, default: [] },
-  
-  // CEO Notes
   ceoNotes: { type: String, default: "" },
-  
-  // Settings
-  settings: {
-    menuActive: { type: Boolean, default: true }
-  }
+  settings: { menuActive: { type: Boolean, default: true } }
 }, { timestamps: true });
 
-// 🔒 1. ENCRYPT PASSWORD (Runs automatically before saving)
+// 1. Encrypt Password
 ownerSchema.pre('save', async function (next) {
-  if (!this.isModified('password')) {
-    next();
-  }
+  if (!this.isModified('password')) next();
   const salt = await bcrypt.genSalt(10);
   this.password = await bcrypt.hash(this.password, salt);
 });
 
-// 🔑 2. PASSWORD CHECKER (CRITICAL: Login fails without this)
+// 2. THIS FIXES THE 500 ERROR 👇
 ownerSchema.methods.matchPassword = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
 };
