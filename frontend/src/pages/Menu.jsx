@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { 
     FaSearch, FaPlus, FaMinus, FaShoppingCart, FaArrowRight, 
-    FaLock, FaSyncAlt, FaLeaf, FaDrumstickBite, FaFire, FaStore 
+    FaLock, FaSyncAlt, FaLeaf, FaDrumstickBite, FaFire, FaStore, FaExclamationTriangle, FaBullhorn
 } from "react-icons/fa";
 import { toast } from "react-hot-toast"; 
 import LoadingSpinner from "../components/LoadingSpinner";
@@ -29,6 +29,11 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customer
     const [loading, setLoading] = useState(dishes.length === 0); 
     const [isSuspended, setIsSuspended] = useState(false);
     
+    // CEO GLOBAL STATES
+    const [systemBroadcast, setSystemBroadcast] = useState("");
+    const [globalBanner, setGlobalBanner] = useState("");
+    const [isMaintenance, setIsMaintenance] = useState(false);
+
     // Pull-to-refresh
     const [pullDistance, setPullDistance] = useState(0);
     const [refreshing, setRefreshing] = useState(false);
@@ -47,13 +52,21 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customer
             const realMongoId = idRes.data.id;
 
             if (realMongoId) {
-                // 2. Fetch Menu
-                const res = await axios.get(`${API_BASE}/dishes?restaurantId=${realMongoId}&t=${Date.now()}`);
+                // 2. Fetch Menu & Global Status
+                const [menuRes, sysRes] = await Promise.all([
+                    axios.get(`${API_BASE}/dishes?restaurantId=${realMongoId}&t=${Date.now()}`),
+                    axios.get(`${API_BASE}/superadmin/system-status`)
+                ]);
                 
-                if (res.data.status === "suspended") {
+                // Set System Info
+                setSystemBroadcast(sysRes.data.message || "");
+                setGlobalBanner(sysRes.data.globalBanner || "");
+                setIsMaintenance(sysRes.data.maintenance || false);
+
+                if (menuRes.data.status === "suspended") {
                     setIsSuspended(true);
                 } else {
-                    const dishData = Array.isArray(res.data) ? res.data : (res.data.dishes || []);
+                    const dishData = Array.isArray(menuRes.data) ? menuRes.data : (menuRes.data.dishes || []);
                     setDishes(dishData);
                     localStorage.setItem(`menu_cache_${currentRestId}`, JSON.stringify(dishData));
                 }
@@ -123,6 +136,14 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customer
         return <FaLeaf color="#22c55e" size={12}/>; // Green for Veg
     };
 
+    if (isMaintenance) return (
+        <div style={styles.center}>
+            <FaExclamationTriangle size={60} color="#f97316"/>
+            <h1 style={{color:'white', marginTop:20, textAlign:'center', fontFamily:'Plus Jakarta Sans'}}>SERVER MAINTENANCE</h1>
+            <p style={{color:'#666', padding:'0 40px', textAlign:'center'}}>Our systems are being upgraded. We will be back online shortly.</p>
+        </div>
+    );
+
     if (loading && dishes.length === 0) return <LoadingSpinner />;
 
     if (isSuspended) return (
@@ -152,6 +173,13 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customer
                 </div>
             </div>
 
+            {/* CEO GLOBAL BROADCAST ALERT */}
+            {systemBroadcast && (
+                <div style={styles.systemAlert}>
+                    <FaBullhorn /> <span>{systemBroadcast}</span>
+                </div>
+            )}
+
             {/* 🟠 PREMIUM TICKER */}
             <div style={styles.marqueeWrapper}>
                 <div style={styles.marqueeContent}>
@@ -159,6 +187,13 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customer
                     <span>✦ FAST SERVICE ✦ HYGIENIC ✦ BEST TASTE ✦ </span>
                 </div>
             </div>
+
+            {/* CEO GLOBAL AD BANNER */}
+            {globalBanner && (
+                <div style={styles.adBanner}>
+                    <img src={globalBanner} alt="Promo" style={{width:'100%', borderRadius:'15px'}} />
+                </div>
+            )}
 
             {/* 🏛️ HEADER SECTION */}
             <div style={styles.header}>
@@ -171,6 +206,11 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customer
                                 {currentTable ? `Table ${currentTable}` : "Takeaway / Delivery"}
                             </div>
                         </div>
+                    </div>
+                    {/* Header Cart Icon */}
+                    <div onClick={() => totalQty > 0 ? navigate(cartLink) : toast.error("Cart is empty!")} style={styles.headerCart}>
+                        <FaShoppingCart size={20} />
+                        {totalQty > 0 && <span style={styles.headerBadge}>{totalQty}</span>}
                     </div>
                 </div>
 
@@ -309,15 +349,17 @@ const styles = {
     pullLoader: { width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', overflow: 'hidden', transition: '0.2s' },
     refreshIconBox: { background: 'rgba(255,255,255,0.1)', padding: 10, borderRadius: '50%' },
 
-    // Lock Screen
+    // Lock Screen & Maintenance
     center: { display:'flex', height:'100vh', alignItems:'center', justifyContent:'center', flexDirection:'column', background: '#020617' },
     lockIcon: { background: 'linear-gradient(135deg, #ef4444, #b91c1c)', padding: 20, borderRadius: '25px', marginBottom: 20, boxShadow: '0 10px 30px rgba(239, 68, 68, 0.3)' },
-    closedTitle: { color: 'white', fontSize: 24, fontWeight: '800', margin: 0 },
-    closedSub: { color: '#94a3b8', marginTop: 10 },
+    closedTitle: { color: 'white', fontSize: 24, fontWeight: '800', margin: 0, fontFamily: 'Plus Jakarta Sans' },
+    closedSub: { color: '#94a3b8', marginTop: 10, fontFamily: 'Plus Jakarta Sans' },
 
-    // Marquee
+    // Marquee & Alerts
     marqueeWrapper: { background: '#1e1b4b', borderBottom: '1px solid #312e81', padding: '8px 0', overflow: 'hidden', whiteSpace: 'nowrap' },
     marqueeContent: { display: 'inline-block', animation: 'scroll 20s linear infinite', color: '#a5b4fc', fontSize: '10px', fontWeight: '800', letterSpacing: '2px', textTransform: 'uppercase' },
+    systemAlert: { background: 'rgba(249, 115, 22, 0.15)', color: '#f97316', padding: '12px 20px', fontSize: '13px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '10px', borderBottom: '1px solid rgba(249, 115, 22, 0.3)' },
+    adBanner: { padding: '0 20px', marginTop: '15px' },
 
     // Header
     header: { padding: "20px", background: "linear-gradient(180deg, #0f172a 0%, #020617 100%)" },
@@ -326,6 +368,8 @@ const styles = {
     storeIcon: { width: 40, height: 40, background: 'linear-gradient(135deg, #3b82f6, #2563eb)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)' },
     restName: { fontSize: "22px", fontWeight: "800", margin: 0, color: 'white', letterSpacing: "-0.5px" },
     tableBadge: { fontSize: "12px", color: "#94a3b8", fontWeight: "600" },
+    headerCart: { position: 'relative', background: '#1e293b', padding: '10px', borderRadius: '12px', color: '#f97316', border: '1px solid #334155' },
+    headerBadge: { position: 'absolute', top: '-5px', right: '-5px', background: '#22c55e', color: 'white', fontSize: '10px', padding: '2px 6px', borderRadius: '10px', fontWeight:'700' },
 
     // Search
     searchWrapper: { position: "relative" },

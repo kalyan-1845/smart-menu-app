@@ -4,7 +4,7 @@ import {
     FaSignOutAlt, FaTrash, FaRedo, FaEdit, FaKey, FaPlus, FaTimes,
     FaBullhorn, FaSync, FaSortAmountDown, FaCircle, 
     FaUserSecret, FaLock, FaArrowRight, FaSpinner, FaHeartbeat, FaEye, FaAd, 
-    FaStar, FaCommentDots, FaQrcode, FaWhatsapp 
+    FaStar, FaCommentDots, FaQrcode, FaWhatsapp, FaServer
 } from "react-icons/fa";
 import axios from "axios";
 import { toast } from "react-hot-toast";
@@ -13,7 +13,7 @@ import { io } from "socket.io-client";
 const API_URL = "https://smart-menu-app-production.up.railway.app";
 
 const SuperAdmin = () => {
-    // --- STATE ---
+    // --- STATE (YOUR EXACT LOGIC) ---
     const [token, setToken] = useState(localStorage.getItem('admin_token'));
     const [secret, setSecret] = useState("");
     const [loginLoading, setLoginLoading] = useState(false);
@@ -22,7 +22,7 @@ const SuperAdmin = () => {
     const [reviews, setReviews] = useState([]); 
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
-    
+     
     // System
     const [broadcastMsg, setBroadcastMsg] = useState("");
     const [globalBanner, setGlobalBanner] = useState(""); 
@@ -116,7 +116,6 @@ const SuperAdmin = () => {
         } catch (e) { toast.error("Failed"); }
     };
 
-    // Standard CRUD
     const handleRegister = async () => { try { await axios.post(`${API_URL}/api/auth/register`, createForm); toast.success("Created! 🚀"); setShowCreateModal(false); refreshData(); } catch(e){ toast.error("Failed"); } };
     const handleUpdateClient = async () => { try { await axios.put(`${API_URL}/api/superadmin/client/${selected._id}`, selected, { headers: { Authorization: `Bearer ${token}` } }); toast.success("Updated"); refreshData(); } catch(e){} };
     const handlePasswordReset = async () => { try { await axios.put(`${API_URL}/api/superadmin/client/${selected._id}`, { password: newPassword }, { headers: { Authorization: `Bearer ${token}` } }); toast.success("Reset 🔒"); setNewPassword(""); } catch(e){} };
@@ -136,117 +135,132 @@ const SuperAdmin = () => {
         };
     }, [clients]);
 
-    // 🔐 SHOW LOGIN SCREEN IF NO TOKEN
+    // 🔐 SHOW LOGIN SCREEN
     if (!token) return <LoginScreen secret={secret} setSecret={setSecret} handleLogin={handleLogin} loading={loginLoading} />;
     
-    if (loading) return <div style={styles.center}><FaShieldAlt className="spin" size={80} color="#f97316"/></div>;
+    if (loading) return <div style={styles.center}><FaShieldAlt className="spin" size={50} color="#f97316"/></div>;
 
     return (
         <div style={styles.container}>
-            {/* PULSE HEADER */}
+            <style>{`
+                @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+                body { margin: 0; background: #020617; }
+                ::-webkit-scrollbar { width: 6px; }
+                ::-webkit-scrollbar-track { background: #020617; }
+                ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+            `}</style>
+
+            {/* HEADER & PULSE */}
             <div style={styles.pulseHeader}>
-                <div style={{display:'flex', gap:30, fontSize:16, color:'#aaa', fontWeight:'bold'}}>
-                    <span style={{display:'flex', alignItems:'center', gap:8}}><FaHeartbeat color="#22c55e"/> Uptime: {serverPulse.uptime}</span>
-                    <span style={{display:'flex', alignItems:'center', gap:8}}><FaCircle size={10} color={serverPulse.dbStatus === 'Connected' ? '#22c55e' : '#f00'}/> DB: {serverPulse.dbStatus}</span>
-                    <span>Latency: <span style={{color:'#f97316'}}>{serverPulse.latency}</span></span>
+                <h1 style={styles.title}><FaShieldAlt color="#f97316" size={28}/> CEO CONSOLE</h1>
+                
+                <div style={styles.pulseStats}>
+                    <div style={styles.pulseItem}><FaHeartbeat color="#22c55e"/> {serverPulse.uptime}</div>
+                    <div style={styles.pulseItem}><FaServer color={serverPulse.dbStatus === 'Connected' ? '#22c55e' : '#ef4444'}/> DB: {serverPulse.dbStatus}</div>
+                    <div style={styles.pulseItem}>Ping: <span style={{color:'#f97316'}}>{serverPulse.latency}</span></div>
                 </div>
-                <button onClick={() => { localStorage.removeItem('admin_token'); setToken(null); }} style={styles.logoutBtn}>LOGOUT</button>
-            </div>
 
-            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:30}}>
-                <h1 style={styles.title}><FaShieldAlt color="#f97316" size={32}/> CEO DASHBOARD</h1>
-                <div style={styles.headerActions}>
-                    <button onClick={refreshData} style={styles.iconBtn}><FaSync size={20}/></button>
-                    <button onClick={() => setShowCreateModal(true)} style={styles.createBtn}><FaPlus size={18}/> NEW CLIENT</button>
+                <div style={{display:'flex', gap:10}}>
+                    <button onClick={refreshData} style={styles.iconBtn}><FaSync size={16}/></button>
+                    <button onClick={() => { localStorage.removeItem('admin_token'); setToken(null); }} style={styles.logoutBtn}>LOGOUT</button>
                 </div>
             </div>
 
+            {/* MAIN DASHBOARD */}
             <div style={styles.contentGrid}>
-                {/* LEFT: MAIN */}
+                
+                {/* LEFT COLUMN: CONTROLS & LIST */}
                 <div style={{flex: 1}}>
-                    {/* BROADCAST */}
-                    <div style={styles.broadcastBar}>
-                        <div style={{display:'flex', gap:15, marginBottom:15}}>
-                            <FaBullhorn color="#f97316" size={24} />
-                            <input style={styles.broadcastInput} placeholder="📢 Mobile Broadcast Message..." value={broadcastMsg} onChange={(e) => setBroadcastMsg(e.target.value)} />
+                    
+                    {/* SYSTEM BROADCAST PANEL */}
+                    <div style={styles.glassCard}>
+                        <h3 style={styles.sectionTitle}>📣 SYSTEM BROADCAST</h3>
+                        <div style={styles.inputGroup}>
+                            <FaBullhorn color="#64748b" />
+                            <input style={styles.ghostInput} placeholder="Mobile Alert Message..." value={broadcastMsg} onChange={(e) => setBroadcastMsg(e.target.value)} />
                         </div>
-                        <div style={{display:'flex', gap:15, marginBottom:15}}>
-                            <FaAd color="#f97316" size={24} />
-                            <input style={styles.broadcastInput} placeholder="📺 Global Menu Banner..." value={globalBanner} onChange={(e) => setGlobalBanner(e.target.value)} />
+                        <div style={{...styles.inputGroup, marginTop:10}}>
+                            <FaAd color="#64748b" />
+                            <input style={styles.ghostInput} placeholder="Global Menu Banner URL..." value={globalBanner} onChange={(e) => setGlobalBanner(e.target.value)} />
                         </div>
-                        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
-                            <div style={{display:'flex', alignItems:'center', gap:15}}>
-                                <label style={{fontSize:14, fontWeight:'bold', color: maintenanceMode ? '#ef4444' : '#888', letterSpacing:1}}>MAINTENANCE MODE</label>
-                                <div onClick={() => setMaintenanceMode(!maintenanceMode)} style={{...styles.toggle, background: maintenanceMode ? '#ef4444' : '#333'}}>
-                                    <div style={{...styles.knob, transform: maintenanceMode ? 'translateX(26px)' : 'translateX(0)'}} />
+                        
+                        <div style={styles.controlRow}>
+                            <div style={{display:'flex', alignItems:'center', gap:12}}>
+                                <span style={{fontSize:12, fontWeight:'700', color: maintenanceMode ? '#ef4444' : '#94a3b8'}}>MAINTENANCE MODE</span>
+                                <div onClick={() => setMaintenanceMode(!maintenanceMode)} style={{...styles.toggle, background: maintenanceMode ? '#ef4444' : '#334155'}}>
+                                    <div style={{...styles.knob, transform: maintenanceMode ? 'translateX(24px)' : 'translateX(0)'}} />
                                 </div>
                             </div>
-                            <button onClick={updateSystemSettings} style={styles.saveSysBtn}>PUSH UPDATES</button>
+                            <button onClick={updateSystemSettings} style={styles.actionBtn}>PUSH UPDATES</button>
                         </div>
                     </div>
 
-                    {/* BIG STATS */}
+                    {/* METRICS */}
                     <div style={styles.statsRow}>
-                        <div style={styles.statCard}><span>TOTAL CLIENTS</span><h2>{metrics.total}</h2></div>
-                        <div style={styles.statCard}><span>TOTAL REVENUE</span><h2 style={{color:'#22c55e'}}>{formatCurrency(metrics.totalRev)}</h2></div>
-                        <div style={styles.statCard}><span>THIS MONTH</span><h2 style={{color:'#f97316'}}>{formatCurrency(metrics.monthlyRev)}</h2></div>
+                        <div style={styles.statCard}>
+                            <span style={styles.statLabel}>TOTAL CLIENTS</span>
+                            <h2 style={styles.statValue}>{metrics.total}</h2>
+                        </div>
+                        <div style={styles.statCard}>
+                            <span style={styles.statLabel}>LIFETIME REVENUE</span>
+                            <h2 style={{...styles.statValue, color:'#22c55e'}}>{formatCurrency(metrics.totalRev)}</h2>
+                        </div>
+                        <div style={styles.statCard}>
+                            <span style={styles.statLabel}>THIS MONTH</span>
+                            <h2 style={{...styles.statValue, color:'#f97316'}}>{formatCurrency(metrics.monthlyRev)}</h2>
+                        </div>
                     </div>
 
-                    <input style={styles.search} placeholder="🔍 Search clients..." onChange={(e) => setSearchTerm(e.target.value)} />
+                    {/* CLIENT LIST */}
+                    <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:15}}>
+                        <input style={styles.searchBar} placeholder="🔍 Search Clients..." onChange={(e) => setSearchTerm(e.target.value)} />
+                        <button onClick={() => setShowCreateModal(true)} style={styles.createBtn}><FaPlus/> NEW</button>
+                    </div>
 
-                    <div style={styles.grid}>
+                    <div style={styles.clientGrid}>
                         {filtered.map(c => (
-                            <div key={c._id} style={styles.card} onClick={() => { setSelected(c); setNoteDraft(c.ceoNotes || ""); }}>
-                                <div style={styles.cardHeader}>
-                                    <h3>{c.restaurantName}</h3>
-                                    <span style={{...styles.badge, background: c.health?.includes("Healthy") ? '#064e3b' : '#450a0a', color: c.health?.includes("Healthy") ? '#4ade80' : '#f87171'}}>
-                                        {c.health === "🟢 Healthy" ? "ONLINE" : "OFFLINE"}
-                                    </span>
+                            <div key={c._id} style={styles.clientCard} onClick={() => { setSelected(c); setNoteDraft(c.ceoNotes || ""); }}>
+                                <div style={styles.clientHeader}>
+                                    <h3 style={styles.clientName}>{c.restaurantName}</h3>
+                                    <div style={{...styles.statusDot, background: c.health === "🟢 Healthy" ? '#22c55e' : '#ef4444'}}></div>
                                 </div>
-                                <div style={styles.cardBody}>
-                                    <p>User: <span style={{color:'#fff'}}>{c.username}</span></p>
-                                    
-                                    {/* 📞 PHONE DISPLAY */}
-                                    {c.phoneNumber && (
-                                        <div style={{display:'flex', alignItems:'center', gap:6, marginTop:5, color:'#3b82f6', fontSize:13, fontWeight:'bold'}}>
-                                            <FaPhone size={10}/> {c.phoneNumber}
-                                        </div>
-                                    )}
-
-                                    <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:10}}>
-                                        <span style={{color: '#facc15', fontWeight:'bold', fontSize:14, display:'flex', alignItems:'center', gap:5}}><FaStar/> {c.rating} ({c.reviewCount})</span>
-                                        <span style={{color:'#f97316', fontWeight:'bold', fontSize:14}}>{formatCurrency(c.monthlyRevenue)}</span>
-                                    </div>
+                                <div style={styles.clientInfo}>
+                                    <p>ID: {c.username}</p>
+                                    {c.phoneNumber && <p style={{color:'#3b82f6', display:'flex', alignItems:'center', gap:5}}><FaPhone size={10}/> {c.phoneNumber}</p>}
+                                </div>
+                                <div style={styles.clientFooter}>
+                                    <span style={{color:'#facc15', display:'flex', gap:4}}><FaStar/> {c.rating}</span>
+                                    <span style={{color:'#f97316'}}>{formatCurrency(c.monthlyRevenue)}</span>
                                 </div>
                             </div>
                         ))}
                     </div>
                 </div>
 
-                {/* RIGHT: SIDEBAR */}
-                <div style={{display:'flex', flexDirection:'column', gap:25, width: 380}}>
-                    {/* 🕵️‍♂️ LIVE ORDERS */}
-                    <div style={styles.spyglass}>
-                        <h3 style={styles.sideTitle}><FaEye/> LIVE ORDERS FEED</h3>
-                        <div style={styles.feedContainer}>
-                            {feed.length === 0 ? <p style={{fontSize:14, color:'#666', textAlign:'center', marginTop:20}}>Listening for orders...</p> : 
-                                feed.map((msg, i) => <div key={i} style={styles.feedItem}>{msg}</div>)
+                {/* RIGHT COLUMN: FEEDS */}
+                <div style={styles.sidebar}>
+                    {/* LIVE ORDERS */}
+                    <div style={styles.terminalCard}>
+                        <h3 style={styles.terminalTitle}><FaEye color="#f97316"/> LIVE FEED</h3>
+                        <div style={styles.feedScroll}>
+                            {feed.length === 0 ? <p style={styles.emptyText}>Waiting for transactions...</p> : 
+                                feed.map((msg, i) => <div key={i} style={styles.logLine}>{msg}</div>)
                             }
                         </div>
                     </div>
 
-                    {/* ⭐ REVIEWS (PUBLIC FEEDBACK) */}
-                    <div style={styles.spyglass}>
-                        <h3 style={styles.sideTitle}><FaCommentDots/> CUSTOMER FEEDBACK</h3>
-                        <div style={styles.feedContainer}>
-                            {reviews.length === 0 ? <p style={{fontSize:14, color:'#666', textAlign:'center', marginTop:20}}>No reviews yet.</p> : 
+                    {/* REVIEWS */}
+                    <div style={styles.terminalCard}>
+                        <h3 style={styles.terminalTitle}><FaCommentDots color="#3b82f6"/> FEEDBACK</h3>
+                        <div style={styles.feedScroll}>
+                            {reviews.length === 0 ? <p style={styles.emptyText}>No recent reviews.</p> : 
                                 reviews.map((r) => (
-                                    <div key={r._id} style={styles.reviewItem}>
-                                        <div style={{display:'flex', justifyContent:'space-between', marginBottom:4}}>
-                                            <span style={{color:'#fff', fontWeight:'bold', fontSize:14}}>{r.restaurantName.substring(0,15)}...</span>
-                                            <span style={{color:'#facc15', fontWeight:'bold'}}>★ {r.rating}</span>
+                                    <div key={r._id} style={styles.reviewBlock}>
+                                        <div style={{display:'flex', justifyContent:'space-between', fontSize:11, color:'#94a3b8'}}>
+                                            <span>{r.restaurantName.substring(0,12)}..</span>
+                                            <span style={{color:'#facc15'}}>★ {r.rating}</span>
                                         </div>
-                                        <div style={{color:'#ccc', fontStyle:'italic', fontSize:13}}>"{r.feedback}"</div>
+                                        <div style={{fontSize:13, marginTop:4, color:'#e2e8f0'}}>"{r.feedback}"</div>
                                     </div>
                                 ))
                             }
@@ -255,124 +269,214 @@ const SuperAdmin = () => {
                 </div>
             </div>
 
-            {/* MODALS */}
-            {showCreateModal && <div style={styles.overlay}><div style={styles.modal}><h2 style={{marginTop:0, fontSize:28}}>🚀 New Restaurant</h2><input style={styles.input} placeholder="Restaurant Name" value={createForm.restaurantName} onChange={e=>setCreateForm({...createForm, restaurantName:e.target.value})}/><input style={styles.input} placeholder="Username" value={createForm.username} onChange={e=>setCreateForm({...createForm, username:e.target.value})}/><input style={styles.input} placeholder="Phone Number" value={createForm.phoneNumber} onChange={e=>setCreateForm({...createForm, phoneNumber:e.target.value})}/><input style={styles.input} placeholder="Password" value={createForm.password} onChange={e=>setCreateForm({...createForm, password:e.target.value})}/><button onClick={handleRegister} style={styles.saveBtn}>CREATE ACCOUNT</button><button onClick={()=>setShowCreateModal(false)} style={styles.closeBtn}>CANCEL</button></div></div>}
-
-            {selected && (
+            {/* --- CREATE MODAL --- */}
+            {showCreateModal && (
                 <div style={styles.overlay}>
                     <div style={styles.modal}>
-                        <div style={styles.modalTop}><h2>{selected.restaurantName}</h2><button onClick={()=>setSelected(null)}><FaTimes size={24}/></button></div>
-                        <div style={styles.scrollContent}>
-                            <div style={styles.switchGrid}>
-                                <button onClick={()=>toggleSwitch(selected._id,'settings.menuActive',selected.settings?.menuActive)} style={{...styles.swBtn, background: selected.settings?.menuActive?'#111':'#450a0a', border:selected.settings?.menuActive?'1px solid #333':'1px solid red'}}><FaUtensils size={20}/> {selected.settings?.menuActive?"MENU ACTIVE":"KILLED"}</button>
-                                <button onClick={()=>enterGodMode(selected._id, selected.username)} style={{...styles.swBtn, background:'#f97316', color:'black'}}><FaGhost size={20}/> GHOST LOGIN</button>
-                            </div>
-                            
-                            {/* 📞 DIRECT CONTACT SECTION */}
-                            <div style={styles.section}>
-                                <label style={styles.label}>📞 CONTACT OWNER</label>
-                                <div style={{display:'flex', gap:10}}>
-                                    <input style={{...styles.input, marginBottom:0}} value={selected.phoneNumber || "No Number"} onChange={e=>setSelected({...selected, phoneNumber:e.target.value})}/>
-                                    {selected.phoneNumber && (
-                                        <a href={`https://wa.me/91${selected.phoneNumber}`} target="_blank" rel="noreferrer" style={{...styles.updateBtn, background:'#22c55e', textDecoration:'none', display:'flex', alignItems:'center', justifyContent:'center', width:'auto', padding:'0 20px'}}>
-                                            <FaWhatsapp size={20}/>
-                                        </a>
-                                    )}
-                                </div>
-                                <button onClick={handleUpdateClient} style={{...styles.updateBtn, marginTop:10, background:'#333', border:'1px solid #444'}}>UPDATE NUMBER</button>
-                            </div>
-
-                            <div style={styles.section}>
-                                <label style={styles.label}>⏳ TIME WARP (Expires: {selected.trialEndsAt ? new Date(selected.trialEndsAt).toLocaleDateString() : "Never"})</label>
-                                <div style={{display:'flex', gap:10}}>
-                                    <button onClick={()=>handleTimeWarp(7)} style={styles.timeBtn}>+7 Days</button>
-                                    <button onClick={()=>handleTimeWarp(30)} style={styles.timeBtn}>+30 Days</button>
-                                    <button onClick={()=>handleTimeWarp(365)} style={styles.timeBtn}>+1 Year</button>
-                                    <button onClick={()=>handleTimeWarp(-999)} style={{...styles.timeBtn, background:'#450a0a', color:'red'}}>EXPIRE NOW</button>
-                                </div>
-                            </div>
-
-                            <div style={styles.section}>
-                                <label style={styles.label}>🖨️ THE FORGE</label>
-                                <div style={{display:'flex', gap:15, alignItems:'center', background:'#111', padding:15, borderRadius:10}}>
-                                    <FaQrcode size={40} color="white"/>
-                                    <a href={`https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=https://yourapp.com/menu/${selected.username}`} target="_blank" rel="noreferrer" style={{color:'#3b82f6', fontSize:14, fontWeight:'bold', textDecoration:'underline'}}>Download High-Res QR Code</a>
-                                </div>
-                            </div>
-
-                            <div style={styles.section}>
-                                <label style={styles.label}>DETAILS & RESET</label>
-                                <input style={styles.input} value={selected.restaurantName} onChange={e=>setSelected({...selected, restaurantName:e.target.value})}/>
-                                <div style={{display:'flex', gap:10}}><input style={{...styles.input, marginBottom:0}} placeholder="New Password Override" value={newPassword} onChange={e=>setNewPassword(e.target.value)}/><button onClick={handlePasswordReset} style={{...styles.saveBtn, width:'auto'}}>RESET PASS</button></div>
-                                <button onClick={handleUpdateClient} style={{...styles.updateBtn, marginTop:15}}>UPDATE INFO</button>
-                            </div>
-
-                            <div style={styles.section}><textarea value={noteDraft} onChange={e=>setNoteDraft(e.target.value)} style={styles.textarea}/><button onClick={()=>saveNotes(selected._id)} style={styles.saveBtn}>SAVE CEO NOTES</button></div>
-                            <div style={styles.dangerZone}><button onClick={handleResetData} style={styles.dangerBtn}><FaRedo/> RESET DATA</button><button onClick={handleDeleteClient} style={styles.dangerBtn}><FaTrash/> DELETE ACCOUNT</button></div>
+                        <h2 style={styles.modalTitle}>🚀 Launch New Client</h2>
+                        <input style={styles.input} placeholder="Restaurant Name" value={createForm.restaurantName} onChange={e=>setCreateForm({...createForm, restaurantName:e.target.value})}/>
+                        <input style={styles.input} placeholder="Username (ID)" value={createForm.username} onChange={e=>setCreateForm({...createForm, username:e.target.value})}/>
+                        <input style={styles.input} placeholder="Phone Number" value={createForm.phoneNumber} onChange={e=>setCreateForm({...createForm, phoneNumber:e.target.value})}/>
+                        <input style={styles.input} placeholder="Password" value={createForm.password} onChange={e=>setCreateForm({...createForm, password:e.target.value})}/>
+                        <div style={{display:'flex', gap:10, marginTop:20}}>
+                            <button onClick={handleRegister} style={styles.primaryBtn}>DEPLOY</button>
+                            <button onClick={()=>setShowCreateModal(false)} style={styles.secondaryBtn}>CANCEL</button>
                         </div>
                     </div>
                 </div>
             )}
-            <style>{`.spin{animation:spin 1s linear infinite}@keyframes spin{100%{transform:rotate(360deg)}}`}</style>
+
+            {/* --- DETAILS MODAL --- */}
+            {selected && (
+                <div style={styles.overlay}>
+                    <div style={styles.modal}>
+                        <div style={styles.modalHeader}>
+                            <h2 style={{margin:0, fontSize:20}}>{selected.restaurantName}</h2>
+                            <button onClick={()=>setSelected(null)} style={styles.closeIcon}><FaTimes/></button>
+                        </div>
+                        
+                        <div style={styles.modalBody}>
+                            {/* ACTION GRID */}
+                            <div style={styles.actionGrid}>
+                                <button onClick={()=>toggleSwitch(selected._id,'settings.menuActive',selected.settings?.menuActive)} 
+                                    style={{...styles.toggleBtn, borderColor: selected.settings?.menuActive ? '#334155' : '#ef4444', color: selected.settings?.menuActive ? '#fff' : '#ef4444'}}>
+                                    <FaUtensils/> {selected.settings?.menuActive ? "MENU ONLINE" : "MENU KILLED"}
+                                </button>
+                                <button onClick={()=>enterGodMode(selected._id, selected.username)} style={{...styles.toggleBtn, borderColor:'#f97316', color:'#f97316'}}>
+                                    <FaGhost/> GHOST LOGIN
+                                </button>
+                            </div>
+
+                            {/* CONTACT */}
+                            <div style={styles.fieldGroup}>
+                                <label style={styles.fieldLabel}>CONTACT & WHATSAPP</label>
+                                <div style={{display:'flex', gap:10}}>
+                                    <input style={styles.input} value={selected.phoneNumber || ""} onChange={e=>setSelected({...selected, phoneNumber:e.target.value})}/>
+                                    {selected.phoneNumber && (
+                                        <a href={`https://wa.me/91${selected.phoneNumber}`} target="_blank" rel="noreferrer" style={styles.waBtn}>
+                                            <FaWhatsapp size={20}/>
+                                        </a>
+                                    )}
+                                </div>
+                                <button onClick={handleUpdateClient} style={styles.miniBtn}>UPDATE NUMBER</button>
+                            </div>
+
+                            {/* SUBSCRIPTION */}
+                            <div style={styles.fieldGroup}>
+                                <label style={styles.fieldLabel}>SUBSCRIPTION (Expires: {selected.trialEndsAt ? new Date(selected.trialEndsAt).toLocaleDateString() : "Never"})</label>
+                                <div style={{display:'flex', gap:5}}>
+                                    <button onClick={()=>handleTimeWarp(7)} style={styles.timePill}>+7 Days</button>
+                                    <button onClick={()=>handleTimeWarp(30)} style={styles.timePill}>+30 Days</button>
+                                    <button onClick={()=>handleTimeWarp(365)} style={styles.timePill}>+1 Year</button>
+                                    <button onClick={()=>handleTimeWarp(-999)} style={{...styles.timePill, background:'#450a0a', color:'#ef4444'}}>EXPIRE</button>
+                                </div>
+                            </div>
+
+                            {/* QR CODE */}
+                            <div style={styles.qrBox}>
+                                <FaQrcode size={32} color="white"/>
+                                <div>
+                                    <div style={{fontWeight:'bold', fontSize:14}}>Menu QR Code</div>
+                                    <a href={`https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=https://yourapp.com/menu/${selected.username}`} target="_blank" rel="noreferrer" style={{color:'#3b82f6', fontSize:12}}>Download High-Res</a>
+                                </div>
+                            </div>
+
+                            {/* CREDENTIALS */}
+                            <div style={styles.fieldGroup}>
+                                <label style={styles.fieldLabel}>CREDENTIALS</label>
+                                <input style={styles.input} value={selected.username} readOnly />
+                                <div style={{display:'flex', gap:10}}>
+                                    <input style={styles.input} placeholder="New Password" value={newPassword} onChange={e=>setNewPassword(e.target.value)}/>
+                                    <button onClick={handlePasswordReset} style={styles.secondaryBtn}>RESET</button>
+                                </div>
+                            </div>
+
+                            {/* NOTES */}
+                            <textarea value={noteDraft} onChange={e=>setNoteDraft(e.target.value)} style={styles.textarea} placeholder="CEO Notes..."/>
+                            <button onClick={()=>saveNotes(selected._id)} style={styles.saveNoteBtn}>SAVE NOTES</button>
+
+                            {/* DANGER */}
+                            <div style={styles.dangerZone}>
+                                <button onClick={handleResetData} style={styles.dangerBtn}><FaRedo/> WIPE ORDERS</button>
+                                <button onClick={handleDeleteClient} style={styles.dangerBtn}><FaTrash/> DELETE ACCOUNT</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
 
+// --- PREMIUM LOGIN SCREEN ---
 const LoginScreen = ({ secret, setSecret, handleLogin, loading }) => (
-    <div style={styles.center}><div style={styles.loginCard}><FaUserSecret size={60} color="#f97316" style={{marginBottom:30}}/><h1 style={styles.loginTitle}>CEO ACCESS</h1><form onSubmit={handleLogin}><div style={{position:'relative',marginBottom:30}}><FaLock size={20} style={{position:'absolute',left:20,top:22,color:'#444'}}/><input type="password" placeholder="Master Key" value={secret} autoFocus onChange={e=>setSecret(e.target.value)} style={styles.loginInput}/></div><button type="submit" disabled={loading} style={styles.loginBtn}>{loading?<FaSpinner className="spin"/>:<>ENTER PANEL <FaArrowRight/></>}</button></form></div></div>
+    <div style={styles.center}>
+        <div style={styles.loginCard}>
+            <div style={styles.loginIconBox}><FaUserSecret size={40} color="#f97316"/></div>
+            <h1 style={styles.loginTitle}>CEO ACCESS</h1>
+            <p style={{color:'#64748b', marginBottom:30}}>Enter Master Key to proceed</p>
+            <form onSubmit={handleLogin}>
+                <div style={{position:'relative', marginBottom:20}}>
+                    <FaLock size={16} style={{position:'absolute', left:20, top:20, color:'#64748b'}}/>
+                    <input type="password" placeholder="Master Key" value={secret} autoFocus onChange={e=>setSecret(e.target.value)} style={styles.loginInput}/>
+                </div>
+                <button type="submit" disabled={loading} style={styles.loginBtn}>
+                    {loading ? <FaSpinner className="spin"/> : "AUTHENTICATE"}
+                </button>
+            </form>
+        </div>
+    </div>
 );
 
+// --- MIDNIGHT GLASS STYLES (PREMIUM) ---
 const styles = {
-    container: { background: '#050505', minHeight: '100vh', padding: '30px', color: '#fff', fontFamily: 'Inter, sans-serif' },
-    pulseHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 30, paddingBottom: 15, borderBottom: '1px solid #222' },
-    contentGrid: { display: 'flex', gap: 30, flexDirection: 'row', alignItems: 'flex-start' },
-    spyglass: { background: '#0a0a0a', border: '1px solid #222', borderRadius: 16, padding: 20, height: 'calc(50vh - 60px)', overflow: 'hidden', display: 'flex', flexDirection: 'column' },
-    sideTitle: { fontSize:14, color:'#888', margin:'0 0 15px 0', display:'flex', alignItems:'center', gap:8, fontWeight:'bold', letterSpacing:1 },
-    feedContainer: { flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10 },
-    feedItem: { fontSize: 13, color: '#ccc', borderBottom: '1px solid #1a1a1a', paddingBottom: 8, fontFamily:'monospace' },
-    reviewItem: { fontSize: 13, borderBottom: '1px solid #1a1a1a', paddingBottom: 10, marginBottom: 10 },
+    container: { background: '#020617', minHeight: '100vh', padding: '30px', color: '#f8fafc', fontFamily: 'Plus Jakarta Sans, sans-serif' },
+    center: { height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#020617' },
     
-    // ... (Big Mode Styles) ...
-    center: { height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#050505' },
-    header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' },
-    title: { fontSize: '32px', fontWeight: '900', margin: 0, display:'flex', alignItems:'center', gap:'15px', letterSpacing:'-1px' },
-    headerActions: { display: 'flex', gap: '15px' },
-    iconBtn: { background:'#111', border:'1px solid #333', color:'#fff', padding:'15px', borderRadius:'12px', cursor:'pointer', transition:'0.2s' },
-    createBtn: { background: '#22c55e', color: '#000', border: 'none', padding: '15px 25px', borderRadius: '12px', fontWeight: '900', fontSize:'14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' },
-    logoutBtn: { background: '#333', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', fontWeight:'bold' },
-    broadcastBar: { background: '#0a0a0a', border: '1px solid #222', padding: '25px', borderRadius: '16px', marginBottom: '30px' },
-    broadcastInput: { background: '#111', border: '1px solid #222', color: '#fff', fontSize: '16px', width: '100%', padding: '12px', borderRadius: 8, outline:'none' },
-    statsRow: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px', marginBottom: '40px' },
-    statCard: { background: '#0a0a0a', border: '1px solid #1a1a1a', padding: '25px', borderRadius: '16px' },
-    grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' },
-    card: { background: '#0a0a0a', border: '1px solid #1a1a1a', padding: '25px', borderRadius: '16px', cursor: 'pointer', transition: '0.2s', boxShadow: '0 4px 20px rgba(0,0,0,0.2)' },
-    cardHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' },
-    badge: { fontSize: '11px', padding: '5px 10px', borderRadius: '6px', fontWeight: 'bold' },
-    cardBody: { fontSize: '14px', color: '#888' },
-    search: { background: '#111', border: '1px solid #333', padding: '16px', borderRadius: '12px', color: '#fff', width: '100%', marginBottom: 30, fontSize:'16px' },
-    overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.95)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', zIndex: 999 },
-    modal: { background: '#0a0a0a', border: '1px solid #333', borderRadius: '24px', width: '100%', maxWidth: '600px', maxHeight: '95vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 50px rgba(0,0,0,0.8)' },
-    modalTop: { display: 'flex', justifyContent: 'space-between', padding: '30px', borderBottom: '1px solid #222' },
-    scrollContent: { overflowY: 'auto', padding: 30 },
-    section: { marginBottom: 25, borderTop: '1px solid #222', paddingTop: 20 },
-    label: { fontSize: 12, fontWeight: 'bold', color: '#666', marginBottom: 10, display: 'block', letterSpacing:1 },
-    input: { width: '100%', background: '#111', border: '1px solid #333', color: '#fff', padding: 16, marginBottom: 15, borderRadius: 10, fontSize:16, outline:'none' },
-    timeBtn: { flex: 1, background: '#111', border: '1px solid #333', color: '#fff', padding: 12, borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 'bold' },
-    saveBtn: { background: '#22c55e', border: 'none', color: '#000', width: '100%', padding: 16, borderRadius: 10, fontWeight: 'bold', cursor: 'pointer', fontSize:16 },
-    updateBtn: { background: '#3b82f6', border: 'none', color: '#fff', width: '100%', padding: 16, borderRadius: 10, fontWeight: 'bold', cursor: 'pointer', fontSize:16 },
-    closeBtn: { background: '#333', border: 'none', color: '#fff', padding: 16, borderRadius: 10, cursor: 'pointer', fontSize:16, fontWeight:'bold' },
-    switchGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 15, marginBottom: 30 },
-    swBtn: { padding: 20, borderRadius: 12, cursor: 'pointer', color: '#fff', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, fontSize: 12 },
-    dangerZone: { marginTop: 30, background: 'rgba(69, 10, 10, 0.2)', padding: 20, borderRadius: 12, border: '1px solid #450a0a' },
-    dangerBtn: { flex: 1, background: '#450a0a', border: '1px solid #ef4444', color: '#ef4444', padding: 15, borderRadius: 10, cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 12 },
-    loginCard: { width: "90%", maxWidth: "400px", padding: "60px 40px", background: "#0a0a0a", borderRadius: "30px", border: "1px solid #222", textAlign: "center" },
-    loginTitle: { fontSize: "32px", fontWeight: "900", margin: "0 0 10px 0" },
-    loginInput: { width: "100%", padding: "20px 20px 20px 50px", background: "#000", border: "1px solid #222", borderRadius: "16px", color: "white", outline: "none", fontSize: '20px' },
-    loginBtn: { width: "100%", padding: "20px", background: "#f97316", border: "none", borderRadius: "16px", color: 'white', fontWeight: "900", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", fontSize:'18px' },
-    toggle: { width: '50px', height: '26px', borderRadius: '30px', position: 'relative', cursor: 'pointer', transition: '0.3s' },
-    knob: { width: '20px', height: '20px', background: 'white', borderRadius: '50%', position: 'absolute', top: '3px', left: '3px', transition: '0.3s' },
-    saveSysBtn: { background: '#f97316', color: '#000', border: 'none', padding: '10px 25px', borderRadius: '8px', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer' },
-    textarea: { width: '100%', height: 100, background: '#000', border: '1px solid #333', color: '#fff', padding: 15, borderRadius: 10, fontSize:14 }
+    // Header
+    pulseHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 40, padding: '20px', background: 'rgba(30, 41, 59, 0.4)', backdropFilter: 'blur(10px)', borderRadius: '20px', border: '1px solid #1e293b' },
+    title: { fontSize: '20px', fontWeight: '800', margin: 0, display:'flex', alignItems:'center', gap:'15px', letterSpacing:'1px', color: '#fff' },
+    pulseStats: { display: 'flex', gap: 20, fontSize: 13, fontWeight: '600', color: '#94a3b8' },
+    pulseItem: { display: 'flex', alignItems: 'center', gap: 8 },
+    
+    // Buttons
+    iconBtn: { background: '#1e293b', border: '1px solid #334155', color: '#fff', padding: '10px 15px', borderRadius: '10px', cursor: 'pointer' },
+    logoutBtn: { background: '#450a0a', color: '#fca5a5', border: '1px solid #7f1d1d', padding: '10px 20px', borderRadius: '10px', cursor: 'pointer', fontWeight: '700', fontSize:12 },
+    createBtn: { background: '#f97316', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '10px', fontWeight: '700', fontSize:'12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' },
+    actionBtn: { background: '#22c55e', color: '#000', border: 'none', padding: '10px 20px', borderRadius: '10px', fontWeight: '800', fontSize:'11px', cursor: 'pointer' },
+    
+    // Layout
+    contentGrid: { display: 'flex', gap: 30, alignItems: 'flex-start' },
+    sidebar: { width: 350, display: 'flex', flexDirection: 'column', gap: 20 },
+    
+    // Glass Cards
+    glassCard: { background: 'rgba(15, 23, 42, 0.6)', border: '1px solid #1e293b', padding: '25px', borderRadius: '20px', marginBottom: '30px' },
+    sectionTitle: { fontSize: 12, fontWeight: '800', color: '#64748b', letterSpacing: '1px', marginBottom: 15 },
+    inputGroup: { display: 'flex', alignItems: 'center', gap: 15, background: '#0f172a', padding: '12px 20px', borderRadius: '12px', border: '1px solid #1e293b' },
+    ghostInput: { background: 'transparent', border: 'none', color: '#fff', width: '100%', fontSize: '14px', outline: 'none' },
+    controlRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 20 },
+    
+    // Stats
+    statsRow: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px', marginBottom: '30px' },
+    statCard: { background: '#0f172a', border: '1px solid #1e293b', padding: '20px', borderRadius: '16px' },
+    statLabel: { fontSize: 11, fontWeight: '700', color: '#64748b', letterSpacing: '0.5px' },
+    statValue: { fontSize: 24, fontWeight: '800', margin: '5px 0 0 0', color: '#fff' },
+    
+    // Client Grid
+    searchBar: { width: '100%', background: '#0f172a', border: '1px solid #1e293b', padding: '15px 20px', borderRadius: '14px', color: '#fff', outline: 'none', marginRight: 20 },
+    clientGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '20px' },
+    clientCard: { background: '#1e293b', border: '1px solid #334155', padding: '20px', borderRadius: '16px', cursor: 'pointer', transition: '0.2s', position: 'relative' },
+    clientHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+    clientName: { fontSize: 16, fontWeight: '700', color: '#fff', margin: 0 },
+    statusDot: { width: 8, height: 8, borderRadius: '50%', boxShadow: '0 0 10px currentColor' },
+    clientInfo: { fontSize: 13, color: '#94a3b8', marginBottom: 15 },
+    clientFooter: { display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: '700', borderTop: '1px solid #334155', paddingTop: 12 },
+    
+    // Sidebar Terminals
+    terminalCard: { background: '#020617', border: '1px solid #334155', borderRadius: '16px', padding: '20px', height: '400px', display: 'flex', flexDirection: 'column' },
+    terminalTitle: { fontSize: 12, fontWeight: '800', color: '#94a3b8', marginBottom: 15, display: 'flex', gap: 10, alignItems: 'center' },
+    feedScroll: { flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10 },
+    logLine: { fontFamily: 'monospace', fontSize: 12, color: '#22c55e', borderBottom: '1px dashed #1e293b', paddingBottom: 5 },
+    emptyText: { fontSize: 12, color: '#475569', textAlign: 'center', marginTop: 20 },
+    reviewBlock: { background: '#0f172a', padding: 10, borderRadius: 8, border: '1px solid #1e293b' },
+
+    // Modals
+    overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(5px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 },
+    modal: { background: '#0f172a', width: '90%', maxWidth: '550px', borderRadius: '24px', border: '1px solid #334155', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' },
+    modalHeader: { padding: '20px', borderBottom: '1px solid #1e293b', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#020617' },
+    closeIcon: { background: 'transparent', border: 'none', color: '#64748b', fontSize: 20, cursor: 'pointer' },
+    modalBody: { padding: '30px', maxHeight: '80vh', overflowY: 'auto' },
+    modalTitle: { fontSize: 22, fontWeight: '800', margin: '0 0 20px 0', color: '#fff' },
+    
+    // Modal Form Elements
+    actionGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 15, marginBottom: 25 },
+    toggleBtn: { padding: 15, borderRadius: 12, border: '1px solid', background: 'transparent', fontWeight: '700', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 },
+    fieldGroup: { marginBottom: 20 },
+    fieldLabel: { fontSize: 11, fontWeight: '700', color: '#64748b', marginBottom: 8, display: 'block', letterSpacing: '0.5px' },
+    input: { width: '100%', background: '#020617', border: '1px solid #334155', color: '#fff', padding: '14px', borderRadius: '10px', outline: 'none', fontSize: 14 },
+    waBtn: { background: '#22c55e', color: '#fff', width: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10, cursor: 'pointer' },
+    miniBtn: { width: '100%', background: '#1e293b', color: '#94a3b8', border: 'none', padding: 10, borderRadius: 8, marginTop: 8, fontSize: 11, fontWeight: '700', cursor: 'pointer' },
+    timePill: { flex: 1, background: '#1e293b', border: '1px solid #334155', color: '#cbd5e1', padding: '8px', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: '600' },
+    qrBox: { display: 'flex', gap: 15, alignItems: 'center', background: '#020617', padding: 15, borderRadius: 12, border: '1px solid #334155', marginBottom: 20 },
+    textarea: { width: '100%', height: 80, background: '#020617', border: '1px solid #334155', color: '#fff', padding: 15, borderRadius: 10, outline: 'none', marginBottom: 10 },
+    saveNoteBtn: { width: '100%', background: '#3b82f6', color: '#fff', border: 'none', padding: 12, borderRadius: 8, fontWeight: '700', cursor: 'pointer' },
+    dangerZone: { marginTop: 30, paddingTop: 20, borderTop: '1px solid #334155', display: 'flex', gap: 15 },
+    dangerBtn: { flex: 1, background: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444', color: '#ef4444', padding: 12, borderRadius: 8, fontSize: 11, fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 },
+    
+    // Login
+    loginCard: { background: '#0f172a', padding: '40px', borderRadius: '24px', border: '1px solid #1e293b', width: '350px', textAlign: 'center' },
+    loginIconBox: { width: 80, height: 80, borderRadius: '50%', background: 'rgba(249, 115, 22, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px auto' },
+    loginTitle: { fontSize: 24, fontWeight: '800', margin: 0, color: '#fff' },
+    loginInput: { width: '100%', padding: '16px 16px 16px 50px', background: '#020617', border: '1px solid #334155', borderRadius: '12px', color: '#fff', outline: 'none' },
+    loginBtn: { width: '100%', padding: '16px', background: '#f97316', color: '#fff', border: 'none', borderRadius: '12px', fontWeight: '800', fontSize: 14, cursor: 'pointer' },
+    
+    // Toggle
+    toggle: { width: 44, height: 24, borderRadius: 20, position: 'relative', cursor: 'pointer', transition: '0.3s' },
+    knob: { width: 18, height: 18, background: '#fff', borderRadius: '50%', position: 'absolute', top: 3, left: 3, transition: '0.3s', boxShadow: '0 2px 5px rgba(0,0,0,0.2)' },
+    
+    // General
+    primaryBtn: { flex: 1, background: '#f97316', color: '#fff', border: 'none', padding: 15, borderRadius: 10, fontWeight: '700', cursor: 'pointer' },
+    secondaryBtn: { flex: 1, background: '#334155', color: '#fff', border: 'none', padding: 15, borderRadius: 10, fontWeight: '700', cursor: 'pointer' }
 };
 
 export default SuperAdmin;
