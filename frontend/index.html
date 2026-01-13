@@ -26,7 +26,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Poppins:wght@600;700;800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Poppins:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
 
@@ -34,75 +34,46 @@
       /* --- GLOBAL VARIABLES & RESET --- */
       :root {
         --bg-color: #050505; 
-        --card-bg: #0a0a0a;
         --primary-orange: #f97316;
         --text-color: #ffffff;
-        --safe-bottom: env(safe-area-inset-bottom, 20px); /* iPhone Home Bar Safety */
+        --safe-bottom: env(safe-area-inset-bottom, 20px); /* iPhone Home Bar */
       }
 
       * {
         box-sizing: border-box;
         margin: 0;
         padding: 0;
-        -webkit-tap-highlight-color: transparent; /* Removes blue tap box on mobile */
+        -webkit-tap-highlight-color: transparent;
       }
 
       html, body {
         height: 100%;
         width: 100%;
         background-color: var(--bg-color);
-        /* 🎨 subtle gradient for Laptops so it doesn't look flat */
+        /* 🎨 Subtle premium gradient background */
         background-image: radial-gradient(circle at 50% 0%, #1a0f0a 0%, #050505 60%);
         background-attachment: fixed;
         color: var(--text-color);
-        font-family: "Inter", system-ui, -apple-system, sans-serif;
-        overscroll-behavior-y: none; /* Prevents "bounce" on Mac/iOS */
+        font-family: "Plus Jakarta Sans", "Inter", sans-serif;
+        overscroll-behavior-y: none; /* Prevents "bounce" scroll */
         -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
+        overflow: hidden; /* Let React manage scrolling */
       }
 
       #root {
         width: 100%;
-        min-height: 100vh;
+        height: 100%;
         display: flex;
         flex-direction: column;
-        /* 📱 Mobile Safe Area Padding */
-        padding-bottom: var(--safe-bottom);
       }
 
-      /* --- 💻 LAPTOP SCROLLBARS (Make it look native) --- */
-      ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
-      }
-      ::-webkit-scrollbar-track {
-        background: #0a0a0a; 
-      }
-      ::-webkit-scrollbar-thumb {
-        background: #333; 
-        border-radius: 4px;
-      }
-      ::-webkit-scrollbar-thumb:hover {
-        background: var(--primary-orange); 
-      }
+      /* --- 💻 SCROLLBARS (Dark Theme) --- */
+      ::-webkit-scrollbar { width: 6px; height: 6px; }
+      ::-webkit-scrollbar-track { background: #0a0a0a; }
+      ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+      ::-webkit-scrollbar-thumb:hover { background: var(--primary-orange); }
 
-      /* --- 🖨️ THERMAL PRINTER HACKS (KOT/Bills) --- */
-      @media print {
-        body * { visibility: hidden; }
-        #kot-receipt, #kot-receipt * { visibility: visible; }
-        #kot-receipt {
-          position: absolute;
-          left: 0; top: 0;
-          width: 80mm; /* Standard Thermal Paper */
-          background: white !important;
-          color: black !important;
-          font-family: 'Courier New', monospace;
-          padding: 5px;
-        }
-        @page { margin: 0; }
-      }
-
-      /* --- 🌀 PRE-LOADER SPINNER --- */
+      /* --- 🌀 PRE-LOADER (Visible before React loads) --- */
       #root:empty {
         display: flex;
         flex-direction: column;
@@ -123,11 +94,11 @@
       }
 
       #root:empty::after {
-        content: "STARTING ENGINE...";
+        content: "INITIALIZING KOVIXA...";
         font-family: "Poppins", sans-serif;
         font-weight: 700;
-        font-size: 14px;
-        letter-spacing: 2px;
+        font-size: 12px;
+        letter-spacing: 3px;
         color: #666;
         animation: pulse 1.5s ease-in-out infinite;
       }
@@ -138,21 +109,10 @@
   </head>
 
   <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    
     <div id="root"></div>
 
-    <div id="kot-receipt"></div>
-
     <script type="module" src="/src/main.jsx"></script>
-
-    <script>
-      if ("serviceWorker" in navigator) {
-        window.addEventListener("load", () => {
-          navigator.serviceWorker
-            .register("/sw.js")
-            .then((reg) => console.log("✅ Kovixa OS: Service Worker Ready"))
-            .catch((err) => console.log("❌ SW Error: ", err));
-        });
-      }
-    </script>
   </body>
 </html>

@@ -1,67 +1,243 @@
-import React, { useEffect } from "react"; // ✅ FIXED: Added useEffect to imports
+import React, { useEffect } from "react";
 import { Link } from "react-router-dom";
-import { FaShieldAlt, FaLock, FaArrowLeft } from "react-icons/fa";
+import { FaShieldAlt, FaLock, FaArrowLeft, FaFileContract, FaGavel } from "react-icons/fa";
 
 const Terms = () => {
-  // ✅ FIXED: useEffect must be INSIDE the component function
+  // 🔄 Auto-scroll to top on load
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
 
-  // ✅ FIXED: Moving styles INSIDE to prevent production ReferenceErrors
-  const styles = {
-    container: { minHeight: "100vh", background: "#050505", color: "#fff", padding: "20px", fontFamily: "'Inter', sans-serif" },
-    header: { maxWidth: "800px", margin: "0 auto 40px", display: "flex", alignItems: "center", gap: "20px" },
-    backBtn: { color: "#f97316", textDecoration: "none", fontSize: "14px", fontWeight: "700", display: "flex", alignItems: "center", gap: "5px" },
-    title: { fontSize: "24px", fontWeight: "900" },
-    content: { maxWidth: "800px", margin: "0 auto" },
-    section: { background: "#0a0a0a", padding: "30px", borderRadius: "24px", border: "1px solid #111", marginBottom: "20px" },
-    iconHeading: { display: "flex", alignItems: "center", gap: "15px", marginBottom: "20px" },
-    list: { paddingLeft: "20px", marginTop: "15px", color: "#a1a1aa", lineHeight: "1.8" },
-    footer: { textAlign: "center", marginTop: "40px", color: "#444", fontSize: "12px" }
-  };
-
   return (
     <div style={styles.container}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+        body { margin: 0; background: #020617; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #020617; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+      `}</style>
+
+      {/* HEADER */}
       <header style={styles.header}>
-        <Link to="/" style={styles.backBtn}><FaArrowLeft /> Back</Link>
-        <h1 style={styles.title}>Legal & Privacy</h1>
+        <div style={styles.headerInner}>
+          <Link to="/" style={styles.backBtn}>
+            <div style={styles.iconCircle}><FaArrowLeft /></div>
+            <span>Back to Home</span>
+          </Link>
+          <h1 style={styles.title}>Legal & Privacy Protocols</h1>
+        </div>
       </header>
 
+      {/* CONTENT */}
       <div style={styles.content}>
-        <section style={styles.section}>
-          <div style={styles.iconHeading}>
-            <FaShieldAlt color="#f97316" size={24} />
-            <h2>Terms of Service</h2>
+        
+        {/* SECTION 1: TERMS */}
+        <section style={styles.card}>
+          <div style={styles.cardHeader}>
+            <FaGavel color="#f97316" size={28} />
+            <div>
+              <h2 style={styles.heading}>Terms of Service</h2>
+              <p style={styles.subHeading}>Last Updated: January 2026</p>
+            </div>
           </div>
-          <p>By using <strong>Kovixa SaaS</strong>, you agree to the following conditions:</p>
+          <div style={styles.divider}></div>
           <ul style={styles.list}>
-            <li><strong>Account Security:</strong> You are responsible for keeping your Master Key and PINs secure.</li>
-            <li><strong>Service Usage:</strong> Fake registrations will result in a permanent ban.</li>
-            <li><strong>Subscription:</strong> Trial accounts expire after 30 days.</li>
-            <li><strong>Liability:</strong> We are not responsible for local hardware or internet failures.</li>
+            <li>
+              <strong>1. License Grant:</strong> Kovixa grants you a revocable, non-exclusive, non-transferable license to use the "Smart Menu System" for your restaurant operations.
+            </li>
+            <li>
+              <strong>2. Account Responsibility:</strong> You are responsible for maintaining the confidentiality of your Master Key and Restaurant ID. Any activity occurring under your account is your responsibility.
+            </li>
+            <li>
+              <strong>3. Acceptable Use:</strong> You agree not to misuse the platform to host illegal content, spam, or malicious software. Violations will result in immediate termination.
+            </li>
+            <li>
+              <strong>4. Service Availability:</strong> While we aim for 99.9% uptime, Kovixa is not liable for business losses due to internet outages, server maintenance, or force majeure events.
+            </li>
           </ul>
         </section>
 
-        <section style={styles.section}>
-          <div style={styles.iconHeading}>
-            <FaLock color="#22c55e" size={24} />
-            <h2>Privacy Policy</h2>
+        {/* SECTION 2: PRIVACY */}
+        <section style={styles.card}>
+          <div style={styles.cardHeader}>
+            <FaShieldAlt color="#3b82f6" size={28} />
+            <div>
+              <h2 style={styles.heading}>Privacy Policy</h2>
+              <p style={styles.subHeading}>How we handle your data</p>
+            </div>
           </div>
-          <p>We take your data security seriously:</p>
+          <div style={styles.divider}></div>
           <ul style={styles.list}>
-            <li><strong>Data Ownership:</strong> Your menu items and history belong to you.</li>
-            <li><strong>Auto-Cleanup:</strong> Individual order details are purged every 30 days. Download reports monthly.</li>
-            <li><strong>Cookies:</strong> We use local storage to keep you logged in.</li>
+            <li>
+              <strong>1. Data Ownership:</strong> All menu data, prices, and images uploaded by you remain your intellectual property.
+            </li>
+            <li>
+              <strong>2. Customer Data:</strong> We do not sell your customer's order history to third parties. Data is used solely to facilitate order processing and kitchen display logic.
+            </li>
+            <li>
+              <strong>3. Auto-Purge System:</strong> To maintain system speed, individual order logs (PII) are automatically archived or purged every 30-60 days. Please download your revenue reports monthly.
+            </li>
+            <li>
+              <strong>4. Local Storage:</strong> This application uses browser local storage to maintain session states (e.g., Cart items, Login tokens) for a seamless experience.
+            </li>
           </ul>
+        </section>
+
+        {/* SECTION 3: SECURITY */}
+        <section style={styles.card}>
+          <div style={styles.cardHeader}>
+            <FaLock color="#22c55e" size={28} />
+            <div>
+              <h2 style={styles.heading}>Security Measures</h2>
+              <p style={styles.subHeading}>Bank-grade encryption standards</p>
+            </div>
+          </div>
+          <div style={styles.divider}></div>
+          <p style={styles.text}>
+            All data transmission between your device and our servers is encrypted via <strong>SSL/TLS 1.2+</strong>. 
+            Passwords are hashed using <strong>Bcrypt</strong> before storage. We conduct regular vulnerability scans to ensure platform integrity.
+          </p>
         </section>
 
         <footer style={styles.footer}>
-          <p>© {new Date().getFullYear()} Kovixa Cloud OS. Purged & Secured.</p>
+          <FaFileContract style={{marginBottom:10}} size={20}/>
+          <p>© 2026 Kovixa Systems. Engineered in Hyderabad.</p>
+          <p style={{opacity:0.5, fontSize:11, marginTop:5}}>For legal inquiries: legal@kovixa.com</p>
         </footer>
+
       </div>
     </div>
   );
+};
+
+// 🎨 "MIDNIGHT GLASS" STYLES
+const styles = {
+  container: {
+    minHeight: "100vh",
+    width: "100%",
+    background: "#020617",
+    backgroundImage: "radial-gradient(circle at 50% 0%, #1e293b 0%, transparent 70%)",
+    color: "#f8fafc",
+    fontFamily: "'Plus Jakarta Sans', sans-serif",
+    paddingBottom: "80px"
+  },
+  header: {
+    background: "rgba(15, 23, 42, 0.8)",
+    backdropFilter: "blur(12px)",
+    borderBottom: "1px solid #1e293b",
+    position: "sticky",
+    top: 0,
+    zIndex: 10,
+    padding: "20px"
+  },
+  headerInner: {
+    maxWidth: "800px",
+    margin: "0 auto",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    flexWrap: "wrap",
+    gap: "15px"
+  },
+  backBtn: {
+    textDecoration: "none",
+    color: "#94a3b8",
+    fontSize: "14px",
+    fontWeight: "600",
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+    transition: "0.2s"
+  },
+  iconCircle: {
+    width: "32px",
+    height: "32px",
+    background: "#1e293b",
+    borderRadius: "50%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    border: "1px solid #334155"
+  },
+  title: {
+    fontSize: "20px",
+    fontWeight: "800",
+    margin: 0,
+    background: "linear-gradient(to right, #fff, #94a3b8)",
+    WebkitBackgroundClip: "text",
+    WebkitTextFillColor: "transparent"
+  },
+  content: {
+    maxWidth: "800px",
+    margin: "40px auto",
+    padding: "0 20px",
+    display: "flex",
+    flexDirection: "column",
+    gap: "30px"
+  },
+  card: {
+    background: "rgba(30, 41, 59, 0.4)",
+    backdropFilter: "blur(10px)",
+    border: "1px solid #1e293b",
+    borderRadius: "24px",
+    padding: "30px",
+    boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)"
+  },
+  cardHeader: {
+    display: "flex",
+    alignItems: "center",
+    gap: "15px",
+    marginBottom: "20px"
+  },
+  heading: {
+    fontSize: "20px",
+    fontWeight: "700",
+    margin: 0,
+    color: "white"
+  },
+  subHeading: {
+    fontSize: "12px",
+    color: "#64748b",
+    margin: "4px 0 0 0",
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: "1px"
+  },
+  divider: {
+    height: "1px",
+    background: "linear-gradient(to right, #334155, transparent)",
+    marginBottom: "20px"
+  },
+  list: {
+    paddingLeft: "0",
+    listStyle: "none",
+    margin: 0,
+    color: "#cbd5e1",
+    fontSize: "15px",
+    lineHeight: "1.7",
+    display: "flex",
+    flexDirection: "column",
+    gap: "15px"
+  },
+  text: {
+    color: "#cbd5e1",
+    fontSize: "15px",
+    lineHeight: "1.7",
+    margin: 0
+  },
+  footer: {
+    textAlign: "center",
+    marginTop: "40px",
+    color: "#64748b",
+    fontSize: "13px",
+    fontWeight: "500",
+    borderTop: "1px solid #1e293b",
+    paddingTop: "40px",
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center'
+  }
 };
 
 export default Terms;

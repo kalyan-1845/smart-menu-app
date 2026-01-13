@@ -1,16 +1,26 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import App from './App.jsx' // Ensure your global CSS is imported here
+import App from './App.jsx' 
 import { Toaster } from 'react-hot-toast';
 
-// --- 🛠️ INDUSTRIAL SERVICE WORKER REGISTRATION ---
+// --- 📲 1. PWA INSTALL CAPTURE (CRITICAL FIX) ---
+// This listens for the browser's install event and saves it for your button.
+window.addEventListener('beforeinstallprompt', (e) => {
+  // Prevent Chrome 67+ from automatically showing the prompt
+  e.preventDefault();
+  // Stash the event so it can be triggered later by <InstallButton />
+  window.deferredPrompt = e;
+  console.log("✅ PWA Install Event Captured");
+});
+
+// --- 🛠️ 2. INDUSTRIAL SERVICE WORKER ---
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js')
       .then(reg => {
-        console.log('✅ Kovixa Service Worker Active:', reg.scope);
+        console.log('✅ Service Worker Active:', reg.scope);
 
-        // Update logic: ensures the app stays fresh for Chefs and Waiters
+        // Auto-Update Logic
         reg.onupdatefound = () => {
           const installingWorker = reg.installing;
           if (installingWorker == null) return;
@@ -18,26 +28,22 @@ if ('serviceWorker' in navigator) {
           installingWorker.onstatechange = () => {
             if (installingWorker.state === 'installed') {
               if (navigator.serviceWorker.controller) {
-                // Trigger a "New Version" toast or auto-reload
                 console.log('🚀 New version available! Refreshing...');
-                // We send a message to the SW to skipWaiting
                 installingWorker.postMessage({ type: 'SKIP_WAITING' });
                 window.location.reload();
-              } else {
-                console.log('✨ Kovixa is ready for offline use.');
               }
             }
           };
         };
       })
-      .catch(err => console.error('❌ Service Worker Registration Failed:', err));
+      .catch(err => console.error('❌ SW Registration Failed:', err));
   });
 }
 
-// Render the application root
+// --- 3. RENDER APP ---
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    {/* Global Toaster: Refined for the Dark Premium Theme */}
+    {/* Global Toaster: Matches "Midnight Glass" Theme */}
     <Toaster 
       position="top-center" 
       reverseOrder={false} 
@@ -45,28 +51,22 @@ ReactDOM.createRoot(document.getElementById('root')).render(
       toastOptions={{
         duration: 4000,
         style: {
-          background: '#0a0a0a',
+          background: 'rgba(15, 23, 42, 0.95)', // Dark Slate
           color: '#fff',
-          border: '1px solid rgba(255,255,255,0.1)',
-          borderRadius: '20px',
+          border: '1px solid rgba(59, 130, 246, 0.3)', // Blue Glow
+          borderRadius: '16px',
           padding: '16px 24px',
           fontSize: '14px',
           fontWeight: '600',
-          fontFamily: "'Inter', sans-serif",
-          boxShadow: '0 20px 40px rgba(0,0,0,0.6)',
-          backdropFilter: 'blur(10px)' // Glassmorphism effect
+          fontFamily: "'Plus Jakarta Sans', sans-serif",
+          boxShadow: '0 20px 50px rgba(0,0,0,0.6)',
+          backdropFilter: 'blur(10px)'
         },
         success: {
-          iconTheme: {
-            primary: '#22c55e',
-            secondary: '#000',
-          },
+          iconTheme: { primary: '#22c55e', secondary: '#000' },
         },
         error: {
-          iconTheme: {
-            primary: '#ef4444',
-            secondary: '#000',
-          },
+          iconTheme: { primary: '#ef4444', secondary: '#000' },
         },
       }}
     />

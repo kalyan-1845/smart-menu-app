@@ -4,7 +4,7 @@ import {
     FaSignOutAlt, FaTrash, FaRedo, FaEdit, FaKey, FaPlus, FaTimes,
     FaBullhorn, FaSync, FaSortAmountDown, FaCircle, 
     FaUserSecret, FaLock, FaArrowRight, FaSpinner, FaHeartbeat, FaEye, FaAd, 
-    FaStar, FaCommentDots, FaQrcode 
+    FaStar, FaCommentDots, FaQrcode, FaWhatsapp 
 } from "react-icons/fa";
 import axios from "axios";
 import { toast } from "react-hot-toast";
@@ -19,7 +19,7 @@ const SuperAdmin = () => {
     const [loginLoading, setLoginLoading] = useState(false);
 
     const [clients, setClients] = useState([]);
-    const [reviews, setReviews] = useState([]); // ⭐ NEW: Reviews State
+    const [reviews, setReviews] = useState([]); 
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
     
@@ -33,7 +33,7 @@ const SuperAdmin = () => {
     // Selection
     const [selected, setSelected] = useState(null); 
     const [noteDraft, setNoteDraft] = useState("");
-    const [createForm, setCreateForm] = useState({ restaurantName: "", username: "", password: "" });
+    const [createForm, setCreateForm] = useState({ restaurantName: "", username: "", password: "", phoneNumber: "" });
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [newPassword, setNewPassword] = useState(""); 
 
@@ -68,7 +68,6 @@ const SuperAdmin = () => {
         if (!token) return;
         const start = Date.now();
         try {
-            // ✅ Fetching Reviews here
             const [clientRes, sysRes, pulseRes, reviewRes] = await Promise.all([
                 axios.get(`${API_URL}/api/superadmin/ceo-sync`, { headers: { Authorization: `Bearer ${token}` } }),
                 axios.get(`${API_URL}/api/superadmin/system-status`),
@@ -80,7 +79,7 @@ const SuperAdmin = () => {
             setBroadcastMsg(sysRes.data.message || "");
             setMaintenanceMode(sysRes.data.maintenance || false);
             setGlobalBanner(sysRes.data.globalBanner || "");
-            setReviews(reviewRes.data); // ⭐ Save Reviews
+            setReviews(reviewRes.data); 
             
             const latency = Date.now() - start;
             setServerPulse({ ...pulseRes.data, latency: `${latency}ms` });
@@ -206,6 +205,14 @@ const SuperAdmin = () => {
                                 </div>
                                 <div style={styles.cardBody}>
                                     <p>User: <span style={{color:'#fff'}}>{c.username}</span></p>
+                                    
+                                    {/* 📞 PHONE DISPLAY */}
+                                    {c.phoneNumber && (
+                                        <div style={{display:'flex', alignItems:'center', gap:6, marginTop:5, color:'#3b82f6', fontSize:13, fontWeight:'bold'}}>
+                                            <FaPhone size={10}/> {c.phoneNumber}
+                                        </div>
+                                    )}
+
                                     <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:10}}>
                                         <span style={{color: '#facc15', fontWeight:'bold', fontSize:14, display:'flex', alignItems:'center', gap:5}}><FaStar/> {c.rating} ({c.reviewCount})</span>
                                         <span style={{color:'#f97316', fontWeight:'bold', fontSize:14}}>{formatCurrency(c.monthlyRevenue)}</span>
@@ -249,7 +256,7 @@ const SuperAdmin = () => {
             </div>
 
             {/* MODALS */}
-            {showCreateModal && <div style={styles.overlay}><div style={styles.modal}><h2 style={{marginTop:0, fontSize:28}}>🚀 New Restaurant</h2><input style={styles.input} placeholder="Restaurant Name" value={createForm.restaurantName} onChange={e=>setCreateForm({...createForm, restaurantName:e.target.value})}/><input style={styles.input} placeholder="Username" value={createForm.username} onChange={e=>setCreateForm({...createForm, username:e.target.value})}/><input style={styles.input} placeholder="Password" value={createForm.password} onChange={e=>setCreateForm({...createForm, password:e.target.value})}/><button onClick={handleRegister} style={styles.saveBtn}>CREATE ACCOUNT</button><button onClick={()=>setShowCreateModal(false)} style={styles.closeBtn}>CANCEL</button></div></div>}
+            {showCreateModal && <div style={styles.overlay}><div style={styles.modal}><h2 style={{marginTop:0, fontSize:28}}>🚀 New Restaurant</h2><input style={styles.input} placeholder="Restaurant Name" value={createForm.restaurantName} onChange={e=>setCreateForm({...createForm, restaurantName:e.target.value})}/><input style={styles.input} placeholder="Username" value={createForm.username} onChange={e=>setCreateForm({...createForm, username:e.target.value})}/><input style={styles.input} placeholder="Phone Number" value={createForm.phoneNumber} onChange={e=>setCreateForm({...createForm, phoneNumber:e.target.value})}/><input style={styles.input} placeholder="Password" value={createForm.password} onChange={e=>setCreateForm({...createForm, password:e.target.value})}/><button onClick={handleRegister} style={styles.saveBtn}>CREATE ACCOUNT</button><button onClick={()=>setShowCreateModal(false)} style={styles.closeBtn}>CANCEL</button></div></div>}
 
             {selected && (
                 <div style={styles.overlay}>
@@ -261,6 +268,20 @@ const SuperAdmin = () => {
                                 <button onClick={()=>enterGodMode(selected._id, selected.username)} style={{...styles.swBtn, background:'#f97316', color:'black'}}><FaGhost size={20}/> GHOST LOGIN</button>
                             </div>
                             
+                            {/* 📞 DIRECT CONTACT SECTION */}
+                            <div style={styles.section}>
+                                <label style={styles.label}>📞 CONTACT OWNER</label>
+                                <div style={{display:'flex', gap:10}}>
+                                    <input style={{...styles.input, marginBottom:0}} value={selected.phoneNumber || "No Number"} onChange={e=>setSelected({...selected, phoneNumber:e.target.value})}/>
+                                    {selected.phoneNumber && (
+                                        <a href={`https://wa.me/91${selected.phoneNumber}`} target="_blank" rel="noreferrer" style={{...styles.updateBtn, background:'#22c55e', textDecoration:'none', display:'flex', alignItems:'center', justifyContent:'center', width:'auto', padding:'0 20px'}}>
+                                            <FaWhatsapp size={20}/>
+                                        </a>
+                                    )}
+                                </div>
+                                <button onClick={handleUpdateClient} style={{...styles.updateBtn, marginTop:10, background:'#333', border:'1px solid #444'}}>UPDATE NUMBER</button>
+                            </div>
+
                             <div style={styles.section}>
                                 <label style={styles.label}>⏳ TIME WARP (Expires: {selected.trialEndsAt ? new Date(selected.trialEndsAt).toLocaleDateString() : "Never"})</label>
                                 <div style={{display:'flex', gap:10}}>

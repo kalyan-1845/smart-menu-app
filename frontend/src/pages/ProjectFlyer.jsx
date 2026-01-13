@@ -9,16 +9,17 @@ import {
 
 const ProjectFlyer = () => {
   const flyerRef = useRef(null);
-  const [scale, setScale] = useState(0.8);
+  const [scale, setScale] = useState(0.6);
   const [isExporting, setIsExporting] = useState(false);
   const [isMobileView, setIsMobileView] = useState(window.innerWidth < 768);
 
-  // Handle auto-scaling for mobile screens
+  // Auto-fit to screen on load
   useEffect(() => {
     const handleResize = () => {
       const mobile = window.innerWidth < 768;
       setIsMobileView(mobile);
-      if (mobile) setScale(window.innerWidth / 1100); // Auto-fit to mobile width
+      if (mobile) setScale(window.innerWidth / 1100); 
+      else setScale(0.6);
     };
     window.addEventListener('resize', handleResize);
     handleResize();
@@ -31,17 +32,17 @@ const ProjectFlyer = () => {
     try {
       await document.fonts.ready;
       const canvas = await html2canvas(flyerRef.current, {
-        scale: 3, // High resolution for print
+        scale: 4, // Ultra 4K Quality for Print
         useCORS: true,
-        backgroundColor: "#020617",
+        backgroundColor: "#000000",
       });
       const image = canvas.toDataURL("image/png", 1.0);
       const link = document.createElement("a");
       link.href = image;
-      link.download = "KOVIXA_SmartResto_Flyer.png";
+      link.download = "KOVIXA_Project_Poster.png";
       link.click();
     } catch (error) {
-      alert("Export failed. Try on a desktop browser.");
+      alert("Export failed. Please try on Desktop.");
     } finally {
       setIsExporting(false);
     }
@@ -52,7 +53,7 @@ const ProjectFlyer = () => {
   return (
     <div style={styles.workspace}>
       
-      {/* 🛠️ NAVIGATION & CONTROLS */}
+      {/* 🛠️ TOOLBAR (Hidden in Export) */}
       <div style={styles.toolbar}>
         {!isMobileView && (
           <div style={styles.zoomGroup}>
@@ -63,91 +64,109 @@ const ProjectFlyer = () => {
         )}
         <button onClick={handleDownload} disabled={isExporting} style={styles.downloadBtn}>
           {isExporting ? <FaSpinner className="spin" /> : <FaCamera />}
-          <span>{isExporting ? " RENDERING..." : " DOWNLOAD 4K POSTER"}</span>
+          <span>{isExporting ? " GENERATING 4K..." : " DOWNLOAD POSTER"}</span>
         </button>
       </div>
 
       <div style={styles.scrollArea}>
         <div style={{ ...styles.scaler, transform: `scale(${scale})` }}>
           
-          {/* 🖼️ THE FLYER DESIGN */}
+          {/* 🖼️ THE POSTER CANVAS */}
           <div ref={flyerRef} style={styles.flyer}>
             
+            {/* Background Effects */}
             <div style={styles.glowTop}></div>
+            <div style={styles.glowBottom}></div>
 
             {/* HEADER */}
             <header style={styles.header}>
               <div style={styles.brandBox}>
                 <h1 style={styles.logoText}>KOVIXA</h1>
-                <p style={styles.tagline}>NEXT-GEN RESTAURANT OS</p>
+                <div style={styles.tagBadge}>ENTERPRISE EDITION</div>
               </div>
               <div style={styles.developerBox}>
-                <span style={styles.devLabel}>ARCHITECTED BY</span>
+                <span style={styles.devLabel}>LEAD ARCHITECT</span>
                 <h2 style={styles.devName}>B. Kalyan Reddy</h2>
+                <span style={styles.devRole}>Full Stack Engineer</span>
               </div>
             </header>
 
-            {/* HERO */}
+            {/* HERO STATEMENT */}
             <section style={styles.heroSection}>
-              <h2 style={styles.mainTitle}>Stop Managing. <br/><span style={styles.blueText}>Start Scaling.</span></h2>
-              <p style={styles.heroSub}>A high-performance Full-Stack ecosystem that connects your customers, kitchen, and management in one real-time pipeline.</p>
+              <h2 style={styles.mainTitle}>
+                The Future of <br/>
+                <span style={styles.gradientText}>Restaurant Management.</span>
+              </h2>
+              <p style={styles.heroSub}>
+                A complete Operating System for modern dining. 
+                Seamlessly connecting customers, kitchens, and owners in real-time.
+              </p>
             </section>
 
-            {/* FEATURES GRID */}
+            {/* CORE MODULES GRID */}
             <div style={styles.grid}>
               
               <div style={styles.card}>
-                <FaQrcode style={styles.cardIcon} />
-                <h3 style={styles.cardTitle}>Contactless Core</h3>
-                <ul style={styles.list}>
-                  <li><FaCheckCircle style={styles.check}/> URL-Locked QR Tables</li>
-                  <li><FaCheckCircle style={styles.check}/> No-Install PWA App</li>
-                  <li><FaCheckCircle style={styles.check}/> Isolated Session Carts</li>
-                </ul>
+                <div style={styles.iconCircle}><FaQrcode size={32} /></div>
+                <h3 style={styles.cardTitle}>Contactless Dining</h3>
+                <p style={styles.cardDesc}>
+                  QR-based ordering system. No app download required. 
+                  Instant menu updates and session-based carts.
+                </p>
               </div>
 
               <div style={styles.card}>
-                <FaUtensils style={styles.cardIcon} />
-                <h3 style={styles.cardTitle}>Kitchen Intel</h3>
-                <ul style={styles.list}>
-                  <li><FaCheckCircle style={styles.check}/> Real-time Socket.io KOT</li>
-                  <li><FaCheckCircle style={styles.check}/> One-Tap Stock Toggle</li>
-                  <li><FaCheckCircle style={styles.check}/> Auto-Audio New Order Alert</li>
-                </ul>
+                <div style={styles.iconCircle}><FaUtensils size={32} /></div>
+                <h3 style={styles.cardTitle}>Smart Kitchen (KDS)</h3>
+                <p style={styles.cardDesc}>
+                  Real-time order transmission via WebSockets. 
+                  Chefs see orders instantly. Zero paper waste.
+                </p>
               </div>
 
               <div style={styles.card}>
-                <FaShieldAlt style={styles.cardIcon} />
-                <h3 style={styles.cardTitle}>Owner Control</h3>
-                <ul style={styles.list}>
-                  <li><FaCheckCircle style={styles.check}/> 256-bit Secure Staff Login</li>
-                  <li><FaCheckCircle style={styles.check}/> Master Revenue Analytics</li>
-                  <li><FaCheckCircle style={styles.check}/> Bulk QR Sticker Generator</li>
-                </ul>
+                <div style={styles.iconCircle}><FaShieldAlt size={32} /></div>
+                <h3 style={styles.cardTitle}>Admin Command</h3>
+                <p style={styles.cardDesc}>
+                  Full inventory control, revenue analytics, and 
+                  staff management from a secure dashboard.
+                </p>
               </div>
 
               <div style={styles.card}>
-                <FaConciergeBell style={styles.cardIcon} />
-                <h3 style={styles.cardTitle}>Smart Service</h3>
-                <ul style={styles.list}>
-                  <li><FaCheckCircle style={styles.check}/> Digital Waiter Calling</li>
-                  <li><FaCheckCircle style={styles.check}/> Dual-Printer Bluetooth Bills</li>
-                  <li><FaCheckCircle style={styles.check}/> Feedback & Rating System</li>
-                </ul>
+                <div style={styles.iconCircle}><FaRocket size={32} /></div>
+                <h3 style={styles.cardTitle}>Cloud Scalability</h3>
+                <p style={styles.cardDesc}>
+                  Built on the MERN Stack. Designed to handle 
+                  millions of requests with 99.9% uptime.
+                </p>
+              </div>
+
+            </div>
+
+            {/* TECHNICAL SPECS */}
+            <div style={styles.techSection}>
+              <h4 style={styles.techTitle}>POWERED BY</h4>
+              <div style={styles.techGrid}>
+                <span style={styles.techTag}>MongoDB</span>
+                <span style={styles.techTag}>Express.js</span>
+                <span style={styles.techTag}>React.js</span>
+                <span style={styles.techTag}>Node.js</span>
+                <span style={styles.techTag}>Socket.io</span>
+                <span style={styles.techTag}>JWT Auth</span>
               </div>
             </div>
 
-            {/* TECH STACK FOOTER */}
-            <div style={styles.techBar}>
-              <div style={styles.techItem}><FaRocket/> MERN STACK</div>
-              <div style={styles.techItem}><FaWifi/> WEBSOCKETS</div>
-              <div style={styles.techItem}><FaMobileAlt/> RESPONSIVE</div>
-            </div>
-
+            {/* CONTACT FOOTER */}
             <footer style={styles.footer}>
-              <div style={styles.contactCapsule}><FaPhone/> +91 63050 13340</div>
-              <div style={styles.contactCapsule}><FaEnvelope/> bitebox.web@gmail.com</div>
-              <div style={styles.contactCapsule}><FaMapMarkerAlt/> Hyderabad, IN</div>
+              <div style={styles.contactRow}>
+                <div style={styles.contactItem}><FaPhone/> +91 63050 13340</div>
+                <div style={styles.divider}></div>
+                <div style={styles.contactItem}><FaEnvelope/> bitebox.web@gmail.com</div>
+                <div style={styles.divider}></div>
+                <div style={styles.contactItem}><FaMapMarkerAlt/> Hyderabad, India</div>
+              </div>
+              <p style={styles.copyright}>© 2026 Kovixa Systems. All Rights Reserved.</p>
             </footer>
 
           </div>
@@ -159,43 +178,52 @@ const ProjectFlyer = () => {
 };
 
 const styles = {
-  workspace: { height: "100vh", width: "100vw", background: "#020617", display: "flex", flexDirection: "column", overflow: "hidden" },
-  toolbar: { height: "70px", background: "rgba(15, 23, 42, 0.8)", backdropFilter: "blur(10px)", borderBottom: "1px solid #1e293b", display: "flex", alignItems: "center", justifyContent: "center", gap: "20px", zIndex: 100, padding: "0 15px" },
-  zoomGroup: { display: "flex", alignItems: "center", gap: "12px", background: "#0f172a", padding: "6px 12px", borderRadius: "10px", border: "1px solid #334155" },
-  toolBtn: { background: "transparent", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: "18px" },
-  zoomLabel: { color: "#fff", fontSize: "14px", fontWeight: "bold", minWidth: "45px", textAlign: "center" },
-  downloadBtn: { background: "linear-gradient(135deg, #3b82f6, #2563eb)", color: "white", border: "none", padding: "10px 20px", borderRadius: "10px", fontWeight: "900", cursor: "pointer", display: "flex", alignItems: "center", gap: "10px" },
+  workspace: { height: "100vh", width: "100vw", background: "#111", display: "flex", flexDirection: "column", overflow: "hidden", fontFamily: "'Inter', sans-serif" },
   
-  scrollArea: { flex: 1, overflow: "auto", display: "flex", justifyContent: "center", paddingTop: "50px", background: "radial-gradient(circle at center, #0f172a 0%, #020617 100%)" },
+  toolbar: { height: "60px", background: "#0a0a0a", borderBottom: "1px solid #333", display: "flex", alignItems: "center", justifyContent: "center", gap: "20px", zIndex: 100 },
+  zoomGroup: { display: "flex", alignItems: "center", gap: "10px", background: "#222", padding: "5px 10px", borderRadius: "8px" },
+  toolBtn: { background: "none", border: "none", color: "#888", cursor: "pointer", fontSize: "16px" },
+  zoomLabel: { color: "#fff", fontSize: "12px", fontWeight: "bold", width: "40px", textAlign: "center" },
+  downloadBtn: { background: "#fff", color: "#000", border: "none", padding: "8px 20px", borderRadius: "6px", fontWeight: "800", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px", fontSize: "13px" },
+
+  scrollArea: { flex: 1, overflow: "auto", display: "flex", justifyContent: "center", paddingTop: "40px", paddingBottom: "40px", background: "#111" },
   scaler: { transition: "transform 0.1s ease-out", transformOrigin: "top center" },
+
+  // POSTER DESIGN
+  flyer: { width: "1000px", minHeight: "1414px", background: "#000", padding: "80px", position: "relative", color: "white", border: "1px solid #333", display:'flex', flexDirection:'column' },
   
-  flyer: { width: "1000px", minHeight: "1414px", background: "#020617", padding: "80px", position: "relative", overflow: "hidden", color: "white", border: "1px solid #1e293b", boxShadow: "0 50px 100px rgba(0,0,0,0.5)" },
-  glowTop: { position: "absolute", top: "-150px", left: "50%", transform: "translateX(-50%)", width: "800px", height: "400px", background: "rgba(59, 130, 246, 0.15)", filter: "blur(120px)" },
+  glowTop: { position: "absolute", top: "-200px", left: "0", width: "600px", height: "600px", background: "radial-gradient(circle, rgba(59, 130, 246, 0.15) 0%, transparent 70%)", filter: "blur(80px)" },
+  glowBottom: { position: "absolute", bottom: "-200px", right: "0", width: "600px", height: "600px", background: "radial-gradient(circle, rgba(16, 185, 129, 0.1) 0%, transparent 70%)", filter: "blur(80px)" },
 
-  header: { display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "80px", borderBottom: "1px solid #1e293b", paddingBottom: "30px" },
-  logoText: { fontSize: "80px", fontWeight: "950", margin: 0, letterSpacing: "-5px", background: "linear-gradient(to bottom, #fff, #64748b)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" },
-  tagline: { fontSize: "16px", letterSpacing: "8px", color: "#3b82f6", fontWeight: "900", margin: "5px 0 0 5px" },
+  header: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "80px", borderBottom: "1px solid #222", paddingBottom: "40px" },
+  logoText: { fontSize: "70px", fontWeight: "900", margin: 0, letterSpacing: "-3px" },
+  tagBadge: { background: "#333", color: "#fff", padding: "6px 12px", borderRadius: "4px", fontSize: "12px", fontWeight: "bold", display: "inline-block", marginTop: "10px", letterSpacing: "2px" },
   developerBox: { textAlign: "right" },
-  devLabel: { fontSize: "12px", color: "#64748b", fontWeight: "bold", letterSpacing: "2px" },
-  devName: { fontSize: "28px", margin: 0, fontWeight: "800", color: "#cbd5e1" },
+  devLabel: { fontSize: "12px", color: "#666", fontWeight: "bold", letterSpacing: "2px", display:"block", marginBottom:"5px" },
+  devName: { fontSize: "24px", margin: 0, fontWeight: "700", color: "#fff" },
+  devRole: { fontSize: "14px", color: "#888" },
 
-  heroSection: { textAlign: "center", marginBottom: "80px" },
-  mainTitle: { fontSize: "70px", fontWeight: "900", lineHeight: 1, letterSpacing: "-3px", margin: 0 },
-  blueText: { color: "#3b82f6" },
-  heroSub: { fontSize: "22px", color: "#94a3b8", maxWidth: "800px", margin: "30px auto 0", lineHeight: 1.4 },
+  heroSection: { marginBottom: "80px" },
+  mainTitle: { fontSize: "80px", fontWeight: "800", lineHeight: 1, letterSpacing: "-4px", margin: "0 0 30px 0" },
+  gradientText: { background: "linear-gradient(90deg, #fff, #666)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" },
+  heroSub: { fontSize: "24px", color: "#888", maxWidth: "700px", lineHeight: 1.5, fontWeight: "400" },
 
   grid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "40px", marginBottom: "80px" },
-  card: { background: "rgba(30, 41, 59, 0.5)", border: "1px solid #1e293b", padding: "40px", borderRadius: "24px" },
-  cardIcon: { fontSize: "40px", color: "#3b82f6", marginBottom: "20px" },
-  cardTitle: { fontSize: "28px", fontWeight: "800", margin: "0 0 20px 0" },
-  list: { listStyle: "none", padding: 0, margin: 0 },
-  check: { color: "#10b981", marginRight: "10px" },
+  card: { background: "#0a0a0a", border: "1px solid #222", padding: "40px", borderRadius: "20px" },
+  iconCircle: { width: "60px", height: "60px", background: "#111", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", marginBottom: "20px", border: "1px solid #333" },
+  cardTitle: { fontSize: "24px", fontWeight: "700", margin: "0 0 15px 0" },
+  cardDesc: { fontSize: "16px", color: "#666", lineHeight: 1.6 },
 
-  techBar: { display: "flex", justifyContent: "center", gap: "50px", background: "#0f172a", padding: "25px", borderRadius: "20px", border: "1px solid #1e293b", marginBottom: "80px" },
-  techItem: { fontSize: "18px", fontWeight: "900", color: "#94a3b8", display: "flex", alignItems: "center", gap: "10px" },
+  techSection: { marginBottom: "80px", textAlign: "center" },
+  techTitle: { fontSize: "14px", color: "#444", letterSpacing: "3px", marginBottom: "30px", fontWeight: "800" },
+  techGrid: { display: "flex", justifyContent: "center", gap: "20px", flexWrap: "wrap" },
+  techTag: { border: "1px solid #333", padding: "10px 25px", borderRadius: "30px", fontSize: "14px", fontWeight: "600", color: "#888" },
 
-  footer: { display: "flex", justifyContent: "center", gap: "20px", flexWrap: "wrap", borderTop: "1px solid #1e293b", paddingTop: "50px" },
-  contactCapsule: { background: "#1e293b", padding: "12px 25px", borderRadius: "50px", fontSize: "16px", fontWeight: "bold", display: "flex", alignItems: "center", gap: "10px", border: "1px solid #334155" }
+  footer: { marginTop: "auto", borderTop: "1px solid #222", paddingTop: "40px", textAlign: "center" },
+  contactRow: { display: "flex", justifyContent: "center", alignItems: "center", gap: "30px", marginBottom: "20px" },
+  contactItem: { display: "flex", alignItems: "center", gap: "10px", fontSize: "16px", fontWeight: "500", color: "#ccc" },
+  divider: { width: "1px", height: "20px", background: "#333" },
+  copyright: { color: "#444", fontSize: "14px" }
 };
 
 export default ProjectFlyer;

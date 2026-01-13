@@ -9,7 +9,6 @@ const RoleLogin = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  // ✅ ROLES UPDATED: Chef and Waiter removed as per your request
   const roles = [
     {
       id: 'customer',
@@ -61,12 +60,15 @@ const RoleLogin = () => {
           navigate('/login'); // Points to owner login page
           break;
         case 'super_admin':
-          navigate('/super-login'); // Points to CEO/SuperAdmin login page
+          // NOTE: You don't have a separate '/super-login' page in your routes.
+          // The login modal is inside '/superadmin'. 
+          // So we redirect directly to '/superadmin' where it asks for the password.
+          navigate('/superadmin'); 
           break;
         default:
           navigate('/');
       }
-    }, 800);
+    }, 500);
   };
 
   return (
@@ -126,7 +128,7 @@ const RoleLogin = () => {
 
         <QuickLinks>
           <QuickLink to="/login">Owner Portal</QuickLink>
-          <QuickLink to="/super-login">CEO Dashboard</QuickLink>
+          <QuickLink to="/superadmin">CEO Dashboard</QuickLink>
         </QuickLinks>
       </LoginCard>
     </LoginContainer>

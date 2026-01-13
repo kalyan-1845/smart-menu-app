@@ -22,10 +22,10 @@ if (publicKey && privateKey) {
 }
 
 // =========================================================
-// 🌍 PUBLIC ROUTES (MUST BE AT TOP TO FIX 404)
+// 🌍 PUBLIC ROUTES
 // =========================================================
 
-// ✅ 1. MAINTENANCE STATUS (Fixed Position)
+// 1. MAINTENANCE STATUS
 router.get('/maintenance-status', async (req, res) => {
     try {
         const settings = await Settings.getSettings();
@@ -33,7 +33,7 @@ router.get('/maintenance-status', async (req, res) => {
     } catch (e) { res.json({ enabled: false }); }
 });
 
-// ✅ 2. SERVER PULSE
+// 2. SERVER PULSE
 router.get('/server-pulse', async (req, res) => {
     try {
         const uptime = os.uptime();
@@ -71,7 +71,7 @@ router.post('/login', (req, res) => {
     return res.status(401).json({ success: false, message: "Invalid Password" });
 });
 
-// 4. CEO SYNC (With Revenue & Ratings)
+// 4. CEO SYNC (With Revenue, Ratings & Phone)
 router.get('/ceo-sync', protect, async (req, res) => {
     try {
         const clients = await Owner.find({}).select('-password').sort({ createdAt: -1 }).lean();
@@ -108,6 +108,8 @@ router.get('/ceo-sync', protect, async (req, res) => {
                 monthlyRevenue: monthRev[0]?.total || 0,
                 rating: ratingStats[0]?.avg?.toFixed(1) || "N/A",
                 reviewCount: ratingStats[0]?.count || 0,
+                // ✅ Ensure phoneNumber is passed (defaults to empty string if missing)
+                phoneNumber: c.phoneNumber || "", 
                 lastActiveStr: daysSinceActive === 0 ? "Today" : `${daysSinceActive}d ago`
             };
         }));
@@ -115,16 +117,14 @@ router.get('/ceo-sync', protect, async (req, res) => {
     } catch (error) { res.status(500).json({ message: "Sync Failed" }); }
 });
 
-// ⭐ 5. REVIEWS FEED (New Endpoint)
+// 5. REVIEWS FEED
 router.get('/reviews', protect, async (req, res) => {
     try {
-        // Fetch last 50 rated orders
         const reviews = await Order.find({ rating: { $exists: true, $ne: null } })
             .sort({ createdAt: -1 })
             .limit(50)
             .lean();
 
-        // Map restaurant names (Optimization: could use .populate if schemas linked, manual lookup safer here)
         const ownerIds = [...new Set(reviews.map(r => r.restaurantId))];
         const owners = await Owner.find({ _id: { $in: ownerIds } }).select('restaurantName');
         const ownerMap = {};
@@ -134,7 +134,7 @@ router.get('/reviews', protect, async (req, res) => {
             _id: r._id,
             restaurantName: ownerMap[r.restaurantId.toString()] || "Unknown",
             rating: r.rating,
-            feedback: r.feedback || r.review || "No comment", // Adapts to your Order schema
+            feedback: r.feedback || r.review || "No comment", 
             date: r.createdAt
         }));
 
@@ -215,7 +215,8 @@ router.put('/control/:id', protect, async (req, res) => {
 
 router.put('/client/:id', protect, async (req, res) => {
     const { password, ...data } = req.body;
-    if (password) data.password = password;
+    if (password) data.password = password; // Only update password if sent
+    // ✅ This handles updating 'phoneNumber', 'restaurantName', etc.
     await Owner.findByIdAndUpdate(req.params.id, data);
     res.json({ success: true });
 });

@@ -10,7 +10,7 @@ export const addInventoryItem = async (req, res) => {
             currentStock: Number(currentStock), 
             unit, 
             lowStockThreshold: Number(lowStockThreshold), 
-            owner: restaurantId 
+            restaurantId: restaurantId // ✅ RENAMED from 'owner' to match other files
         });
         
         res.status(201).json(newItem);
@@ -42,7 +42,8 @@ export const getInventory = async (req, res) => {
         const { restaurantId } = req.query;
         if (!restaurantId) return res.status(400).json({ message: "Restaurant ID required" });
 
-        const items = await Inventory.find({ owner: restaurantId });
+        // ✅ Query by 'restaurantId' to match the schema
+        const items = await Inventory.find({ restaurantId: restaurantId });
         res.json(items);
     } catch (error) {
         res.status(500).json({ message: error.message });

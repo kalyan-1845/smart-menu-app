@@ -1,389 +1,228 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import styled from 'styled-components';
-import { Chef, User, Shield, Store, ArrowLeft, LogIn, Utensils } from 'lucide-react';
-import toast from 'react-hot-toast';
+import React, { useState } from "react";
+import { FaStore, FaUtensils, FaQrcode, FaCheck, FaArrowRight, FaArrowLeft, FaMagic } from "react-icons/fa";
+import axios from "axios";
+import { toast } from "react-hot-toast";
 
-const RoleLogin = () => {
-  const [selectedRole, setSelectedRole] = useState('');
-  const [restaurantId, setRestaurantId] = useState(''); // Only for Chef/Waiter
-  const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
+const API_BASE = "https://smart-menu-app-production.up.railway.app/api";
 
-  const roles = [
-    {
-      id: 'customer',
-      name: 'Customer',
-      description: 'Browse menus & order food',
-      icon: User,
-      color: '#4ECDC4'
-    },
-    {
-      id: 'chef',
-      name: 'Chef',
-      description: 'Kitchen display system',
-      icon: Chef,
-      color: '#FF6B35'
-    },
-    {
-      id: 'waiter',
-      name: 'Waiter',
-      description: 'Table & order management',
-      icon: Utensils,
-      color: '#FFA500'
-    },
-    {
-      id: 'owner',
-      name: 'Restaurant Owner',
-      description: 'Admin dashboard & setup',
-      icon: Store,
-      color: '#06D6A0'
-    },
-    {
-      id: 'super_admin',
-      name: 'Super Admin',
-      description: 'CEO & Platform Control',
-      icon: Shield,
-      color: '#292F36'
-    }
-  ];
-
-  const handleRoleSelect = (roleId) => {
-    setSelectedRole(roleId);
-    setRestaurantId(''); // Reset input on change
-  };
-
-  const handleLogin = async (e) => {
-    e.preventDefault();
+const SetupWizard = ({ ownerId, token, onComplete }) => {
+    const [step, setStep] = useState(1);
+    const [loading, setLoading] = useState(false);
     
-    if (!selectedRole) {
-      toast.error('Please select a role');
-      return;
-    }
+    // Form State
+    const [data, setData] = useState({
+        cuisineType: "",
+        address: "",
+        categories: ["Starters", "Main Course", "Beverages"], // Defaults
+        menuActive: true
+    });
 
-    setLoading(true);
+    const steps = [
+        { num: 1, title: "Identity", icon: FaStore },
+        { num: 2, title: "Cuisine", icon: FaUtensils },
+        { num: 3, title: "Launch", icon: FaQrcode },
+    ];
 
-    // Artificial delay for smooth UX
-    setTimeout(() => {
-      setLoading(false);
-      
-      // 🚀 SMART ROUTING LOGIC
-      switch(selectedRole) {
-        case 'customer':
-          navigate('/');
-          toast.success("Welcome Guest!");
-          break;
-          
-        case 'owner':
-          navigate('/login'); // Redirect to existing Owner Login
-          break;
-          
-        case 'super_admin':
-          navigate('/super-login'); // Redirect to existing Super Login
-          break;
-          
-        case 'chef':
-        case 'waiter':
-          if (!restaurantId.trim()) {
-            toast.error("Please enter the Restaurant Username");
-            return;
-          }
-          // Redirect to dynamic URL: /:id/chef or /:id/waiter
-          navigate(`/${restaurantId.trim()}/${selectedRole}`);
-          toast.success(`Opening ${selectedRole} panel for ${restaurantId}`);
-          break;
-          
-        default:
-          navigate('/');
-      }
-    }, 800);
-  };
+    const handleNext = () => setStep(prev => prev + 1);
+    const handleBack = () => setStep(prev => prev - 1);
 
-  const isStaff = selectedRole === 'chef' || selectedRole === 'waiter';
+    const toggleCategory = (cat) => {
+        if (data.categories.includes(cat)) {
+            setData({ ...data, categories: data.categories.filter(c => c !== cat) });
+        } else {
+            setData({ ...data, categories: [...data.categories, cat] });
+        }
+    };
 
-  return (
-    <LoginContainer>
-      <LoginCard>
-        <BackButton to="/">
-          <ArrowLeft size={20} />
-          Back to Home
-        </BackButton>
-        
-        <LoginHeader>
-          <Shield size={48} color="#f97316" />
-          <h1>Access Portal</h1>
-          <p>Select your role to continue</p>
-        </LoginHeader>
+    const handleFinish = async () => {
+        setLoading(true);
+        try {
+            // 1. Update Owner Profile
+            await axios.put(`${API_BASE}/superadmin/client/${ownerId}`, {
+                cuisineType: data.cuisineType,
+                address: data.address,
+                isSetupComplete: true // You might need to add this field to your Schema later
+            }, { headers: { Authorization: `Bearer ${token}` } });
 
-        <RoleSelection>
-          <RoleLabel>I am a...</RoleLabel>
-          <RoleGrid>
-            {roles.map((role) => {
-              const Icon = role.icon;
-              return (
-                <RoleOption
-                  key={role.id}
-                  selected={selectedRole === role.id}
-                  onClick={() => handleRoleSelect(role.id)}
-                >
-                  <RoleIcon color={role.color}>
-                    <Icon size={24} />
-                  </RoleIcon>
-                  <RoleInfo>
-                    <RoleName>{role.name}</RoleName>
-                    <RoleDescription>{role.description}</RoleDescription>
-                  </RoleInfo>
-                </RoleOption>
-              );
-            })}
-          </RoleGrid>
-        </RoleSelection>
+            // 2. Add Default Categories (Optional: You can create dummy dishes here)
+            // For now, we just simulate success
+            
+            toast.success("Setup Complete! Welcome to Kovixa.");
+            if (onComplete) onComplete();
+        } catch (error) {
+            console.error(error);
+            toast.error("Setup failed. Please try again.");
+        } finally {
+            setLoading(false);
+        }
+    };
 
-        <LoginForm onSubmit={handleLogin}>
-          
-          {/* 🔽 ONLY SHOW INPUT FOR CHEF/WAITER */}
-          {isStaff ? (
-            <FormGroup className="fade-in">
-              <FormLabel>Restaurant Username (ID)</FormLabel>
-              <FormControl
-                type="text"
-                placeholder="e.g. kalyanresto"
-                value={restaurantId}
-                onChange={(e) => setRestaurantId(e.target.value)}
-                required
-                autoFocus
-              />
-              <small style={{color:'#666', marginTop: 5, display:'block'}}>Enter the shop username to verify access.</small>
-            </FormGroup>
-          ) : (
-            // Message for direct login roles
-            selectedRole && (
-              <div style={{textAlign:'center', marginBottom: 20, color:'#666', fontSize: 14}}>
-                Click below to proceed to the <strong>{roles.find(r => r.id === selectedRole)?.name} Login</strong> page.
-              </div>
-            )
-          )}
+    return (
+        <div style={styles.overlay}>
+            <div style={styles.card}>
+                
+                {/* PROGRESS HEADER */}
+                <div style={styles.header}>
+                    <div style={styles.logoBadge}><FaMagic /></div>
+                    <div>
+                        <h2 style={styles.title}>Welcome to Kovixa</h2>
+                        <p style={styles.sub}>Let's set up your digital restaurant in 3 steps.</p>
+                    </div>
+                </div>
 
-          <LoginButton type="submit" disabled={loading}>
-            {loading ? (
-              'Redirecting...'
-            ) : (
-              <>
-                <LogIn size={20} />
-                {isStaff ? `Enter ${selectedRole === 'chef' ? 'Kitchen' : 'Dining'} Area` : 'Continue'}
-              </>
-            )}
-          </LoginButton>
+                <div style={styles.progressTrack}>
+                    {steps.map((s, i) => (
+                        <div key={s.num} style={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+                            <div style={{
+                                ...styles.stepDot,
+                                background: step >= s.num ? '#f97316' : '#333',
+                                color: step >= s.num ? 'white' : '#666',
+                                border: step === s.num ? '1px solid white' : 'none'
+                            }}>
+                                {step > s.num ? <FaCheck size={10}/> : s.num}
+                            </div>
+                            {i < steps.length - 1 && (
+                                <div style={{
+                                    ...styles.line,
+                                    background: step > s.num ? '#f97316' : '#333'
+                                }} />
+                            )}
+                        </div>
+                    ))}
+                </div>
 
-        </LoginForm>
+                {/* CONTENT AREA */}
+                <div style={styles.content}>
+                    
+                    {/* STEP 1: IDENTITY */}
+                    {step === 1 && (
+                        <div className="slide-in">
+                            <h3 style={styles.stepTitle}>Restaurant Details</h3>
+                            <label style={styles.label}>Cuisine Type</label>
+                            <input 
+                                style={styles.input} 
+                                placeholder="e.g. South Indian, Multi-Cuisine, Cafe"
+                                value={data.cuisineType}
+                                onChange={e => setData({...data, cuisineType: e.target.value})}
+                            />
+                            <label style={styles.label}>City / Location</label>
+                            <input 
+                                style={styles.input} 
+                                placeholder="e.g. Hyderabad, Banjara Hills"
+                                value={data.address}
+                                onChange={e => setData({...data, address: e.target.value})}
+                            />
+                        </div>
+                    )}
 
-        <QuickLinks>
-          <QuickLink to="/login">Forgot ID?</QuickLink>
-          <QuickLink to="/">Need Help?</QuickLink>
-        </QuickLinks>
-      </LoginCard>
-      
-      <style>{`
-        .fade-in { animation: fadeIn 0.3s ease-in; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
-      `}</style>
-    </LoginContainer>
-  );
+                    {/* STEP 2: CATEGORIES */}
+                    {step === 2 && (
+                        <div className="slide-in">
+                            <h3 style={styles.stepTitle}>Select Menu Categories</h3>
+                            <p style={styles.desc}>Tap to select what you serve. You can change this later.</p>
+                            <div style={styles.tagGrid}>
+                                {["Starters", "Biryani", "Chinese", "Tandoori", "Burgers", "Pizza", "Desserts", "Beverages", "Thali"].map(cat => (
+                                    <button 
+                                        key={cat}
+                                        onClick={() => toggleCategory(cat)}
+                                        style={{
+                                            ...styles.tag,
+                                            background: data.categories.includes(cat) ? '#f97316' : '#1e293b',
+                                            color: data.categories.includes(cat) ? 'white' : '#94a3b8',
+                                            borderColor: data.categories.includes(cat) ? '#f97316' : '#334155'
+                                        }}
+                                    >
+                                        {cat} {data.categories.includes(cat) && <FaCheck size={10} style={{marginLeft:5}}/>}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* STEP 3: PREVIEW */}
+                    {step === 3 && (
+                        <div className="slide-in" style={{textAlign:'center'}}>
+                            <div style={styles.qrPlaceholder}>
+                                <FaQrcode size={80} color="white" />
+                                <div style={styles.scanText}>SCAN TO ORDER</div>
+                            </div>
+                            <h3 style={styles.stepTitle}>You are Ready!</h3>
+                            <p style={styles.desc}>Your digital menu link has been generated. Click finish to access your dashboard and start adding dishes.</p>
+                        </div>
+                    )}
+
+                </div>
+
+                {/* FOOTER ACTIONS */}
+                <div style={styles.footer}>
+                    {step > 1 ? (
+                        <button onClick={handleBack} style={styles.backBtn}><FaArrowLeft /> Back</button>
+                    ) : <div></div>}
+
+                    {step < 3 ? (
+                        <button onClick={handleNext} style={styles.nextBtn}>Next Step <FaArrowRight /></button>
+                    ) : (
+                        <button onClick={handleFinish} disabled={loading} style={styles.finishBtn}>
+                            {loading ? "Launching..." : "LAUNCH DASHBOARD 🚀"}
+                        </button>
+                    )}
+                </div>
+
+            </div>
+            <style>{`
+                .slide-in { animation: slideIn 0.4s ease-out; }
+                @keyframes slideIn { from { opacity: 0; transform: translateX(10px); } to { opacity: 1; transform: translateX(0); } }
+            `}</style>
+        </div>
+    );
 };
 
-// --- STYLED COMPONENTS ---
+const styles = {
+    overlay: {
+        position: 'fixed', inset: 0,
+        background: 'rgba(2, 6, 23, 0.95)',
+        backdropFilter: 'blur(10px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        zIndex: 9999, padding: 20
+    },
+    card: {
+        background: '#0f172a',
+        border: '1px solid #1e293b',
+        borderRadius: '24px',
+        width: '100%', maxWidth: '500px',
+        padding: '30px',
+        boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
+        display: 'flex', flexDirection: 'column',
+        minHeight: '550px'
+    },
+    header: { display: 'flex', gap: 15, marginBottom: 30, alignItems: 'center' },
+    logoBadge: {
+        width: 45, height: 45, background: 'linear-gradient(135deg, #f97316, #ea580c)',
+        borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 20
+    },
+    title: { margin: 0, color: 'white', fontSize: 22, fontWeight: '800' },
+    sub: { margin: 0, color: '#94a3b8', fontSize: 13 },
+    
+    progressTrack: { display: 'flex', alignItems: 'center', marginBottom: 40, padding: '0 10px' },
+    stepDot: { width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 'bold', transition: '0.3s' },
+    line: { flex: 1, height: 2, margin: '0 10px', borderRadius: 2, transition: '0.3s' },
 
-const LoginContainer = styled.div`
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-  background: radial-gradient(circle at center, #1a1a1a 0%, #000 100%);
-  font-family: 'Inter', sans-serif;
-`;
+    content: { flex: 1 },
+    stepTitle: { color: 'white', fontSize: 18, marginBottom: 20 },
+    label: { display: 'block', color: '#cbd5e1', fontSize: 12, fontWeight: 'bold', marginBottom: 8, textTransform: 'uppercase' },
+    input: { width: '100%', background: '#1e293b', border: '1px solid #334155', padding: 14, borderRadius: 12, color: 'white', fontSize: 15, marginBottom: 20, outline: 'none' },
+    desc: { color: '#94a3b8', fontSize: 14, marginBottom: 20, lineHeight: 1.5 },
+    
+    tagGrid: { display: 'flex', flexWrap: 'wrap', gap: 10 },
+    tag: { padding: '10px 18px', borderRadius: 20, border: '1px solid', fontSize: 13, fontWeight: '600', cursor: 'pointer', transition: '0.2s', display: 'flex', alignItems: 'center' },
 
-const LoginCard = styled.div`
-  background: #0a0a0a;
-  border: 1px solid #222;
-  border-radius: 24px;
-  padding: 40px;
-  width: 100%;
-  max-width: 500px;
-  box-shadow: 0 20px 50px rgba(0,0,0,0.5);
-  color: white;
-`;
+    qrPlaceholder: { background: 'linear-gradient(135deg, #3b82f6, #2563eb)', width: 150, height: 150, borderRadius: 20, margin: '0 auto 30px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', boxShadow: '0 20px 40px rgba(59, 130, 246, 0.3)' },
+    scanText: { color: 'white', fontSize: 10, fontWeight: 'bold', marginTop: 10, letterSpacing: 2 },
 
-const BackButton = styled(Link)`
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: #666;
-  margin-bottom: 30px;
-  text-decoration: none;
-  font-size: 14px;
-  font-weight: 600;
-  
-  &:hover {
-    color: #f97316;
-  }
-`;
+    footer: { display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #1e293b', paddingTop: 20, marginTop: 20 },
+    backBtn: { background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 8 },
+    nextBtn: { background: '#334155', color: 'white', border: 'none', padding: '12px 24px', borderRadius: 12, fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 },
+    finishBtn: { background: '#f97316', color: 'white', border: 'none', padding: '12px 24px', borderRadius: 12, fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, boxShadow: '0 4px 15px rgba(249, 115, 22, 0.4)' }
+};
 
-const LoginHeader = styled.div`
-  text-align: center;
-  margin-bottom: 30px;
-  
-  h1 {
-    margin: 15px 0 5px;
-    font-size: 24px;
-    font-weight: 900;
-  }
-  
-  p {
-    color: #666;
-    font-size: 14px;
-  }
-`;
-
-const RoleSelection = styled.div`
-  margin-bottom: 30px;
-`;
-
-const RoleLabel = styled.div`
-  font-weight: 700;
-  margin-bottom: 15px;
-  color: #888;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-`;
-
-const RoleGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 12px;
-  margin-bottom: 20px;
-`;
-
-const RoleOption = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px;
-  border: 1px solid ${props => props.selected ? '#f97316' : '#222'};
-  border-radius: 12px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  background: ${props => props.selected ? 'rgba(249, 115, 22, 0.1)' : '#111'};
-  
-  &:hover {
-    border-color: #f97316;
-    transform: translateY(-2px);
-  }
-`;
-
-const RoleIcon = styled.div`
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: ${props => `${props.color}20`};
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: ${props => props.color};
-`;
-
-const RoleInfo = styled.div`
-  flex: 1;
-`;
-
-const RoleName = styled.div`
-  font-weight: 700;
-  font-size: 14px;
-  margin-bottom: 2px;
-  color: white;
-`;
-
-const RoleDescription = styled.div`
-  font-size: 10px;
-  color: #666;
-`;
-
-const LoginForm = styled.form`
-  margin-top: 20px;
-`;
-
-const FormGroup = styled.div`
-  margin-bottom: 20px;
-`;
-
-const FormLabel = styled.label`
-  display: block;
-  margin-bottom: 8px;
-  font-weight: 600;
-  color: #ccc;
-  font-size: 14px;
-`;
-
-const FormControl = styled.input`
-  width: 100%;
-  padding: 14px 16px;
-  background: #000;
-  border: 1px solid #333;
-  border-radius: 12px;
-  font-size: 16px;
-  color: white;
-  transition: border-color 0.3s ease;
-  
-  &:focus {
-    outline: none;
-    border-color: #f97316;
-  }
-`;
-
-const LoginButton = styled.button`
-  width: 100%;
-  padding: 16px;
-  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
-  color: white;
-  border: none;
-  border-radius: 12px;
-  font-size: 16px;
-  font-weight: 800;
-  cursor: pointer;
-  transition: opacity 0.3s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  
-  &:hover:not(:disabled) {
-    opacity: 0.9;
-  }
-  
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-`;
-
-const QuickLinks = styled.div`
-  display: flex;
-  justify-content: space-between;
-  margin-top: 30px;
-  padding-top: 20px;
-  border-top: 1px solid #222;
-`;
-
-const QuickLink = styled(Link)`
-  color: #666;
-  text-decoration: none;
-  font-size: 12px;
-  font-weight: 600;
-  
-  &:hover {
-    color: #f97316;
-  }
-`;
-
-export default RoleLogin;
+export default SetupWizard;

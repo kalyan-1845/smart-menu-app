@@ -18,7 +18,7 @@ import RestaurantAdmin from "./pages/RestaurantAdmin";
 
 // ✅ NEW IMPORTS
 import RoleLogin from "./pages/RoleLogin"; 
-import ProjectFlyer from "./pages/ProjectFlyer"; 
+import ProjectFlyer from "./components/ProjectFlyer"; // Ensure this path is correct
 
 const API_BASE = "https://smart-menu-app-production.up.railway.app/api";
 
@@ -36,24 +36,60 @@ const SmartHome = () => {
     const lastRole = localStorage.getItem("kovixa_last_role");
     const lastId = localStorage.getItem("kovixa_last_id");
 
-    if (lastId) {
-      if (lastRole === "owner") {
-        navigate(`/${lastId}/admin`, { replace: true });
-      } 
+    if (lastId && lastRole === "owner") {
+       navigate(`/${lastId}/admin`, { replace: true });
     }
   }, [navigate]);
 
   return <LandingPage />;
 };
 
+// 🎨 GLOBAL STYLES (Full Screen Fix)
 const GlobalStyles = () => (
   <style>{`
-    :root { font-family: 'Inter', sans-serif; color: white; background-color: #050505; }
-    body { margin: 0; min-height: 100vh; overflow-x: hidden; background-color: #050505; }
-    #root { width: 100%; margin: 0 auto; text-align: center; }
-    .page-transition { animation: slideUp 0.4s ease-out forwards; }
-    @keyframes slideUp { from { transform: translateY(10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+    :root { 
+        font-family: 'Plus Jakarta Sans', sans-serif; 
+        color: white; 
+        background-color: #020617; 
+    }
+
+    html, body { 
+        width: 100%; 
+        height: 100%; 
+        margin: 0; 
+        padding: 0; 
+        background-color: #020617; 
+        overflow-x: hidden; 
+    }
+
+    #root { 
+        width: 100%; 
+        min-height: 100vh; 
+        display: flex; 
+        flex-direction: column;
+    }
+
+    /* Page Transitions */
+    .page-transition { 
+        flex: 1; 
+        display: flex; 
+        flex-direction: column; 
+        animation: fadeUp 0.3s ease-out forwards; 
+    }
+    @keyframes fadeUp { 
+        from { opacity: 0; transform: translateY(10px); } 
+        to { opacity: 1; transform: translateY(0); } 
+    }
+
+    /* Reset & Scrollbar */
     * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; outline: none; }
+    
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+    ::-webkit-scrollbar-thumb:hover { background: #475569; }
   `}</style>
 );
 
@@ -140,7 +176,9 @@ function App() {
       <Routes>
         <Route path="/" element={<SmartHome />} /> 
         
-        <Route path="/ProjectFlyer" element={<ProjectFlyer />} />
+        {/* Marketing Flyer Route */}
+        <Route path="/flyer" element={<ProjectFlyer />} />
+        
         <Route path="/portal" element={<RoleLogin />} />
         <Route path="/login" element={<OwnerLogin />} />
         <Route path="/register" element={<Register />} />
@@ -187,8 +225,6 @@ function App() {
               />
             </div>
         } />
-        
-        {/* ❌ REMOVED: /track/:id route */}
         
         {/* --- 🏢 ADMIN & STAFF --- */}
         <Route path="/superadmin" element={<SuperAdmin />} />

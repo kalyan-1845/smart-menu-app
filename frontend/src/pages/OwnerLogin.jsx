@@ -1,19 +1,16 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, Link, useParams } from "react-router-dom";
 import axios from "axios";
-import { FaLock, FaStore, FaKey, FaArrowRight } from "react-icons/fa";
+import { FaLock, FaStore, FaKey, FaArrowRight, FaNetworkWired } from "react-icons/fa";
 
-// --- INLINE STYLES ---
+// --- INLINE STYLES (MATCHING "MIDNIGHT GLASS" THEME) ---
 const styles = `
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
 /* --- CONTAINER & BACKGROUND --- */
 .login-container {
     background-color: #020617; /* Deep Slate */
-    background-image: 
-        linear-gradient(to right, rgba(30, 41, 59, 0.3) 1px, transparent 1px),
-        linear-gradient(to bottom, rgba(30, 41, 59, 0.3) 1px, transparent 1px);
-    background-size: 40px 40px;
+    background-image: radial-gradient(circle at 50% 0%, #1e293b 0%, transparent 70%);
     min-height: 100vh;
     display: flex;
     align-items: center;
@@ -27,34 +24,35 @@ const styles = `
 /* Ambient Blue Glows */
 .glow-spot {
     position: absolute;
-    width: 400px;
-    height: 400px;
+    width: 500px;
+    height: 500px;
     border-radius: 50%;
-    filter: blur(100px);
+    filter: blur(120px);
     z-index: 0;
     pointer-events: none;
+    opacity: 0.4;
 }
 .top-left {
-    top: -150px;
-    left: -150px;
-    background: radial-gradient(circle, rgba(59, 130, 246, 0.2) 0%, transparent 70%);
+    top: -200px;
+    left: -200px;
+    background: radial-gradient(circle, rgba(59, 130, 246, 0.4) 0%, transparent 70%);
 }
 .bottom-right {
-    bottom: -150px;
-    right: -150px;
-    background: radial-gradient(circle, rgba(6, 182, 212, 0.15) 0%, transparent 70%);
+    bottom: -200px;
+    right: -200px;
+    background: radial-gradient(circle, rgba(245, 158, 11, 0.2) 0%, transparent 70%);
 }
 
 /* --- GLASS CARD --- */
 .login-card {
-    background: rgba(15, 23, 42, 0.7);
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 24px;
     padding: 40px 35px;
     width: 100%;
-    max-width: 420px;
+    max-width: 400px;
     box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
     z-index: 1;
     position: relative;
@@ -68,18 +66,18 @@ const styles = `
 
 .icon-wrapper {
     width: 64px; height: 64px;
-    background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(6, 182, 212, 0.1));
-    border-radius: 16px;
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(37, 99, 235, 0.1));
+    border-radius: 20px;
     display: flex; align-items: center; justify-content: center;
     margin: 0 auto 20px auto;
     border: 1px solid rgba(59, 130, 246, 0.2);
     box-shadow: 0 0 30px rgba(59, 130, 246, 0.15);
 }
 
-.lock-icon { font-size: 24px; color: #3b82f6; }
+.lock-icon { font-size: 24px; color: #60a5fa; }
 
 h1 {
-    font-size: 26px;
+    font-size: 24px;
     color: white;
     margin: 0 0 8px 0;
     font-weight: 800;
@@ -89,7 +87,7 @@ h1 {
 .login-header p {
     color: #94a3b8;
     font-size: 14px;
-    line-height: 1.6;
+    line-height: 1.5;
 }
 
 /* --- FORM INPUTS --- */
@@ -98,7 +96,7 @@ h1 {
 .input-group label {
     display: block;
     color: #cbd5e1;
-    font-size: 12px;
+    font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     margin-bottom: 8px;
@@ -125,13 +123,14 @@ h1 {
     width: 100%;
     background: #0f172a;
     border: 1px solid #1e293b;
-    padding: 16px 16px 16px 45px; /* Space for icon */
-    border-radius: 12px;
+    padding: 16px 16px 16px 48px; 
+    border-radius: 14px;
     color: white;
     font-size: 15px;
     outline: none;
     transition: all 0.2s ease;
     font-weight: 500;
+    font-family: 'Plus Jakarta Sans', sans-serif;
 }
 
 .input-wrapper input:focus {
@@ -161,7 +160,7 @@ h1 {
     color: white;
     border: none;
     padding: 16px;
-    border-radius: 12px;
+    border-radius: 14px;
     font-size: 15px;
     font-weight: 700;
     cursor: pointer;
@@ -190,22 +189,22 @@ h1 {
 .login-footer p { color: #64748b; font-size: 13px; margin-bottom: 20px; font-weight: 500; }
 
 .register-link {
-    color: #3b82f6;
+    color: #60a5fa;
     text-decoration: none;
     font-weight: 700;
     margin-left: 5px;
     transition: 0.2s;
 }
-.register-link:hover { color: #60a5fa; text-decoration: underline; }
+.register-link:hover { color: #93c5fd; text-decoration: underline; }
 
 .secure-badge {
     display: inline-flex; align-items: center; gap: 6px;
-    font-size: 11px;
+    font-size: 10px;
     color: #475569;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    background: rgba(255,255,255,0.03);
-    padding: 6px 14px;
+    background: rgba(255,255,255,0.02);
+    padding: 6px 12px;
     border-radius: 20px;
     font-weight: 700;
     border: 1px solid rgba(255,255,255,0.02);
@@ -284,7 +283,7 @@ const OwnerLogin = () => {
                         <h1>Owner Portal</h1>
                         <p>
                             {restaurantId 
-                                ? <span>Login to manage <strong style={{color:'#3b82f6'}}>{restaurantId}</strong></span>
+                                ? <span>Login to manage <strong style={{color:'#60a5fa'}}>{restaurantId}</strong></span>
                                 : "Enter your credentials to access the secure dashboard."
                             }
                         </p>
@@ -336,7 +335,7 @@ const OwnerLogin = () => {
                         {!restaurantId && (
                             <p>New Business? <Link to="/register" className="register-link">Create Account</Link></p>
                         )}
-                        <span className="secure-badge"><FaLock size={10}/> 256-BIT SECURE LOGIN</span>
+                        <span className="secure-badge"><FaNetworkWired size={10}/> 256-BIT SECURE LOGIN</span>
                     </div>
                 </div>
             </div>

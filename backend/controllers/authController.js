@@ -7,33 +7,47 @@ const generateToken = (id) => {
     return jwt.sign({ id }, process.env.JWT_SECRET || 'fallback_secret', { expiresIn: '30d' });
 };
 
-// --- 📝 REGISTER OWNER ---
+// --- 📲 SAVE PUSH SUBSCRIPTION ---
+export const saveSubscription = async (req, res) => {
+    const { restaurantId, subscription } = req.body;
+    try {
+        const user = await Owner.findById(restaurantId);
+        if (!user) return res.status(404).json({ message: "Restaurant not found" });
+
+        const exists = user.pushSubscriptions.find(s => s.endpoint === subscription.endpoint);
+        if (!exists) {
+            user.pushSubscriptions.push(subscription);
+            await user.save();
+        }
+        res.status(200).json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+};
+
+// --- 📝 REGISTER OWNER (Now saves Phone Number) ---
 export const registerOwner = async (req, res) => {
     try {
-        let { restaurantName, username, email, password } = req.body;
+        // ✅ 1. Destructure 'phoneNumber' from request body
+        let { restaurantName, username, email, password, phoneNumber } = req.body;
 
-        // 1. Sanitize: Force lowercase for unique ID
         const cleanUsername = username.trim().toLowerCase();
         
-        // 2. Auto-email if missing (Matches your Register.jsx logic)
         if (!email) email = `${cleanUsername}@kovixa.local`; 
 
-        // 3. Duplicate Check
         const userExists = await Owner.findOne({ 
             $or: [{ username: cleanUsername }, { email }] 
         });
         if (userExists) return res.status(400).json({ message: 'Unique ID or Email already taken.' });
 
-        // 4. Set 100-Year Access Date
         const freeAccessDate = new Date();
         freeAccessDate.setFullYear(freeAccessDate.getFullYear() + 100); 
 
-        // 5. Create Owner
+        // ✅ 2. Save 'phoneNumber' to Database
         const user = await Owner.create({ 
             restaurantName: restaurantName.trim(), 
             username: cleanUsername, 
             email, 
             password, 
+            phoneNumber: phoneNumber || "", // <--- ADDED THIS LINE
             trialEndsAt: freeAccessDate, 
             isPro: true
         });
@@ -54,7 +68,6 @@ export const loginOwner = async (req, res) => {
     try {
         const user = await Owner.findOne({ username: username.toLowerCase() });
 
-        // matchPassword is a method defined in your Owner model
         if (user && (await user.matchPassword(password))) {
             res.json({
                 _id: user._id,
@@ -71,7 +84,7 @@ export const loginOwner = async (req, res) => {
     }
 };
 
-// --- 🔍 GET OWNER ID BY USERNAME (For Menu Logic) ---
+// --- 🔍 GET OWNER ID BY USERNAME ---
 export const getOwnerIdByUsername = async (req, res) => {
     try {
         const owner = await Owner.findOne({ 
@@ -86,16 +99,14 @@ export const getOwnerIdByUsername = async (req, res) => {
     }
 };
 
-// --- 🌐 GET RESTAURANT DETAILS (With Cache Killing) ---
+// --- 🌐 GET RESTAURANT DETAILS ---
 export const getRestaurantDetails = async (req, res) => {
-    // Kill cache to prevent browser from showing old data
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     
     try {
         const { id } = req.params;
         let owner;
 
-        // Check if searching by MongoDB _id or Username
         if (mongoose.Types.ObjectId.isValid(id)) {
             owner = await Owner.findById(id).select('username restaurantName isPro');
         } else {

@@ -1,48 +1,34 @@
 import mongoose from 'mongoose';
 
-/**
- * 🛎️ SERVICE CALL SCHEMA
- * Powers the real-time request system for the Waiter Dashboard.
- * Designed specifically for the BiteBox Dine-In MVP.
- */
-const callSchema = mongoose.Schema({
-    // Link to the specific restaurant owner
-    restaurantId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Owner',
-        required: true,
-        index: true // Indexed for faster lookup in busy restaurants
-    },
-    
-    // The table where the customer clicked the 'Bell' icon
-    tableNumber: {
-        type: String,
-        required: true
-    },
-    
-    // Defines the type of help needed. 
-    // Matches the icons in the Waiter Station: help (🛎️), bill (🧾), water (💧).
-    type: {
-        type: String,
-        enum: ['help', 'bill', 'water'], 
-        default: 'help'
-    },
-    
-    // Status used to manage active vs resolved calls on the dashboard
-    status: {
-        type: String,
-        enum: ['pending', 'resolved'],
-        default: 'pending'
-    }
-}, { 
-    // Automatically tracks when the customer called (createdAt) 
-    // and when the waiter clicked 'DONE' (updatedAt).
-    timestamps: true 
-});
+const callSchema = new mongoose.Schema({
+  restaurantId: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'Owner', 
+    required: true,
+    index: true 
+  },
+  
+  tableNumber: { 
+    type: String, 
+    required: true 
+  },
+  
+  // 'bill' = Request Bill, 'help' = Call Waiter, 'water' = Water Bottle
+  type: { 
+    type: String, 
+    enum: ['bill', 'help', 'water'], 
+    default: 'help' 
+  },
+  
+  status: { 
+    type: String, 
+    enum: ['pending', 'resolved'], 
+    default: 'pending' 
+  }
+}, { timestamps: true });
 
-/**
- * 🏗️ EXPORT MODEL
- * Using the existence check to maintain stability during server reloads.
- */
+// Auto-delete resolved calls after 24 hours to keep DB fast
+callSchema.index({ createdAt: 1 }, { expireAfterSeconds: 86400 });
+
 const Call = mongoose.models.Call || mongoose.model('Call', callSchema);
 export default Call;

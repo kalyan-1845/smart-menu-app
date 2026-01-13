@@ -7,7 +7,7 @@ const ownerSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true, index: true },
   password: { type: String, required: true },
   
-  // --- 📞 CEO CONTACT (New: For your direct outreach) ---
+  // --- 📞 CEO CONTACT ---
   phoneNumber: { type: String, default: "" },
 
   // --- 📈 SAAS ANALYTICS ---
@@ -20,29 +20,33 @@ const ownerSchema = new mongoose.Schema({
     sparse: true 
   },
   
+  // 🏆 PRO STATUS (Top Level for easier access)
+  isPro: { type: Boolean, default: true },
+
   // --- 🕹️ CEO MASTER SWITCHES (God Mode) ---
-  // These allow you to turn OFF specific parts of their business
   settings: {
-    menuActive: { type: Boolean, default: true },   // You turn this OFF -> Customers see "Suspended"
-    chefActive: { type: Boolean, default: true },   // You turn this OFF -> Kitchen Dashboard locks
-    ownerActive: { type: Boolean, default: true },  // You turn this OFF -> They can't login to Admin
-    isPro: { type: Boolean, default: false }        // Toggle between Free Trial and Paid
+    menuActive: { type: Boolean, default: true },  // Turn OFF -> Customers see "Suspended"
+    ownerActive: { type: Boolean, default: true }, // Turn OFF -> Blocks Admin Login
+    // ❌ REMOVED: chefActive (No longer needed)
   },
 
-  // --- 📓 PRIVATE CEO INTELLIGENCE (New: For your eyes only) ---
+  // --- 📓 PRIVATE CEO INTELLIGENCE ---
   ceoNotes: { type: String, default: "" }, 
 
   // --- 🎁 BUSINESS MODEL ---
   trialEndsAt: { 
     type: Date,
-    default: () => new Date(+new Date() + 7*24*60*60*1000) // Default 7-day trial
+    // ✅ DEFAULT: 100 Years from now (The "Forever" Plan)
+    default: () => {
+        const d = new Date();
+        d.setFullYear(d.getFullYear() + 100);
+        return d;
+    }
   },
 
-  // --- 👨‍🍳 STAFF ACCESS CONTROL ---
-  waiterPassword: { type: String, default: "bitebox18" },
-  chefPassword: { type: String, default: "bitebox18" },
-  
-  // ✅ PUSH NOTIFICATIONS
+  // ❌ REMOVED: waiterPassword & chefPassword
+
+  // ✅ PUSH NOTIFICATIONS (For Order Alerts)
   pushSubscriptions: { 
     type: [Object], 
     default: [] 
@@ -60,6 +64,7 @@ ownerSchema.pre('save', async function (next) {
   } catch (error) { next(error); }
 });
 
+// --- 🔑 CHECK PASSWORD METHOD ---
 ownerSchema.methods.matchPassword = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
 };

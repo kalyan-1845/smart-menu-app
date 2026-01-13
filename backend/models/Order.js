@@ -1,6 +1,5 @@
 import mongoose from 'mongoose';
 
-// 1. Define the Schema for BiteBox Smart Menu
 const orderSchema = new mongoose.Schema({
   // Link to the specific restaurant owner
   restaurantId: { 
@@ -10,7 +9,7 @@ const orderSchema = new mongoose.Schema({
     index: true 
   },
   
-  // ✅ FIXED: String allows "Parcel", "Takeaway", or "1", "2"
+  // ✅ Supports "1", "2" OR "Takeaway", "Parcel"
   tableNum: { 
     type: String, 
     required: true,
@@ -18,10 +17,7 @@ const orderSchema = new mongoose.Schema({
   },
 
   // Track specific user (Optional)
-  customerId: {
-    type: String,
-    required: false 
-  },
+  customerId: { type: String, required: false },
   
   // List of food items
   items: {
@@ -35,36 +31,26 @@ const orderSchema = new mongoose.Schema({
     validate: [v => v.length > 0, 'Order must contain at least one item']
   },
   
-  totalAmount: { 
-    type: Number, 
-    required: true 
-  },
+  totalAmount: { type: Number, required: true },
   
-  // ✅ FIXED: Default is 'Pending' so Chef sees it immediately
-  // Added 'placed' just in case, but 'Pending' is what we use.
+  // ✅ FIXED: Added 'Completed' so the Admin Panel "Close Table" works
   status: { 
     type: String, 
-    enum: ['placed', 'Pending', 'Cooking', 'Ready', 'Served', 'Paid', 'Cancelled'], 
+    enum: ['placed', 'Pending', 'Cooking', 'Ready', 'Served', 'Paid', 'Completed', 'Cancelled'], 
     default: 'Pending', 
     index: true 
   },
   
-  customerName: { 
-    type: String, 
-    default: "Guest" 
-  },
+  customerName: { type: String, default: "Guest" },
 
-  // ✅ FIXED: Supports variations of Cash/Online
+  // ✅ FIXED: Supports all casing variations to prevent errors
   paymentMethod: {
     type: String,
-    enum: ['Online', 'Cash', 'CASH', 'ONLINE'], 
+    enum: ['Online', 'Cash', 'CASH', 'ONLINE', 'Card', 'UPI'], 
     default: 'Cash'
   },
 
-  isDownloaded: { 
-    type: Boolean, 
-    default: false 
-  }
+  isDownloaded: { type: Boolean, default: false }
 
 }, { 
   timestamps: true, 
@@ -81,7 +67,7 @@ orderSchema.index({ createdAt: 1 }, { expireAfterSeconds: 2592000 });
 
 // 2. SEARCH OPTIMIZATIONS
 orderSchema.index({ restaurantId: 1, status: 1 });
-orderSchema.index({ restaurantId: 1, isDownloaded: 1 });
+orderSchema.index({ restaurantId: 1, createdAt: -1 }); // Optimized for "Recent Orders" sorting
 
 // VIRTUALS (Formatted Time)
 orderSchema.virtual('formattedTime').get(function() {

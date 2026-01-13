@@ -1,17 +1,19 @@
 import mongoose from 'mongoose';
 
-const inventorySchema = mongoose.Schema({
-    owner: { 
-        type: mongoose.Schema.Types.ObjectId, 
-        ref: 'Owner', 
-        required: true 
-    },
-    itemName: { type: String, required: true },
-    currentStock: { type: Number, required: true },
-    unit: { type: String, default: "kg" },
-    lowStockThreshold: { type: Number, default: 5 }
+const inventorySchema = new mongoose.Schema({
+  itemName: { type: String, required: true },
+  currentStock: { type: Number, required: true, default: 0 },
+  unit: { type: String, default: 'kg' }, // kg, liters, pcs, etc.
+  lowStockThreshold: { type: Number, default: 5 }, // Warning level
+  
+  // ✅ Linked to the Owner
+  restaurantId: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'Owner', 
+    required: true,
+    index: true 
+  }
 }, { timestamps: true });
 
-// Prevent model overwrite error during reloads
 const Inventory = mongoose.models.Inventory || mongoose.model('Inventory', inventorySchema);
 export default Inventory;

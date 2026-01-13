@@ -1,12 +1,12 @@
 import express from 'express';
 import mongoose from 'mongoose';
 import jwt from 'jsonwebtoken';
-import Dish from '../models/Dish.js';   // ✅ Ensure this model exists
-import Owner from '../models/Owner.js'; // ✅ MUST MATCH authRoutes.js
+import Dish from '../models/Dish.js';   // ✅ Model exists
+import Owner from '../models/Owner.js'; // ✅ Matches authRoutes
 
 const router = express.Router();
 
-// --- 🛡️ MIDDLEWARE (Protects Admin & Chef Routes) ---
+// --- 🛡️ MIDDLEWARE (Protects Owner Routes) ---
 const protect = async (req, res, next) => {
     let token;
     if (req.headers.authorization?.startsWith('Bearer')) {
@@ -16,10 +16,10 @@ const protect = async (req, res, next) => {
             
             const decoded = jwt.verify(token, secret);
             
-            // ✅ CRITICAL FIX: Use 'Owner' model here to match authRoutes
+            // ✅ CRITICAL: Verifies user against the Owner collection
             req.user = await Owner.findById(decoded.id).select('_id username').lean(); 
             
-            if (!req.user) return res.status(401).json({ message: 'Owner not found in DB' });
+            if (!req.user) return res.status(401).json({ message: 'Owner not found' });
             next();
         } catch (error) {
             console.error("Auth Failed:", error.message);
@@ -31,7 +31,7 @@ const protect = async (req, res, next) => {
 };
 
 // ============================================================
-// 🌐 1. GET MENU (Public - No Token Needed)
+// 🌐 1. GET MENU (Public - Smart Lookup)
 // ============================================================
 router.get('/', async (req, res) => {
     const { restaurantId } = req.query; 
@@ -45,14 +45,14 @@ router.get('/', async (req, res) => {
         if (mongoose.Types.ObjectId.isValid(restaurantId)) {
             ownerObjectId = restaurantId;
         } 
-        // 2. If not, try finding it as a Username (Smart Lookup)
+        // 2. If not, try finding it as a Username (The "Human Readable" Link)
         else {
             const owner = await Owner.findOne({ username: restaurantId.toLowerCase() }).select('_id');
-            if (!owner) return res.json([]); // Return empty if not found
+            if (!owner) return res.json([]); // Return empty list if restaurant not found
             ownerObjectId = owner._id;
         }
 
-        // Fetch dishes using the resolved ID
+        // Fetch dishes for the resolved Owner ID
         const dishes = await Dish.find({ restaurantId: ownerObjectId })
             .sort({ isAvailable: -1, category: 1, name: 1 })
             .lean();
@@ -65,15 +65,15 @@ router.get('/', async (req, res) => {
 });
 
 // ============================================================
-// 🏗️ 2. ADMIN & CHEF TOOLS (Protected)
+// 🏗️ 2. OWNER TOOLS (Protected)
 // ============================================================
 
-// ADD DISH (Fixes "Save Item" Issue)
+// ADD DISH
 router.post('/', protect, async (req, res) => {
     try {
         const newDish = new Dish({
             ...req.body,
-            restaurantId: req.user._id // ✅ Uses the verified Owner ID
+            restaurantId: req.user._id // ✅ Securely links dish to the logged-in Owner
         });
         const savedDish = await newDish.save();
         res.status(201).json(savedDish);
@@ -105,7 +105,7 @@ router.delete('/:id', protect, async (req, res) => {
             _id: req.params.id, 
             restaurantId: req.user._id 
         });
-        if (!deleted) return res.status(404).json({ message: "Unauthorized" });
+        if (!deleted) return res.status(404).json({ message: "Unauthorized or Not Found" });
         res.json({ message: 'Deleted' });
     } catch (error) {
         res.status(500).json({ message: 'Delete error' });

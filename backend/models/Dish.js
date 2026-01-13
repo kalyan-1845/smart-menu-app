@@ -1,8 +1,8 @@
 import mongoose from 'mongoose';
 
 /**
- * Dish Model (Enterprise v3.5 - Ratings Integrated)
- * This schema handles food items, pricing, availability, and social proof.
+ * Dish Model (Enterprise v3.5 - Performance Optimized)
+ * Optimized for high-concurrency reading (Menu Page).
  */
 const dishSchema = new mongoose.Schema({
   name: { 
@@ -49,7 +49,7 @@ const dishSchema = new mongoose.Schema({
 
   /**
    * ⭐ RATINGS & SOCIAL PROOF
-   * Optimized for high-speed retrieval on the Menu page.
+   * Defaulting to 4.5 gives new items a "fresh & hot" psychological boost.
    */
   ratings: {
     average: { type: Number, default: 4.5, min: 1, max: 5 },
@@ -58,7 +58,8 @@ const dishSchema = new mongoose.Schema({
 
   /**
    * 💬 CUSTOMER REVIEWS
-   * Limited to the most recent ones to keep the document size lean.
+   * NOTE: The controller MUST limit this array to the last 50 reviews 
+   * to prevent the document from exceeding MongoDB's 16MB limit.
    */
   reviews: [{
     customerName: { type: String, default: "Guest" },
@@ -69,7 +70,7 @@ const dishSchema = new mongoose.Schema({
 
   /**
    * 🏢 RESTAURANT LINK
-   * This field is critical. It connects this dish to a specific Owner.
+   * Critical for multi-tenant isolation.
    */
   restaurantId: { 
     type: mongoose.Schema.Types.ObjectId, 
@@ -83,16 +84,18 @@ const dishSchema = new mongoose.Schema({
 
 // --- 🚀 PRO PERFORMANCE INDEXING ---
 
-// Compound index for the Menu page: Filter by restaurant and sort by rating
+// 1. "Popular Items" Sort (Fastest Menu Render)
 dishSchema.index({ restaurantId: 1, "ratings.average": -1 });
 
-// Speed up category and availability filters
+// 2. Category Filter (Starters, Main Course, etc.)
 dishSchema.index({ restaurantId: 1, category: 1 });
+
+// 3. Availability Filter (Don't show out-of-stock items)
 dishSchema.index({ restaurantId: 1, isAvailable: 1 });
 
 /**
  * 🏗️ EXPORT MODEL
- * Prevents re-compilation errors in development.
+ * Prevents "OverwriteModelError" during development hot-reloads.
  */
 const Dish = mongoose.models.Dish || mongoose.model('Dish', dishSchema);
 export default Dish;
