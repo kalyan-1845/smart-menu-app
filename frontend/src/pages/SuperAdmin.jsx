@@ -11,7 +11,7 @@ import { toast } from "react-hot-toast";
 import { io } from "socket.io-client";
 
 // ✅ FIXED: Using the new working domain
-const API_URL = "https://kovixa-backend-v99.up.railway.app";
+const API_URL = "https://kovixa-backend-v99-production-a1b2.up.railway.app";
 
 const SuperAdmin = () => {
     const [token, setToken] = useState(localStorage.getItem('admin_token'));

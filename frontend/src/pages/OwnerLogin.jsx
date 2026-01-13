@@ -247,7 +247,7 @@ const OwnerLogin = () => {
         setLoading(true);
 
         try {
-            const response = await axios.post("https://kovixa-backend-v99.up.railway.app/api/auth/login", formData);
+            const response = await axios.post("https://kovixa-backend-v99-production-a1b2.up.railway.app/api/auth/login", formData);
             
             if (response.data && response.data.token) {
                 // Save Tokens

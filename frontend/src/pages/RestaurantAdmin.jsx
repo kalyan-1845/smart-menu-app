@@ -17,7 +17,7 @@ const CATEGORY_LIST = ["Starters (Veg)", "Starters (Non-Veg)", "Main Course (Veg
 const RestaurantAdmin = () => {
     const { id } = useParams();
     // ✅ FIXED: Using the new working domain
-    const SERVER_URL = "https://kovixa-backend-v99.up.railway.app";
+    const SERVER_URL = "https://kovixa-backend-v99-production-a1b2.up.railway.app";
     const API_BASE = `${SERVER_URL}/api`;
     
     // --- STATE ---
