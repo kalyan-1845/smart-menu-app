@@ -5,7 +5,7 @@ import io from "socket.io-client";
 import { FaArrowLeft, FaTrash, FaCheckCircle, FaBell, FaUtensils, FaBoxOpen, FaPaperPlane, FaStar, FaTimes } from "react-icons/fa";
 import { toast } from "react-hot-toast";
 
-const SERVER_URL = "https://smart-menu-app-production.up.railway.app";
+const SERVER_URL = "https://kovixa-backend-v99.up.railway.app";
 const API_BASE = `${SERVER_URL}/api`;
 
 // --- 🌟 INTERNAL FEEDBACK MODAL ---
