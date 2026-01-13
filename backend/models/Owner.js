@@ -7,7 +7,7 @@ const ownerSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
   
-  // ✅ Added Phone Number Field
+  // ✅ Phone Number (Matches your new controller)
   phoneNumber: { type: String, default: "" },
 
   isPro: { type: Boolean, default: false },
@@ -16,16 +16,16 @@ const ownerSchema = new mongoose.Schema({
   // Push Notifications
   pushSubscriptions: { type: Array, default: [] },
   
-  // CEO Notes (For your Super Admin Dashboard)
+  // CEO Notes
   ceoNotes: { type: String, default: "" },
   
-  // Settings (Menu On/Off, etc.)
+  // Settings
   settings: {
     menuActive: { type: Boolean, default: true }
   }
 }, { timestamps: true });
 
-// 🔒 1. ENCRYPT PASSWORD BEFORE SAVING
+// 🔒 1. ENCRYPT PASSWORD (Runs automatically before saving)
 ownerSchema.pre('save', async function (next) {
   if (!this.isModified('password')) {
     next();
@@ -34,7 +34,7 @@ ownerSchema.pre('save', async function (next) {
   this.password = await bcrypt.hash(this.password, salt);
 });
 
-// 🔑 2. COMPARE PASSWORD METHOD (Crucial for Login)
+// 🔑 2. PASSWORD CHECKER (CRITICAL: Login fails without this)
 ownerSchema.methods.matchPassword = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
 };
