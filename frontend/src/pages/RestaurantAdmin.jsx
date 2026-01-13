@@ -13,16 +13,22 @@ import { toast } from "react-hot-toast";
 
 const CATEGORY_LIST = [
     "Starters (Veg)", "Starters (Non-Veg)", "Main Course (Veg)", "Main Course (Non-Veg)",
-    "Biryani", "Rice Items", "Fried Rice", "Noodles", "Chinese",
-    "Tandoori", "Kebabs", "Breads", "Curries", "Dal",
-    "Thali", "Combos", "Soups", "Salads",
-    "Breakfast", "Idli", "Dosa", "Snacks", "Sandwich", "Burger", "Pizza",
-    "Desserts", "Ice Cream", "Beverages", "Juices", "Milkshakes", "Tea/Coffee"
+    "Biryani", "Rice Items", "Fried Rice", "Noodles", "Manchurian", "Chinese",
+    "Tandoori", "Kebabs", "Rotis & Breads", "Naan", "Kulcha", "Paratha",
+    "Curries (Veg)", "Curries (Chicken)", "Curries (Mutton)", "Curries (Fish/Prawns)",
+    "Dal / Lentils", "Paneer Specials", "Mushroom Specials", "Egg Specials",
+    "Thali", "Combos", "Family Packs", "Platters",
+    "Soups", "Salads", "Raita", "Papad",
+    "Breakfast", "Idli", "Dosa", "Vada", "Puri", "Upma",
+    "Snacks", "Samosa", "Bajji", "Sandwich", "Burger", "Pizza", "Pasta", "Wraps",
+    "Desserts", "Ice Cream", "Kulfi", "Sweets", "Cakes", "Pastries",
+    "Beverages", "Soft Drinks", "Juices", "Milkshakes", "Lassi", "Smoothies",
+    "Tea", "Coffee", "Mocktails", "Mojitos", "Water",
+    "Specials", "Chef's Choice", "Today's Special", "Kids Menu", "Add-ons"
 ];
 
 const RestaurantAdmin = () => {
     const { id } = useParams();
-    // ✅ Ensure this matches your actual backend URL
     const SERVER_URL = "https://smart-menu-app-production.up.railway.app";
     const API_BASE = `${SERVER_URL}/api`;
     
@@ -43,6 +49,7 @@ const RestaurantAdmin = () => {
     // Menu Form
     const [newItem, setNewItem] = useState({ name: "", price: "", image: "", category: "Starters (Veg)" });
     const [isCustomCategory, setIsCustomCategory] = useState(false);
+    const [customCategory, setCustomCategory] = useState("");
     
     // Tools / QR Form
     const [qrCount, setQrCount] = useState(15); 
@@ -96,7 +103,7 @@ const RestaurantAdmin = () => {
             refreshData(savedId);
         } else setIsLoading(false);
 
-        // Auto-refresh every 15 seconds
+        // Auto-refresh every 15 seconds to keep Kitchen & Counter in sync
         const interval = setInterval(() => {
             if(isAuthenticated && navigator.onLine) refreshData();
         }, 15000); 
@@ -150,7 +157,6 @@ const RestaurantAdmin = () => {
 
         for (let i = 1; i <= qrCount; i++) {
             // ✅ THIS URL NEVER EXPIRES
-            // It points to: https://your-site.com/menu/restaurantId?table=1
             const permanentUrl = `${window.location.origin}/menu/${id}?table=${i}`;
             const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(permanentUrl)}`;
             
@@ -175,14 +181,15 @@ const RestaurantAdmin = () => {
     // --- 6. MENU ACTIONS ---
     const handleAddItem = async () => {
         if (!newItem.name || !newItem.price) return toast.error("Name & Price Required");
+        const finalCategory = isCustomCategory ? customCategory : newItem.category;
         const token = localStorage.getItem(`owner_token_${id}`);
         try {
             await axios.post(`${API_BASE}/dishes`, {
                 name: newItem.name, price: parseFloat(newItem.price), image: newItem.image || "", 
-                category: newItem.category, restaurantId: mongoId, isAvailable: true 
+                category: finalCategory, restaurantId: mongoId, isAvailable: true 
             }, { headers: { Authorization: `Bearer ${token}` } });
             toast.success("Added to Menu");
-            setNewItem({ ...newItem, name: "", price: "" }); // Keep category
+            setNewItem({ name: "", price: "", image: "", category: "Starters (Veg)" }); // Reset
             refreshData(mongoId);
         } catch (err) { toast.error("Failed"); }
     };
@@ -198,26 +205,30 @@ const RestaurantAdmin = () => {
     };
 
     // --- 7. PRINTER FUNCTIONS ---
+    
+    // ✅ KITCHEN PRINTER (Big Table Number)
     const printKOT = (order) => {
         const win = window.open('', '', 'width=300,height=600');
         win.document.write(`
             <html><body style="font-family:monospace;width:280px;padding:5px;">
-                <h3 style="text-align:center;margin:0;">KOT</h3>
-                <p style="text-align:center;margin:0;">Table: ${order.tableNum}</p>
+                <h3 style="text-align:center;margin:0;">KITCHEN TICKET</h3>
+                <h1 style="text-align:center;font-size:40px;margin:5px 0;">TABLE ${order.tableNum}</h1>
                 <hr/>
-                <table style="width:100%;font-size:14px;">
+                <table style="width:100%;font-size:16px;font-weight:bold;">
                     ${order.items.map(i => `<tr><td>${i.name}</td><td style="text-align:right;">x${i.quantity}</td></tr>`).join('')}
                 </table>
                 <hr/>
-                <p style="text-align:center;font-size:10px;">${new Date(order.createdAt).toLocaleTimeString()}</p>
+                <p style="text-align:center;font-size:12px;">${new Date(order.createdAt).toLocaleTimeString()}</p>
             </body></html>
         `);
         win.document.close(); win.print(); win.close();
     };
 
+    // ✅ COUNTER PRINTER (Full Consolidated Bill)
     const printBill = (tableNum, orders) => {
         const allItems = []; 
         let total = 0;
+        // Merge multiple orders into one list
         orders.forEach(o => { 
             total += o.totalAmount; 
             o.items.forEach(i => allItems.push(i)); 
@@ -227,16 +238,16 @@ const RestaurantAdmin = () => {
         win.document.write(`
             <html><body style="font-family:monospace;width:280px;padding:5px;">
                 <h2 style="text-align:center;margin:5px 0;">${restaurantName}</h2>
-                <p style="text-align:center;">BILL / RECEIPT</p>
+                <p style="text-align:center;">TAX INVOICE</p>
                 <hr/>
-                <p>Table: ${tableNum}</p>
+                <p style="font-size:16px;"><b>Table: ${tableNum}</b></p>
                 <table style="width:100%;font-size:12px;text-align:left;">
-                    <tr><th>Item</th><th>Qty</th><th>Amt</th></tr>
+                    <tr style="border-bottom:1px dashed #000;"><th>Item</th><th>Qty</th><th>Amt</th></tr>
                     ${allItems.map(i => `<tr><td>${i.name}</td><td>${i.quantity}</td><td>${i.price * i.quantity}</td></tr>`).join('')}
                 </table>
                 <hr/>
-                <h3 style="text-align:right;margin:10px 0;">Total: Rs. ${total}</h3>
-                <p style="text-align:center;font-size:10px;">Thank You!</p>
+                <h2 style="text-align:right;margin:10px 0;">TOTAL: Rs. ${total}</h2>
+                <p style="text-align:center;font-size:10px;">Thank You! Visit Again.</p>
             </body></html>
         `);
         win.document.close(); win.print(); win.close();
@@ -310,9 +321,11 @@ const RestaurantAdmin = () => {
                                 <input type="number" className="input-dark" placeholder="Price" value={newItem.price} onChange={e=>setNewItem({...newItem,price:e.target.value})}/>
                                 <input className="input-dark" placeholder="Image URL (Optional)" value={newItem.image} onChange={e=>setNewItem({...newItem,image:e.target.value})}/>
                             </div>
-                            <select className="input-dark" value={newItem.category} onChange={e=>setNewItem({...newItem,category:e.target.value})}>
+                            <select className="input-dark" value={isCustomCategory?"custom":newItem.category} onChange={(e)=>{if(e.target.value==="custom"){setIsCustomCategory(true);setNewItem({...newItem,category:""});}else{setIsCustomCategory(false);setNewItem({...newItem,category:e.target.value});}}}>
                                 {CATEGORY_LIST.map((cat,i)=><option key={i} value={cat}>{cat}</option>)}
+                                <option value="custom">+ Custom</option>
                             </select>
+                            {isCustomCategory && <input className="input-dark" placeholder="Category Name" value={customCategory} onChange={e=>{setCustomCategory(e.target.value);setNewItem({...newItem,category:e.target.value})}}/>}
                             <button onClick={handleAddItem} className="btn-primary">SAVE ITEM</button>
                         </div>
                         <div className="glass-card scrollable">
@@ -380,7 +393,10 @@ const RestaurantAdmin = () => {
                                     <div key={order._id} className="order-item">
                                         <div className="order-meta"><span>#{order._id.slice(-4)}</span><span>{new Date(order.createdAt).toLocaleTimeString()}</span></div>
                                         {order.items.map((item, i) => (<div key={i} className="order-row"><span>{item.name}</span><b>x{item.quantity}</b></div>))}
-                                        <div style={{marginTop:10,display:'flex',justifyContent:'flex-end'}}><button onClick={() => printKOT(order)} className="btn-sm"><FaPrint/> KOT</button></div>
+                                        {/* KOT BUTTON - For Kitchen Machine */}
+                                        <div style={{marginTop:10,display:'flex',justifyContent:'flex-end'}}>
+                                            <button onClick={() => printKOT(order)} className="btn-sm"><FaPrint/> KOT</button>
+                                        </div>
                                     </div>
                                 ))
                             }
@@ -388,7 +404,11 @@ const RestaurantAdmin = () => {
                         {selectedTable.orders.length > 0 && (
                             <div className="modal-footer">
                                 <div className="modal-footer-info"><span>TOTAL</span><span className="total-val">₹{selectedTable.totalAmount}</span></div>
-                                <div className="modal-actions"><button onClick={() => printBill(selectedTable.tableNum, selectedTable.orders)} className="btn-action blue"><FaReceipt/> PRINT BILL</button><button onClick={() => handleCompleteTable(selectedTable.tableNum, selectedTable.orders)} className="btn-action green"><FaCheck/> CLEAR</button></div>
+                                {/* ACTIONS - For Counter Machine */}
+                                <div className="modal-actions">
+                                    <button onClick={() => printBill(selectedTable.tableNum, selectedTable.orders)} className="btn-action blue"><FaReceipt/> BILL</button>
+                                    <button onClick={() => handleCompleteTable(selectedTable.tableNum, selectedTable.orders)} className="btn-action green"><FaCheck/> CLEAR</button>
+                                </div>
                             </div>
                         )}
                     </div>
