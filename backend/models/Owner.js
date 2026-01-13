@@ -1,4 +1,3 @@
-// models/Owner.js
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 
@@ -22,7 +21,7 @@ ownerSchema.pre('save', async function (next) {
   this.password = await bcrypt.hash(this.password, salt);
 });
 
-// 2. THIS FIXES THE 500 ERROR 👇
+// 2. ✅ THIS IS THE FIX (Login fails without this)
 ownerSchema.methods.matchPassword = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
 };
