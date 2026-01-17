@@ -4,14 +4,14 @@ import axios from "axios";
 import io from "socket.io-client"; 
 import { 
     FaArrowLeft, FaTrash, FaCheckCircle, FaStar, FaTimes, 
-    FaUtensils, FaPaperPlane, FaReceipt, FaExclamationTriangle 
+    FaUtensils, FaPaperPlane 
 } from "react-icons/fa";
 import { toast } from "react-hot-toast";
 
 const SERVER_URL = "https://smart-menu-app-production.up.railway.app";
 const API_BASE = `${SERVER_URL}/api`;
 
-// --- 🌟 PREMIUM FEEDBACK MODAL ---
+// --- 🌟 FEEDBACK MODAL ---
 const FeedbackModal = ({ onClose, dishId }) => {
     const [rating, setRating] = useState(0);
     const [hover, setHover] = useState(0);
@@ -69,11 +69,9 @@ const Cart = ({ cart, customerId, clearCart, removeFromCart, tableNum }) => {
     const [showFeedback, setShowFeedback] = useState(false);
     const socketRef = useRef(null); 
 
-    // ✅ SMART TABLE LOGIC: Verify table belongs to THIS restaurant
+    // ✅ SMART TABLE LOGIC
     const storedTable = localStorage.getItem("last_table_scanned");
     const storedRest = localStorage.getItem("last_rest_scanned");
-    
-    // Only use stored table if it matches the current restaurant context
     const finalTableNum = tableNum || (storedRest === restaurantId ? storedTable : null);
 
     const totalPrice = cart.reduce((total, item) => total + (item.price * (item.quantity || 1)), 0);
@@ -89,7 +87,6 @@ const Cart = ({ cart, customerId, clearCart, removeFromCart, tableNum }) => {
     const handlePlaceOrder = async () => { 
         if (isSubmitting) return;
         
-        // 🔒 SAFETY CHECK
         if (!finalTableNum) {
             toast.error("Security Check Failed: Scan QR Code again.");
             return; 
@@ -97,10 +94,9 @@ const Cart = ({ cart, customerId, clearCart, removeFromCart, tableNum }) => {
         if (cart.length === 0) return toast.error("Your cart is empty!");
 
         setIsSubmitting(true);
-        if(navigator.vibrate) navigator.vibrate(50); // Haptic feedback
+        if(navigator.vibrate) navigator.vibrate(50); 
 
         try {
-            // 1. Resolve Owner ID
             const idRes = await axios.get(`${API_BASE}/auth/owner-id/${restaurantId}`);
             const realMongoId = idRes.data.id;
 
@@ -115,14 +111,12 @@ const Cart = ({ cart, customerId, clearCart, removeFromCart, tableNum }) => {
                 restaurantId: realMongoId
             };
 
-            // 2. Send Order
             const res = await axios.post(`${API_BASE}/orders`, payload);
             
-            // 3. Real-time Alert
             if (socketRef.current) socketRef.current.emit("new-order", res.data);
             
             setOrderSuccess(true);
-            if(navigator.vibrate) navigator.vibrate([100, 50, 100]); // Success vibration
+            if(navigator.vibrate) navigator.vibrate([100, 50, 100]); 
         } catch (err) {
             console.error(err);
             toast.error("Could not place order. Try again.");
@@ -197,44 +191,32 @@ const Cart = ({ cart, customerId, clearCart, removeFromCart, tableNum }) => {
                 )}
             </div>
 
-            {/* 💰 FOOTER */}
+            {/* 💰 BOTTOM FIXED FOOTER (Mobile Optimized) */}
             {cart.length > 0 && (
-                <div style={styles.footer}>
-                    <div style={styles.billCard}>
+                <div style={styles.footerWrapper}>
+                    <div style={styles.footerContent}>
                         <div style={styles.billRow}>
-                            <span style={{color:'#94a3b8'}}>Subtotal</span>
-                            <span style={{fontWeight:'700'}}>₹{totalPrice}</span>
+                            <span style={{color:'#94a3b8'}}>Grand Total</span>
+                            <span style={{fontWeight:'800', fontSize:18, color:'#f59e0b'}}>₹{totalPrice}</span>
                         </div>
-                        <div style={styles.billRow}>
-                            <span style={{color:'#94a3b8'}}>Taxes & Charges</span>
-                            <span style={{fontWeight:'700'}}>₹0</span>
-                        </div>
-                        <div style={styles.divider}></div>
-                        <div style={styles.totalRow}>
-                            <span>Grand Total</span>
-                            <span style={{color:'#f59e0b'}}>₹{totalPrice}</span>
-                        </div>
+                        
+                        <button onClick={handlePlaceOrder} disabled={isSubmitting} style={styles.placeOrderBtn}>
+                            {isSubmitting ? "SENDING..." : <>PLACE ORDER <FaPaperPlane /></>}
+                        </button>
                     </div>
-
-                    <button onClick={handlePlaceOrder} disabled={isSubmitting} style={styles.placeOrderBtn}>
-                        {isSubmitting ? (
-                            "SENDING TO KITCHEN..." 
-                        ) : (
-                            <>PLACE ORDER <FaPaperPlane /></>
-                        )}
-                    </button>
                 </div>
             )}
         </div>
     );
 };
 
-// 🎨 "MIDNIGHT GLASS" THEME (Matches Menu.jsx)
+// 🎨 "MIDNIGHT GLASS" THEME (Mobile Optimized)
 const styles = {
-    container: { minHeight: '100vh', background: '#020617', color: 'white', paddingBottom: '180px', fontFamily: "'Plus Jakarta Sans', sans-serif" },
+    // ✅ Use 100dvh for mobile browsers
+    container: { minHeight: '100dvh', background: '#020617', color: 'white', paddingBottom: '140px', fontFamily: "'Plus Jakarta Sans', sans-serif" },
     
     // Header
-    header: { display: 'flex', alignItems: 'center', gap: 20, padding: '20px', background: 'rgba(15, 23, 42, 0.8)', backdropFilter: 'blur(12px)', position: 'sticky', top: 0, zIndex: 10, borderBottom: '1px solid #1e293b' },
+    header: { display: 'flex', alignItems: 'center', gap: 20, padding: '20px', background: 'rgba(15, 23, 42, 0.95)', backdropFilter: 'blur(12px)', position: 'sticky', top: 0, zIndex: 10, borderBottom: '1px solid #1e293b' },
     backBtn: { background: '#1e293b', border: '1px solid #334155', color: '#94a3b8', width: 40, height: 40, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' },
     pageTitle: { fontSize: 20, fontWeight: '800', margin: 0 },
     pageSub: { fontSize: 13, color: '#64748b', margin: 0 },
@@ -254,16 +236,29 @@ const styles = {
     emptyIcon: { fontSize: 40, color: '#334155', marginBottom: 20 },
     browseBtn: { marginTop: 20, background: '#f59e0b', border: 'none', padding: '12px 24px', borderRadius: 12, color: '#000', fontWeight: '800', cursor: 'pointer' },
 
-    // Footer
-    footer: { position: 'fixed', bottom: 0, left: 0, right: 0, background: '#020617', padding: '20px', borderTop: '1px solid #1e293b', zIndex: 20 },
-    billCard: { background: '#0f172a', borderRadius: 16, padding: '15px', marginBottom: 15, border: '1px solid #1e293b' },
-    billRow: { display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 8 },
-    divider: { height: 1, background: '#1e293b', margin: '10px 0' },
-    totalRow: { display: 'flex', justifyContent: 'space-between', fontSize: 16, fontWeight: '800', color: 'white' },
-    placeOrderBtn: { width: '100%', padding: '18px', background: 'linear-gradient(135deg, #f59e0b, #d97706)', color: 'white', border: 'none', borderRadius: 16, fontWeight: '800', fontSize: 15, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 10, boxShadow: '0 10px 30px rgba(245, 158, 11, 0.3)', letterSpacing: 0.5 },
+    // ✅ FIXED FOOTER (Key Fix for Mobile)
+    footerWrapper: { 
+        position: 'fixed', 
+        bottom: 0, 
+        left: 0, 
+        right: 0, 
+        background: 'rgba(2, 6, 23, 0.95)', // Semi-transparent background
+        backdropFilter: 'blur(10px)',
+        borderTop: '1px solid #1e293b', 
+        zIndex: 100,
+        paddingBottom: 'env(safe-area-inset-bottom)', // Handles iPhone Notch Area
+    },
+    footerContent: {
+        padding: '20px',
+        maxWidth: '600px', // Prevents it from getting too wide on tablets
+        margin: '0 auto'
+    },
+    billRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15, fontSize: 14 },
+    
+    placeOrderBtn: { width: '100%', padding: '16px', background: 'linear-gradient(135deg, #f59e0b, #d97706)', color: 'white', border: 'none', borderRadius: 14, fontWeight: '800', fontSize: 16, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 10, boxShadow: '0 4px 15px rgba(245, 158, 11, 0.4)', letterSpacing: 0.5, cursor:'pointer' },
 
     // Modal
-    modalOverlay: { position: 'fixed', inset: 0, background: 'rgba(2, 6, 23, 0.85)', backdropFilter: 'blur(8px)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 },
+    modalOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.9)', backdropFilter: 'blur(5px)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 },
     modalCard: { background: '#0f172a', padding: '30px', borderRadius: '24px', textAlign: 'center', border: '1px solid #1e293b', width: '100%', maxWidth: '360px', position: 'relative', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' },
     closeBtn: { position: 'absolute', right: 20, top: 20, background: 'none', border: 'none', color: '#64748b', cursor: 'pointer' },
     successIconBox: { width: 80, height: 80, background: 'rgba(34, 197, 94, 0.1)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' },

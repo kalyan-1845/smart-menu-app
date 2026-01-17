@@ -38,7 +38,7 @@ const RestaurantAdmin = () => {
     const [password, setPassword] = useState("");
     const [searchParams, setSearchParams] = useSearchParams();
     
-    // Tabs: 'orders', 'menu', 'tools', 'revenue'
+    // Tabs
     const [activeTab, setActiveTab] = useState(() => searchParams.get("tab") || localStorage.getItem(`last_tab_${id}`) || "orders");
     
     const [restaurantName, setRestaurantName] = useState(id);
@@ -46,12 +46,10 @@ const RestaurantAdmin = () => {
     const [inboxOrders, setInboxOrders] = useState([]);
     const [mongoId, setMongoId] = useState(null); 
     
-    // Menu Form
+    // Forms
     const [newItem, setNewItem] = useState({ name: "", price: "", image: "", category: "Starters (Veg)" });
     const [isCustomCategory, setIsCustomCategory] = useState(false);
     const [customCategory, setCustomCategory] = useState("");
-    
-    // Tools / QR Form
     const [qrCount, setQrCount] = useState(15); 
     
     // Modal
@@ -65,14 +63,13 @@ const RestaurantAdmin = () => {
 
     // --- 2. DATA FETCHING (POLLING) ---
     const refreshData = useCallback(async (manualId) => {
-        if (!navigator.onLine) return; 
+        // Remove strict navigator.onLine check to allow local testing
         const fetchId = manualId || mongoId || localStorage.getItem(`owner_id_${id}`);
         const token = localStorage.getItem(`owner_token_${id}`); 
         if (!fetchId) return;
 
         try {
             const config = { headers: { Authorization: `Bearer ${token}` } };
-            // Only fetch what we need based on tab to save data
             const promises = [axios.get(`${API_BASE}/orders/inbox?restaurantId=${fetchId}&t=${Date.now()}`, config)];
             
             if (activeTab === "menu" || dishes.length === 0) {
@@ -103,10 +100,9 @@ const RestaurantAdmin = () => {
             refreshData(savedId);
         } else setIsLoading(false);
 
-        // Auto-refresh every 15 seconds to keep Kitchen & Counter in sync
         const interval = setInterval(() => {
-            if(isAuthenticated && navigator.onLine) refreshData();
-        }, 15000); 
+            if(isAuthenticated) refreshData();
+        }, 10000); 
         return () => clearInterval(interval);
     }, [id, refreshData, isAuthenticated]);
 
@@ -125,10 +121,9 @@ const RestaurantAdmin = () => {
         } catch (err) { toast.error("Invalid Key"); }
     };
 
-    // --- 4. TABLE LOGIC (Smart Grouping) ---
+    // --- 4. TABLE LOGIC ---
     const tableData = useMemo(() => {
         const map = {};
-        // Default 1 to 20 tables (or based on orders)
         for(let i = 1; i <= 20; i++) {
             map[i] = { tableNum: i, orders: [], totalAmount: 0, status: 'Free' };
         }
@@ -143,39 +138,34 @@ const RestaurantAdmin = () => {
         return map;
     }, [inboxOrders]);
 
-    // --- 5. QR CODE GENERATOR (TOOLS) ---
+    // --- 5. QR PDF ---
     const generateQRPDF = () => {
         const doc = new jsPDF();
-        let x = 20, y = 20;
+        let x = 15, y = 20;
 
         doc.setFontSize(22);
-        doc.text(`QR Menus: ${restaurantName}`, 105, 15, { align: 'center' });
-        doc.setFontSize(12);
-        doc.text("Scan to Order • No App Needed", 105, 22, { align: 'center' });
+        doc.text(restaurantName.toUpperCase(), 105, 15, { align: 'center' });
         
-        y += 20;
+        y += 10;
 
         for (let i = 1; i <= qrCount; i++) {
-            // ✅ THIS URL NEVER EXPIRES
             const permanentUrl = `${window.location.origin}/menu/${id}?table=${i}`;
             const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(permanentUrl)}`;
             
-            // Layout Logic for PDF (Grid)
-            if (y > 250) { doc.addPage(); y = 20; }
+            if (y > 260) { doc.addPage(); y = 20; }
             
             doc.setDrawColor(200);
-            doc.rect(x - 5, y - 5, 50, 60); // Border
-            
-            doc.addImage(qrApiUrl, "PNG", x, y, 40, 40);
-            doc.setFontSize(14);
+            doc.rect(x, y, 50, 60); 
+            doc.addImage(qrApiUrl, "PNG", x + 5, y + 5, 40, 40);
+            doc.setFontSize(16);
             doc.setFont("helvetica", "bold");
-            doc.text(`Table ${i}`, x + 20, y + 50, { align: "center" });
+            doc.text(`T - ${i}`, x + 25, y + 55, { align: "center" });
             
             x += 60;
-            if (x > 150) { x = 20; y += 70; }
+            if (x > 150) { x = 15; y += 70; }
         }
-        doc.save(`${restaurantName}_QR_Codes.pdf`);
-        toast.success("Downloading QR Codes...");
+        doc.save(`${restaurantName}_Tables.pdf`);
+        toast.success("PDF Downloaded");
     };
 
     // --- 6. MENU ACTIONS ---
@@ -188,14 +178,14 @@ const RestaurantAdmin = () => {
                 name: newItem.name, price: parseFloat(newItem.price), image: newItem.image || "", 
                 category: finalCategory, restaurantId: mongoId, isAvailable: true 
             }, { headers: { Authorization: `Bearer ${token}` } });
-            toast.success("Added to Menu");
-            setNewItem({ name: "", price: "", image: "", category: "Starters (Veg)" }); // Reset
+            toast.success("Added");
+            setNewItem({ ...newItem, name: "", price: "" }); 
             refreshData(mongoId);
         } catch (err) { toast.error("Failed"); }
     };
 
     const handleDeleteDish = async (dishId) => {
-        if (!window.confirm("Delete this item?")) return;
+        if (!window.confirm("Delete?")) return;
         const token = localStorage.getItem(`owner_token_${id}`);
         try {
             await axios.delete(`${API_BASE}/dishes/${dishId}`, { headers: { Authorization: `Bearer ${token}` } });
@@ -204,53 +194,60 @@ const RestaurantAdmin = () => {
         } catch (err) { toast.error("Failed"); }
     };
 
-    // --- 7. PRINTER FUNCTIONS ---
+    // --- 7. PRINTER (Dual Machine Logic) ---
     
     // ✅ KITCHEN PRINTER (Big Table Number)
     const printKOT = (order) => {
         const win = window.open('', '', 'width=300,height=600');
+        if (!win) return toast.error("Allow Popups!");
+        
         win.document.write(`
             <html><body style="font-family:monospace;width:280px;padding:5px;">
-                <h3 style="text-align:center;margin:0;">KITCHEN TICKET</h3>
-                <h1 style="text-align:center;font-size:40px;margin:5px 0;">TABLE ${order.tableNum}</h1>
+                <div style="text-align:center;font-weight:bold;border-bottom:2px solid black;">KITCHEN ORDER</div>
+                <h1 style="text-align:center;font-size:50px;margin:5px 0;">T-${order.tableNum}</h1>
                 <hr/>
-                <table style="width:100%;font-size:16px;font-weight:bold;">
+                <table style="width:100%;font-size:18px;font-weight:bold;">
                     ${order.items.map(i => `<tr><td>${i.name}</td><td style="text-align:right;">x${i.quantity}</td></tr>`).join('')}
                 </table>
                 <hr/>
-                <p style="text-align:center;font-size:12px;">${new Date(order.createdAt).toLocaleTimeString()}</p>
+                <div style="text-align:center;font-size:12px;">${new Date(order.createdAt).toLocaleTimeString()}</div>
             </body></html>
         `);
-        win.document.close(); win.print(); win.close();
+        win.document.close();
+        setTimeout(() => { win.focus(); win.print(); win.close(); }, 500);
     };
 
-    // ✅ COUNTER PRINTER (Full Consolidated Bill)
+    // ✅ BILL PRINTER (Consolidated)
     const printBill = (tableNum, orders) => {
         const allItems = []; 
         let total = 0;
-        // Merge multiple orders into one list
         orders.forEach(o => { 
             total += o.totalAmount; 
             o.items.forEach(i => allItems.push(i)); 
         });
         
         const win = window.open('', '', 'width=300,height=600');
+        if (!win) return toast.error("Allow Popups!");
+
         win.document.write(`
             <html><body style="font-family:monospace;width:280px;padding:5px;">
-                <h2 style="text-align:center;margin:5px 0;">${restaurantName}</h2>
-                <p style="text-align:center;">TAX INVOICE</p>
+                <h2 style="text-align:center;margin:0;">${restaurantName}</h2>
+                <div style="text-align:center;font-size:12px;">Payment Receipt</div>
                 <hr/>
-                <p style="font-size:16px;"><b>Table: ${tableNum}</b></p>
+                <div style="font-size:16px;"><b>Table: ${tableNum}</b></div>
+                <div style="font-size:12px;">Date: ${new Date().toLocaleDateString()}</div>
+                <hr/>
                 <table style="width:100%;font-size:12px;text-align:left;">
                     <tr style="border-bottom:1px dashed #000;"><th>Item</th><th>Qty</th><th>Amt</th></tr>
                     ${allItems.map(i => `<tr><td>${i.name}</td><td>${i.quantity}</td><td>${i.price * i.quantity}</td></tr>`).join('')}
                 </table>
                 <hr/>
-                <h2 style="text-align:right;margin:10px 0;">TOTAL: Rs. ${total}</h2>
-                <p style="text-align:center;font-size:10px;">Thank You! Visit Again.</p>
+                <h2 style="text-align:right;margin:10px 0;">Total: ₹${total}</h2>
+                <div style="text-align:center;font-size:10px;">Thank You!</div>
             </body></html>
         `);
-        win.document.close(); win.print(); win.close();
+        win.document.close();
+        setTimeout(() => { win.focus(); win.print(); win.close(); }, 500);
     };
 
     const handleCompleteTable = async (tableNum, orders) => {
@@ -258,18 +255,19 @@ const RestaurantAdmin = () => {
         try {
             await Promise.all(orders.map(o => axios.put(`${API_BASE}/orders/${o._id}/status`, { status: 'Completed' })));
             toast.success(`Table ${tableNum} Cleared`);
-            setSelectedTable(null); refreshData();
+            setSelectedTable(null); 
+            refreshData();
         } catch(e) { toast.error("Error closing"); }
     };
 
-    // --- UI RENDER ---
-    if (isLoading) return <div className="admin-container"><div style={{display:'flex',height:'100vh',alignItems:'center',justifyContent:'center'}}><FaSpinner className="spin" size={40} color="#3b82f6"/></div></div>;
+    // --- RENDER ---
+    if (isLoading) return <div className="admin-container"><div className="center-box"><FaSpinner className="spin" size={40} color="#3b82f6"/></div></div>;
 
     if (!isAuthenticated) return (
         <div className="admin-container">
             <style>{styles}</style>
-            <div style={{height:'90vh',display:'flex',alignItems:'center',justifyContent:'center'}}>
-                <div className="glass-card" style={{textAlign:'center',width:'350px'}}>
+            <div className="center-box" style={{height:'90vh'}}>
+                <div className="glass-card" style={{width:'350px', textAlign:'center'}}>
                     <FaStore size={50} color="#3b82f6" style={{marginBottom:'20px'}}/>
                     <h1>OWNER LOGIN</h1>
                     <form onSubmit={handleLogin} style={{marginTop:'25px'}}>
@@ -285,58 +283,61 @@ const RestaurantAdmin = () => {
         <div className="admin-container">
             <style>{styles}</style>
             <div className="max-w-wrapper">
-                {/* Header */}
                 <header className="app-header">
-                    <div><h1 className="shop-title">{restaurantName}</h1><span className="badge-pro">PREMIUM ADMIN</span></div>
-                    <button onClick={() => {localStorage.removeItem(`owner_token_${id}`); window.location.reload();}} className="btn-glass" style={{color:'#ef4444', borderColor:'#ef4444'}}><FaSignOutAlt/> LOGOUT</button>
+                    <div><h1 className="shop-title">{restaurantName}</h1><span className="badge-pro">ADMIN</span></div>
+                    <button onClick={() => {localStorage.removeItem(`owner_token_${id}`); window.location.reload();}} className="btn-glass danger"><FaSignOutAlt/> LOGOUT</button>
                 </header>
 
-                {/* Navigation */}
                 <div className="nav-grid">
-                    <button onClick={() => setActiveTab("orders")} className={`nav-btn ${activeTab === "orders" ? 'active' : ''}`}><FaFire size={22} /> <span>Tables</span></button>
-                    <button onClick={() => setActiveTab("menu")} className={`nav-btn ${activeTab === "menu" ? 'active' : ''}`}><FaUtensils size={22} /> <span>Menu</span></button>
-                    <button onClick={() => setActiveTab("tools")} className={`nav-btn ${activeTab === "tools" ? 'active' : ''}`}><FaQrcode size={22} /> <span>Tools</span></button>
-                    <button onClick={() => setActiveTab("revenue")} className={`nav-btn ${activeTab === "revenue" ? 'active' : ''}`}><FaChartLine size={22} /> <span>Stats</span></button>
+                    <button onClick={() => setActiveTab("orders")} className={`nav-btn ${activeTab === "orders" ? 'active' : ''}`}><FaFire size={24} /> <span>Tables</span></button>
+                    <button onClick={() => setActiveTab("menu")} className={`nav-btn ${activeTab === "menu" ? 'active' : ''}`}><FaUtensils size={24} /> <span>Menu</span></button>
+                    <button onClick={() => setActiveTab("tools")} className={`nav-btn ${activeTab === "tools" ? 'active' : ''}`}><FaQrcode size={24} /> <span>QR</span></button>
+                    <button onClick={() => setActiveTab("revenue")} className={`nav-btn ${activeTab === "revenue" ? 'active' : ''}`}><FaChartLine size={24} /> <span>Stats</span></button>
                 </div>
 
-                {/* TAB: TABLES */}
+                {/* TABLES */}
                 {activeTab === "orders" && (
                     <div className="table-grid">
                         {Object.values(tableData).map((table) => (
                             <div key={table.tableNum} onClick={() => setSelectedTable(table)} className={`table-box ${table.status === 'Occupied' ? 'occupied' : 'free'}`}>
                                 <div className="t-num">{table.tableNum}</div>
-                                <div className="t-status">{table.status === 'Occupied' ? <><span>Occupied</span><div className="t-amount">₹{table.totalAmount}</div></> : <span>Available</span>}</div>
+                                <div className="t-status">
+                                    {table.status === 'Occupied' ? (
+                                        <>
+                                            <div className="t-amt">₹{table.totalAmount}</div>
+                                            {table.orders.length > 0 && <span className="badge-new">{table.orders.length}</span>}
+                                        </>
+                                    ) : "Empty"}
+                                </div>
                             </div>
                         ))}
                     </div>
                 )}
 
-                {/* TAB: MENU */}
+                {/* MENU */}
                 {activeTab === "menu" && (
                     <div className="menu-layout">
                         <div className="glass-card">
                             <h3 className="section-title"><FaPlus/> ADD ITEM</h3>
                             <input className="input-dark" placeholder="Name" value={newItem.name} onChange={e=>setNewItem({...newItem,name:e.target.value})}/>
-                            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+                            <div className="grid-2">
                                 <input type="number" className="input-dark" placeholder="Price" value={newItem.price} onChange={e=>setNewItem({...newItem,price:e.target.value})}/>
-                                <input className="input-dark" placeholder="Image URL (Optional)" value={newItem.image} onChange={e=>setNewItem({...newItem,image:e.target.value})}/>
+                                <input className="input-dark" placeholder="Image URL" value={newItem.image} onChange={e=>setNewItem({...newItem,image:e.target.value})}/>
                             </div>
                             <select className="input-dark" value={isCustomCategory?"custom":newItem.category} onChange={(e)=>{if(e.target.value==="custom"){setIsCustomCategory(true);setNewItem({...newItem,category:""});}else{setIsCustomCategory(false);setNewItem({...newItem,category:e.target.value});}}}>
                                 {CATEGORY_LIST.map((cat,i)=><option key={i} value={cat}>{cat}</option>)}
                                 <option value="custom">+ Custom</option>
                             </select>
-                            {isCustomCategory && <input className="input-dark" placeholder="Category Name" value={customCategory} onChange={e=>{setCustomCategory(e.target.value);setNewItem({...newItem,category:e.target.value})}}/>}
-                            <button onClick={handleAddItem} className="btn-primary">SAVE ITEM</button>
+                            {isCustomCategory && <input className="input-dark" placeholder="Category" value={customCategory} onChange={e=>{setCustomCategory(e.target.value);setNewItem({...newItem,category:e.target.value})}}/>}
+                            <button onClick={handleAddItem} className="btn-primary">SAVE</button>
                         </div>
                         <div className="glass-card scrollable">
-                            <h3 className="section-title">ACTIVE DISHES</h3>
+                            <h3 className="section-title">MENU ({dishes.length})</h3>
                             {dishes.map(dish => (
                                 <div key={dish._id} className="dish-item">
                                     <div style={{display:'flex',gap:12,alignItems:'center'}}>
-                                        <div style={{width:45,height:45,background:'#0f172a',borderRadius:10,overflow:'hidden'}}>
-                                            {dish.image && <img src={dish.image} style={{width:'100%',height:'100%',objectFit:'cover'}} alt=""/>}
-                                        </div>
-                                        <div><div style={{fontWeight:700}}>{dish.name}</div><div style={{color:'#3b82f6',fontWeight:'bold'}}>₹{dish.price}</div></div>
+                                        <img src={dish.image || "https://placehold.co/50"} style={{width:40,height:40,borderRadius:8,objectFit:'cover'}} alt=""/>
+                                        <div><div style={{fontWeight:700}}>{dish.name}</div><div style={{color:'#3b82f6'}}>₹{dish.price}</div></div>
                                     </div>
                                     <button onClick={()=>handleDeleteDish(dish._id)} className="btn-icon-danger"><FaTrash/></button>
                                 </div>
@@ -345,38 +346,30 @@ const RestaurantAdmin = () => {
                     </div>
                 )}
 
-                {/* TAB: TOOLS (QR GENERATOR) */}
+                {/* TOOLS */}
                 {activeTab === "tools" && (
-                    <div className="glass-card" style={{textAlign:'center', maxWidth:'500px', margin:'0 auto'}}>
-                        <FaQrcode size={60} color="#3b82f6" style={{marginBottom:20}} />
-                        <h2>QR CODE GENERATOR</h2>
-                        <p style={{color:'#94a3b8', marginBottom:20}}>Generate permanent QR codes for your tables. Download and print them.</p>
-                        
-                        <div style={{marginBottom:20}}>
-                            <label style={{display:'block', marginBottom:10, color:'#94a3b8'}}>How many tables?</label>
-                            <input type="number" className="input-dark" value={qrCount} onChange={e=>setQrCount(e.target.value)} style={{textAlign:'center', fontSize:20}} />
+                    <div className="center-box">
+                        <div className="glass-card" style={{width:'100%', maxWidth:'400px', textAlign:'center'}}>
+                            <FaQrcode size={60} color="#3b82f6" style={{marginBottom:20}}/>
+                            <h2>QR GENERATOR</h2>
+                            <p style={{color:'#94a3b8', marginBottom:20}}>Generate permanent table codes.</p>
+                            <label style={{color:'#94a3b8', display:'block', marginBottom:10}}>Table Count:</label>
+                            <input type="number" className="input-dark" style={{textAlign:'center', fontSize:20}} value={qrCount} onChange={e=>setQrCount(e.target.value)}/>
+                            <button onClick={generateQRPDF} className="btn-primary"><FaFilePdf/> DOWNLOAD PDF</button>
                         </div>
-                        
-                        <button onClick={generateQRPDF} className="btn-primary" style={{display:'flex', alignItems:'center', justifyContent:'center', gap:10}}>
-                            <FaFilePdf size={20}/> DOWNLOAD PDF
-                        </button>
                     </div>
                 )}
 
-                {/* TAB: REVENUE */}
+                {/* REVENUE */}
                 {activeTab === "revenue" && (
-                    <div className="table-grid">
-                        <div className="glass-card">
-                            <h3 style={{color:'#94a3b8'}}>Active Orders Value</h3>
-                            <h1 style={{color:'#3b82f6', fontSize:40}}>
-                                ₹{Object.values(tableData).reduce((a, b) => a + b.totalAmount, 0)}
-                            </h1>
+                    <div className="grid-2">
+                        <div className="glass-card center-text">
+                            <h3>Active Revenue</h3>
+                            <h1 style={{color:'#3b82f6', fontSize:36}}>₹{Object.values(tableData).reduce((a, b) => a + b.totalAmount, 0)}</h1>
                         </div>
-                        <div className="glass-card">
-                            <h3 style={{color:'#94a3b8'}}>Busy Tables</h3>
-                            <h1 style={{color:'#10b981', fontSize:40}}>
-                                {Object.values(tableData).filter(t => t.status === 'Occupied').length}
-                            </h1>
+                        <div className="glass-card center-text">
+                            <h3>Active Tables</h3>
+                            <h1 style={{color:'#10b981', fontSize:36}}>{Object.values(tableData).filter(t => t.status === 'Occupied').length}</h1>
                         </div>
                     </div>
                 )}
@@ -386,26 +379,32 @@ const RestaurantAdmin = () => {
             {selectedTable && (
                 <div className="qr-overlay" onClick={() => setSelectedTable(null)}>
                     <div className="qr-modal" onClick={e => e.stopPropagation()}>
-                        <div className="modal-header"><h2>TABLE {selectedTable.tableNum}</h2><button onClick={() => setSelectedTable(null)} className="btn-icon-close"><FaTimes/></button></div>
+                        <div className="modal-header">
+                            <h2>TABLE {selectedTable.tableNum}</h2>
+                            <button onClick={() => setSelectedTable(null)} className="close-btn"><FaTimes/></button>
+                        </div>
                         <div className="modal-body">
-                            {selectedTable.orders.length === 0 ? <p style={{textAlign:'center', color:'#666'}}>Empty Table</p> : 
+                            {selectedTable.orders.length === 0 ? <p className="empty-msg">No Orders Yet</p> : 
                                 selectedTable.orders.map((order) => (
-                                    <div key={order._id} className="order-item">
-                                        <div className="order-meta"><span>#{order._id.slice(-4)}</span><span>{new Date(order.createdAt).toLocaleTimeString()}</span></div>
-                                        {order.items.map((item, i) => (<div key={i} className="order-row"><span>{item.name}</span><b>x{item.quantity}</b></div>))}
-                                        {/* KOT BUTTON - For Kitchen Machine */}
-                                        <div style={{marginTop:10,display:'flex',justifyContent:'flex-end'}}>
+                                    <div key={order._id} className="order-card">
+                                        <div className="order-header">
+                                            <span>KOT: #{order._id.slice(-4).toUpperCase()}</span>
                                             <button onClick={() => printKOT(order)} className="btn-sm"><FaPrint/> KOT</button>
                                         </div>
+                                        {order.items.map((item, i) => (
+                                            <div key={i} className="order-row">
+                                                <span>{item.name}</span>
+                                                <b>x{item.quantity}</b>
+                                            </div>
+                                        ))}
                                     </div>
                                 ))
                             }
                         </div>
                         {selectedTable.orders.length > 0 && (
                             <div className="modal-footer">
-                                <div className="modal-footer-info"><span>TOTAL</span><span className="total-val">₹{selectedTable.totalAmount}</span></div>
-                                {/* ACTIONS - For Counter Machine */}
-                                <div className="modal-actions">
+                                <div className="footer-row"><span>Total:</span> <span className="total-val">₹{selectedTable.totalAmount}</span></div>
+                                <div className="footer-actions">
                                     <button onClick={() => printBill(selectedTable.tableNum, selectedTable.orders)} className="btn-action blue"><FaReceipt/> BILL</button>
                                     <button onClick={() => handleCompleteTable(selectedTable.tableNum, selectedTable.orders)} className="btn-action green"><FaCheck/> CLEAR</button>
                                 </div>
@@ -419,59 +418,68 @@ const RestaurantAdmin = () => {
     );
 };
 
-// --- STYLES ---
+// --- CSS ---
 const styles = `
-.admin-container { min-height: 100vh; padding: 20px; background: #020617; color: white; font-family: 'Plus Jakarta Sans', sans-serif; padding-bottom: 90px; }
+.admin-container { min-height: 100dvh; padding: 15px; background: #020617; color: white; font-family: 'Plus Jakarta Sans', sans-serif; padding-bottom: 80px; touch-action: pan-y; }
 .max-w-wrapper { width: 100%; max-width: 1200px; margin: 0 auto; }
-@media (min-width: 1024px) { .max-w-wrapper { padding: 0 40px; } }
 
-.app-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
-.shop-title { font-size: 26px; font-weight: 800; background: linear-gradient(to right, #60a5fa, #3b82f6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-.badge-pro { background: rgba(59, 130, 246, 0.1); color: #60a5fa; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; }
+.app-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+.shop-title { font-size: 22px; font-weight: 800; background: linear-gradient(to right, #60a5fa, #3b82f6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin: 0; }
+.badge-pro { background: rgba(59, 130, 246, 0.1); color: #60a5fa; padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: 700; border: 1px solid rgba(59, 130, 246, 0.2); }
 
-.nav-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 30px; }
-.nav-btn { background: #0f172a; border: 1px solid #1e293b; border-radius: 16px; height: 80px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #64748b; cursor: pointer; transition: 0.2s; font-size: 14px; font-weight: 600; }
+.nav-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 20px; }
+.nav-btn { background: #0f172a; border: 1px solid #1e293b; border-radius: 12px; height: 65px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #64748b; cursor: pointer; transition: 0.2s; }
+.nav-btn span { font-size: 10px; margin-top: 4px; font-weight: 600; }
 .nav-btn.active { border-color: #3b82f6; color: #60a5fa; background: rgba(37, 99, 235, 0.1); }
 
-.table-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 20px; }
-.table-box { aspect-ratio: 1; border-radius: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; border: 2px solid transparent; transition: 0.2s; background: #1e293b; border: 1px solid #334155; }
-.table-box.free { background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.3); color: #34d399; }
-.table-box.occupied { background: rgba(37, 99, 235, 0.15); border-color: #3b82f6; color: #60a5fa; }
-.t-num { font-size: 32px; font-weight: 800; }
-.t-status { font-size: 12px; margin-top: 5px; text-align: center; }
-.t-amount { font-weight: 700; font-size: 16px; margin-top: 2px; }
+/* RESPONSIVE GRID */
+.table-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+@media (min-width: 768px) { .table-grid { grid-template-columns: repeat(5, 1fr); gap: 15px; } }
 
-.glass-card { background: rgba(30, 41, 59, 0.6); border: 1px solid rgba(255,255,255,0.05); border-radius: 24px; padding: 24px; margin-bottom: 24px; }
 .menu-layout { display: grid; grid-template-columns: 1fr; gap: 20px; }
 @media (min-width: 1024px) { .menu-layout { grid-template-columns: 350px 1fr; } }
-.scrollable { max-height: 600px; overflow-y: auto; }
 
-.input-dark { width: 100%; background: #0f172a; border: 1px solid #1e293b; padding: 14px; border-radius: 12px; color: white; margin-bottom: 15px; outline: none; transition: 0.2s; }
-.input-dark:focus { border-color: #3b82f6; }
-.btn-primary { background: #3b82f6; border: none; color: white; width: 100%; padding: 15px; border-radius: 14px; font-weight: 700; cursor: pointer; transition: 0.2s; }
-.btn-primary:active { transform: scale(0.98); }
-.btn-glass { background: rgba(255,255,255,0.05); border: 1px solid #334155; padding: 8px 16px; border-radius: 8px; color: #fff; cursor: pointer; display: flex; alignItems: center; gap: 8px; font-weight: 600; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
-.dish-item { display: flex; justify-content: space-between; align-items: center; padding: 15px 0; border-bottom: 1px solid #334155; }
-.btn-icon-danger { background: rgba(239, 68, 68, 0.1); color: #ef4444; border: none; padding: 10px; border-radius: 10px; cursor: pointer; }
+/* COMPONENTS */
+.table-box { aspect-ratio: 1.1; border-radius: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; border: 1px solid #334155; background: #1e293b; position: relative; }
+.table-box.occupied { border-color: #3b82f6; background: rgba(59, 130, 246, 0.1); }
+.t-num { font-size: 26px; font-weight: 800; }
+.t-status { font-size: 11px; text-align: center; margin-top: 2px; color: #94a3b8; }
+.t-amt { font-weight: 700; color: #fff; font-size: 14px; }
+.badge-new { position: absolute; top: 8px; right: 8px; background: #ef4444; color: white; width: 18px; height: 18px; border-radius: 50%; font-size: 10px; display: flex; alignItems: center; justifyContent: center; font-weight: bold; }
 
-.qr-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 100; backdrop-filter: blur(5px); }
-.qr-modal { background: #0f172a; width: 95%; max-width: 500px; border-radius: 24px; padding: 0; max-height: 90vh; overflow-y: auto; border: 1px solid #334155; box-shadow: 0 20px 50px rgba(0,0,0,0.5); }
-.modal-header { padding: 20px; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; align-items: center; background: #1e293b; }
-.modal-body { padding: 20px; }
-.order-item { background: #1e293b; padding: 15px; border-radius: 12px; margin-bottom: 12px; border: 1px solid #334155; }
-.order-meta { display: flex; justify-content: space-between; font-size: 12px; color: #94a3b8; margin-bottom: 8px; }
-.order-row { display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 4px; }
-.btn-sm { background: #334155; color: white; border: none; padding: 6px 12px; border-radius: 8px; font-size: 11px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px; }
-.btn-icon-close { background: transparent; border: none; color: #94a3b8; cursor: pointer; font-size: 20px; }
+.glass-card { background: rgba(30, 41, 59, 0.6); border: 1px solid rgba(255,255,255,0.05); border-radius: 20px; padding: 20px; margin-bottom: 15px; }
+.section-title { font-size: 12px; font-weight: 800; color: #94a3b8; margin-bottom: 15px; display: flex; align-items: center; gap: 8px; }
+.input-dark { width: 100%; background: #0f172a; border: 1px solid #1e293b; padding: 12px; border-radius: 10px; color: white; margin-bottom: 10px; font-size: 14px; }
+.btn-primary { background: #3b82f6; border: none; color: white; width: 100%; padding: 14px; border-radius: 12px; font-weight: 700; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; }
+.btn-glass { background: rgba(255,255,255,0.05); border: 1px solid #334155; padding: 8px 12px; border-radius: 8px; color: #fff; cursor: pointer; font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.btn-glass.danger { color: #ef4444; border-color: rgba(239, 68, 68, 0.3); }
 
+/* MODAL */
+.qr-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 1000; backdrop-filter: blur(5px); padding: 15px; }
+.qr-modal { background: #0f172a; width: 100%; max-width: 450px; border-radius: 24px; display: flex; flex-direction: column; max-height: 85vh; border: 1px solid #334155; box-shadow: 0 20px 50px rgba(0,0,0,0.5); }
+.modal-header { padding: 20px; border-bottom: 1px solid #1e293b; display: flex; justify-content: space-between; align-items: center; }
+.modal-body { padding: 20px; overflow-y: auto; flex: 1; }
+.order-card { background: #1e293b; padding: 15px; border-radius: 12px; margin-bottom: 10px; border: 1px solid #334155; }
+.order-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 12px; color: #94a3b8; font-weight: 700; }
+.order-row { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 14px; }
+.btn-sm { background: #3b82f6; border: none; padding: 4px 10px; border-radius: 6px; color: white; font-size: 10px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 4px; }
 .modal-footer { padding: 20px; background: #1e293b; border-top: 1px solid #334155; }
-.modal-footer-info { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; font-weight: 700; }
-.modal-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.btn-action { padding: 14px; border: none; border-radius: 12px; font-weight: 700; color: white; cursor: pointer; width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.footer-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; font-weight: 700; font-size: 16px; }
+.total-val { color: #3b82f6; font-size: 20px; }
+.footer-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.btn-action { padding: 12px; border: none; border-radius: 10px; font-weight: 700; color: white; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 6px; font-size: 13px; }
 .btn-action.blue { background: #3b82f6; }
 .btn-action.green { background: #10b981; }
-.total-val { color: #34d399; font-size: 20px; font-weight: 800; }
+
+.center-box { display: flex; align-items: center; justify-content: center; height: 100%; }
+.center-text { text-align: center; }
+.empty-msg { text-align: center; color: #64748b; margin-top: 20px; }
+.close-btn { background: transparent; border: none; color: #94a3b8; font-size: 20px; cursor: pointer; }
+.dish-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+.btn-icon-danger { background: rgba(239, 68, 68, 0.1); color: #ef4444; border: none; padding: 8px; border-radius: 8px; cursor: pointer; }
+.scrollable { max-height: 50vh; overflow-y: auto; }
 .spin { animation: spin 1s linear infinite; }
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 `;

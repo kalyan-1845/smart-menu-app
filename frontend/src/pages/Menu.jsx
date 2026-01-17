@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import { useParams, useNavigate } from "react-router-dom"; 
+import { useParams, useNavigate, useSearchParams } from "react-router-dom"; 
 import axios from "axios";
 import { 
     FaSearch, FaPlus, FaMinus, FaShoppingCart, FaArrowRight, 
@@ -11,10 +11,18 @@ import LoadingSpinner from "../components/LoadingSpinner";
 const API_BASE = "https://smart-menu-app-production.up.railway.app/api";
 
 const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customerId }) => {
+    // 1. Get Params from URL Path (e.g. /menu/restaurantName)
     const params = useParams();
+    
+    // 2. Get Params from Search String (e.g. ?table=1)
+    const [searchParams] = useSearchParams();
+    
     const navigate = useNavigate(); 
+    
+    // ✅ FIX: Robust ID and Table Extraction
     const currentRestId = params.restaurantId || params.id;
-    const currentTable = params.table;
+    // Checks URL path first, then ?table=1 query param
+    const currentTable = params.table || searchParams.get("table");
 
     // ⚡️ CACHE: Instant Load
     const [dishes, setDishes] = useState(() => {
@@ -34,7 +42,7 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customer
     const [globalBanner, setGlobalBanner] = useState("");
     const [isMaintenance, setIsMaintenance] = useState(false);
 
-    // Pull-to-refresh
+    // Pull-to-refresh state
     const [pullDistance, setPullDistance] = useState(0);
     const [refreshing, setRefreshing] = useState(false);
     const startY = useRef(0);
@@ -42,7 +50,7 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customer
     const DEFAULT_IMG = "https://placehold.co/400x300/1e293b/fbbf24?text=Tasty";
 
     // ✅ FETCH LOGIC
-    const fetchMenu = async (isManual = false) => {
+    const fetchMenu = async () => {
         if (!currentRestId) return;
         try {
             if (dishes.length === 0) setLoading(true);
@@ -123,24 +131,25 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customer
     const cartLink = `/${currentRestId}/cart/${customerId}`;
 
     const handleAction = (dish, val = 1) => {
-        if ("vibrate" in navigator) navigator.vibrate(40);
+        // Safe Vibrate for Mobile
+        if (navigator.vibrate) try { navigator.vibrate(40); } catch(e){}
         addToCart(val === -1 ? {...dish, quantity: -1} : dish);
     };
 
-    // Helper: Guess Veg/Non-Veg based on category/name
+    // Helper: Guess Veg/Non-Veg
     const getDishTypeIcon = (dish) => {
         const txt = (dish.category + dish.name).toLowerCase();
         if (txt.includes('chicken') || txt.includes('mutton') || txt.includes('fish') || txt.includes('non')) {
-            return <FaDrumstickBite color="#ef4444" size={12}/>; // Red for Non-Veg
+            return <FaDrumstickBite color="#ef4444" size={12}/>; 
         }
-        return <FaLeaf color="#22c55e" size={12}/>; // Green for Veg
+        return <FaLeaf color="#22c55e" size={12}/>; 
     };
 
     if (isMaintenance) return (
         <div style={styles.center}>
             <FaExclamationTriangle size={60} color="#f97316"/>
-            <h1 style={{color:'white', marginTop:20, textAlign:'center', fontFamily:'Plus Jakarta Sans'}}>SERVER MAINTENANCE</h1>
-            <p style={{color:'#666', padding:'0 40px', textAlign:'center'}}>Our systems are being upgraded. We will be back online shortly.</p>
+            <h1 style={{color:'white', marginTop:20, textAlign:'center'}}>MAINTENANCE</h1>
+            <p style={{color:'#666', padding:'0 40px', textAlign:'center'}}>System upgrade in progress.</p>
         </div>
     );
 
@@ -150,20 +159,24 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customer
         <div style={styles.center}>
             <div style={styles.lockIcon}><FaLock size={40} color="white"/></div>
             <h1 style={styles.closedTitle}>Restaurant Closed</h1>
-            <p style={styles.closedSub}>We are currently not accepting orders.</p>
+            <p style={styles.closedSub}>Not accepting orders currently.</p>
         </div>
     );
 
     return (
         <div style={styles.container} 
+             // ✅ MOBILE SCROLL FIX: Only trigger pull-to-refresh at absolute top
              onTouchStart={(e) => { if (window.scrollY === 0) startY.current = e.touches[0].pageY; }}
              onTouchMove={(e) => {
                 const diff = e.touches[0].pageY - startY.current;
-                if (window.scrollY === 0 && diff > 0 && diff < 80) setPullDistance(diff);
+                // Only allow pull effect if we are at top and pulling DOWN
+                if (window.scrollY === 0 && diff > 0 && diff < 80) {
+                    setPullDistance(diff);
+                }
              }}
              onTouchEnd={() => {
-                if (pullDistance > 60) { setRefreshing(true); fetchMenu(true); } 
-                else setPullDistance(0);
+                if (pullDistance > 60) { setRefreshing(true); fetchMenu(); } 
+                setPullDistance(0);
              }}>
             
             {/* 🔄 PULL REFRESH INDICATOR */}
@@ -323,7 +336,7 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customer
             <style>{`
                 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
                 
-                body { background-color: #020617; font-family: 'Plus Jakarta Sans', sans-serif; }
+                body { background-color: #020617; font-family: 'Plus Jakarta Sans', sans-serif; overscroll-behavior-y: none; }
                 .spin { animation: spin 1s linear infinite; }
                 @keyframes spin { 100% { transform: rotate(360deg); } }
                 .slide-up { animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
@@ -343,14 +356,15 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customer
 
 // 🎨 "MIDNIGHT GLASS" THEME SYSTEM
 const styles = {
-    container: { minHeight: "100vh", background: "#020617", paddingBottom: "140px", position: 'relative' },
+    // ✅ MOBILE FIX: Use 100dvh for mobile browsers and touch-action pan-y
+    container: { minHeight: "100dvh", background: "#020617", paddingBottom: "140px", position: 'relative', touchAction: "pan-y" },
     
     // Refresh
     pullLoader: { width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', overflow: 'hidden', transition: '0.2s' },
     refreshIconBox: { background: 'rgba(255,255,255,0.1)', padding: 10, borderRadius: '50%' },
 
     // Lock Screen & Maintenance
-    center: { display:'flex', height:'100vh', alignItems:'center', justifyContent:'center', flexDirection:'column', background: '#020617' },
+    center: { display:'flex', height:'100dvh', alignItems:'center', justifyContent:'center', flexDirection:'column', background: '#020617' },
     lockIcon: { background: 'linear-gradient(135deg, #ef4444, #b91c1c)', padding: 20, borderRadius: '25px', marginBottom: 20, boxShadow: '0 10px 30px rgba(239, 68, 68, 0.3)' },
     closedTitle: { color: 'white', fontSize: 24, fontWeight: '800', margin: 0, fontFamily: 'Plus Jakarta Sans' },
     closedSub: { color: '#94a3b8', marginTop: 10, fontFamily: 'Plus Jakarta Sans' },
