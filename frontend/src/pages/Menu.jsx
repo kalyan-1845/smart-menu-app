@@ -11,17 +11,11 @@ import LoadingSpinner from "../components/LoadingSpinner";
 const API_BASE = "https://smart-menu-app-production.up.railway.app/api";
 
 const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customerId }) => {
-    // 1. Get Params from URL Path (e.g. /menu/restaurantName)
     const params = useParams();
-    
-    // 2. Get Params from Search String (e.g. ?table=1)
     const [searchParams] = useSearchParams();
-    
     const navigate = useNavigate(); 
     
-    // ✅ FIX: Robust ID and Table Extraction
     const currentRestId = params.restaurantId || params.id;
-    // Checks URL path first, then ?table=1 query param
     const currentTable = params.table || searchParams.get("table");
 
     // ⚡️ CACHE: Instant Load
@@ -131,12 +125,10 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customer
     const cartLink = `/${currentRestId}/cart/${customerId}`;
 
     const handleAction = (dish, val = 1) => {
-        // Safe Vibrate for Mobile
         if (navigator.vibrate) try { navigator.vibrate(40); } catch(e){}
         addToCart(val === -1 ? {...dish, quantity: -1} : dish);
     };
 
-    // Helper: Guess Veg/Non-Veg
     const getDishTypeIcon = (dish) => {
         const txt = (dish.category + dish.name).toLowerCase();
         if (txt.includes('chicken') || txt.includes('mutton') || txt.includes('fish') || txt.includes('non')) {
@@ -165,11 +157,10 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customer
 
     return (
         <div style={styles.container} 
-             // ✅ MOBILE SCROLL FIX: Only trigger pull-to-refresh at absolute top
+             // Mobile Scroll Logic: Only pull if at absolute top
              onTouchStart={(e) => { if (window.scrollY === 0) startY.current = e.touches[0].pageY; }}
              onTouchMove={(e) => {
                 const diff = e.touches[0].pageY - startY.current;
-                // Only allow pull effect if we are at top and pulling DOWN
                 if (window.scrollY === 0 && diff > 0 && diff < 80) {
                     setPullDistance(diff);
                 }
@@ -193,11 +184,11 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customer
                 </div>
             )}
 
-            {/* 🟠 PREMIUM TICKER */}
+            {/* 🟠 WELCOME MARQUEE */}
             <div style={styles.marqueeWrapper}>
                 <div style={styles.marqueeContent}>
-                    <span>✦ KOVIXA POWERED ✦ LIVE KITCHEN ✦ FRESH INGREDIENTS ✦ </span>
-                    <span>✦ FAST SERVICE ✦ HYGIENIC ✦ BEST TASTE ✦ </span>
+                    <span>✦ WELCOME FRIENDS AND FAMILY ✦ ENJOY YOUR MEAL ✦ KOVIXA POWERED ✦ </span>
+                    <span>✦ FRESH FOOD ✦ GREAT TASTE ✦ HYGIENIC & SAFE ✦ </span>
                 </div>
             </div>
 
@@ -214,7 +205,10 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customer
                     <div style={styles.brandBox}>
                         <div style={styles.storeIcon}><FaStore size={18} /></div>
                         <div>
-                            <h1 style={styles.restName}>{currentRestId?.toUpperCase()}</h1>
+                            {/* ✅ BRANDING: KOVIXA X RESTAURANT */}
+                            <h1 style={styles.restName}>
+                                KOVIXA <span style={{color:'#f59e0b', fontSize:'18px'}}>x</span> {currentRestId?.toUpperCase()}
+                            </h1>
                             <div style={styles.tableBadge}>
                                 {currentTable ? `Table ${currentTable}` : "Takeaway / Delivery"}
                             </div>
@@ -336,7 +330,7 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customer
             <style>{`
                 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
                 
-                body { background-color: #020617; font-family: 'Plus Jakarta Sans', sans-serif; overscroll-behavior-y: none; }
+                body { background-color: #020617; font-family: 'Plus Jakarta Sans', sans-serif; }
                 .spin { animation: spin 1s linear infinite; }
                 @keyframes spin { 100% { transform: rotate(360deg); } }
                 .slide-up { animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
@@ -344,7 +338,7 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customer
                 
                 @keyframes scroll {
                     0% { transform: translateX(0); }
-                    100% { transform: translateX(-50%); }
+                    100% { transform: translateX(-100%); }
                 }
                 
                 ::-webkit-scrollbar { display: none; }
@@ -356,22 +350,23 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customer
 
 // 🎨 "MIDNIGHT GLASS" THEME SYSTEM
 const styles = {
-    // ✅ MOBILE FIX: Use 100dvh for mobile browsers and touch-action pan-y
-    container: { minHeight: "100dvh", background: "#020617", paddingBottom: "140px", position: 'relative', touchAction: "pan-y" },
+    // ✅ SCROLL FIX: Changed to minHeight: 100vh (Removed 100dvh to prevent scroll locks on some Androids)
+    // ✅ SCROLL FIX: Added overflowX: hidden to prevent horizontal wobble
+    container: { minHeight: "100vh", background: "#020617", paddingBottom: "140px", position: 'relative', overflowX: 'hidden' },
     
     // Refresh
     pullLoader: { width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', overflow: 'hidden', transition: '0.2s' },
     refreshIconBox: { background: 'rgba(255,255,255,0.1)', padding: 10, borderRadius: '50%' },
 
-    // Lock Screen & Maintenance
-    center: { display:'flex', height:'100dvh', alignItems:'center', justifyContent:'center', flexDirection:'column', background: '#020617' },
+    // Lock Screen
+    center: { display:'flex', height:'100vh', alignItems:'center', justifyContent:'center', flexDirection:'column', background: '#020617' },
     lockIcon: { background: 'linear-gradient(135deg, #ef4444, #b91c1c)', padding: 20, borderRadius: '25px', marginBottom: 20, boxShadow: '0 10px 30px rgba(239, 68, 68, 0.3)' },
     closedTitle: { color: 'white', fontSize: 24, fontWeight: '800', margin: 0, fontFamily: 'Plus Jakarta Sans' },
     closedSub: { color: '#94a3b8', marginTop: 10, fontFamily: 'Plus Jakarta Sans' },
 
-    // Marquee & Alerts
-    marqueeWrapper: { background: '#1e1b4b', borderBottom: '1px solid #312e81', padding: '8px 0', overflow: 'hidden', whiteSpace: 'nowrap' },
-    marqueeContent: { display: 'inline-block', animation: 'scroll 20s linear infinite', color: '#a5b4fc', fontSize: '10px', fontWeight: '800', letterSpacing: '2px', textTransform: 'uppercase' },
+    // Marquee
+    marqueeWrapper: { background: '#1e1b4b', borderBottom: '1px solid #312e81', padding: '10px 0', overflow: 'hidden', whiteSpace: 'nowrap' },
+    marqueeContent: { display: 'inline-block', animation: 'scroll 20s linear infinite', color: '#a5b4fc', fontSize: '11px', fontWeight: '800', letterSpacing: '2px', textTransform: 'uppercase' },
     systemAlert: { background: 'rgba(249, 115, 22, 0.15)', color: '#f97316', padding: '12px 20px', fontSize: '13px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '10px', borderBottom: '1px solid rgba(249, 115, 22, 0.3)' },
     adBanner: { padding: '0 20px', marginTop: '15px' },
 
@@ -380,7 +375,7 @@ const styles = {
     heroRow: { display: "flex", justifyContent: "space-between", alignItems: 'center', marginBottom: 20 },
     brandBox: { display: 'flex', gap: 12, alignItems: 'center' },
     storeIcon: { width: 40, height: 40, background: 'linear-gradient(135deg, #3b82f6, #2563eb)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)' },
-    restName: { fontSize: "22px", fontWeight: "800", margin: 0, color: 'white', letterSpacing: "-0.5px" },
+    restName: { fontSize: "18px", fontWeight: "800", margin: 0, color: 'white', letterSpacing: "-0.5px" },
     tableBadge: { fontSize: "12px", color: "#94a3b8", fontWeight: "600" },
     headerCart: { position: 'relative', background: '#1e293b', padding: '10px', borderRadius: '12px', color: '#f97316', border: '1px solid #334155' },
     headerBadge: { position: 'absolute', top: '-5px', right: '-5px', background: '#22c55e', color: 'white', fontSize: '10px', padding: '2px 6px', borderRadius: '10px', fontWeight:'700' },

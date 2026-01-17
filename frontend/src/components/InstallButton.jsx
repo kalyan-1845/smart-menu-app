@@ -7,17 +7,13 @@ const InstallButton = () => {
 
     useEffect(() => {
         const handler = (e) => {
-            // Prevent the mini-infobar from appearing on mobile
             e.preventDefault();
-            // Stash the event so it can be triggered later.
             setDeferredPrompt(e);
-            // Update UI notify the user they can install the PWA
             setIsVisible(true);
         };
 
         window.addEventListener("beforeinstallprompt", handler);
 
-        // Check if app is already installed (Standalone Mode)
         if (window.matchMedia('(display-mode: standalone)').matches) {
             setIsVisible(false);
         }
@@ -27,13 +23,9 @@ const InstallButton = () => {
 
     const handleInstallClick = async () => {
         if (!deferredPrompt) return;
-        // Show the install prompt
         deferredPrompt.prompt();
-        // Wait for the user to respond to the prompt
         const { outcome } = await deferredPrompt.userChoice;
-        console.log(`User response to the install prompt: ${outcome}`);
-        
-        // We've used the prompt, and can't use it again, throw it away
+        console.log(`User response: ${outcome}`);
         setDeferredPrompt(null);
         setIsVisible(false);
     };
@@ -43,13 +35,21 @@ const InstallButton = () => {
     return (
         <div className="install-toast slide-up">
             <div style={styles.content}>
+                
+                {/* 🌟 LOGO BOX (Adjusted for Perfection) */}
                 <div style={styles.iconBox}>
-                    <FaMobileAlt size={20} color="#3b82f6"/>
+                    {/* OPTION 1: Default Icon */}
+                    <FaMobileAlt size={24} color="#3b82f6" />
+
+                    {/* OPTION 2: Use your real logo (Uncomment below and remove FaMobileAlt above) */}
+                    {/* <img src="/logo.png" alt="App Logo" style={{width:'100%', height:'100%', objectFit:'cover'}} /> */}
                 </div>
+
                 <div style={styles.text}>
                     <h3 style={styles.title}>Install App</h3>
-                    <p style={styles.desc}>Add to Home Screen for faster access.</p>
+                    <p style={styles.desc}>Add to Home Screen</p>
                 </div>
+                
                 <div style={styles.actions}>
                     <button onClick={() => setIsVisible(false)} style={styles.closeBtn}>
                         <FaTimes />
@@ -60,27 +60,18 @@ const InstallButton = () => {
                 </div>
             </div>
             
-            {/* ⚡️ RESPONSIVE CSS INJECTION */}
             <style>{`
                 .install-toast {
-                    position: fixed;
-                    left: 0; 
-                    right: 0;
-                    z-index: 9999;
-                    display: flex;
-                    justify-content: center; /* Centers on PC/Laptop */
-                    pointer-events: none; /* Lets clicks pass through the empty areas */
-                    
-                    /* PC / Default Position */
+                    position: fixed; left: 0; right: 0; z-index: 9999;
+                    display: flex; justify-content: center;
+                    pointer-events: none;
                     bottom: 30px; 
                     animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1);
                 }
                 
-                /* Mobile Adjustment (Moves up to avoid Floating Cart) */
+                /* Mobile: Move up to avoid floating cart */
                 @media (max-width: 768px) {
-                    .install-toast {
-                        bottom: 95px; 
-                    }
+                    .install-toast { bottom: 95px; }
                 }
 
                 @keyframes slideUp { 
@@ -94,80 +85,53 @@ const InstallButton = () => {
 
 const styles = {
     content: {
-        background: 'rgba(15, 23, 42, 0.95)', // Dark Premium Slate
-        backdropFilter: 'blur(16px)',          // Glass Effect
-        border: '1px solid rgba(59, 130, 246, 0.3)', // Subtle Blue Glow Border
-        padding: '12px 16px',
+        background: 'rgba(15, 23, 42, 0.95)', 
+        backdropFilter: 'blur(16px)',
+        border: '1px solid rgba(59, 130, 246, 0.3)',
+        padding: '10px 14px', // Tighter padding for a sleeker look
         borderRadius: '16px',
         display: 'flex',
         alignItems: 'center',
         gap: '12px',
-        
-        // 📏 RESPONSIVE SIZING
-        width: '90%',          // Good for Mobile
-        maxWidth: '400px',     // Prevents it from being huge on PC
-        
+        width: '90%',
+        maxWidth: '400px',
         boxShadow: '0 20px 50px rgba(0,0,0,0.6)',
-        pointerEvents: 'auto'  // Re-enable clicks on the card itself
+        pointerEvents: 'auto'
     },
+    
+    // ✅ PERFECT LOGO BOX
     iconBox: {
-        minWidth: '40px',
-        height: '40px',
-        background: 'rgba(59, 130, 246, 0.1)',
-        borderRadius: '10px',
+        width: '48px',  // Standard App Icon Size
+        height: '48px',
+        minWidth: '48px',
+        background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', // Premium Gradient
+        borderRadius: '12px', // Apple-style rounded corners
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'center'
-    },
-    text: {
-        flex: 1
-    },
-    title: {
-        margin: 0,
-        color: '#fff',
-        fontSize: '14px',
-        fontWeight: '800',
-        marginBottom: '2px',
-        lineHeight: 1.2
-    },
-    desc: {
-        margin: 0,
-        color: '#94a3b8',
-        fontSize: '11px',
-        fontWeight: '500',
-        lineHeight: 1.2
-    },
-    actions: {
-        display: 'flex',
-        gap: '8px',
-        alignItems: 'center'
-    },
-    installBtn: {
-        background: '#3b82f6', 
-        color: 'white',
-        border: 'none',
-        padding: '8px 16px',
-        borderRadius: '10px',
-        fontWeight: '700',
-        fontSize: '12px',
-        cursor: 'pointer',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '6px',
-        boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)',
-        whiteSpace: 'nowrap' // Prevents text wrapping on tiny screens
-    },
-    closeBtn: {
-        background: 'transparent',
+        justifyContent: 'center',
         border: '1px solid rgba(255,255,255,0.1)',
-        color: '#94a3b8',
-        width: '32px',
-        height: '32px',
-        borderRadius: '10px',
-        cursor: 'pointer',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center'
+        overflow: 'hidden' // Ensures image stays inside corners
+    },
+    
+    text: { flex: 1 },
+    title: { margin: 0, color: '#fff', fontSize: '14px', fontWeight: '800', lineHeight: 1.2 },
+    desc: { margin: 0, color: '#94a3b8', fontSize: '11px', fontWeight: '500', lineHeight: 1.2 },
+    
+    actions: { display: 'flex', gap: '8px', alignItems: 'center' },
+    
+    installBtn: {
+        background: '#3b82f6', color: 'white', border: 'none',
+        padding: '8px 16px', borderRadius: '10px',
+        fontWeight: '700', fontSize: '12px', cursor: 'pointer',
+        display: 'flex', alignItems: 'center', gap: '6px',
+        boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)',
+        whiteSpace: 'nowrap'
+    },
+    
+    closeBtn: {
+        background: 'transparent', border: '1px solid rgba(255,255,255,0.1)',
+        color: '#94a3b8', width: '30px', height: '30px', borderRadius: '50%',
+        cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
     }
 };
 

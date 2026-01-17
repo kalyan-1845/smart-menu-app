@@ -1,127 +1,91 @@
 import Owner from '../models/Owner.js';
 import jwt from 'jsonwebtoken';
-import mongoose from 'mongoose';
+import bcrypt from 'bcryptjs';
 
-// --- 🛡️ TOKEN GENERATOR ---
-const generateToken = (id) => {
-    return jwt.sign({ id }, process.env.JWT_SECRET || 'fallback_secret', { expiresIn: '30d' });
-};
-
-// --- 📲 SAVE PUSH SUBSCRIPTION ---
-export const saveSubscription = async (req, res) => {
-    const { restaurantId, subscription } = req.body;
-    try {
-        const user = await Owner.findById(restaurantId);
-        if (!user) return res.status(404).json({ message: "Restaurant not found" });
-
-        const exists = user.pushSubscriptions.find(s => s.endpoint === subscription.endpoint);
-        if (!exists) {
-            user.pushSubscriptions.push(subscription);
-            await user.save();
-        }
-        res.status(200).json({ success: true });
-    } catch (err) { res.status(500).json({ error: err.message }); }
-};
-
-// --- 📝 REGISTER OWNER (Now saves Phone Number) ---
+// --- 1. REGISTER (For you to create owners) ---
 export const registerOwner = async (req, res) => {
     try {
-        // ✅ 1. Destructure 'phoneNumber' from request body
-        let { restaurantName, username, email, password, phoneNumber } = req.body;
-
-        const cleanUsername = username.trim().toLowerCase();
+        const { username, password, restaurantName, phoneNumber } = req.body;
         
-        if (!email) email = `${cleanUsername}@kovixa.local`; 
+        // Check if username exists
+        const existing = await Owner.findOne({ username });
+        if (existing) return res.status(400).json({ message: "Username taken" });
 
-        const userExists = await Owner.findOne({ 
-            $or: [{ username: cleanUsername }, { email }] 
+        const owner = new Owner({
+            username,
+            password, // Password is encrypted via pre-save hook in Model
+            restaurantName,
+            phoneNumber
         });
-        if (userExists) return res.status(400).json({ message: 'Unique ID or Email already taken.' });
 
-        const freeAccessDate = new Date();
-        freeAccessDate.setFullYear(freeAccessDate.getFullYear() + 100); 
-
-        // ✅ 2. Save 'phoneNumber' to Database
-        const user = await Owner.create({ 
-            restaurantName: restaurantName.trim(), 
-            username: cleanUsername, 
-            email, 
-            password, 
-            phoneNumber: phoneNumber || "", // <--- ADDED THIS LINE
-            trialEndsAt: freeAccessDate, 
-            isPro: true
-        });
-        
-        res.status(201).json({
-            _id: user._id,
-            username: user.username,
-            token: generateToken(user._id)
-        });
-    } catch (error) { 
-        res.status(400).json({ message: error.message }); 
+        await owner.save();
+        res.status(201).json({ success: true, message: "Restaurant Created" });
+    } catch (error) {
+        res.status(500).json({ message: "Registration Failed" });
     }
 };
 
-// --- 🔑 LOGIN OWNER ---
+// --- 2. LOGIN (For Owners to access Dashboard) ---
 export const loginOwner = async (req, res) => {
-    const { username, password } = req.body;
     try {
-        const user = await Owner.findOne({ username: username.toLowerCase() });
+        const { username, password } = req.body;
+        const owner = await Owner.findOne({ username });
 
-        if (user && (await user.matchPassword(password))) {
-            res.json({
-                _id: user._id,
-                username: user.username,
-                restaurantName: user.restaurantName,
-                token: generateToken(user._id),
-                isPro: user.isPro
+        if (owner && (await owner.matchPassword(password))) {
+            const token = jwt.sign({ id: owner._id }, process.env.JWT_SECRET || 'secret', {
+                expiresIn: '30d',
             });
-        } else { 
-            res.status(401).json({ message: 'Invalid credentials. Check your ID and Password.' }); 
+
+            res.json({
+                _id: owner._id,
+                username: owner.username,
+                restaurantName: owner.restaurantName,
+                isPro: owner.isPro,
+                token
+            });
+        } else {
+            res.status(401).json({ message: "Invalid Credentials" });
         }
-    } catch (error) { 
-        res.status(500).json({ message: "Server Error during login." }); 
+    } catch (error) {
+        res.status(500).json({ message: "Server Error" });
     }
 };
 
-// --- 🔍 GET OWNER ID BY USERNAME ---
+// --- 3. ⚡️ RESOLVE ID (The Critical Function for QR Codes) ---
+// This is what Cart.jsx calls when the page loads
 export const getOwnerIdByUsername = async (req, res) => {
     try {
-        const owner = await Owner.findOne({ 
-            username: req.params.username.toLowerCase() 
-        }).select('_id');
+        const { username } = req.params;
+        const owner = await Owner.findOne({ username }).select('_id restaurantName isPro settings');
 
-        if (!owner) return res.status(404).json({ message: "Restaurant ID not found" });
-        
-        res.json({ id: owner._id }); 
+        if (owner) {
+            res.json({ 
+                id: owner._id, 
+                name: owner.restaurantName,
+                isPro: owner.isPro,
+                settings: owner.settings
+            });
+        } else {
+            res.status(404).json({ message: "Restaurant Not Found" });
+        }
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        res.status(500).json({ message: "Server Error" });
     }
 };
 
-// --- 🌐 GET RESTAURANT DETAILS ---
+// --- 4. GET DETAILS (For Menu Header) ---
 export const getRestaurantDetails = async (req, res) => {
-    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-    
     try {
-        const { id } = req.params;
-        let owner;
-
-        if (mongoose.Types.ObjectId.isValid(id)) {
-            owner = await Owner.findById(id).select('username restaurantName isPro');
-        } else {
-            owner = await Owner.findOne({ username: id.toLowerCase() }).select('username restaurantName isPro');
-        }
-
-        if (!owner) return res.status(404).json({ message: 'Restaurant not found' });
-        
-        res.json({
-            id: owner._id,
-            username: owner.username,
-            restaurantName: owner.restaurantName,
-            isPro: owner.isPro
-        });
-    } catch (error) { 
-        res.status(500).json({ message: error.message }); 
+        const owner = await Owner.findById(req.params.id).select('-password');
+        if(owner) res.json(owner);
+        else res.status(404).json({message: "Not found"});
+    } catch (e) {
+        res.status(500).json({message: "Error"});
     }
+};
+
+// --- 5. SAVE SUBSCRIPTION (For Notifications) ---
+export const saveSubscription = async (req, res) => {
+    // Logic to save WebPush subscription (optional)
+    res.json({ success: true });
 };

@@ -3,62 +3,12 @@ import { useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
 import io from "socket.io-client"; 
 import { 
-    FaArrowLeft, FaTrash, FaCheckCircle, FaStar, FaTimes, 
-    FaUtensils, FaPaperPlane 
+    FaArrowLeft, FaTrash, FaCheckCircle, FaUtensils, FaPaperPlane, FaTimes 
 } from "react-icons/fa";
 import { toast } from "react-hot-toast";
 
 const SERVER_URL = "https://smart-menu-app-production.up.railway.app";
 const API_BASE = `${SERVER_URL}/api`;
-
-// --- 🌟 FEEDBACK MODAL ---
-const FeedbackModal = ({ onClose, dishId }) => {
-    const [rating, setRating] = useState(0);
-    const [hover, setHover] = useState(0);
-    const [comment, setComment] = useState("");
-
-    const handleSubmit = async () => {
-        if (rating === 0) return toast.error("Please tap a star!");
-        try {
-            await axios.post(`${API_BASE}/dishes/rate/${dishId || 'general'}`, { rating, comment });
-            toast.success("Thanks for your review!");
-            onClose();
-        } catch (e) { toast.error("Could not save review"); }
-    };
-
-    return (
-        <div style={styles.modalOverlay}>
-            <div style={styles.modalCard}>
-                <button onClick={onClose} style={styles.closeBtn}><FaTimes size={18} /></button>
-                <div style={{marginBottom: 20}}>
-                    <div style={styles.iconCircle}><FaStar color="#f59e0b" size={24}/></div>
-                </div>
-                <h2 style={styles.modalTitle}>Rate Your Meal</h2>
-                <p style={styles.modalSub}>How was the food?</p>
-                
-                <div style={styles.starRow}>
-                    {[1, 2, 3, 4, 5].map((star) => (
-                        <FaStar key={star} size={32} 
-                            color={(hover || rating) >= star ? "#f59e0b" : "#334155"}
-                            onMouseEnter={() => setHover(star)} 
-                            onMouseLeave={() => setHover(0)} 
-                            onClick={() => { if(navigator.vibrate) navigator.vibrate(20); setRating(star); }}
-                            style={{ cursor: 'pointer', transition: '0.2s' }}
-                        />
-                    ))}
-                </div>
-                
-                <textarea 
-                    placeholder="Tell the chef what you liked..." 
-                    style={styles.textArea} 
-                    value={comment} 
-                    onChange={(e) => setComment(e.target.value)} 
-                />
-                <button onClick={handleSubmit} style={styles.submitBtn}>SUBMIT REVIEW</button>
-            </div>
-        </div>
-    );
-};
 
 const Cart = ({ cart, customerId, clearCart, removeFromCart, tableNum }) => {
     const { restaurantId } = useParams(); 
@@ -66,7 +16,6 @@ const Cart = ({ cart, customerId, clearCart, removeFromCart, tableNum }) => {
     
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [orderSuccess, setOrderSuccess] = useState(false); 
-    const [showFeedback, setShowFeedback] = useState(false);
     const socketRef = useRef(null); 
 
     // ✅ SMART TABLE LOGIC
@@ -78,8 +27,7 @@ const Cart = ({ cart, customerId, clearCart, removeFromCart, tableNum }) => {
 
     useEffect(() => {
         if (restaurantId) {
-            socketRef.current = io(SERVER_URL, { transports: ['polling'], query: { restaurantId } });
-            socketRef.current.emit("join-restaurant", restaurantId);
+            socketRef.current = io(SERVER_URL, { transports: ['polling'] });
         }
         return () => { if (socketRef.current) socketRef.current.disconnect(); };
     }, [restaurantId]);
@@ -88,7 +36,7 @@ const Cart = ({ cart, customerId, clearCart, removeFromCart, tableNum }) => {
         if (isSubmitting) return;
         
         if (!finalTableNum) {
-            toast.error("Security Check Failed: Scan QR Code again.");
+            toast.error("Please scan the Table QR Code again.");
             return; 
         }
         if (cart.length === 0) return toast.error("Your cart is empty!");
@@ -101,56 +49,85 @@ const Cart = ({ cart, customerId, clearCart, removeFromCart, tableNum }) => {
             const realMongoId = idRes.data.id;
 
             const payload = {
-                customerName: `Guest (Table ${finalTableNum})`,
-                customerId,
+                restaurantId: realMongoId,
                 tableNum: finalTableNum.toString(),
-                items: cart.map(i => ({ dishId: i._id, name: i.name, quantity: i.quantity, price: i.price })),
+                items: cart.map(i => ({ 
+                    name: i.name, 
+                    quantity: i.quantity, 
+                    price: i.price,
+                    dishId: i._id,
+                    image: i.image 
+                })),
                 totalAmount: totalPrice,
-                paymentMethod: "Pay Later",
                 status: "Pending", 
-                restaurantId: realMongoId
+                customerName: "Guest"
             };
 
             const res = await axios.post(`${API_BASE}/orders`, payload);
             
-            if (socketRef.current) socketRef.current.emit("new-order", res.data);
+            if (socketRef.current) {
+                socketRef.current.emit("new-order", res.data);
+            }
             
             setOrderSuccess(true);
             if(navigator.vibrate) navigator.vibrate([100, 50, 100]); 
+
         } catch (err) {
             console.error(err);
-            toast.error("Could not place order. Try again.");
+            toast.error("Connection Error. Please try again.");
             setIsSubmitting(false);
         }
     };
 
+    // ✅ "ADD ITEMS" LOGIC
+    const handleAddMore = () => {
+        clearCart();
+        navigate(`/menu/${restaurantId}?table=${finalTableNum}`); 
+    };
+
     return (
         <div style={styles.container}>
-            {showFeedback && <FeedbackModal onClose={() => setShowFeedback(false)} />}
-
-            {/* ✅ SUCCESS OVERLAY */}
+            
+            {/* ✅ PREMIUM SUCCESS POPUP */}
             {orderSuccess && (
                 <div style={styles.modalOverlay}>
                     <div style={styles.modalCard}>
+                        {/* BRANDING HEADER */}
+                        <div style={styles.popupHeader}>
+                            <h3 style={styles.popupBrand}>
+                                KOVIXA <span style={{color:'#f59e0b'}}>x</span> {restaurantId?.toUpperCase()}
+                            </h3>
+                        </div>
+
                         <div style={styles.successIconBox}>
                             <FaCheckCircle size={50} color="#22c55e" />
                         </div>
-                        <h2 style={styles.modalTitle}>Order Sent!</h2>
-                        <p style={styles.modalSub}>Kitchen has received your order for <b style={{color:'white'}}>Table {finalTableNum}</b></p>
                         
-                        <div style={styles.receiptBox}>
-                            <div style={styles.receiptRow}><span>Order ID</span><span>#{Math.floor(Math.random()*9000)+1000}</span></div>
-                            <div style={styles.receiptRow}><span>Est. Time</span><span>15 Mins</span></div>
+                        <h2 style={styles.modalTitle}>Order Placed!</h2>
+                        <p style={styles.modalSub}>Table {finalTableNum} • Kitchen Notified</p>
+                        
+                        {/* ORDER RECEIPT LIST */}
+                        <div style={styles.receiptList}>
+                            {cart.map((item) => (
+                                <div key={item._id} style={styles.receiptItem}>
+                                    <div style={{display:'flex', gap:8, alignItems:'center'}}>
+                                        <div style={styles.qtySquare}>{item.quantity}</div>
+                                        <span style={styles.receiptName}>{item.name}</span>
+                                    </div>
+                                    <span style={styles.receiptPrice}>₹{item.price * item.quantity}</span>
+                                </div>
+                            ))}
+                            <div style={styles.divider}></div>
+                            <div style={styles.receiptTotal}>
+                                <span>Total Amount</span>
+                                <span style={{color:'#f59e0b'}}>₹{totalPrice}</span>
+                            </div>
                         </div>
 
-                        <div style={{ marginTop: 25, display: 'flex', flexDirection: 'column', gap: 12 }}>
-                            <button onClick={() => { clearCart(); navigate(`/menu/${restaurantId}`); }} style={styles.primaryBtn}>
-                                <FaUtensils /> Order More Items
-                            </button>
-                            <button onClick={() => setShowFeedback(true)} style={styles.secondaryBtn}>
-                                <FaStar color="#f59e0b" /> Rate Experience
-                            </button>
-                        </div>
+                        {/* ADD ITEMS BUTTON */}
+                        <button onClick={handleAddMore} style={styles.addMoreBtn}>
+                            <FaUtensils /> ADD MORE ITEMS
+                        </button>
                     </div>
                 </div>
             )}
@@ -159,8 +136,8 @@ const Cart = ({ cart, customerId, clearCart, removeFromCart, tableNum }) => {
             <div style={styles.header}>
                 <button onClick={() => navigate(-1)} style={styles.backBtn}><FaArrowLeft /></button>
                 <div>
-                    <h1 style={styles.pageTitle}>Your Order</h1>
-                    <p style={styles.pageSub}>{cart.length} Items • Table {finalTableNum || "?"}</p>
+                    <h1 style={styles.pageTitle}>Review Order</h1>
+                    <p style={styles.pageSub}>Table {finalTableNum || "?"}</p>
                 </div>
             </div>
 
@@ -168,10 +145,9 @@ const Cart = ({ cart, customerId, clearCart, removeFromCart, tableNum }) => {
             <div style={styles.listContainer}>
                 {cart.length === 0 ? (
                     <div style={styles.emptyState}>
-                        <div style={styles.emptyIcon}><FaUtensils /></div>
-                        <h3>Hungry?</h3>
-                        <p>You haven't added any food yet.</p>
-                        <button onClick={() => navigate(-1)} style={styles.browseBtn}>Browse Menu</button>
+                        <FaUtensils style={{fontSize: 40, color: '#334155', marginBottom: 20}} />
+                        <h3 style={{color:'#94a3b8'}}>Cart is empty</h3>
+                        <button onClick={() => navigate(-1)} style={styles.browseBtn}>Go to Menu</button>
                     </div>
                 ) : (
                     cart.map(item => (
@@ -183,7 +159,7 @@ const Cart = ({ cart, customerId, clearCart, removeFromCart, tableNum }) => {
                                     <span style={styles.itemPrice}>₹{item.price * item.quantity}</span>
                                 </div>
                             </div>
-                            <button onClick={() => { if(navigator.vibrate) navigator.vibrate(20); removeFromCart(item._id); }} style={styles.trashBtn}>
+                            <button onClick={() => removeFromCart(item._id)} style={styles.trashBtn}>
                                 <FaTrash size={14} />
                             </button>
                         </div>
@@ -191,17 +167,17 @@ const Cart = ({ cart, customerId, clearCart, removeFromCart, tableNum }) => {
                 )}
             </div>
 
-            {/* 💰 BOTTOM FIXED FOOTER (Mobile Optimized) */}
+            {/* 💰 FOOTER */}
             {cart.length > 0 && (
                 <div style={styles.footerWrapper}>
                     <div style={styles.footerContent}>
                         <div style={styles.billRow}>
-                            <span style={{color:'#94a3b8'}}>Grand Total</span>
+                            <span style={{color:'#94a3b8'}}>Total to Pay</span>
                             <span style={{fontWeight:'800', fontSize:18, color:'#f59e0b'}}>₹{totalPrice}</span>
                         </div>
                         
                         <button onClick={handlePlaceOrder} disabled={isSubmitting} style={styles.placeOrderBtn}>
-                            {isSubmitting ? "SENDING..." : <>PLACE ORDER <FaPaperPlane /></>}
+                            {isSubmitting ? "SENDING..." : <>CONFIRM ORDER <FaPaperPlane /></>}
                         </button>
                     </div>
                 </div>
@@ -210,10 +186,9 @@ const Cart = ({ cart, customerId, clearCart, removeFromCart, tableNum }) => {
     );
 };
 
-// 🎨 "MIDNIGHT GLASS" THEME (Mobile Optimized)
+// 🎨 DARK PREMIUM THEME
 const styles = {
-    // ✅ Use 100dvh for mobile browsers
-    container: { minHeight: '100dvh', background: '#020617', color: 'white', paddingBottom: '140px', fontFamily: "'Plus Jakarta Sans', sans-serif" },
+    container: { minHeight: '100vh', background: '#020617', color: 'white', paddingBottom: '140px', fontFamily: "'Plus Jakarta Sans', sans-serif" },
     
     // Header
     header: { display: 'flex', alignItems: 'center', gap: 20, padding: '20px', background: 'rgba(15, 23, 42, 0.95)', backdropFilter: 'blur(12px)', position: 'sticky', top: 0, zIndex: 10, borderBottom: '1px solid #1e293b' },
@@ -231,50 +206,41 @@ const styles = {
     itemPrice: { color: '#f59e0b', fontWeight: '700', fontSize: 14 },
     trashBtn: { background: 'rgba(239, 68, 68, 0.1)', border: 'none', color: '#ef4444', width: 32, height: 32, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' },
 
-    // Empty State
-    emptyState: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', marginTop: 80, opacity: 0.7 },
-    emptyIcon: { fontSize: 40, color: '#334155', marginBottom: 20 },
-    browseBtn: { marginTop: 20, background: '#f59e0b', border: 'none', padding: '12px 24px', borderRadius: 12, color: '#000', fontWeight: '800', cursor: 'pointer' },
-
-    // ✅ FIXED FOOTER (Key Fix for Mobile)
+    // Footer
     footerWrapper: { 
-        position: 'fixed', 
-        bottom: 0, 
-        left: 0, 
-        right: 0, 
-        background: 'rgba(2, 6, 23, 0.95)', // Semi-transparent background
-        backdropFilter: 'blur(10px)',
-        borderTop: '1px solid #1e293b', 
-        zIndex: 100,
-        paddingBottom: 'env(safe-area-inset-bottom)', // Handles iPhone Notch Area
+        position: 'fixed', bottom: 0, left: 0, right: 0, 
+        background: 'rgba(2, 6, 23, 0.95)', backdropFilter: 'blur(10px)',
+        borderTop: '1px solid #1e293b', zIndex: 100,
+        paddingBottom: 'env(safe-area-inset-bottom)' 
     },
-    footerContent: {
-        padding: '20px',
-        maxWidth: '600px', // Prevents it from getting too wide on tablets
-        margin: '0 auto'
-    },
+    footerContent: { padding: '20px', maxWidth: '600px', margin: '0 auto' },
     billRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15, fontSize: 14 },
-    
-    placeOrderBtn: { width: '100%', padding: '16px', background: 'linear-gradient(135deg, #f59e0b, #d97706)', color: 'white', border: 'none', borderRadius: 14, fontWeight: '800', fontSize: 16, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 10, boxShadow: '0 4px 15px rgba(245, 158, 11, 0.4)', letterSpacing: 0.5, cursor:'pointer' },
+    placeOrderBtn: { width: '100%', padding: '16px', background: 'linear-gradient(135deg, #f59e0b, #d97706)', color: 'white', border: 'none', borderRadius: 14, fontWeight: '800', fontSize: 16, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 10, cursor:'pointer' },
 
     // Modal
-    modalOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.9)', backdropFilter: 'blur(5px)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 },
-    modalCard: { background: '#0f172a', padding: '30px', borderRadius: '24px', textAlign: 'center', border: '1px solid #1e293b', width: '100%', maxWidth: '360px', position: 'relative', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' },
-    closeBtn: { position: 'absolute', right: 20, top: 20, background: 'none', border: 'none', color: '#64748b', cursor: 'pointer' },
-    successIconBox: { width: 80, height: 80, background: 'rgba(34, 197, 94, 0.1)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' },
-    modalTitle: { fontSize: 24, fontWeight: '800', margin: '0 0 10px 0', color: 'white' },
-    modalSub: { color: '#94a3b8', fontSize: 14, margin: 0 },
-    receiptBox: { background: '#1e293b', borderRadius: 12, padding: 15, marginTop: 20 },
-    receiptRow: { display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#cbd5e1', marginBottom: 5 },
+    modalOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.95)', backdropFilter: 'blur(10px)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 },
+    modalCard: { background: '#0f172a', borderRadius: '24px', textAlign: 'center', border: '1px solid #1e293b', width: '100%', maxWidth: '360px', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.8)' },
     
-    primaryBtn: { background: '#3b82f6', color: 'white', border: 'none', padding: '14px', borderRadius: 12, fontWeight: '700', width: '100%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 },
-    secondaryBtn: { background: 'transparent', border: '1px solid #334155', color: '#cbd5e1', padding: '14px', borderRadius: 12, fontWeight: '700', width: '100%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 },
+    popupHeader: { background: '#1e293b', padding: '15px', borderBottom: '1px solid #334155' },
+    popupBrand: { margin: 0, fontSize: 14, fontWeight: '800', letterSpacing: 1, color: '#e2e8f0' },
+    
+    successIconBox: { marginTop: 25, marginBottom: 15 },
+    modalTitle: { fontSize: 24, fontWeight: '800', margin: '0 0 5px 0', color: 'white' },
+    modalSub: { color: '#94a3b8', fontSize: 13, margin: 0 },
 
-    // Feedback
-    iconCircle: { width: 50, height: 50, background: 'rgba(245, 158, 11, 0.1)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto' },
-    starRow: { display: 'flex', justifyContent: 'center', gap: 8, marginBottom: 20 },
-    textArea: { width: '100%', background: '#1e293b', border: '1px solid #334155', color: 'white', borderRadius: 12, padding: 15, marginBottom: 20, fontSize: 14, minHeight: 80, outline: 'none' },
-    submitBtn: { background: '#22c55e', color: '#020617', fontWeight: '800', border: 'none', padding: '14px', borderRadius: 12, width: '100%', cursor: 'pointer' }
+    receiptList: { padding: '20px', maxHeight: '200px', overflowY: 'auto' },
+    receiptItem: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, fontSize: 14 },
+    qtySquare: { background: '#334155', color: '#fff', width: 20, height: 20, borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 'bold' },
+    receiptName: { color: '#cbd5e1' },
+    receiptPrice: { color: '#fff', fontWeight: '600' },
+    divider: { height: 1, background: '#334155', margin: '15px 0' },
+    receiptTotal: { display: 'flex', justifyContent: 'space-between', fontSize: 16, fontWeight: '800' },
+
+    addMoreBtn: { width: '100%', padding: '18px', background: '#3b82f6', color: 'white', border: 'none', fontWeight: '800', fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 },
+
+    // Empty State
+    emptyState: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', marginTop: 80 },
+    browseBtn: { marginTop: 20, background: '#f59e0b', border: 'none', padding: '12px 24px', borderRadius: 12, color: '#000', fontWeight: '800' }
 };
 
 export default Cart;
