@@ -63,7 +63,6 @@ const RestaurantAdmin = () => {
 
     // --- 2. DATA FETCHING (POLLING) ---
     const refreshData = useCallback(async (manualId) => {
-        // Remove strict navigator.onLine check to allow local testing
         const fetchId = manualId || mongoId || localStorage.getItem(`owner_id_${id}`);
         const token = localStorage.getItem(`owner_token_${id}`); 
         if (!fetchId) return;
@@ -102,7 +101,7 @@ const RestaurantAdmin = () => {
 
         const interval = setInterval(() => {
             if(isAuthenticated) refreshData();
-        }, 10000); 
+        }, 5000); // Poll every 5 seconds for faster updates
         return () => clearInterval(interval);
     }, [id, refreshData, isAuthenticated]);
 
@@ -194,9 +193,8 @@ const RestaurantAdmin = () => {
         } catch (err) { toast.error("Failed"); }
     };
 
-    // --- 7. PRINTER (Dual Machine Logic) ---
+    // --- 7. PRINTER & CLEAR ---
     
-    // ✅ KITCHEN PRINTER (Big Table Number)
     const printKOT = (order) => {
         const win = window.open('', '', 'width=300,height=600');
         if (!win) return toast.error("Allow Popups!");
@@ -217,7 +215,6 @@ const RestaurantAdmin = () => {
         setTimeout(() => { win.focus(); win.print(); win.close(); }, 500);
     };
 
-    // ✅ BILL PRINTER (Consolidated)
     const printBill = (tableNum, orders) => {
         const allItems = []; 
         let total = 0;
@@ -283,96 +280,100 @@ const RestaurantAdmin = () => {
         <div className="admin-container">
             <style>{styles}</style>
             <div className="max-w-wrapper">
-                <header className="app-header">
-                    <div><h1 className="shop-title">{restaurantName}</h1><span className="badge-pro">ADMIN</span></div>
-                    <button onClick={() => {localStorage.removeItem(`owner_token_${id}`); window.location.reload();}} className="btn-glass danger"><FaSignOutAlt/> LOGOUT</button>
-                </header>
+                
+                {/* 🏗️ STICKY HEADER - Always Visible */}
+                <div className="sticky-header">
+                    <header className="app-header">
+                        <div><h1 className="shop-title">{restaurantName}</h1><span className="badge-pro">ADMIN</span></div>
+                        <button onClick={() => {localStorage.removeItem(`owner_token_${id}`); window.location.reload();}} className="btn-glass danger"><FaSignOutAlt/> LOGOUT</button>
+                    </header>
 
-                <div className="nav-grid">
-                    <button onClick={() => setActiveTab("orders")} className={`nav-btn ${activeTab === "orders" ? 'active' : ''}`}><FaFire size={24} /> <span>Tables</span></button>
-                    <button onClick={() => setActiveTab("menu")} className={`nav-btn ${activeTab === "menu" ? 'active' : ''}`}><FaUtensils size={24} /> <span>Menu</span></button>
-                    <button onClick={() => setActiveTab("tools")} className={`nav-btn ${activeTab === "tools" ? 'active' : ''}`}><FaQrcode size={24} /> <span>QR</span></button>
-                    <button onClick={() => setActiveTab("revenue")} className={`nav-btn ${activeTab === "revenue" ? 'active' : ''}`}><FaChartLine size={24} /> <span>Stats</span></button>
+                    {/* TABS */}
+                    <div className="nav-grid">
+                        <button onClick={() => setActiveTab("orders")} className={`nav-btn ${activeTab === "orders" ? 'active' : ''}`}><FaFire size={24} /> <span>Tables</span></button>
+                        <button onClick={() => setActiveTab("menu")} className={`nav-btn ${activeTab === "menu" ? 'active' : ''}`}><FaUtensils size={24} /> <span>Menu</span></button>
+                        <button onClick={() => setActiveTab("tools")} className={`nav-btn ${activeTab === "tools" ? 'active' : ''}`}><FaQrcode size={24} /> <span>QR</span></button>
+                        <button onClick={() => setActiveTab("revenue")} className={`nav-btn ${activeTab === "revenue" ? 'active' : ''}`}><FaChartLine size={24} /> <span>Stats</span></button>
+                    </div>
                 </div>
 
-                {/* TABLES */}
-                {activeTab === "orders" && (
-                    <div className="table-grid">
-                        {Object.values(tableData).map((table) => (
-                            <div key={table.tableNum} onClick={() => setSelectedTable(table)} className={`table-box ${table.status === 'Occupied' ? 'occupied' : 'free'}`}>
-                                <div className="t-num">{table.tableNum}</div>
-                                <div className="t-status">
-                                    {table.status === 'Occupied' ? (
-                                        <>
-                                            <div className="t-amt">₹{table.totalAmount}</div>
-                                            {table.orders.length > 0 && <span className="badge-new">{table.orders.length}</span>}
-                                        </>
-                                    ) : "Empty"}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
-
-                {/* MENU */}
-                {activeTab === "menu" && (
-                    <div className="menu-layout">
-                        <div className="glass-card">
-                            <h3 className="section-title"><FaPlus/> ADD ITEM</h3>
-                            <input className="input-dark" placeholder="Name" value={newItem.name} onChange={e=>setNewItem({...newItem,name:e.target.value})}/>
-                            <div className="grid-2">
-                                <input type="number" className="input-dark" placeholder="Price" value={newItem.price} onChange={e=>setNewItem({...newItem,price:e.target.value})}/>
-                                <input className="input-dark" placeholder="Image URL" value={newItem.image} onChange={e=>setNewItem({...newItem,image:e.target.value})}/>
-                            </div>
-                            <select className="input-dark" value={isCustomCategory?"custom":newItem.category} onChange={(e)=>{if(e.target.value==="custom"){setIsCustomCategory(true);setNewItem({...newItem,category:""});}else{setIsCustomCategory(false);setNewItem({...newItem,category:e.target.value});}}}>
-                                {CATEGORY_LIST.map((cat,i)=><option key={i} value={cat}>{cat}</option>)}
-                                <option value="custom">+ Custom</option>
-                            </select>
-                            {isCustomCategory && <input className="input-dark" placeholder="Category" value={customCategory} onChange={e=>{setCustomCategory(e.target.value);setNewItem({...newItem,category:e.target.value})}}/>}
-                            <button onClick={handleAddItem} className="btn-primary">SAVE</button>
-                        </div>
-                        <div className="glass-card scrollable">
-                            <h3 className="section-title">MENU ({dishes.length})</h3>
-                            {dishes.map(dish => (
-                                <div key={dish._id} className="dish-item">
-                                    <div style={{display:'flex',gap:12,alignItems:'center'}}>
-                                        <img src={dish.image || "https://placehold.co/50"} style={{width:40,height:40,borderRadius:8,objectFit:'cover'}} alt=""/>
-                                        <div><div style={{fontWeight:700}}>{dish.name}</div><div style={{color:'#3b82f6'}}>₹{dish.price}</div></div>
+                {/* 📜 SCROLLABLE CONTENT */}
+                <div className="content-area">
+                    {activeTab === "orders" && (
+                        <div className="table-grid">
+                            {Object.values(tableData).map((table) => (
+                                <div key={table.tableNum} onClick={() => setSelectedTable(table)} className={`table-box ${table.status === 'Occupied' ? 'occupied' : 'free'}`}>
+                                    <div className="t-num">{table.tableNum}</div>
+                                    <div className="t-status">
+                                        {table.status === 'Occupied' ? (
+                                            <>
+                                                <div className="t-amt">₹{table.totalAmount}</div>
+                                                {table.orders.length > 0 && <span className="badge-new">{table.orders.length}</span>}
+                                            </>
+                                        ) : "Empty"}
                                     </div>
-                                    <button onClick={()=>handleDeleteDish(dish._id)} className="btn-icon-danger"><FaTrash/></button>
                                 </div>
                             ))}
                         </div>
-                    </div>
-                )}
+                    )}
 
-                {/* TOOLS */}
-                {activeTab === "tools" && (
-                    <div className="center-box">
-                        <div className="glass-card" style={{width:'100%', maxWidth:'400px', textAlign:'center'}}>
-                            <FaQrcode size={60} color="#3b82f6" style={{marginBottom:20}}/>
-                            <h2>QR GENERATOR</h2>
-                            <p style={{color:'#94a3b8', marginBottom:20}}>Generate permanent table codes.</p>
-                            <label style={{color:'#94a3b8', display:'block', marginBottom:10}}>Table Count:</label>
-                            <input type="number" className="input-dark" style={{textAlign:'center', fontSize:20}} value={qrCount} onChange={e=>setQrCount(e.target.value)}/>
-                            <button onClick={generateQRPDF} className="btn-primary"><FaFilePdf/> DOWNLOAD PDF</button>
+                    {activeTab === "menu" && (
+                        <div className="menu-layout">
+                            <div className="glass-card">
+                                <h3 className="section-title"><FaPlus/> ADD ITEM</h3>
+                                <input className="input-dark" placeholder="Name" value={newItem.name} onChange={e=>setNewItem({...newItem,name:e.target.value})}/>
+                                <div className="grid-2">
+                                    <input type="number" className="input-dark" placeholder="Price" value={newItem.price} onChange={e=>setNewItem({...newItem,price:e.target.value})}/>
+                                    <input className="input-dark" placeholder="Image URL" value={newItem.image} onChange={e=>setNewItem({...newItem,image:e.target.value})}/>
+                                </div>
+                                <select className="input-dark" value={isCustomCategory?"custom":newItem.category} onChange={(e)=>{if(e.target.value==="custom"){setIsCustomCategory(true);setNewItem({...newItem,category:""});}else{setIsCustomCategory(false);setNewItem({...newItem,category:e.target.value});}}}>
+                                    {CATEGORY_LIST.map((cat,i)=><option key={i} value={cat}>{cat}</option>)}
+                                    <option value="custom">+ Custom</option>
+                                </select>
+                                {isCustomCategory && <input className="input-dark" placeholder="Category" value={customCategory} onChange={e=>{setCustomCategory(e.target.value);setNewItem({...newItem,category:e.target.value})}}/>}
+                                <button onClick={handleAddItem} className="btn-primary">SAVE</button>
+                            </div>
+                            <div className="glass-card">
+                                <h3 className="section-title">MENU ({dishes.length})</h3>
+                                {dishes.map(dish => (
+                                    <div key={dish._id} className="dish-item">
+                                        <div style={{display:'flex',gap:12,alignItems:'center'}}>
+                                            <img src={dish.image || "https://placehold.co/50"} style={{width:40,height:40,borderRadius:8,objectFit:'cover'}} alt=""/>
+                                            <div><div style={{fontWeight:700}}>{dish.name}</div><div style={{color:'#3b82f6'}}>₹{dish.price}</div></div>
+                                        </div>
+                                        <button onClick={()=>handleDeleteDish(dish._id)} className="btn-icon-danger"><FaTrash/></button>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
-                    </div>
-                )}
+                    )}
 
-                {/* REVENUE */}
-                {activeTab === "revenue" && (
-                    <div className="grid-2">
-                        <div className="glass-card center-text">
-                            <h3>Active Revenue</h3>
-                            <h1 style={{color:'#3b82f6', fontSize:36}}>₹{Object.values(tableData).reduce((a, b) => a + b.totalAmount, 0)}</h1>
+                    {activeTab === "tools" && (
+                        <div className="center-box">
+                            <div className="glass-card" style={{width:'100%', maxWidth:'400px', textAlign:'center'}}>
+                                <FaQrcode size={60} color="#3b82f6" style={{marginBottom:20}}/>
+                                <h2>QR GENERATOR</h2>
+                                <p style={{color:'#94a3b8', marginBottom:20}}>Generate permanent table codes.</p>
+                                <label style={{color:'#94a3b8', display:'block', marginBottom:10}}>Table Count:</label>
+                                <input type="number" className="input-dark" style={{textAlign:'center', fontSize:20}} value={qrCount} onChange={e=>setQrCount(e.target.value)}/>
+                                <button onClick={generateQRPDF} className="btn-primary"><FaFilePdf/> DOWNLOAD PDF</button>
+                            </div>
                         </div>
-                        <div className="glass-card center-text">
-                            <h3>Active Tables</h3>
-                            <h1 style={{color:'#10b981', fontSize:36}}>{Object.values(tableData).filter(t => t.status === 'Occupied').length}</h1>
+                    )}
+
+                    {activeTab === "revenue" && (
+                        <div className="grid-2">
+                            <div className="glass-card center-text">
+                                <h3>Active Revenue</h3>
+                                <h1 style={{color:'#3b82f6', fontSize:36}}>₹{Object.values(tableData).reduce((a, b) => a + b.totalAmount, 0)}</h1>
+                            </div>
+                            <div className="glass-card center-text">
+                                <h3>Active Tables</h3>
+                                <h1 style={{color:'#10b981', fontSize:36}}>{Object.values(tableData).filter(t => t.status === 'Occupied').length}</h1>
+                            </div>
                         </div>
-                    </div>
-                )}
+                    )}
+                </div>
             </div>
 
             {/* MODAL */}
@@ -418,30 +419,51 @@ const RestaurantAdmin = () => {
     );
 };
 
-// --- CSS ---
+// --- CSS (NATIVE SCROLLING FIX) ---
 const styles = `
-.admin-container { min-height: 100dvh; padding: 15px; background: #020617; color: white; font-family: 'Plus Jakarta Sans', sans-serif; padding-bottom: 80px; touch-action: pan-y; }
+/* 1. Global Container - Allows native scroll */
+.admin-container { 
+    min-height: 100vh; 
+    padding: 15px; 
+    background: #020617; 
+    color: white; 
+    font-family: 'Plus Jakarta Sans', sans-serif; 
+    padding-bottom: 80px; 
+    box-sizing: border-box;
+}
+
 .max-w-wrapper { width: 100%; max-width: 1200px; margin: 0 auto; }
 
-.app-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.1); }
-.shop-title { font-size: 22px; font-weight: 800; background: linear-gradient(to right, #60a5fa, #3b82f6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin: 0; }
-.badge-pro { background: rgba(59, 130, 246, 0.1); color: #60a5fa; padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: 700; border: 1px solid rgba(59, 130, 246, 0.2); }
+/* 2. Sticky Header (Keeps Nav visible) */
+.sticky-header {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: #020617; /* Matches background to hide content behind */
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+}
 
-.nav-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 20px; }
-.nav-btn { background: #0f172a; border: 1px solid #1e293b; border-radius: 12px; height: 65px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #64748b; cursor: pointer; transition: 0.2s; }
+.app-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+.shop-title { font-size: 22px; font-weight: 800; background: linear-gradient(to right, #60a5fa, #3b82f6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin: 0; }
+.badge-pro { background: rgba(59, 130, 246, 0.1); color: #60a5fa; padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: 700; border: 1px solid rgba(59, 130, 246, 0.2); margin-left: 8px;}
+
+/* 3. Navigation Buttons */
+.nav-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.nav-btn { background: #0f172a; border: 1px solid #1e293b; border-radius: 12px; height: 60px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #64748b; cursor: pointer; transition: 0.2s; }
 .nav-btn span { font-size: 10px; margin-top: 4px; font-weight: 600; }
 .nav-btn.active { border-color: #3b82f6; color: #60a5fa; background: rgba(37, 99, 235, 0.1); }
 
-/* RESPONSIVE GRID */
-.table-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+/* 4. Table Grid (Mobile: 2 cols, Laptop: 5 cols) */
+.table-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 20px; }
 @media (min-width: 768px) { .table-grid { grid-template-columns: repeat(5, 1fr); gap: 15px; } }
 
-.menu-layout { display: grid; grid-template-columns: 1fr; gap: 20px; }
+.menu-layout { display: grid; grid-template-columns: 1fr; gap: 20px; margin-top: 20px; }
 @media (min-width: 1024px) { .menu-layout { grid-template-columns: 350px 1fr; } }
 
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
-/* COMPONENTS */
+/* Components */
 .table-box { aspect-ratio: 1.1; border-radius: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; border: 1px solid #334155; background: #1e293b; position: relative; }
 .table-box.occupied { border-color: #3b82f6; background: rgba(59, 130, 246, 0.1); }
 .t-num { font-size: 26px; font-weight: 800; }
@@ -451,12 +473,12 @@ const styles = `
 
 .glass-card { background: rgba(30, 41, 59, 0.6); border: 1px solid rgba(255,255,255,0.05); border-radius: 20px; padding: 20px; margin-bottom: 15px; }
 .section-title { font-size: 12px; font-weight: 800; color: #94a3b8; margin-bottom: 15px; display: flex; align-items: center; gap: 8px; }
-.input-dark { width: 100%; background: #0f172a; border: 1px solid #1e293b; padding: 12px; border-radius: 10px; color: white; margin-bottom: 10px; font-size: 14px; }
+.input-dark { width: 100%; background: #0f172a; border: 1px solid #1e293b; padding: 12px; border-radius: 10px; color: white; margin-bottom: 10px; font-size: 14px; box-sizing: border-box; }
 .btn-primary { background: #3b82f6; border: none; color: white; width: 100%; padding: 14px; border-radius: 12px; font-weight: 700; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; }
 .btn-glass { background: rgba(255,255,255,0.05); border: 1px solid #334155; padding: 8px 12px; border-radius: 8px; color: #fff; cursor: pointer; font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
 .btn-glass.danger { color: #ef4444; border-color: rgba(239, 68, 68, 0.3); }
 
-/* MODAL */
+/* Modal */
 .qr-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 1000; backdrop-filter: blur(5px); padding: 15px; }
 .qr-modal { background: #0f172a; width: 100%; max-width: 450px; border-radius: 24px; display: flex; flex-direction: column; max-height: 85vh; border: 1px solid #334155; box-shadow: 0 20px 50px rgba(0,0,0,0.5); }
 .modal-header { padding: 20px; border-bottom: 1px solid #1e293b; display: flex; justify-content: space-between; align-items: center; }
@@ -479,7 +501,6 @@ const styles = `
 .close-btn { background: transparent; border: none; color: #94a3b8; font-size: 20px; cursor: pointer; }
 .dish-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
 .btn-icon-danger { background: rgba(239, 68, 68, 0.1); color: #ef4444; border: none; padding: 8px; border-radius: 8px; cursor: pointer; }
-.scrollable { max-height: 50vh; overflow-y: auto; }
 .spin { animation: spin 1s linear infinite; }
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 `;
