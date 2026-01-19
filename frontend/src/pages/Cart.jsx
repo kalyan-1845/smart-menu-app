@@ -1,9 +1,10 @@
 import React, { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
-import { FaArrowLeft, FaCheckCircle, FaTrash, FaUtensils } from "react-icons/fa";
+import { FaArrowLeft, FaCheckCircle, FaTrash, FaUtensils, FaReceipt } from "react-icons/fa";
 import { toast } from "react-hot-toast";
 
+// ⚠️ CHANGE TO YOUR LIVE SERVER URL
 const API_BASE = "https://smart-menu-app-production.up.railway.app/api";
 
 const Cart = ({ cart, clearCart, removeFromCart, tableNum }) => {
@@ -12,99 +13,121 @@ const Cart = ({ cart, clearCart, removeFromCart, tableNum }) => {
     const [done, setDone] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // Logic: Use prop first, then local storage
-    const finalTable = tableNum || localStorage.getItem("last_table");
+    // ⚡️ READ FROM SESSION STORAGE (Clears on Browser Close)
+    const finalTable = tableNum || sessionStorage.getItem("last_table_scanned") || "Walk-In";
+
     const totalPrice = cart.reduce((a, b) => a + (b.price * b.quantity), 0);
 
     const handleOrder = async () => {
         if (isSubmitting) return;
-        if (!finalTable) return toast.error("Please scan the Table QR again!");
         if (cart.length === 0) return toast.error("Cart is empty");
 
         setIsSubmitting(true);
         try {
-            // 1. Resolve ID (The Bridge)
             const idRes = await axios.get(`${API_BASE}/auth/owner-id/${restaurantId}`);
             
-            // 2. Send Order
             await axios.post(`${API_BASE}/orders`, {
                 restaurantId: idRes.data.id,
                 tableNum: finalTable,
                 items: cart,
                 totalAmount: totalPrice,
-                status: "Pending" // Starts active
+                status: "Pending"
             });
             
             setDone(true);
             clearCart();
         } catch (e) { 
             console.error(e);
-            toast.error("Failed to connect. Try again.");
+            toast.error("Network Error. Try again.");
             setIsSubmitting(false);
         }
     };
 
     if (done) return (
-        <div style={{height:'100vh', background:'#020617', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', color:'white', textAlign:'center', padding:20}}>
-            <FaCheckCircle size={80} color="#22c55e" />
-            <h1 style={{marginTop:20, fontSize:28}}>Order Sent!</h1>
-            <p style={{color:'#94a3b8', fontSize:16, marginTop:10}}>
-                Table {finalTable} • Kitchen Notified<br/>
-                Sit back and relax!
+        <div style={{height:'100vh', background:'#020617', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', color:'white', textAlign:'center', padding:20, fontFamily:"'Plus Jakarta Sans', sans-serif"}}>
+            <div style={{width:100, height:100, background:'rgba(34, 197, 94, 0.1)', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', marginBottom:25, border:'1px solid rgba(34, 197, 94, 0.3)'}}>
+                <FaCheckCircle size={50} color="#22c55e" />
+            </div>
+            <h1 style={{margin:0, fontSize:32, fontWeight:'800', letterSpacing:'-1px'}}>Order Sent!</h1>
+            <p style={{color:'#94a3b8', fontSize:16, marginTop:15, lineHeight:'1.5'}}>
+                <span style={{color:'#3b82f6', fontWeight:'bold', background:'rgba(59, 130, 246, 0.1)', padding:'4px 12px', borderRadius:20}}>Table {finalTable}</span>
+                <br/><br/>
+                Your order has been sent to the kitchen.<br/>Sit back and relax!
             </p>
-            <div style={{marginTop:40, width:'100%', maxWidth:300}}>
-                <button onClick={() => navigate(-1)} style={{width:'100%', padding:15, background:'#3b82f6', color:'white', border:'none', borderRadius:12, fontWeight:'bold', fontSize:16}}>
-                    ADD MORE ITEMS
+            <div style={{marginTop:50, width:'100%', maxWidth:300}}>
+                <button onClick={() => navigate(-1)} style={{width:'100%', padding:18, background:'#3b82f6', color:'white', border:'none', borderRadius:16, fontWeight:'bold', fontSize:16, cursor:'pointer', boxShadow:'0 10px 30px rgba(59, 130, 246, 0.4)'}}>
+                    PLACE NEW ORDER
                 </button>
             </div>
         </div>
     );
 
     return (
-        <div style={{minHeight:'100vh', background:'#020617', color:'white', paddingBottom:100, fontFamily:"'Plus Jakarta Sans', sans-serif"}}>
+        <div style={{minHeight:'100vh', background:'#020617', color:'white', paddingBottom:140, fontFamily:"'Plus Jakarta Sans', sans-serif"}}>
+            
             {/* Header */}
-            <div style={{display:'flex', alignItems:'center', gap:15, padding:20, background:'rgba(2,6,23,0.95)', borderBottom:'1px solid #1e293b', position:'sticky', top:0, zIndex:10}}>
-                <FaArrowLeft onClick={() => navigate(-1)} size={20} style={{cursor:'pointer'}}/>
-                <div>
-                    <h2 style={{margin:0, fontSize:18}}>Your Cart</h2>
-                    <div style={{fontSize:12, color:'#94a3b8'}}>Table {finalTable || "?"}</div>
+            <div style={{display:'flex', alignItems:'center', gap:15, padding:'20px', background:'rgba(2,6,23,0.9)', borderBottom:'1px solid rgba(59, 130, 246, 0.2)', position:'sticky', top:0, zIndex:10, backdropFilter:'blur(10px)'}}>
+                <div onClick={() => navigate(-1)} style={{padding:10, background:'rgba(255,255,255,0.05)', borderRadius:12, cursor:'pointer'}}>
+                    <FaArrowLeft size={16} color="white"/>
+                </div>
+                <div style={{flex:1}}>
+                    <h2 style={{margin:0, fontSize:18, fontWeight:'700'}}>Your Cart</h2>
+                    <div style={{fontSize:12, color:'#94a3b8'}}>
+                        {finalTable === "Walk-In" ? "Counter Order" : `Ordering for Table ${finalTable}`}
+                    </div>
                 </div>
             </div>
             
             {/* Items */}
             <div style={{padding:20, display:'flex', flexDirection:'column', gap:15}}>
                 {cart.length === 0 ? (
-                    <div style={{textAlign:'center', marginTop:100, color:'#64748b'}}>
-                        <FaUtensils size={40} style={{marginBottom:15, opacity:0.5}}/>
-                        <h3>Hungry?</h3>
-                        <p>Add some tasty food from the menu!</p>
-                        <button onClick={() => navigate(-1)} style={{marginTop:20, background:'#f59e0b', color:'black', border:'none', padding:'10px 20px', borderRadius:8, fontWeight:'bold'}}>Go to Menu</button>
+                    <div style={{textAlign:'center', marginTop:80, color:'#64748b'}}>
+                        <div style={{width:80, height:80, background:'rgba(255,255,255,0.03)', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 20px'}}>
+                            <FaUtensils size={30} style={{opacity:0.5}}/>
+                        </div>
+                        <h3 style={{color:'#e2e8f0', margin:0}}>Cart is empty</h3>
+                        <p style={{fontSize:14, marginTop:8}}>Add some delicious items to get started.</p>
+                        <button onClick={() => navigate(-1)} style={{marginTop:25, background:'#3b82f6', color:'white', border:'none', padding:'14px 30px', borderRadius:12, fontWeight:'bold', cursor:'pointer'}}>Browse Menu</button>
                     </div>
                 ) : (
                     cart.map(item => (
-                        <div key={item._id} style={{display:'flex', justifyContent:'space-between', alignItems:'center', background:'#1e293b', padding:15, borderRadius:12, border:'1px solid #334155'}}>
-                            <div>
-                                <div style={{fontWeight:'bold', fontSize:15}}>{item.name}</div>
-                                <div style={{fontSize:12, color:'#94a3b8', marginTop:4}}>x{item.quantity}</div>
+                        <div key={item._id} style={{display:'flex', justifyContent:'space-between', alignItems:'center', background:'rgba(30, 41, 59, 0.4)', padding:15, borderRadius:16, border:'1px solid rgba(255,255,255,0.05)'}}>
+                            <div style={{flex:1}}>
+                                <div style={{fontWeight:'700', fontSize:16, color:'white', marginBottom:4}}>{item.name}</div>
+                                <div style={{fontSize:13, color:'#94a3b8'}}>₹{item.price} × {item.quantity}</div>
                             </div>
                             <div style={{display:'flex', alignItems:'center', gap:15}}>
-                                <div style={{fontWeight:'bold', color:'#f59e0b'}}>₹{item.price * item.quantity}</div>
-                                <button onClick={() => removeFromCart(item._id)} style={{background:'rgba(239,68,68,0.1)', color:'#ef4444', border:'none', width:30, height:30, borderRadius:8, display:'flex', alignItems:'center', justifyContent:'center'}}><FaTrash size={12}/></button>
+                                <div style={{fontWeight:'800', color:'#3b82f6', fontSize:16}}>₹{item.price * item.quantity}</div>
+                                <button onClick={() => removeFromCart(item._id)} style={{background:'rgba(239,68,68,0.1)', color:'#ef4444', border:'none', width:36, height:36, borderRadius:10, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer'}}>
+                                    <FaTrash size={14}/>
+                                </button>
                             </div>
                         </div>
                     ))
                 )}
             </div>
 
-            {/* Footer */}
+            {/* Checkout Footer */}
             {cart.length > 0 && (
-                <div style={{position:'fixed', bottom:0, left:0, right:0, background:'#0f172a', padding:20, borderTop:'1px solid #334155'}}>
-                    <div style={{display:'flex', justifyContent:'space-between', marginBottom:15, fontSize:16}}>
-                        <span style={{color:'#94a3b8'}}>Total to Pay</span>
-                        <span style={{fontWeight:'bold', color:'white'}}>₹{totalPrice}</span>
+                <div style={{position:'fixed', bottom:0, left:0, right:0, background:'#020617', padding:'20px 25px 30px', borderTop:'1px solid rgba(59, 130, 246, 0.2)', zIndex:100}}>
+                    <div style={{display:'flex', justifyContent:'space-between', marginBottom:20, alignItems:'flex-end'}}>
+                        <span style={{color:'#94a3b8', fontSize:14}}>Total to Pay</span>
+                        <span style={{fontWeight:'800', color:'white', fontSize:24}}>₹{totalPrice}</span>
                     </div>
-                    <button onClick={handleOrder} disabled={isSubmitting} style={{width:'100%', padding:16, background: isSubmitting ? '#64748b' : '#f59e0b', color: isSubmitting ? 'white' : 'black', border:'none', borderRadius:12, fontWeight:'bold', fontSize:16}}>
-                        {isSubmitting ? "SENDING..." : "CONFIRM ORDER"}
+                    <button onClick={handleOrder} disabled={isSubmitting} style={{
+                        width:'100%', 
+                        padding:18, 
+                        background: isSubmitting ? '#475569' : '#3b82f6', 
+                        color: 'white', 
+                        border:'none', 
+                        borderRadius:18, 
+                        fontWeight:'800', 
+                        fontSize:16, 
+                        cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                        display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 10,
+                        boxShadow: '0 10px 40px rgba(59, 130, 246, 0.3)'
+                    }}>
+                        {isSubmitting ? "SENDING ORDER..." : <><FaReceipt /> CONFIRM ORDER</>}
                     </button>
                 </div>
             )}
