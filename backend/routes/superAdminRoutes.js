@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import webpush from 'web-push'; 
 import mongoose from 'mongoose';
 import os from 'os'; 
+import bcrypt from 'bcryptjs'; // ✅ Needed for manual hashing
 import Owner from '../models/Owner.js';
 import Order from '../models/Order.js'; 
 import Settings from '../models/Settings.js'; 
@@ -108,7 +109,6 @@ router.get('/ceo-sync', protect, async (req, res) => {
                 monthlyRevenue: monthRev[0]?.total || 0,
                 rating: ratingStats[0]?.avg?.toFixed(1) || "N/A",
                 reviewCount: ratingStats[0]?.count || 0,
-                // ✅ Ensure phoneNumber is passed (defaults to empty string if missing)
                 phoneNumber: c.phoneNumber || "", 
                 lastActiveStr: daysSinceActive === 0 ? "Today" : `${daysSinceActive}d ago`
             };
@@ -184,9 +184,10 @@ router.put('/client/:id/extend', protect, async (req, res) => {
         if (!user) return res.status(404).json({ message: "User not found" });
 
         let baseDate = new Date(user.trialEndsAt);
+        if (isNaN(baseDate)) baseDate = new Date(); // Fix invalid date
         if (baseDate < new Date()) baseDate = new Date(); 
 
-        const newExpiry = new Date(baseDate.setDate(baseDate.getDate() + parseInt(days)));
+        const newExpiry = new Date(baseDate.getTime() + (parseInt(days) * 24 * 60 * 60 * 1000));
         
         if (days < -100) {
              const yesterday = new Date();
@@ -201,24 +202,36 @@ router.put('/client/:id/extend', protect, async (req, res) => {
     } catch (e) { res.status(500).json({ message: "Time Warp Failed" }); }
 });
 
-// 8. CRUD
+// 8. CRUD & CONTROLS
 router.get('/ghost-login/:id', protect, async (req, res) => {
     const user = await Owner.findById(req.params.id);
-    const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: '1h' });
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '1h' }); // Use Owner Secret
     res.json({ token, ownerId: user._id, username: user.username });
 });
 
 router.put('/control/:id', protect, async (req, res) => {
-    await Owner.findByIdAndUpdate(req.params.id, { $set: { [req.body.field]: req.body.value } });
+    // ✅ Fix: Handle nested updates correctly (e.g. "settings.menuActive")
+    const update = {};
+    update[req.body.field] = req.body.value;
+    await Owner.findByIdAndUpdate(req.params.id, { $set: update });
     res.json({ success: true });
 });
 
 router.put('/client/:id', protect, async (req, res) => {
-    const { password, ...data } = req.body;
-    if (password) data.password = password; // Only update password if sent
-    // ✅ This handles updating 'phoneNumber', 'restaurantName', etc.
-    await Owner.findByIdAndUpdate(req.params.id, data);
-    res.json({ success: true });
+    try {
+        const { password, ...data } = req.body;
+        
+        // ✅ Fix: Manually hash password because findByIdAndUpdate skips hooks
+        if (password) {
+            const salt = await bcrypt.genSalt(10);
+            data.password = await bcrypt.hash(password, salt);
+        }
+
+        await Owner.findByIdAndUpdate(req.params.id, data);
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ success: false, message: "Update failed" });
+    }
 });
 
 router.delete('/client/:id', protect, async (req, res) => {

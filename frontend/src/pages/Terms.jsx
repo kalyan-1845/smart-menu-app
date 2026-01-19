@@ -15,7 +15,7 @@ const Terms = () => {
         body { margin: 0; background: #020617; }
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: #020617; }
-        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb { background: #3b82f6; border-radius: 10px; }
       `}</style>
 
       {/* HEADER */}
@@ -32,7 +32,7 @@ const Terms = () => {
       {/* CONTENT */}
       <div style={styles.content}>
         
-        {/* SECTION 1: TERMS */}
+        {/* SECTION 1: TERMS (Mandatory for Liability) */}
         <section style={styles.card}>
           <div style={styles.cardHeader}>
             <FaGavel color="#f97316" size={28} />
@@ -44,53 +44,53 @@ const Terms = () => {
           <div style={styles.divider}></div>
           <ul style={styles.list}>
             <li>
-              <strong>1. License Grant:</strong> Kovixa grants you a revocable, non-exclusive, non-transferable license to use the "Smart Menu System" for your restaurant operations.
+              <strong>1. License Grant:</strong> Kovixa grants you a revocable, non-exclusive license to use the "Smart Menu System" for your restaurant operations.
             </li>
             <li>
-              <strong>2. Account Responsibility:</strong> You are responsible for maintaining the confidentiality of your Master Key and Restaurant ID. Any activity occurring under your account is your responsibility.
+              <strong>2. Account Responsibility:</strong> You are responsible for maintaining the confidentiality of your Master Key and Restaurant ID. 
             </li>
             <li>
-              <strong>3. Acceptable Use:</strong> You agree not to misuse the platform to host illegal content, spam, or malicious software. Violations will result in immediate termination.
+              <strong>3. Acceptable Use:</strong> You agree not to misuse the platform to host illegal content or malicious software. Violations result in immediate termination.
             </li>
             <li>
-              <strong>4. Service Availability:</strong> While we aim for 99.9% uptime, Kovixa is not liable for business losses due to internet outages, server maintenance, or force majeure events.
+              <strong>4. Liability Disclaimer:</strong> Kovixa is not liable for business losses due to internet outages, local hardware failure, or force majeure events.
             </li>
           </ul>
         </section>
 
-        {/* SECTION 2: PRIVACY */}
+        {/* SECTION 2: PRIVACY (Mandatory for Data Laws) */}
         <section style={styles.card}>
           <div style={styles.cardHeader}>
             <FaShieldAlt color="#3b82f6" size={28} />
             <div>
               <h2 style={styles.heading}>Privacy Policy</h2>
-              <p style={styles.subHeading}>How we handle your data</p>
+              <p style={styles.subHeading}>Data Handling & Ownership</p>
             </div>
           </div>
           <div style={styles.divider}></div>
           <ul style={styles.list}>
             <li>
-              <strong>1. Data Ownership:</strong> All menu data, prices, and images uploaded by you remain your intellectual property.
+              <strong>1. Data Ownership:</strong> All menu data, prices, and food images uploaded by you remain your intellectual property.
             </li>
             <li>
-              <strong>2. Customer Data:</strong> We do not sell your customer's order history to third parties. Data is used solely to facilitate order processing and kitchen display logic.
+              <strong>2. Customer Data:</strong> We do not sell your customer's order history to third parties. Data is used solely for order processing.
             </li>
             <li>
-              <strong>3. Auto-Purge System:</strong> To maintain system speed, individual order logs (PII) are automatically archived or purged every 30-60 days. Please download your revenue reports monthly.
+              <strong>3. Auto-Purge:</strong> To ensure system speed, individual order logs (PII) are automatically archived or purged every 60 days.
             </li>
             <li>
-              <strong>4. Local Storage:</strong> This application uses browser local storage to maintain session states (e.g., Cart items, Login tokens) for a seamless experience.
+              <strong>4. Local Storage:</strong> This app uses browser storage for essential functions (Cart state, Login sessions).
             </li>
           </ul>
         </section>
 
-        {/* SECTION 3: SECURITY */}
+        {/* SECTION 3: SECURITY (Mandatory for Trust) */}
         <section style={styles.card}>
           <div style={styles.cardHeader}>
             <FaLock color="#22c55e" size={28} />
             <div>
               <h2 style={styles.heading}>Security Measures</h2>
-              <p style={styles.subHeading}>Bank-grade encryption standards</p>
+              <p style={styles.subHeading}>Encryption Standards</p>
             </div>
           </div>
           <div style={styles.divider}></div>
@@ -111,7 +111,7 @@ const Terms = () => {
   );
 };
 
-// 🎨 "MIDNIGHT GLASS" STYLES
+// 🎨 PREMIUM BLUE THEME STYLES
 const styles = {
   container: {
     minHeight: "100vh",
@@ -123,7 +123,7 @@ const styles = {
     paddingBottom: "80px"
   },
   header: {
-    background: "rgba(15, 23, 42, 0.8)",
+    background: "rgba(2, 6, 23, 0.8)",
     backdropFilter: "blur(12px)",
     borderBottom: "1px solid #1e293b",
     position: "sticky",

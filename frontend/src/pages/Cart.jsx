@@ -78,7 +78,7 @@ const Cart = ({ cart, clearCart, removeFromCart, tableNum }) => {
                 </div>
             </div>
             
-            {/* Items */}
+            {/* Items List */}
             <div style={{padding:20, display:'flex', flexDirection:'column', gap:15}}>
                 {cart.length === 0 ? (
                     <div style={{textAlign:'center', marginTop:80, color:'#64748b'}}>
@@ -91,15 +91,23 @@ const Cart = ({ cart, clearCart, removeFromCart, tableNum }) => {
                     </div>
                 ) : (
                     cart.map(item => (
-                        <div key={item._id} style={{display:'flex', justifyContent:'space-between', alignItems:'center', background:'rgba(30, 41, 59, 0.4)', padding:15, borderRadius:16, border:'1px solid rgba(255,255,255,0.05)'}}>
-                            <div style={{flex:1}}>
-                                <div style={{fontWeight:'700', fontSize:16, color:'white', marginBottom:4}}>{item.name}</div>
-                                <div style={{fontSize:13, color:'#94a3b8'}}>₹{item.price} × {item.quantity}</div>
+                        <div key={item._id} style={{display:'flex', justifyContent:'space-between', alignItems:'center', background:'rgba(30, 41, 59, 0.4)', padding:'18px', borderRadius:18, border:'1px solid rgba(255,255,255,0.05)'}}>
+                            <div style={{flex:1, paddingRight:10}}>
+                                {/* ⚡️ BIGGER FONT HERE */}
+                                <div style={{fontWeight:'800', fontSize:'19px', color:'white', marginBottom:6, lineHeight:'1.3'}}>
+                                    {item.name}
+                                </div>
+                                <div style={{fontSize:14, color:'#94a3b8', fontWeight:500}}>
+                                    ₹{item.price} × {item.quantity}
+                                </div>
                             </div>
+                            
                             <div style={{display:'flex', alignItems:'center', gap:15}}>
-                                <div style={{fontWeight:'800', color:'#3b82f6', fontSize:16}}>₹{item.price * item.quantity}</div>
-                                <button onClick={() => removeFromCart(item._id)} style={{background:'rgba(239,68,68,0.1)', color:'#ef4444', border:'none', width:36, height:36, borderRadius:10, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer'}}>
-                                    <FaTrash size={14}/>
+                                <div style={{fontWeight:'900', color:'#3b82f6', fontSize:18}}>
+                                    ₹{item.price * item.quantity}
+                                </div>
+                                <button onClick={() => removeFromCart(item._id)} style={{background:'rgba(239,68,68,0.1)', color:'#ef4444', border:'none', width:40, height:40, borderRadius:12, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer'}}>
+                                    <FaTrash size={16}/>
                                 </button>
                             </div>
                         </div>
@@ -112,7 +120,7 @@ const Cart = ({ cart, clearCart, removeFromCart, tableNum }) => {
                 <div style={{position:'fixed', bottom:0, left:0, right:0, background:'#020617', padding:'20px 25px 30px', borderTop:'1px solid rgba(59, 130, 246, 0.2)', zIndex:100}}>
                     <div style={{display:'flex', justifyContent:'space-between', marginBottom:20, alignItems:'flex-end'}}>
                         <span style={{color:'#94a3b8', fontSize:14}}>Total to Pay</span>
-                        <span style={{fontWeight:'800', color:'white', fontSize:24}}>₹{totalPrice}</span>
+                        <span style={{fontWeight:'900', color:'white', fontSize:26}}>₹{totalPrice}</span>
                     </div>
                     <button onClick={handleOrder} disabled={isSubmitting} style={{
                         width:'100%', 

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { 
   FaUtensils, FaQrcode, FaArrowRight, FaChartLine, 
-  FaShieldAlt, FaHandshake, FaBoxOpen, FaStar, FaBolt
+  FaHandshake, FaStar, FaBolt
 } from "react-icons/fa";
 
 const LandingPage = () => {
@@ -45,29 +45,29 @@ const LandingPage = () => {
         /* --- NAVBAR --- */
         .navbar {
           display: flex; justify-content: space-between; align-items: center;
-          padding: 20px 40px; position: sticky; top: 0; z-index: 100;
+          padding: 25px 60px; position: sticky; top: 0; z-index: 100;
           backdrop-filter: blur(16px); border-bottom: 1px solid var(--border);
           background: rgba(2, 6, 23, 0.8);
         }
         .brand { 
-            font-size: 26px; font-weight: 800; display: flex; align-items: center; gap: 12px; 
-            color: #fff; text-decoration: none; letter-spacing: -0.5px;
+            font-size: 32px; font-weight: 800; display: flex; align-items: center; gap: 15px; 
+            color: #fff; text-decoration: none; letter-spacing: -1px;
         }
-        .nav-links { display: flex; gap: 30px; align-items: center; }
-        .nav-link { text-decoration: none; color: var(--text-muted); font-weight: 600; font-size: 15px; transition: 0.2s; }
+        .nav-links { display: flex; gap: 40px; align-items: center; }
+        .nav-link { text-decoration: none; color: var(--text-muted); font-weight: 700; font-size: 18px; transition: 0.2s; }
         .nav-link:hover { color: white; }
 
         /* --- BUTTONS --- */
         .btn {
-            padding: 14px 32px; border-radius: 14px; font-weight: 700; font-size: 16px;
-            text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+            padding: 18px 42px; border-radius: 16px; font-weight: 800; font-size: 18px;
+            text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 12px;
             transition: all 0.2s ease; cursor: pointer; border: none; white-space: nowrap;
         }
         .btn-primary {
             background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white;
             box-shadow: 0 8px 25px -5px var(--primary-glow);
         }
-        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 12px 30px -5px var(--primary-glow); }
+        .btn-primary:hover { transform: translateY(-3px); box-shadow: 0 15px 35px -5px var(--primary-glow); }
         .btn-outline {
             background: rgba(255,255,255,0.05); color: white; border: 1px solid var(--border);
         }
@@ -75,54 +75,54 @@ const LandingPage = () => {
 
         /* --- HERO --- */
         .hero {
-            padding: 120px 20px 80px; text-align: center;
-            max-width: 1200px; margin: 0 auto;
+            padding: 160px 20px 100px; text-align: center;
+            max-width: 1400px; margin: 0 auto;
             display: flex; flex-direction: column; align-items: center;
         }
         .trust-badge {
-            display: inline-flex; align-items: center; gap: 8px;
+            display: inline-flex; align-items: center; gap: 10px;
             background: rgba(59, 130, 246, 0.1); color: #60a5fa;
-            padding: 8px 20px; border-radius: 50px; font-size: 14px; font-weight: 700;
-            margin-bottom: 30px; border: 1px solid rgba(59, 130, 246, 0.2);
+            padding: 10px 25px; border-radius: 50px; font-size: 16px; font-weight: 700;
+            margin-bottom: 40px; border: 1px solid rgba(59, 130, 246, 0.2);
         }
         .hero h1 {
-            font-size: 72px; line-height: 1.05; font-weight: 800; letter-spacing: -2px;
+            font-size: 90px; line-height: 1.05; font-weight: 900; letter-spacing: -3px;
             margin-bottom: 30px;
             background: linear-gradient(to right, #fff 20%, #94a3b8 100%);
             -webkit-background-clip: text; -webkit-text-fill-color: transparent;
         }
         .hero p {
-            font-size: 20px; color: var(--text-muted); line-height: 1.6;
-            max-width: 700px; margin-bottom: 50px;
+            font-size: 24px; color: var(--text-muted); line-height: 1.6;
+            max-width: 800px; margin-bottom: 60px; font-weight: 500;
         }
-        .cta-group { display: flex; gap: 20px; }
+        .cta-group { display: flex; gap: 25px; }
 
         /* --- GRID --- */
-        .grid-section { max-width: 1200px; margin: 0 auto 120px; padding: 0 20px; }
-        .section-header { text-align: center; margin-bottom: 60px; }
-        .section-header h2 { font-size: 42px; font-weight: 800; margin-bottom: 15px; }
-        .section-header p { font-size: 18px; color: var(--text-muted); }
+        .grid-section { max-width: 1400px; margin: 0 auto 160px; padding: 0 40px; }
+        .section-header { text-align: center; margin-bottom: 80px; }
+        .section-header h2 { font-size: 56px; font-weight: 800; margin-bottom: 20px; letter-spacing: -1px; }
+        .section-header p { font-size: 22px; color: var(--text-muted); }
 
-        .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px; }
+        .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 40px; }
         .feature-card {
             background: var(--surface); border: 1px solid var(--border);
-            padding: 40px; border-radius: 24px; transition: 0.3s;
+            padding: 50px; border-radius: 30px; transition: 0.3s;
             position: relative; overflow: hidden;
         }
-        .feature-card:hover { border-color: var(--primary); transform: translateY(-5px); }
+        .feature-card:hover { border-color: var(--primary); transform: translateY(-10px); }
         .icon-box {
-            width: 60px; height: 60px; background: rgba(59, 130, 246, 0.1);
-            border-radius: 16px; display: flex; align-items: center; justify-content: center;
-            color: var(--primary); font-size: 28px; margin-bottom: 25px;
+            width: 80px; height: 80px; background: rgba(59, 130, 246, 0.1);
+            border-radius: 20px; display: flex; align-items: center; justify-content: center;
+            color: var(--primary); font-size: 36px; margin-bottom: 30px;
         }
-        .feature-card h3 { font-size: 22px; font-weight: 700; margin-bottom: 12px; }
-        .feature-card p { color: var(--text-muted); line-height: 1.6; font-size: 16px; }
+        .feature-card h3 { font-size: 28px; font-weight: 700; margin-bottom: 15px; }
+        .feature-card p { color: var(--text-muted); line-height: 1.7; font-size: 18px; }
 
         /* --- PROMISE --- */
         .promise-box {
             background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-            border: 1px solid rgba(255,255,255,0.1); border-radius: 30px;
-            padding: 80px; text-align: center; position: relative; overflow: hidden;
+            border: 1px solid rgba(255,255,255,0.1); border-radius: 40px;
+            padding: 100px; text-align: center; position: relative; overflow: hidden;
         }
         .shine {
             position: absolute; top: 0; left: 0; right: 0; height: 1px;
@@ -131,34 +131,36 @@ const LandingPage = () => {
 
         /* --- FOOTER --- */
         .footer {
-            border-top: 1px solid var(--border); padding: 60px 20px;
+            border-top: 1px solid var(--border); padding: 80px 40px;
             background: #020617; text-align: center;
         }
-        .footer-nav { display: flex; justify-content: center; gap: 40px; margin-top: 30px; }
-        .f-link { color: var(--text-muted); text-decoration: none; font-weight: 600; transition:0.2s; }
+        .footer-nav { display: flex; justify-content: center; gap: 50px; margin-top: 40px; }
+        .f-link { color: var(--text-muted); text-decoration: none; font-weight: 600; font-size: 18px; transition:0.2s; }
         .f-link:hover { color: white; }
 
         /* ========================================= */
-        /* 📱 MOBILE OPTIMIZATIONS (The Big Fixes) */
+        /* 📱 MOBILE OPTIMIZATIONS (Responsive Fixes) */
         /* ========================================= */
         @media (max-width: 768px) {
-            .navbar { padding: 15px 20px; }
-            .nav-links { display: none; } /* Hide secondary links on mobile */
+            .navbar { padding: 20px; }
+            .brand { font-size: 24px; }
+            .nav-links { display: none; }
             
-            .hero { padding: 100px 20px 60px; text-align: left; }
-            .hero h1 { font-size: 48px; line-height: 1.1; margin-bottom: 20px; }
+            .hero { padding: 120px 20px 80px; }
+            .hero h1 { font-size: 52px; margin-bottom: 20px; }
             .hero p { font-size: 18px; margin-bottom: 40px; }
             
             .cta-group { flex-direction: column; width: 100%; gap: 15px; }
-            .btn { width: 100%; padding: 18px; font-size: 18px; } /* BIG BUTTONS FOR MOBILE */
+            .btn { width: 100%; padding: 20px; font-size: 18px; }
             
-            .section-header h2 { font-size: 32px; }
+            .section-header h2 { font-size: 36px; }
+            .section-header p { font-size: 18px; }
             
-            .features { grid-template-columns: 1fr; gap: 20px; } /* Stack cards */
-            .feature-card { padding: 30px; }
+            .features { grid-template-columns: 1fr; gap: 25px; }
+            .feature-card { padding: 35px; }
             
-            .promise-box { padding: 40px 20px; }
-            .promise-box h2 { font-size: 28px; }
+            .promise-box { padding: 50px 25px; }
+            .promise-box h2 { font-size: 32px; }
             
             .footer-nav { flex-direction: column; gap: 20px; }
         }
@@ -171,13 +173,12 @@ const LandingPage = () => {
         </Link>
         <div className="nav-links">
           <Link to="/login" className="nav-link">Owner Login</Link>
-          <Link to="/register" className="btn btn-primary" style={{padding: '10px 24px', fontSize: '14px'}}>
+          <Link to="/register" className="btn btn-primary" style={{padding: '12px 30px', fontSize: '16px'}}>
             Create Restaurant
           </Link>
         </div>
-        {/* Mobile-Only Login Button */}
         {isMobile && (
-            <Link to="/login" className="btn btn-outline" style={{padding: '8px 16px', fontSize: '13px'}}>
+            <Link to="/login" className="btn btn-outline" style={{padding: '10px 20px', fontSize: '14px'}}>
                 Login
             </Link>
         )}
@@ -239,16 +240,16 @@ const LandingPage = () => {
       <div className="grid-section">
         <div className="promise-box">
             <div className="shine"></div>
-            <div style={{display:'flex',justifyContent:'center',marginBottom:25}}>
-                <FaHandshake size={60} color="#3b82f6" />
+            <div style={{display:'flex',justifyContent:'center',marginBottom:30}}>
+                <FaHandshake size={80} color="#3b82f6" />
             </div>
-            <h2 style={{color:'white', marginBottom:20}}>100-Year Free Access</h2>
-            <p style={{maxWidth:700, margin:'0 auto', color:'#94a3b8', fontSize:18, lineHeight:1.6}}>
+            <h2 style={{color:'white', marginBottom:25, fontSize: '48px', fontWeight: '800'}}>100-Year Free Access</h2>
+            <p style={{maxWidth:800, margin:'0 auto', color:'#94a3b8', fontSize:22, lineHeight:1.6}}>
                 "We don't charge monthly fees for our partners. Kovixa is designed to support the 
                 hardworking restaurant owners of India. Your success is our success."
             </p>
-            <div style={{marginTop:40}}>
-                <Link to="/register" className="btn btn-primary" style={{width: isMobile ? '100%' : 'auto'}}>
+            <div style={{marginTop:50}}>
+                <Link to="/register" className="btn btn-primary" style={{width: isMobile ? '100%' : 'auto', padding: '20px 50px', fontSize: '20px'}}>
                     Claim Your Account Now
                 </Link>
             </div>
@@ -257,15 +258,15 @@ const LandingPage = () => {
 
       {/* --- FOOTER --- */}
       <footer className="footer">
-        <div style={{marginBottom:20}}>
-            <h3 style={{fontSize:24, fontWeight:800, color:'white'}}>KOVIXA</h3>
-            <p style={{color:'#64748b', marginTop:10}}>Powering the next generation of dining.</p>
+        <div style={{marginBottom:30}}>
+            <h3 style={{fontSize:32, fontWeight:800, color:'white'}}>KOVIXA</h3>
+            <p style={{color:'#64748b', marginTop:15, fontSize: '18px'}}>Powering the next generation of dining.</p>
         </div>
         <div className="footer-nav">
             <Link to="/login" className="f-link">Owner Login</Link>
             <Link to="/register" className="f-link">Register</Link>
         </div>
-        <div style={{marginTop: 40, color: '#334155', fontSize: 13}}>
+        <div style={{marginTop: 50, color: '#334155', fontSize: 15, fontWeight: 600}}>
             &copy; 2026 Kovixa Systems. Secure & Encrypted.
         </div>
       </footer>

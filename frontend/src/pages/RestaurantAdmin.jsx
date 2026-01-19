@@ -15,6 +15,7 @@ const CATEGORY_LIST = ["Starters (Veg)", "Starters (Non-Veg)", "Main Course (Veg
 
 const RestaurantAdmin = () => {
     const { id } = useParams();
+    // ⚠️ CHANGE TO YOUR LIVE SERVER URL
     const API_BASE = "https://smart-menu-app-production.up.railway.app/api";
     
     // --- STATE ---
@@ -35,14 +36,14 @@ const RestaurantAdmin = () => {
     const [systemBroadcast, setSystemBroadcast] = useState("");
     
     // Tools State
-    const [tableCount, setTableCount] = useState(15); // Default 15 tables
+    const [tableCount, setTableCount] = useState(15); 
 
     // Smart KOT Tracking (Local Storage)
     const [printedKOTs, setPrintedKOTs] = useState(() => {
         try { return JSON.parse(localStorage.getItem("printed_kots_log")) || []; } catch { return []; }
     });
 
-    // --- SYNC DATA (Optimized: No Inventory) ---
+    // --- SYNC DATA ---
     const refreshData = useCallback(async (manualId) => {
         const fetchId = manualId || mongoId || localStorage.getItem(`owner_id_${id}`);
         const token = localStorage.getItem(`owner_token_${id}`); 
@@ -50,7 +51,6 @@ const RestaurantAdmin = () => {
 
         try {
             const config = { headers: { Authorization: `Bearer ${token}` } };
-            // Parallel Fetch for Speed
             const [dishRes, orderRes, sysRes] = await Promise.all([
                 axios.get(`${API_BASE}/dishes?restaurantId=${fetchId}&t=${Date.now()}`, config),
                 axios.get(`${API_BASE}/orders/inbox?restaurantId=${fetchId}&t=${Date.now()}`, config),
@@ -76,7 +76,7 @@ const RestaurantAdmin = () => {
             refreshData(savedId);
         } else setIsLoading(false);
 
-        const interval = setInterval(() => refreshData(), 5000); // 5s Poll for Live Orders
+        const interval = setInterval(() => refreshData(), 5000); 
         return () => clearInterval(interval);
     }, [id, refreshData]);
 
@@ -129,21 +129,18 @@ const RestaurantAdmin = () => {
     const generatePDF = () => {
         const doc = new jsPDF();
         let x = 10, y = 10;
-        
         doc.setFontSize(20);
         doc.text("Scan to Order", 105, 10, null, null, "center");
         y += 20;
 
         for (let i = 1; i <= tableCount; i++) {
             if (y > 250) { doc.addPage(); y = 20; }
-            
-            const url = `https://smartmenuss.netlify.app/menu/${id}?table=${i}`;
+            // ⚠️ REPLACE THIS URL WITH YOUR VERCEL/NETLIFY LINK
+            const url = `https://kovixa.com/menu/${id}?table=${i}`;
             const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(url)}`;
-            
             doc.setFontSize(14);
             doc.text(`Table ${i}`, x + 15, y);
             doc.addImage(qrUrl, "PNG", x, y + 5, 50, 50);
-            
             x += 60;
             if (x > 150) { x = 10; y += 70; }
         }
@@ -151,7 +148,6 @@ const RestaurantAdmin = () => {
         toast.success("PDF Downloaded");
     };
 
-    // --- MENU ACTIONS ---
     const handleAddItem = async () => {
         if (!newItem.name || !newItem.price) return toast.error("Required fields missing");
         const token = localStorage.getItem(`owner_token_${id}`);
@@ -178,17 +174,20 @@ const RestaurantAdmin = () => {
     // --- DATA CALCULATIONS ---
     const tableData = useMemo(() => {
         const map = {};
-        // Dynamic Range based on user preference or active orders
         for(let i = 1; i <= tableCount; i++) map[i] = { tableNum: i, orders: [], totalAmount: 0, status: 'Free' };
-        
         inboxOrders.filter(o => o.status === 'Pending').forEach(order => {
-            const tNum = parseInt(order.tableNum);
-            // Auto-expand if order is outside range
-            if (!map[tNum]) map[tNum] = { tableNum: tNum, orders: [], totalAmount: 0, status: 'Free' };
-            
-            map[tNum].orders.push(order);
-            map[tNum].totalAmount += order.totalAmount;
-            map[tNum].status = 'Occupied';
+            const tNum = parseInt(order.tableNum) || "Walk-In"; 
+            if (tNum === "Walk-In") {
+                // Handle Walk-Ins separately if needed, for now map to 0 or specific section
+                if(!map["Walk-In"]) map["Walk-In"] = { tableNum: "Walk-In", orders: [], totalAmount: 0, status: 'Occupied' };
+                map["Walk-In"].orders.push(order);
+                map["Walk-In"].totalAmount += order.totalAmount;
+            } else {
+                if (!map[tNum]) map[tNum] = { tableNum: tNum, orders: [], totalAmount: 0, status: 'Free' };
+                map[tNum].orders.push(order);
+                map[tNum].totalAmount += order.totalAmount;
+                map[tNum].status = 'Occupied';
+            }
         });
         return map;
     }, [inboxOrders, tableCount]);
@@ -199,7 +198,6 @@ const RestaurantAdmin = () => {
         const revenue = todaysOrders.reduce((acc, o) => acc + o.totalAmount, 0);
         return { revenue, count: todaysOrders.length };
     }, [inboxOrders]);
-
 
     if (isLoading) return <div className="admin-container flex-center"><div className="spin" style={{width:40,height:40,border:'4px solid #3b82f6',borderTopColor:'transparent',borderRadius:'50%'}}></div></div>;
 
@@ -221,12 +219,12 @@ const RestaurantAdmin = () => {
         <div className="admin-container">
             <style>{styles}</style>
             
-            {/* --- MODAL --- */}
+            {/* --- MODAL (POPUP) --- */}
             {selectedTable && (
                 <div className="qr-overlay" onClick={() => setSelectedTable(null)}>
                     <div className="qr-modal" onClick={e => e.stopPropagation()}>
                         <div className="modal-header">
-                            <h2>TABLE {selectedTable.tableNum}</h2>
+                            <h2>{selectedTable.tableNum === "Walk-In" ? "WALK-IN / COUNTER" : `TABLE ${selectedTable.tableNum}`}</h2>
                             <button onClick={() => setSelectedTable(null)} className="btn-icon-close"><FaTimes/></button>
                         </div>
                         <div className="modal-body">
@@ -266,7 +264,7 @@ const RestaurantAdmin = () => {
                 </div>
             )}
 
-            {/* --- HEADER --- */}
+            {/* --- DASHBOARD HEADER --- */}
             <div className="max-w-wrapper">
                 {systemBroadcast && <div className="broadcast-banner"><FaBullhorn /> <span>{systemBroadcast}</span></div>}
                 
@@ -285,7 +283,19 @@ const RestaurantAdmin = () => {
                 {/* --- 1. TABLES (LIVE) --- */}
                 {activeTab === "orders" && (
                     <div className="table-grid">
-                        {Object.values(tableData).map((table) => (
+                        {/* Render "Walk-In" Box First if exists */}
+                        {tableData["Walk-In"] && (
+                             <div onClick={() => setSelectedTable(tableData["Walk-In"])} 
+                                  className="table-box occupied"
+                                  style={{cursor: 'pointer', borderColor: '#f59e0b', background: 'rgba(245, 158, 11, 0.1)'}}>
+                                <div className="t-status" style={{color:'#f59e0b'}}>WALK-IN</div>
+                                <div className="t-num" style={{fontSize:'24px'}}>Counter</div>
+                                <div className="t-amount">₹{tableData["Walk-In"].totalAmount}</div>
+                            </div>
+                        )}
+
+                        {/* Render Numeric Tables */}
+                        {Object.values(tableData).filter(t => t.tableNum !== "Walk-In").map((table) => (
                             <div key={table.tableNum} onClick={() => table.status === 'Occupied' ? setSelectedTable(table) : null} 
                                  className={`table-box ${table.status === 'Occupied' ? 'occupied' : 'free'}`}
                                  style={{cursor: table.status === 'Occupied' ? 'pointer' : 'default'}}>
@@ -333,7 +343,8 @@ const RestaurantAdmin = () => {
                                     <div key={num} className="dish-item">
                                         <div className="fw-700">Table {num}</div>
                                         <button onClick={() => {
-                                            navigator.clipboard.writeText(`https://smartmenuss.netlify.app/menu/${id}?table=${num}`);
+                                            // ⚠️ REPLACE WITH YOUR REAL URL
+                                            navigator.clipboard.writeText(`https://kovixa.com/menu/${id}?table=${num}`);
                                             toast.success("Link Copied");
                                         }} className="btn-glass" style={{fontSize:12}}>COPY LINK</button>
                                     </div>
@@ -368,7 +379,7 @@ const RestaurantAdmin = () => {
 const styles = `
 .admin-container { min-height: 100vh; padding: 20px; background: #020617; color: white; font-family: 'Plus Jakarta Sans', sans-serif; padding-bottom: 90px; }
 .max-w-wrapper { width: 100%; max-width: 100%; margin: 0 auto; }
-@media (min-width: 1024px) { .max-w-wrapper { padding: 0 60px; } }
+@media (min-width: 1024px) { .max-w-wrapper { padding: 0 40px; } }
 .flex-center { display: flex; align-items: center; justify-content: center; }
 .flex-end { display: flex; justify-content: flex-end; }
 .text-center { text-align: center; }
@@ -392,11 +403,16 @@ const styles = `
 .nav-btn.active { border-color: #3b82f6; color: #60a5fa; background: rgba(37, 99, 235, 0.1); }
 .nav-btn svg { font-size: 20px; margin-bottom: 4px; }
 
-.table-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 15px; }
+/* --- BIG SCREEN GRID (Updated) --- */
+.table-grid { 
+    display: grid; 
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); /* Increased from 130px to 180px */
+    gap: 20px; 
+}
 .table-box { aspect-ratio: 1; border-radius: 18px; display: flex; flex-direction: column; align-items: center; justify-content: center; border: 2px solid transparent; transition: 0.2s; }
 .table-box.free { background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.2); color: #34d399; }
 .table-box.occupied { background: rgba(37, 99, 235, 0.15); border-color: #3b82f6; color: #60a5fa; box-shadow: 0 0 15px rgba(59, 130, 246, 0.2); }
-.t-num { font-size: 36px; font-weight: 800; }
+.t-num { font-size: 48px; font-weight: 800; } /* Increased Font */
 .t-status { font-size: 12px; font-weight: 600; text-align: center; }
 .t-amount { font-size: 14px; color: white; margin-top: 2px; }
 
@@ -410,7 +426,17 @@ const styles = `
 .broadcast-banner { background: rgba(249, 115, 22, 0.1); border: 1px solid #f97316; color: #f97316; padding: 12px; border-radius: 10px; margin-bottom: 20px; font-weight: 700; display: flex; align-items: center; gap: 10px; font-size: 14px; }
 
 .qr-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 1000; backdrop-filter: blur(5px); }
-.qr-modal { background: #0f172a; width: 95%; max-width: 450px; border-radius: 24px; padding: 25px; max-height: 85vh; overflow-y: auto; border: 1px solid #1e293b; display: flex; flex-direction: column; }
+.qr-modal { 
+    background: #0f172a; 
+    width: 95%; 
+    max-width: 650px; /* Increased Max Width */
+    border-radius: 24px; 
+    padding: 25px; 
+    max-height: 85vh; 
+    overflow-y: auto; 
+    border: 1px solid #1e293b; 
+    display: flex; flex-direction: column; 
+}
 .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 .btn-icon-close { background: none; border: none; color: #94a3b8; font-size: 24px; cursor: pointer; }
 .order-item { background: #1e293b; padding: 15px; border-radius: 12px; margin-bottom: 10px; border-left: 4px solid; }

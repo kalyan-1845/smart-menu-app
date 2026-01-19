@@ -4,16 +4,16 @@ import {
     FaSignOutAlt, FaTrash, FaRedo, FaEdit, FaKey, FaPlus, FaTimes,
     FaBullhorn, FaSync, FaSortAmountDown, FaCircle, 
     FaUserSecret, FaLock, FaArrowRight, FaSpinner, FaHeartbeat, FaEye, FaAd, 
-    FaStar, FaCommentDots, FaQrcode, FaWhatsapp, FaServer
+    FaStar, FaCommentDots, FaQrcode, FaWhatsapp, FaServer, FaBan, FaFileCsv
 } from "react-icons/fa";
 import axios from "axios";
 import { toast } from "react-hot-toast";
 import { io } from "socket.io-client";
 
+// ⚠️ CHANGE TO YOUR LIVE SERVER URL
 const API_URL = "https://smart-menu-app-production.up.railway.app";
 
 const SuperAdmin = () => {
-    // --- STATE (YOUR EXACT LOGIC) ---
     const [token, setToken] = useState(localStorage.getItem('admin_token'));
     const [secret, setSecret] = useState("");
     const [loginLoading, setLoginLoading] = useState(false);
@@ -22,7 +22,7 @@ const SuperAdmin = () => {
     const [reviews, setReviews] = useState([]); 
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
-     
+      
     // System
     const [broadcastMsg, setBroadcastMsg] = useState("");
     const [globalBanner, setGlobalBanner] = useState(""); 
@@ -48,7 +48,7 @@ const SuperAdmin = () => {
         return () => socket.disconnect();
     }, [token]);
 
-    // --- 🔐 LOGIN LOGIC ---
+    // --- 🔐 LOGIN ---
     const handleLogin = async (e) => {
         e.preventDefault();
         setLoginLoading(true);
@@ -83,7 +83,6 @@ const SuperAdmin = () => {
             
             const latency = Date.now() - start;
             setServerPulse({ ...pulseRes.data, latency: `${latency}ms` });
-            
             setLoading(false);
         } catch (e) {
             if(e.response?.status === 401) { localStorage.removeItem('admin_token'); setToken(null); }
@@ -97,36 +96,65 @@ const SuperAdmin = () => {
     const updateSystemSettings = async () => {
         try {
             await axios.put(`${API_URL}/api/superadmin/system-status`, {
-                message: broadcastMsg,
-                maintenance: maintenanceMode,
-                globalBanner 
+                message: broadcastMsg, maintenance: maintenanceMode, globalBanner 
             }, { headers: { Authorization: `Bearer ${token}` } });
             toast.success("System Updated 📢");
         } catch (e) { toast.error("Update Failed"); }
     };
 
-    const handleTimeWarp = async (days) => {
-        try {
-            const res = await axios.put(`${API_URL}/api/superadmin/client/${selected._id}/extend`, 
-                { days }, { headers: { Authorization: `Bearer ${token}` } }
-            );
-            toast.success(`Access Updated`);
-            refreshData(); 
-            setSelected(prev => ({ ...prev, trialEndsAt: res.data.trialEndsAt, isPro: res.data.isPro })); 
-        } catch (e) { toast.error("Failed"); }
-    };
-
     const handleRegister = async () => { try { await axios.post(`${API_URL}/api/auth/register`, createForm); toast.success("Created! 🚀"); setShowCreateModal(false); refreshData(); } catch(e){ toast.error("Failed"); } };
     const handleUpdateClient = async () => { try { await axios.put(`${API_URL}/api/superadmin/client/${selected._id}`, selected, { headers: { Authorization: `Bearer ${token}` } }); toast.success("Updated"); refreshData(); } catch(e){} };
     const handlePasswordReset = async () => { try { await axios.put(`${API_URL}/api/superadmin/client/${selected._id}`, { password: newPassword }, { headers: { Authorization: `Bearer ${token}` } }); toast.success("Reset 🔒"); setNewPassword(""); } catch(e){} };
-    const toggleSwitch = async (id, field, val) => { try { setSelected(p => ({...p, settings: {...p.settings, [field.split('.')[1]]: !val}})); await axios.put(`${API_URL}/api/superadmin/control/${id}`, { field, value: !val }, { headers: { Authorization: `Bearer ${token}` } }); refreshData(); } catch(e){} };
+    
+    // ⚡️ TOGGLE CLIENT SETTINGS (Menu Active / Suspend)
+    const toggleSwitch = async (id, field, val) => { 
+        try { 
+            // Optimistic Update
+            setSelected(p => ({...p, settings: {...p.settings, [field.split('.')[1]]: !val}})); 
+            await axios.put(`${API_URL}/api/superadmin/control/${id}`, { field, value: !val }, { headers: { Authorization: `Bearer ${token}` } }); 
+            refreshData(); 
+            toast.success("Status Updated");
+        } catch(e){ toast.error("Error toggling"); } 
+    };
+
     const enterGodMode = async (id, u) => { try { const res = await axios.get(`${API_URL}/api/superadmin/ghost-login/${id}`, { headers: { Authorization: `Bearer ${token}` } }); localStorage.setItem(`owner_token_${u}`, res.data.token); localStorage.setItem(`owner_id_${u}`, res.data.ownerId); window.open(`/${u}/admin`, '_blank'); } catch(e){} };
     const handleResetData = async () => { if(window.confirm("WIPE ORDERS?")) try { await axios.post(`${API_URL}/api/superadmin/client/${selected._id}/reset`, {}, { headers: { Authorization: `Bearer ${token}` } }); toast.success("Wiped"); refreshData(); } catch(e){} };
     const handleDeleteClient = async () => { if(window.confirm("DELETE?")) try { await axios.delete(`${API_URL}/api/superadmin/client/${selected._id}`, { headers: { Authorization: `Bearer ${token}` } }); toast.success("Deleted"); setSelected(null); refreshData(); } catch(e){} };
     const saveNotes = async (id) => { await axios.put(`${API_URL}/api/superadmin/notes/${id}`, { notes: noteDraft }, { headers: { Authorization: `Bearer ${token}` } }); toast.success("Saved"); refreshData(); };
 
+    // 📥 DOWNLOAD REPORT (CSV Generation)
+    const downloadReport = (client) => {
+        const headers = ["Metric", "Value"];
+        const rows = [
+            ["Restaurant Name", client.restaurantName],
+            ["Username", client.username],
+            ["Phone", client.phoneNumber || "N/A"],
+            ["Total Revenue", `₹${client.totalRevenue || 0}`],
+            ["Monthly Revenue", `₹${client.monthlyRevenue || 0}`],
+            ["Subscription Status", client.isPro ? "PRO" : "TRIAL"],
+            ["Trial Ends", client.trialEndsAt ? new Date(client.trialEndsAt).toLocaleDateString() : "N/A"],
+            ["Status", client.settings?.menuActive ? "Active" : "Suspended/Maintenance"],
+            ["Report Date", new Date().toLocaleString()]
+        ];
+
+        const csvContent = "data:text/csv;charset=utf-8," 
+            + headers.join(",") + "\n" 
+            + rows.map(e => e.join(",")).join("\n");
+
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `${client.restaurantName}_Report_${new Date().toISOString().slice(0,10)}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        toast.success("Report Downloaded");
+    };
+
     const formatCurrency = (val) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val);
     const filtered = clients.filter(c => c.restaurantName?.toLowerCase().includes(searchTerm.toLowerCase()) || c.username?.includes(searchTerm));
+    
+    // Metrics Calculation
     const metrics = useMemo(() => {
         return { 
             total: clients.length, 
@@ -135,7 +163,6 @@ const SuperAdmin = () => {
         };
     }, [clients]);
 
-    // 🔐 SHOW LOGIN SCREEN
     if (!token) return <LoginScreen secret={secret} setSecret={setSecret} handleLogin={handleLogin} loading={loginLoading} />;
     
     if (loading) return <div style={styles.center}><FaShieldAlt className="spin" size={50} color="#f97316"/></div>;
@@ -150,29 +177,26 @@ const SuperAdmin = () => {
                 ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
             `}</style>
 
-            {/* HEADER & PULSE */}
+            {/* HEADER */}
             <div style={styles.pulseHeader}>
                 <h1 style={styles.title}><FaShieldAlt color="#f97316" size={28}/> CEO CONSOLE</h1>
-                
                 <div style={styles.pulseStats}>
                     <div style={styles.pulseItem}><FaHeartbeat color="#22c55e"/> {serverPulse.uptime}</div>
                     <div style={styles.pulseItem}><FaServer color={serverPulse.dbStatus === 'Connected' ? '#22c55e' : '#ef4444'}/> DB: {serverPulse.dbStatus}</div>
                     <div style={styles.pulseItem}>Ping: <span style={{color:'#f97316'}}>{serverPulse.latency}</span></div>
                 </div>
-
                 <div style={{display:'flex', gap:10}}>
                     <button onClick={refreshData} style={styles.iconBtn}><FaSync size={16}/></button>
                     <button onClick={() => { localStorage.removeItem('admin_token'); setToken(null); }} style={styles.logoutBtn}>LOGOUT</button>
                 </div>
             </div>
 
-            {/* MAIN DASHBOARD */}
+            {/* DASHBOARD GRID */}
             <div style={styles.contentGrid}>
                 
-                {/* LEFT COLUMN: CONTROLS & LIST */}
+                {/* LEFT: CONTROLS & CLIENTS */}
                 <div style={{flex: 1}}>
-                    
-                    {/* SYSTEM BROADCAST PANEL */}
+                    {/* GLOBAL CONTROLS */}
                     <div style={styles.glassCard}>
                         <h3 style={styles.sectionTitle}>📣 SYSTEM BROADCAST</h3>
                         <div style={styles.inputGroup}>
@@ -183,10 +207,9 @@ const SuperAdmin = () => {
                             <FaAd color="#64748b" />
                             <input style={styles.ghostInput} placeholder="Global Menu Banner URL..." value={globalBanner} onChange={(e) => setGlobalBanner(e.target.value)} />
                         </div>
-                        
                         <div style={styles.controlRow}>
                             <div style={{display:'flex', alignItems:'center', gap:12}}>
-                                <span style={{fontSize:12, fontWeight:'700', color: maintenanceMode ? '#ef4444' : '#94a3b8'}}>MAINTENANCE MODE</span>
+                                <span style={{fontSize:12, fontWeight:'700', color: maintenanceMode ? '#ef4444' : '#94a3b8'}}>GLOBAL MAINTENANCE</span>
                                 <div onClick={() => setMaintenanceMode(!maintenanceMode)} style={{...styles.toggle, background: maintenanceMode ? '#ef4444' : '#334155'}}>
                                     <div style={{...styles.knob, transform: maintenanceMode ? 'translateX(24px)' : 'translateX(0)'}} />
                                 </div>
@@ -218,28 +241,34 @@ const SuperAdmin = () => {
                     </div>
 
                     <div style={styles.clientGrid}>
-                        {filtered.map(c => (
-                            <div key={c._id} style={styles.clientCard} onClick={() => { setSelected(c); setNoteDraft(c.ceoNotes || ""); }}>
-                                <div style={styles.clientHeader}>
-                                    <h3 style={styles.clientName}>{c.restaurantName}</h3>
-                                    <div style={{...styles.statusDot, background: c.health === "🟢 Healthy" ? '#22c55e' : '#ef4444'}}></div>
+                        {filtered.map(c => {
+                            // Status Logic
+                            let statusColor = '#22c55e'; // Green (Healthy)
+                            if (!c.settings?.menuActive) statusColor = '#ef4444'; // Red (Suspended)
+                            else if (c.trialEndsAt && new Date(c.trialEndsAt) < new Date()) statusColor = '#f59e0b'; // Orange (Expired)
+
+                            return (
+                                <div key={c._id} style={styles.clientCard} onClick={() => { setSelected(c); setNoteDraft(c.ceoNotes || ""); }}>
+                                    <div style={styles.clientHeader}>
+                                        <h3 style={styles.clientName}>{c.restaurantName}</h3>
+                                        <div style={{...styles.statusDot, background: statusColor, boxShadow: `0 0 10px ${statusColor}`}}></div>
+                                    </div>
+                                    <div style={styles.clientInfo}>
+                                        <p>ID: {c.username}</p>
+                                        {c.phoneNumber && <p style={{color:'#3b82f6', display:'flex', alignItems:'center', gap:5}}><FaPhone size={10}/> {c.phoneNumber}</p>}
+                                    </div>
+                                    <div style={styles.clientFooter}>
+                                        <span style={{color:'#facc15', display:'flex', gap:4}}><FaStar/> {c.rating}</span>
+                                        <span style={{color:'#f97316'}}>{formatCurrency(c.monthlyRevenue)}</span>
+                                    </div>
                                 </div>
-                                <div style={styles.clientInfo}>
-                                    <p>ID: {c.username}</p>
-                                    {c.phoneNumber && <p style={{color:'#3b82f6', display:'flex', alignItems:'center', gap:5}}><FaPhone size={10}/> {c.phoneNumber}</p>}
-                                </div>
-                                <div style={styles.clientFooter}>
-                                    <span style={{color:'#facc15', display:'flex', gap:4}}><FaStar/> {c.rating}</span>
-                                    <span style={{color:'#f97316'}}>{formatCurrency(c.monthlyRevenue)}</span>
-                                </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </div>
 
-                {/* RIGHT COLUMN: FEEDS */}
+                {/* RIGHT: LIVE FEED */}
                 <div style={styles.sidebar}>
-                    {/* LIVE ORDERS */}
                     <div style={styles.terminalCard}>
                         <h3 style={styles.terminalTitle}><FaEye color="#f97316"/> LIVE FEED</h3>
                         <div style={styles.feedScroll}>
@@ -248,8 +277,6 @@ const SuperAdmin = () => {
                             }
                         </div>
                     </div>
-
-                    {/* REVIEWS */}
                     <div style={styles.terminalCard}>
                         <h3 style={styles.terminalTitle}><FaCommentDots color="#3b82f6"/> FEEDBACK</h3>
                         <div style={styles.feedScroll}>
@@ -269,7 +296,7 @@ const SuperAdmin = () => {
                 </div>
             </div>
 
-            {/* --- CREATE MODAL --- */}
+            {/* --- CREATE CLIENT MODAL --- */}
             {showCreateModal && (
                 <div style={styles.overlay}>
                     <div style={styles.modal}>
@@ -286,7 +313,7 @@ const SuperAdmin = () => {
                 </div>
             )}
 
-            {/* --- DETAILS MODAL --- */}
+            {/* --- CLIENT DETAILS MODAL --- */}
             {selected && (
                 <div style={styles.overlay}>
                     <div style={styles.modal}>
@@ -296,69 +323,53 @@ const SuperAdmin = () => {
                         </div>
                         
                         <div style={styles.modalBody}>
-                            {/* ACTION GRID */}
+                            {/* ACTION GRID - MAIN CONTROLS */}
                             <div style={styles.actionGrid}>
+                                {/* ⛔ INDIVIDUAL MAINTENANCE TOGGLE */}
                                 <button onClick={()=>toggleSwitch(selected._id,'settings.menuActive',selected.settings?.menuActive)} 
-                                    style={{...styles.toggleBtn, borderColor: selected.settings?.menuActive ? '#334155' : '#ef4444', color: selected.settings?.menuActive ? '#fff' : '#ef4444'}}>
-                                    <FaUtensils/> {selected.settings?.menuActive ? "MENU ONLINE" : "MENU KILLED"}
+                                    style={{...styles.toggleBtn, 
+                                        borderColor: selected.settings?.menuActive ? '#ef4444' : '#22c55e', 
+                                        color: selected.settings?.menuActive ? '#ef4444' : '#22c55e',
+                                        background: selected.settings?.menuActive ? 'rgba(239, 68, 68, 0.1)' : 'rgba(34, 197, 94, 0.1)'
+                                    }}>
+                                    {selected.settings?.menuActive ? <><FaBan/> SUSPEND (UNPAID)</> : <><FaUtensils/> ACTIVATE MENU</>}
                                 </button>
+
                                 <button onClick={()=>enterGodMode(selected._id, selected.username)} style={{...styles.toggleBtn, borderColor:'#f97316', color:'#f97316'}}>
                                     <FaGhost/> GHOST LOGIN
                                 </button>
                             </div>
 
-                            {/* CONTACT */}
                             <div style={styles.fieldGroup}>
-                                <label style={styles.fieldLabel}>CONTACT & WHATSAPP</label>
+                                <label style={styles.fieldLabel}>REPORTS & DATA</label>
+                                <button onClick={()=>downloadReport(selected)} style={{...styles.secondaryBtn, width:'100%', display:'flex', justifyContent:'center', gap:10}}>
+                                    <FaFileCsv size={16}/> DOWNLOAD MONTHLY REPORT
+                                </button>
+                            </div>
+
+                            <div style={styles.fieldGroup}>
+                                <label style={styles.fieldLabel}>CONTACT</label>
                                 <div style={{display:'flex', gap:10}}>
                                     <input style={styles.input} value={selected.phoneNumber || ""} onChange={e=>setSelected({...selected, phoneNumber:e.target.value})}/>
                                     {selected.phoneNumber && (
-                                        <a href={`https://wa.me/91${selected.phoneNumber}`} target="_blank" rel="noreferrer" style={styles.waBtn}>
-                                            <FaWhatsapp size={20}/>
-                                        </a>
+                                        <a href={`https://wa.me/91${selected.phoneNumber}`} target="_blank" rel="noreferrer" style={styles.waBtn}><FaWhatsapp size={20}/></a>
                                     )}
                                 </div>
-                                <button onClick={handleUpdateClient} style={styles.miniBtn}>UPDATE NUMBER</button>
+                                <button onClick={handleUpdateClient} style={styles.miniBtn}>UPDATE</button>
                             </div>
 
-                            {/* SUBSCRIPTION */}
-                            <div style={styles.fieldGroup}>
-                                <label style={styles.fieldLabel}>SUBSCRIPTION (Expires: {selected.trialEndsAt ? new Date(selected.trialEndsAt).toLocaleDateString() : "Never"})</label>
-                                <div style={{display:'flex', gap:5}}>
-                                    <button onClick={()=>handleTimeWarp(7)} style={styles.timePill}>+7 Days</button>
-                                    <button onClick={()=>handleTimeWarp(30)} style={styles.timePill}>+30 Days</button>
-                                    <button onClick={()=>handleTimeWarp(365)} style={styles.timePill}>+1 Year</button>
-                                    <button onClick={()=>handleTimeWarp(-999)} style={{...styles.timePill, background:'#450a0a', color:'#ef4444'}}>EXPIRE</button>
-                                </div>
-                            </div>
-
-                            {/* QR CODE */}
                             <div style={styles.qrBox}>
                                 <FaQrcode size={32} color="white"/>
                                 <div>
                                     <div style={{fontWeight:'bold', fontSize:14}}>Menu QR Code</div>
-                                    <a href={`https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=https://yourapp.com/menu/${selected.username}`} target="_blank" rel="noreferrer" style={{color:'#3b82f6', fontSize:12}}>Download High-Res</a>
+                                    <a href={`https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=https://kovixa.com/menu/${selected.username}`} target="_blank" rel="noreferrer" style={{color:'#3b82f6', fontSize:12}}>Download High-Res</a>
                                 </div>
                             </div>
 
-                            {/* CREDENTIALS */}
-                            <div style={styles.fieldGroup}>
-                                <label style={styles.fieldLabel}>CREDENTIALS</label>
-                                <input style={styles.input} value={selected.username} readOnly />
-                                <div style={{display:'flex', gap:10}}>
-                                    <input style={styles.input} placeholder="New Password" value={newPassword} onChange={e=>setNewPassword(e.target.value)}/>
-                                    <button onClick={handlePasswordReset} style={styles.secondaryBtn}>RESET</button>
-                                </div>
-                            </div>
-
-                            {/* NOTES */}
-                            <textarea value={noteDraft} onChange={e=>setNoteDraft(e.target.value)} style={styles.textarea} placeholder="CEO Notes..."/>
-                            <button onClick={()=>saveNotes(selected._id)} style={styles.saveNoteBtn}>SAVE NOTES</button>
-
-                            {/* DANGER */}
+                            {/* DANGER ZONE */}
                             <div style={styles.dangerZone}>
-                                <button onClick={handleResetData} style={styles.dangerBtn}><FaRedo/> WIPE ORDERS</button>
-                                <button onClick={handleDeleteClient} style={styles.dangerBtn}><FaTrash/> DELETE ACCOUNT</button>
+                                <button onClick={handleResetData} style={styles.dangerBtn}><FaRedo/> WIPE DATA</button>
+                                <button onClick={handleDeleteClient} style={styles.dangerBtn}><FaTrash/> DELETE</button>
                             </div>
                         </div>
                     </div>
@@ -388,51 +399,44 @@ const LoginScreen = ({ secret, setSecret, handleLogin, loading }) => (
     </div>
 );
 
-// --- MIDNIGHT GLASS STYLES (PREMIUM) ---
+// --- STYLES ---
 const styles = {
     container: { background: '#020617', minHeight: '100vh', padding: '30px', color: '#f8fafc', fontFamily: 'Plus Jakarta Sans, sans-serif' },
     center: { height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#020617' },
     
-    // Header
     pulseHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 40, padding: '20px', background: 'rgba(30, 41, 59, 0.4)', backdropFilter: 'blur(10px)', borderRadius: '20px', border: '1px solid #1e293b' },
     title: { fontSize: '20px', fontWeight: '800', margin: 0, display:'flex', alignItems:'center', gap:'15px', letterSpacing:'1px', color: '#fff' },
     pulseStats: { display: 'flex', gap: 20, fontSize: 13, fontWeight: '600', color: '#94a3b8' },
     pulseItem: { display: 'flex', alignItems: 'center', gap: 8 },
     
-    // Buttons
     iconBtn: { background: '#1e293b', border: '1px solid #334155', color: '#fff', padding: '10px 15px', borderRadius: '10px', cursor: 'pointer' },
     logoutBtn: { background: '#450a0a', color: '#fca5a5', border: '1px solid #7f1d1d', padding: '10px 20px', borderRadius: '10px', cursor: 'pointer', fontWeight: '700', fontSize:12 },
     createBtn: { background: '#f97316', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '10px', fontWeight: '700', fontSize:'12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' },
     actionBtn: { background: '#22c55e', color: '#000', border: 'none', padding: '10px 20px', borderRadius: '10px', fontWeight: '800', fontSize:'11px', cursor: 'pointer' },
     
-    // Layout
     contentGrid: { display: 'flex', gap: 30, alignItems: 'flex-start' },
     sidebar: { width: 350, display: 'flex', flexDirection: 'column', gap: 20 },
     
-    // Glass Cards
     glassCard: { background: 'rgba(15, 23, 42, 0.6)', border: '1px solid #1e293b', padding: '25px', borderRadius: '20px', marginBottom: '30px' },
     sectionTitle: { fontSize: 12, fontWeight: '800', color: '#64748b', letterSpacing: '1px', marginBottom: 15 },
     inputGroup: { display: 'flex', alignItems: 'center', gap: 15, background: '#0f172a', padding: '12px 20px', borderRadius: '12px', border: '1px solid #1e293b' },
     ghostInput: { background: 'transparent', border: 'none', color: '#fff', width: '100%', fontSize: '14px', outline: 'none' },
     controlRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 20 },
     
-    // Stats
     statsRow: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px', marginBottom: '30px' },
     statCard: { background: '#0f172a', border: '1px solid #1e293b', padding: '20px', borderRadius: '16px' },
     statLabel: { fontSize: 11, fontWeight: '700', color: '#64748b', letterSpacing: '0.5px' },
     statValue: { fontSize: 24, fontWeight: '800', margin: '5px 0 0 0', color: '#fff' },
     
-    // Client Grid
     searchBar: { width: '100%', background: '#0f172a', border: '1px solid #1e293b', padding: '15px 20px', borderRadius: '14px', color: '#fff', outline: 'none', marginRight: 20 },
     clientGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '20px' },
     clientCard: { background: '#1e293b', border: '1px solid #334155', padding: '20px', borderRadius: '16px', cursor: 'pointer', transition: '0.2s', position: 'relative' },
     clientHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
     clientName: { fontSize: 16, fontWeight: '700', color: '#fff', margin: 0 },
-    statusDot: { width: 8, height: 8, borderRadius: '50%', boxShadow: '0 0 10px currentColor' },
+    statusDot: { width: 8, height: 8, borderRadius: '50%' },
     clientInfo: { fontSize: 13, color: '#94a3b8', marginBottom: 15 },
     clientFooter: { display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: '700', borderTop: '1px solid #334155', paddingTop: 12 },
     
-    // Sidebar Terminals
     terminalCard: { background: '#020617', border: '1px solid #334155', borderRadius: '16px', padding: '20px', height: '400px', display: 'flex', flexDirection: 'column' },
     terminalTitle: { fontSize: 12, fontWeight: '800', color: '#94a3b8', marginBottom: 15, display: 'flex', gap: 10, alignItems: 'center' },
     feedScroll: { flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10 },
@@ -440,7 +444,6 @@ const styles = {
     emptyText: { fontSize: 12, color: '#475569', textAlign: 'center', marginTop: 20 },
     reviewBlock: { background: '#0f172a', padding: 10, borderRadius: 8, border: '1px solid #1e293b' },
 
-    // Modals
     overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(5px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 },
     modal: { background: '#0f172a', width: '90%', maxWidth: '550px', borderRadius: '24px', border: '1px solid #334155', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' },
     modalHeader: { padding: '20px', borderBottom: '1px solid #1e293b', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#020617' },
@@ -448,7 +451,6 @@ const styles = {
     modalBody: { padding: '30px', maxHeight: '80vh', overflowY: 'auto' },
     modalTitle: { fontSize: 22, fontWeight: '800', margin: '0 0 20px 0', color: '#fff' },
     
-    // Modal Form Elements
     actionGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 15, marginBottom: 25 },
     toggleBtn: { padding: 15, borderRadius: 12, border: '1px solid', background: 'transparent', fontWeight: '700', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 },
     fieldGroup: { marginBottom: 20 },
@@ -456,25 +458,19 @@ const styles = {
     input: { width: '100%', background: '#020617', border: '1px solid #334155', color: '#fff', padding: '14px', borderRadius: '10px', outline: 'none', fontSize: 14 },
     waBtn: { background: '#22c55e', color: '#fff', width: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10, cursor: 'pointer' },
     miniBtn: { width: '100%', background: '#1e293b', color: '#94a3b8', border: 'none', padding: 10, borderRadius: 8, marginTop: 8, fontSize: 11, fontWeight: '700', cursor: 'pointer' },
-    timePill: { flex: 1, background: '#1e293b', border: '1px solid #334155', color: '#cbd5e1', padding: '8px', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: '600' },
     qrBox: { display: 'flex', gap: 15, alignItems: 'center', background: '#020617', padding: 15, borderRadius: 12, border: '1px solid #334155', marginBottom: 20 },
-    textarea: { width: '100%', height: 80, background: '#020617', border: '1px solid #334155', color: '#fff', padding: 15, borderRadius: 10, outline: 'none', marginBottom: 10 },
-    saveNoteBtn: { width: '100%', background: '#3b82f6', color: '#fff', border: 'none', padding: 12, borderRadius: 8, fontWeight: '700', cursor: 'pointer' },
     dangerZone: { marginTop: 30, paddingTop: 20, borderTop: '1px solid #334155', display: 'flex', gap: 15 },
     dangerBtn: { flex: 1, background: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444', color: '#ef4444', padding: 12, borderRadius: 8, fontSize: 11, fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 },
     
-    // Login
     loginCard: { background: '#0f172a', padding: '40px', borderRadius: '24px', border: '1px solid #1e293b', width: '350px', textAlign: 'center' },
     loginIconBox: { width: 80, height: 80, borderRadius: '50%', background: 'rgba(249, 115, 22, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px auto' },
     loginTitle: { fontSize: 24, fontWeight: '800', margin: 0, color: '#fff' },
     loginInput: { width: '100%', padding: '16px 16px 16px 50px', background: '#020617', border: '1px solid #334155', borderRadius: '12px', color: '#fff', outline: 'none' },
     loginBtn: { width: '100%', padding: '16px', background: '#f97316', color: '#fff', border: 'none', borderRadius: '12px', fontWeight: '800', fontSize: 14, cursor: 'pointer' },
     
-    // Toggle
     toggle: { width: 44, height: 24, borderRadius: 20, position: 'relative', cursor: 'pointer', transition: '0.3s' },
     knob: { width: 18, height: 18, background: '#fff', borderRadius: '50%', position: 'absolute', top: 3, left: 3, transition: '0.3s', boxShadow: '0 2px 5px rgba(0,0,0,0.2)' },
     
-    // General
     primaryBtn: { flex: 1, background: '#f97316', color: '#fff', border: 'none', padding: 15, borderRadius: 10, fontWeight: '700', cursor: 'pointer' },
     secondaryBtn: { flex: 1, background: '#334155', color: '#fff', border: 'none', padding: 15, borderRadius: 10, fontWeight: '700', cursor: 'pointer' }
 };

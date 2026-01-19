@@ -126,46 +126,55 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customer
                 <FaSyncAlt className={refreshing ? "spin" : ""} style={{color: '#3b82f6'}} />
             </div>
 
-            {/* CEO BROADCAST */}
+            {/* CEO BROADCAST (Compact) */}
             {systemBroadcast && (
                 <div style={styles.systemAlert}>
                     <FaBullhorn /> <span>{systemBroadcast}</span>
                 </div>
             )}
 
-            {/* MARQUEE (Religious/Welcome Text) */}
+            {/* MARQUEE (Compact) */}
             <div style={styles.marqueeWrapper}>
                 <div style={styles.marqueeContent}>
                     <span>✦ JAI SHREE RAM ✦ WELCOME TO {currentRestId?.toUpperCase()} ✦ ENJOY YOUR MEAL ✦ </span>
                 </div>
             </div>
 
-            {/* CEO AD BANNER */}
+            {/* CEO AD BANNER (Less padding) */}
             {globalBanner && (
                 <div style={styles.adBanner}>
-                    <img src={globalBanner} alt="Promo" style={{width:'100%', borderRadius:'15px', border:'1px solid rgba(59, 130, 246, 0.3)'}} />
+                    <img src={globalBanner} alt="Promo" style={{width:'100%', borderRadius:'12px', border:'1px solid rgba(59, 130, 246, 0.3)'}} />
                 </div>
             )}
 
-            {/* HERO SECTION */}
-            <div style={styles.hero}>
-                <div style={styles.heroContent}>
+            {/* HEADER SECTION (Compact Layout) */}
+            <div style={styles.header}>
+                <div style={styles.headerRow}>
                     <div>
-                        <h1 style={styles.restName}>{currentRestId?.toUpperCase()}</h1>
-                        <p style={styles.restSub}>{currentTable ? `Table ${currentTable}` : "Takeaway / Walk-In"}</p>
+                        {/* ⚡️ BRANDING FIX: Name X KOVIXA */}
+                        <h1 style={styles.restName}>
+                            {currentRestId?.toUpperCase()} <span style={{color:'#3b82f6', fontWeight:400}}>X KOVIXA</span>
+                        </h1>
+                        <p style={styles.restSub}>
+                            {currentTable ? `Table ${currentTable}` : "Takeaway / Walk-In"}
+                        </p>
                     </div>
+                    
+                    {/* Cart Icon */}
                     <div onClick={() => totalQty > 0 ? navigate(cartLink) : toast.error("Cart is empty!")} style={styles.headerCart}>
-                        <FaShoppingCart size={20} />
+                        <FaShoppingCart size={18} />
                         {totalQty > 0 && <span style={styles.badge}>{totalQty}</span>}
                     </div>
                 </div>
+
+                {/* Search Bar (Compact) */}
                 <div style={styles.searchContainer}>
                     <FaSearch style={styles.searchIcon} />
                     <input style={styles.searchInput} placeholder="Search for food..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                 </div>
             </div>
 
-            {/* CATEGORIES */}
+            {/* CATEGORIES (Sticky) */}
             <div style={styles.stickyNav}>
                 <div style={styles.catScroll}>
                     {categories.map(cat => (
@@ -228,49 +237,63 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customer
     );
 };
 
-// --- PREMIUM BLUE STYLES ---
+// --- COMPACT & PREMIUM STYLES ---
 const styles = {
     container: { minHeight: "100vh", background: "#020617", color: "white", paddingBottom: "160px", fontFamily: "'Plus Jakarta Sans', sans-serif" },
     center: { display:'flex', height:'100vh', alignItems:'center', justifyContent:'center', flexDirection:'column', background:'#020617' },
-    systemAlert: { background: 'rgba(59, 130, 246, 0.1)', color: '#60a5fa', padding: '12px 20px', fontSize: '13px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '10px', borderBottom: '1px solid rgba(59, 130, 246, 0.2)' },
-    adBanner: { padding: '0 20px', marginTop: '15px' },
-    pullLoader: { width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', overflow: 'hidden', transition: '0.2s' },
-    marqueeWrapper: { background: 'linear-gradient(90deg, #1e3a8a, #0f172a, #1e3a8a)', borderBottom: '2px solid #3b82f6', padding: '8px 0', overflow: 'hidden' },
-    marqueeContent: { display: 'inline-block', paddingLeft: '100%', animation: 'scroll 25s linear infinite', color: '#bfdbfe', fontSize: '11px', fontWeight: '900', letterSpacing: '2px' },
-    hero: { padding: "20px" },
-    heroContent: { display: "flex", justifyContent: "space-between", alignItems: 'center' },
-    restName: { fontSize: "24px", fontWeight: "900", letterSpacing: '-1px' },
-    restSub: { fontSize: "13px", color: "#60a5fa", fontWeight: "600" },
-    headerCart: { position: 'relative', background: 'rgba(59, 130, 246, 0.1)', padding: '12px', borderRadius: '14px', color: '#60a5fa', border: '1px solid rgba(59, 130, 246, 0.2)' },
-    headerBadge: { position: 'absolute', top: '-5px', right: '-5px', background: '#ef4444', color: 'white', fontSize: '10px', padding: '2px 6px', borderRadius: '10px', fontWeight: 'bold' },
-    searchContainer: { position: "relative", marginTop: 20 },
-    searchIcon: { position: "absolute", left: "15px", top: "14px", color: "#94a3b8" },
-    searchInput: { width: "100%", padding: "12px 15px 12px 45px", borderRadius: "14px", background: "#0f172a", border: "1px solid #1e293b", color: "white", outline: "none", fontSize: '15px' },
-    stickyNav: { position: "sticky", top: 0, background: "rgba(2, 6, 23, 0.95)", backdropFilter: "blur(12px)", padding: "10px 0", zIndex: 100, borderBottom: '1px solid rgba(255,255,255,0.05)' },
-    catScroll: { display: "flex", gap: "10px", padding: "0 20px", overflowX: "auto", scrollbarWidth: 'none' },
-    catBtn: { padding: "8px 20px", borderRadius: "20px", fontSize: "13px", fontWeight: "600", whiteSpace: "nowrap", border: '1px solid #1e293b', transition: '0.2s', cursor:'pointer' },
+    
+    // Alerts (More Compact)
+    systemAlert: { background: 'rgba(59, 130, 246, 0.1)', color: '#60a5fa', padding: '8px 15px', fontSize: '11px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '1px solid rgba(59, 130, 246, 0.2)' },
+    marqueeWrapper: { background: 'linear-gradient(90deg, #1e3a8a, #0f172a, #1e3a8a)', borderBottom: '2px solid #3b82f6', padding: '6px 0', overflow: 'hidden' },
+    marqueeContent: { display: 'inline-block', paddingLeft: '100%', animation: 'scroll 25s linear infinite', color: '#bfdbfe', fontSize: '10px', fontWeight: '800', letterSpacing: '2px' },
+    adBanner: { padding: '0 15px', marginTop: '10px' }, // Reduced Margin
+    
+    // Header (Fixed Spacing)
+    header: { padding: "15px 15px 5px 15px" }, // Reduced bottom padding
+    headerRow: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: '10px' },
+    
+    // Branding
+    restName: { fontSize: "18px", fontWeight: "900", letterSpacing: '-0.5px', margin: 0 },
+    restSub: { fontSize: "11px", color: "#60a5fa", fontWeight: "600", marginTop: '2px' },
+    
+    headerCart: { position: 'relative', background: 'rgba(59, 130, 246, 0.1)', padding: '10px', borderRadius: '12px', color: '#60a5fa', border: '1px solid rgba(59, 130, 246, 0.2)', cursor:'pointer' },
+    headerBadge: { position: 'absolute', top: '-5px', right: '-5px', background: '#ef4444', color: 'white', fontSize: '9px', padding: '2px 5px', borderRadius: '10px', fontWeight: 'bold' },
+    
+    searchContainer: { position: "relative", marginBottom: '5px' },
+    searchIcon: { position: "absolute", left: "12px", top: "12px", color: "#94a3b8", fontSize: '14px' },
+    searchInput: { width: "100%", padding: "10px 15px 10px 40px", borderRadius: "12px", background: "#0f172a", border: "1px solid #1e293b", color: "white", outline: "none", fontSize: '14px' },
+    
+    // Sticky Nav (Less space)
+    stickyNav: { position: "sticky", top: 0, background: "rgba(2, 6, 23, 0.95)", backdropFilter: "blur(12px)", padding: "8px 0", zIndex: 100, borderBottom: '1px solid rgba(255,255,255,0.05)' },
+    catScroll: { display: "flex", gap: "8px", padding: "0 15px", overflowX: "auto", scrollbarWidth: 'none' },
+    catBtn: { padding: "6px 16px", borderRadius: "20px", fontSize: "12px", fontWeight: "600", whiteSpace: "nowrap", border: '1px solid #1e293b', transition: '0.2s', cursor:'pointer', background: '#0f172a', color: '#94a3b8' },
     activeCat: { background: '#3b82f6', color: 'white', borderColor: '#3b82f6', fontWeight: '800', boxShadow: '0 4px 12px rgba(59, 130, 246, 0.4)' },
-    grid: { padding: "20px", display: "flex", flexDirection: "column", gap: "15px" },
-    card: { background: "#0f172a", borderRadius: "20px", overflow: "hidden", border: "1px solid #1e293b", display: 'flex', height: '120px' },
-    imgWrapper: { width: "120px", height: "100%", position: "relative" },
+    
+    // Grid (Standard)
+    grid: { padding: "15px", display: "flex", flexDirection: "column", gap: "12px" },
+    card: { background: "#0f172a", borderRadius: "16px", overflow: "hidden", border: "1px solid #1e293b", display: 'flex', height: '110px' },
+    imgWrapper: { width: "110px", height: "100%", position: "relative" },
     img: { width: "100%", height: "100%", objectFit: "cover" },
     soldOut: { position: "absolute", inset: 0, background: "rgba(0,0,0,0.8)", color: "#ef4444", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "10px", fontWeight: "900" },
-    info: { padding: "15px", flex: 1, display: 'flex', flexDirection: 'column' },
-    row: { marginBottom: 5 },
-    dishTitle: { margin: 0, fontSize: "16px", fontWeight: "700", color: 'white' },
-    price: { color: "#3b82f6", fontWeight: "900", fontSize: '18px' },
-    desc: { color: "#64748b", fontSize: "11px", fontWeight: "600" },
-    addBtn: { padding: "8px 20px", background: "#3b82f6", color: "#fff", fontWeight: "800", borderRadius: "10px", border: "none", fontSize: '12px', cursor:'pointer' },
-    counter: { display: "flex", alignItems: "center", justifyContent: "space-between", background: "#1e293b", borderRadius: "10px", width: "90px", border: '1px solid #3b82f6' },
-    countBtn: { width: "30px", height: "32px", background: "transparent", border: "none", color: "#60a5fa", cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' },
-    qtyNum: { fontWeight: "900", fontSize: '14px', color:'white' },
+    info: { padding: "12px", flex: 1, display: 'flex', flexDirection: 'column' },
+    row: { marginBottom: 2 },
+    dishTitle: { margin: 0, fontSize: "15px", fontWeight: "700", color: 'white' },
+    price: { color: "#3b82f6", fontWeight: "900", fontSize: '16px' },
+    desc: { color: "#64748b", fontSize: "10px", fontWeight: "600" },
+    addBtn: { padding: "6px 16px", background: "#3b82f6", color: "#fff", fontWeight: "800", borderRadius: "8px", border: "none", fontSize: '11px', cursor:'pointer' },
+    counter: { display: "flex", alignItems: "center", justifyContent: "space-between", background: "#1e293b", borderRadius: "8px", width: "80px", border: '1px solid #3b82f6' },
+    countBtn: { width: "26px", height: "28px", background: "transparent", border: "none", color: "#60a5fa", cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' },
+    qtyNum: { fontWeight: "900", fontSize: '13px', color:'white' },
+    
     floatBarContainer: { position: "fixed", bottom: "30px", left: "0", right: "0", padding: "0 20px", zIndex: 1000 },
-    floatBar: { background: "#3b82f6", padding: "16px 25px", borderRadius: "24px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 10px 40px rgba(59, 130, 246, 0.4)", border: '1px solid rgba(255,255,255,0.1)' },
+    floatBar: { background: "#3b82f6", padding: "14px 20px", borderRadius: "20px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 10px 40px rgba(59, 130, 246, 0.4)", border: '1px solid rgba(255,255,255,0.1)' },
     floatInfo: { display: "flex", flexDirection: "column" },
     floatQty: { fontSize: "10px", color: "rgba(255,255,255,0.8)", fontWeight: "700" },
-    floatPrice: { fontSize: "20px", fontWeight: "900", color: "white" },
-    viewCart: { color: "white", fontWeight: "800", display: "flex", alignItems: "center", fontSize: "14px" },
-    disabledBtn: { background: "#1e293b", color: "#64748b", padding: "8px", borderRadius: "10px", border: "none", fontSize: "10px" }
+    floatPrice: { fontSize: "18px", fontWeight: "900", color: "white" },
+    viewCart: { color: "white", fontWeight: "800", display: "flex", alignItems: "center", fontSize: "13px" },
+    
+    pullLoader: { width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', overflow: 'hidden', transition: '0.2s' },
+    disabledBtn: { background: "#1e293b", color: "#64748b", padding: "6px", borderRadius: "8px", border: "none", fontSize: "10px" }
 };
 
 export default Menu;
