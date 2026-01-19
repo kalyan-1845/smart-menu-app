@@ -36,7 +36,7 @@
         --bg-color: #050505; 
         --primary-orange: #f97316;
         --text-color: #ffffff;
-        --safe-bottom: env(safe-area-inset-bottom, 20px); /* iPhone Home Bar */
+        --safe-bottom: env(safe-area-inset-bottom, 20px);
       }
 
       * {
@@ -57,12 +57,15 @@
         font-family: "Plus Jakarta Sans", "Inter", sans-serif;
         overscroll-behavior-y: none; /* Prevents "bounce" scroll */
         -webkit-font-smoothing: antialiased;
-        overflow: hidden; /* Let React manage scrolling */
+        
+        /* ✅ FIXED: Allow Vertical Scrolling, Prevent Horizontal */
+        overflow-x: hidden; 
+        overflow-y: auto; 
       }
 
       #root {
         width: 100%;
-        height: 100%;
+        min-height: 100vh;
         display: flex;
         flex-direction: column;
       }
@@ -73,7 +76,7 @@
       ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
       ::-webkit-scrollbar-thumb:hover { background: var(--primary-orange); }
 
-      /* --- 🌀 PRE-LOADER (Visible before React loads) --- */
+      /* --- 🌀 PRE-LOADER --- */
       #root:empty {
         display: flex;
         flex-direction: column;

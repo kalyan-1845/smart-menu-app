@@ -2,29 +2,26 @@ import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 
 const ownerSchema = new mongoose.Schema({
-  restaurantName: { type: String, required: true },
   username: { type: String, required: true, unique: true },
-  email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
-  phoneNumber: { type: String, default: "" }, 
-  isPro: { type: Boolean, default: false },
-  trialEndsAt: { type: Date },
-  pushSubscriptions: { type: Array, default: [] },
-  ceoNotes: { type: String, default: "" },
-  settings: { menuActive: { type: Boolean, default: true } }
-}, { timestamps: true });
-
-// 1. Encrypt Password
-ownerSchema.pre('save', async function (next) {
-  if (!this.isModified('password')) next();
-  const salt = await bcrypt.genSalt(10);
-  this.password = await bcrypt.hash(this.password, salt);
+  restaurantName: { type: String, required: true },
+  phoneNumber: { type: String },
+  isPro: { type: Boolean, default: false }, // Crucial for the "PREMIUM DASHBOARD" badge
+  createdAt: { type: Date, default: Date.now }
 });
 
-// 2. ✅ THIS IS THE FIX (Login fails without this)
+// Encryption Middleware
+ownerSchema.pre("save", async function (next) {
+  if (!this.isModified("password")) return next();
+  const salt = await bcrypt.genSalt(10);
+  this.password = await bcrypt.hash(this.password, salt);
+  next();
+});
+
+// Password Check Helper
 ownerSchema.methods.matchPassword = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
 };
 
-const Owner = mongoose.models.Owner || mongoose.model("Owner", ownerSchema);
+const Owner = mongoose.model("Owner", ownerSchema);
 export default Owner;
