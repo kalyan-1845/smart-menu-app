@@ -136,7 +136,7 @@ const RestaurantAdmin = () => {
         for (let i = 1; i <= tableCount; i++) {
             if (y > 250) { doc.addPage(); y = 20; }
             // ⚠️ REPLACE THIS URL WITH YOUR VERCEL/NETLIFY LINK
-            const url = `https://kovixa.com/menu/${id}?table=${i}`;
+            const url = `https://smartmenuss.netlify.app/menu/${id}?table=${i}`;
             const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(url)}`;
             doc.setFontSize(14);
             doc.text(`Table ${i}`, x + 15, y);
