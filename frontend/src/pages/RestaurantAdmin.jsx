@@ -344,7 +344,7 @@ const RestaurantAdmin = () => {
                                         <div className="fw-700">Table {num}</div>
                                         <button onClick={() => {
                                             // ⚠️ REPLACE WITH YOUR REAL URL
-                                            navigator.clipboard.writeText(`https://kovixa.com/menu/${id}?table=${num}`);
+                                            navigator.clipboard.writeText(`https://smartmenuss.netlify.app/menu/${id}?table=${num}`);
                                             toast.success("Link Copied");
                                         }} className="btn-glass" style={{fontSize:12}}>COPY LINK</button>
                                     </div>
