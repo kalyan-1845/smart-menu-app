@@ -5,7 +5,7 @@ import jsPDF from 'jspdf';
 import InstallButton from "../components/InstallButton";
 
 import { 
-    FaTrash, FaUtensils, FaSignOutAlt, FaStore, 
+    FaTrash, FaUtensils, FaStore, 
     FaTimes, FaPrint, FaCheck, FaFire, FaChartLine, 
     FaBullhorn, FaReceipt, FaPlus, FaQrcode, FaLink, FaFilePdf, FaSyncAlt
 } from "react-icons/fa";
@@ -13,8 +13,8 @@ import { toast } from "react-hot-toast";
 
 const CATEGORY_LIST = ["Starters (Veg)", "Starters (Non-Veg)", "Main Course (Veg)", "Main Course (Non-Veg)", "Biryani", "Chinese", "Desserts", "Beverages", "Breakfast", "Snacks", "Add-ons"];
 
-// 1. ⚡️ DEFINE BAR CATEGORIES HERE
-const BAR_CATEGORIES = ["Beverages", "Desserts", "Alcohol", "Drinks"];
+// 🧠 INTELLIGENT FILTER: These items will NEVER print on the Kitchen Ticket
+const BAR_CATEGORIES = ["Beverages", "Drinks", "Alcohol", "Desserts", "Milkshakes", "Ice Cream"];
 
 const RestaurantAdmin = () => {
     const { id } = useParams();
@@ -41,14 +41,11 @@ const RestaurantAdmin = () => {
     // Tools State
     const [tableCount, setTableCount] = useState(15); 
 
-    // Smart KOT Tracking (Local Storage)
     const [printedKOTs, setPrintedKOTs] = useState(() => {
         try { return JSON.parse(localStorage.getItem("printed_kots_log")) || []; } catch { return []; }
     });
 
-    // --- ⚡️ SPEED OPTIMIZATION (Heavy Data Separate) ---
-
-    // 1. Heavy Data (Menu) - Runs Only Once
+    // --- ⚡️ DATA SYNC ---
     const fetchMenuData = useCallback(async (fetchId, token) => {
         try {
             const config = { headers: { Authorization: `Bearer ${token}` } };
@@ -57,7 +54,6 @@ const RestaurantAdmin = () => {
         } catch (e) { console.error("Menu Sync Error"); }
     }, [API_BASE]);
 
-    // 2. Fast Data (Orders) - Runs Every 3 Seconds
     const fetchLiveUpdates = useCallback(async (fetchId, token) => {
         if (!fetchId) return;
         try {
@@ -77,7 +73,6 @@ const RestaurantAdmin = () => {
         }
     }, [API_BASE]);
 
-    // --- INITIAL LOAD & LOOP ---
     useEffect(() => {
         const token = localStorage.getItem(`owner_token_${id}`);
         const savedId = localStorage.getItem(`owner_id_${id}`);
@@ -85,12 +80,9 @@ const RestaurantAdmin = () => {
         if (token && savedId) {
             setMongoId(savedId);
             setIsAuthenticated(true);
-            
-            // Initial Load
             fetchMenuData(savedId, token);
             fetchLiveUpdates(savedId, token).then(() => setIsLoading(false));
 
-            // Fast Loop (Orders Only)
             const interval = setInterval(() => {
                 fetchLiveUpdates(savedId, token);
             }, 3000); 
@@ -120,49 +112,41 @@ const RestaurantAdmin = () => {
             setMongoId(res.data._id);
             setRestaurantName(res.data.restaurantName);
             setIsAuthenticated(true);
-            
             fetchMenuData(res.data._id, res.data.token);
             fetchLiveUpdates(res.data._id, res.data.token);
             toast.success("Welcome Back!");
         } catch (err) { toast.error("Invalid Key"); }
     };
 
-    // --- 🖨️ SMART TWO-MACHINE PRINTING LOGIC ---
+    // --- 🖨️ SMART KOT LOGIC (THE BRAIN) ---
 
-    const handlePrintKOT = (order, type = "ALL") => {
-        let itemsToPrint = order.items;
-        let title = "KITCHEN TICKET";
+    const handlePrintKOT = (order) => {
+        // 1. FILTER: Remove Drinks/Bar Items automatically
+        const itemsToPrint = order.items.filter(i => !BAR_CATEGORIES.includes(i.category));
 
-        // Filter Logic
-        if (type === "FOOD") {
-            itemsToPrint = order.items.filter(i => !BAR_CATEGORIES.includes(i.category));
-            title = "FOOD TICKET";
-        } 
-        else if (type === "BAR") {
-            itemsToPrint = order.items.filter(i => BAR_CATEGORIES.includes(i.category));
-            title = "BAR TICKET";
-        }
-
+        // 2. CHECK: If there is nothing left (e.g., user ordered 2 Cokes), DON'T PRINT.
         if (itemsToPrint.length === 0) {
-            return toast.error(`No ${type.toLowerCase()} items found.`);
+            return toast("Only drinks in this order. KOT skipped!", { icon: '🥤' });
         }
 
+        // 3. GENERATE KITCHEN TICKET (Only Food)
         const win = window.open('', '', 'width=300,height=600');
-        win.document.write(`<html><body style="font-family:monospace;width:280px;padding:10px;"><h3 style="text-align:center;margin:0;border-bottom:2px dashed black;">${title}</h3><p style="text-align:center;font-size:12px">Order #${order._id.slice(-4).toUpperCase()}</p><h2 style="text-align:center;margin:10px 0;">TABLE ${order.tableNum}</h2><hr/><table style="width:100%;font-size:14px;font-weight:bold;">${itemsToPrint.map(i => `<tr><td>${i.name}</td><td style="text-align:right;">x${i.quantity}</td></tr>`).join('')}</table><hr/><p style="text-align:center;">${new Date().toLocaleTimeString()}</p></body></html>`);
+        win.document.write(`<html><body style="font-family:monospace;width:280px;padding:10px;"><h3 style="text-align:center;margin:0;border-bottom:2px dashed black;">KITCHEN TICKET</h3><p style="text-align:center;font-size:12px">Order #${order._id.slice(-4).toUpperCase()}</p><h2 style="text-align:center;margin:10px 0;">TABLE ${order.tableNum}</h2><hr/><table style="width:100%;font-size:14px;font-weight:bold;">${itemsToPrint.map(i => `<tr><td>${i.name}</td><td style="text-align:right;">x${i.quantity}</td></tr>`).join('')}</table><hr/><p style="text-align:center;">${new Date().toLocaleTimeString()}</p></body></html>`);
         win.document.close(); win.print(); win.close();
 
-        // Only mark "notified" if printing Full or Food (Primary)
-        if (type === "ALL" || type === "FOOD") {
-            const newPrintedList = [...printedKOTs, order._id];
-            setPrintedKOTs(newPrintedList);
-            localStorage.setItem("printed_kots_log", JSON.stringify(newPrintedList));
-            toast.success("Sent to Kitchen");
-        }
+        // 4. MARK AS NOTIFIED
+        const newPrintedList = [...printedKOTs, order._id];
+        setPrintedKOTs(newPrintedList);
+        localStorage.setItem("printed_kots_log", JSON.stringify(newPrintedList));
+        toast.success("Sent to Kitchen");
     };
 
+    // --- 🧾 BILL LOGIC (PRINTS EVERYTHING) ---
     const printBill = (tableNum, orders) => {
         const total = orders.reduce((sum, o) => sum + o.totalAmount, 0);
+        // Combine all items (Food + Drinks)
         const allItems = orders.flatMap(o => o.items);
+        
         const win = window.open('', '', 'width=300,height=600');
         win.document.write(`<html><body style="font-family:monospace;width:280px;padding:10px;"><h2 style="text-align:center;margin:0;">${restaurantName.toUpperCase()}</h2><p style="text-align:center;">Thank you!</p><hr/><h3 style="text-align:center;">TABLE ${tableNum}</h3><hr/><table style="width:100%;text-align:left;"><tr><th>Item</th><th>Qty</th><th>Amt</th></tr>${allItems.map(i => `<tr><td>${i.name}</td><td>${i.quantity}</td><td>${i.price*i.quantity}</td></tr>`).join('')}</table><hr/><h2 style="text-align:right;">TOTAL: ₹${total}</h2><hr/><p style="text-align:center;font-size:10px;">${new Date().toLocaleString()}</p></body></html>`);
         win.document.close(); win.print(); win.close();
@@ -224,7 +208,6 @@ const RestaurantAdmin = () => {
         } catch (err) { toast.error("Failed"); }
     };
 
-    // --- DATA CALCS ---
     const tableData = useMemo(() => {
         const map = {};
         for(let i = 1; i <= tableCount; i++) map[i] = { tableNum: i, orders: [], totalAmount: 0, status: 'Free' };
@@ -292,11 +275,12 @@ const RestaurantAdmin = () => {
                                             {order.items.map((item, i) => (
                                                 <div key={i} className="order-row"><span>{item.name}</span><b>x{item.quantity}</b></div>
                                             ))}
-                                            <div className="flex-end mt-10" style={{gap:8}}>
-                                                {/* ⚡️ TWO MACHINE BUTTONS HERE */}
-                                                <button onClick={() => handlePrintKOT(order, "ALL")} className="btn-sm"><FaPrint/> ALL</button>
-                                                <button onClick={() => handlePrintKOT(order, "FOOD")} className="btn-sm" style={{background:'#f59e0b', color:'black'}}><FaUtensils/> FOOD</button>
-                                                <button onClick={() => handlePrintKOT(order, "BAR")} className="btn-sm" style={{background:'#8b5cf6'}}><FaSignOutAlt/> BAR</button>
+                                            <div className="flex-end mt-10">
+                                                {/* ⚡️ INTELLIGENT KOT BUTTON */}
+                                                {isPrinted ? 
+                                                    <span className="success-text"><FaCheck /> KITCHEN NOTIFIED</span> : 
+                                                    <button onClick={() => handlePrintKOT(order)} className="btn-sm"><FaPrint/> PRINT KOT</button>
+                                                }
                                             </div>
                                         </div>
                                     );
