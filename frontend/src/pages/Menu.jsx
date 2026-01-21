@@ -133,25 +133,24 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customer
                 </div>
             )}
 
-            {/* MARQUEE (Compact) */}
+            {/* MARQUEE (Fixed Colors: Dark Background, Orange Text) */}
             <div style={styles.marqueeWrapper}>
                 <div style={styles.marqueeContent}>
                     <span>✦ JAI SHREE RAM ✦ WELCOME TO {currentRestId?.toUpperCase()} ✦ ENJOY YOUR MEAL ✦ </span>
                 </div>
             </div>
 
-            {/* CEO AD BANNER (Less padding) */}
+            {/* CEO AD BANNER */}
             {globalBanner && (
                 <div style={styles.adBanner}>
                     <img src={globalBanner} alt="Promo" style={{width:'100%', borderRadius:'12px', border:'1px solid rgba(59, 130, 246, 0.3)'}} />
                 </div>
             )}
 
-            {/* HEADER SECTION (Compact Layout) */}
+            {/* HEADER SECTION */}
             <div style={styles.header}>
                 <div style={styles.headerRow}>
                     <div>
-                        {/* ⚡️ BRANDING FIX: Name X KOVIXA */}
                         <h1 style={styles.restName}>
                             {currentRestId?.toUpperCase()} <span style={{color:'#3b82f6', fontWeight:400}}>X KOVIXA</span>
                         </h1>
@@ -167,14 +166,14 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customer
                     </div>
                 </div>
 
-                {/* Search Bar (Compact) */}
+                {/* Search Bar */}
                 <div style={styles.searchContainer}>
                     <FaSearch style={styles.searchIcon} />
                     <input style={styles.searchInput} placeholder="Search for food..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                 </div>
             </div>
 
-            {/* CATEGORIES (Sticky) */}
+            {/* CATEGORIES */}
             <div style={styles.stickyNav}>
                 <div style={styles.catScroll}>
                     {categories.map(cat => (
@@ -221,7 +220,7 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customer
                 })}
             </div>
 
-            {/* FLOATING CART BAR (Blue) */}
+            {/* FLOATING CART BAR */}
             {totalQty > 0 && (
                 <div style={styles.floatBarContainer}>
                     <div onClick={() => navigate(cartLink)} style={styles.floatBar}>
@@ -237,22 +236,35 @@ const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customer
     );
 };
 
-// --- COMPACT & PREMIUM STYLES ---
 const styles = {
     container: { minHeight: "100vh", background: "#020617", color: "white", paddingBottom: "160px", fontFamily: "'Plus Jakarta Sans', sans-serif" },
     center: { display:'flex', height:'100vh', alignItems:'center', justifyContent:'center', flexDirection:'column', background:'#020617' },
     
-    // Alerts (More Compact)
+    // Alerts
     systemAlert: { background: 'rgba(59, 130, 246, 0.1)', color: '#60a5fa', padding: '8px 15px', fontSize: '11px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '1px solid rgba(59, 130, 246, 0.2)' },
-    marqueeWrapper: { background: 'linear-gradient(90deg, #1e3a8a, #0f172a, #1e3a8a)', borderBottom: '2px solid #3b82f6', padding: '6px 0', overflow: 'hidden' },
-    marqueeContent: { display: 'inline-block', paddingLeft: '100%', animation: 'scroll 25s linear infinite', color: '#bfdbfe', fontSize: '10px', fontWeight: '800', letterSpacing: '2px' },
-    adBanner: { padding: '0 15px', marginTop: '10px' }, // Reduced Margin
     
-    // Header (Fixed Spacing)
-    header: { padding: "15px 15px 5px 15px" }, // Reduced bottom padding
+    // ⚡️ MARQUEE FIX: Dark Background, Orange Text
+    marqueeWrapper: { 
+        background: '#0f172a', // Dark Blue/Black
+        borderBottom: '1px solid #1e293b', 
+        padding: '8px 0', 
+        overflow: 'hidden' 
+    },
+    marqueeContent: { 
+        display: 'inline-block', 
+        paddingLeft: '100%', 
+        animation: 'scroll 25s linear infinite', 
+        color: '#f97316', // Orange Color for Saffron Look
+        fontSize: '11px', 
+        fontWeight: '900', 
+        letterSpacing: '2px' 
+    },
+
+    adBanner: { padding: '0 15px', marginTop: '10px' },
+    
+    // Header
+    header: { padding: "15px 15px 5px 15px" },
     headerRow: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: '10px' },
-    
-    // Branding
     restName: { fontSize: "18px", fontWeight: "900", letterSpacing: '-0.5px', margin: 0 },
     restSub: { fontSize: "11px", color: "#60a5fa", fontWeight: "600", marginTop: '2px' },
     
@@ -263,13 +275,11 @@ const styles = {
     searchIcon: { position: "absolute", left: "12px", top: "12px", color: "#94a3b8", fontSize: '14px' },
     searchInput: { width: "100%", padding: "10px 15px 10px 40px", borderRadius: "12px", background: "#0f172a", border: "1px solid #1e293b", color: "white", outline: "none", fontSize: '14px' },
     
-    // Sticky Nav (Less space)
     stickyNav: { position: "sticky", top: 0, background: "rgba(2, 6, 23, 0.95)", backdropFilter: "blur(12px)", padding: "8px 0", zIndex: 100, borderBottom: '1px solid rgba(255,255,255,0.05)' },
     catScroll: { display: "flex", gap: "8px", padding: "0 15px", overflowX: "auto", scrollbarWidth: 'none' },
     catBtn: { padding: "6px 16px", borderRadius: "20px", fontSize: "12px", fontWeight: "600", whiteSpace: "nowrap", border: '1px solid #1e293b', transition: '0.2s', cursor:'pointer', background: '#0f172a', color: '#94a3b8' },
     activeCat: { background: '#3b82f6', color: 'white', borderColor: '#3b82f6', fontWeight: '800', boxShadow: '0 4px 12px rgba(59, 130, 246, 0.4)' },
     
-    // Grid (Standard)
     grid: { padding: "15px", display: "flex", flexDirection: "column", gap: "12px" },
     card: { background: "#0f172a", borderRadius: "16px", overflow: "hidden", border: "1px solid #1e293b", display: 'flex', height: '110px' },
     imgWrapper: { width: "110px", height: "100%", position: "relative" },

@@ -13,6 +13,9 @@ import { toast } from "react-hot-toast";
 
 const CATEGORY_LIST = ["Starters (Veg)", "Starters (Non-Veg)", "Main Course (Veg)", "Main Course (Non-Veg)", "Biryani", "Chinese", "Desserts", "Beverages", "Breakfast", "Snacks", "Add-ons"];
 
+// 1. ⚡️ DEFINE BAR CATEGORIES HERE
+const BAR_CATEGORIES = ["Beverages", "Desserts", "Alcohol", "Drinks"];
+
 const RestaurantAdmin = () => {
     const { id } = useParams();
     // ⚠️ CHANGE TO YOUR LIVE SERVER URL
@@ -43,42 +46,70 @@ const RestaurantAdmin = () => {
         try { return JSON.parse(localStorage.getItem("printed_kots_log")) || []; } catch { return []; }
     });
 
-    // --- SYNC DATA ---
-    const refreshData = useCallback(async (manualId) => {
-        const fetchId = manualId || mongoId || localStorage.getItem(`owner_id_${id}`);
-        const token = localStorage.getItem(`owner_token_${id}`); 
-        if (!fetchId) return;
+    // --- ⚡️ SPEED OPTIMIZATION (Heavy Data Separate) ---
 
+    // 1. Heavy Data (Menu) - Runs Only Once
+    const fetchMenuData = useCallback(async (fetchId, token) => {
         try {
             const config = { headers: { Authorization: `Bearer ${token}` } };
-            const [dishRes, orderRes, sysRes] = await Promise.all([
-                axios.get(`${API_BASE}/dishes?restaurantId=${fetchId}&t=${Date.now()}`, config),
+            const dishRes = await axios.get(`${API_BASE}/dishes?restaurantId=${fetchId}&t=${Date.now()}`, config);
+            setDishes(dishRes.data || []);
+        } catch (e) { console.error("Menu Sync Error"); }
+    }, [API_BASE]);
+
+    // 2. Fast Data (Orders) - Runs Every 3 Seconds
+    const fetchLiveUpdates = useCallback(async (fetchId, token) => {
+        if (!fetchId) return;
+        try {
+            const config = { headers: { Authorization: `Bearer ${token}` } };
+            const [orderRes, sysRes] = await Promise.all([
                 axios.get(`${API_BASE}/orders/inbox?restaurantId=${fetchId}&t=${Date.now()}`, config),
                 axios.get(`${API_BASE}/superadmin/system-status`)
             ]);
             
-            setDishes(dishRes.data || []);
-            setInboxOrders(orderRes.data || []);
+            setInboxOrders(prev => {
+                if (JSON.stringify(prev) !== JSON.stringify(orderRes.data)) return orderRes.data || [];
+                return prev;
+            });
             setSystemBroadcast(sysRes.data.message || "");
-            setIsLoading(false);
         } catch (e) { 
-            setIsLoading(false);
             if (e.response?.status === 401) setIsAuthenticated(false);
         }
-    }, [API_BASE, id, mongoId]);
+    }, [API_BASE]);
 
+    // --- INITIAL LOAD & LOOP ---
     useEffect(() => {
         const token = localStorage.getItem(`owner_token_${id}`);
         const savedId = localStorage.getItem(`owner_id_${id}`);
+
         if (token && savedId) {
             setMongoId(savedId);
             setIsAuthenticated(true);
-            refreshData(savedId);
-        } else setIsLoading(false);
+            
+            // Initial Load
+            fetchMenuData(savedId, token);
+            fetchLiveUpdates(savedId, token).then(() => setIsLoading(false));
 
-        const interval = setInterval(() => refreshData(), 5000); 
-        return () => clearInterval(interval);
-    }, [id, refreshData]);
+            // Fast Loop (Orders Only)
+            const interval = setInterval(() => {
+                fetchLiveUpdates(savedId, token);
+            }, 3000); 
+
+            return () => clearInterval(interval);
+        } else {
+            setIsLoading(false);
+        }
+    }, [id, fetchMenuData, fetchLiveUpdates]);
+
+    const handleManualRefresh = () => {
+        const token = localStorage.getItem(`owner_token_${id}`);
+        if(mongoId && token) {
+            toast.promise(
+                Promise.all([fetchMenuData(mongoId, token), fetchLiveUpdates(mongoId, token)]),
+                { loading: 'Syncing...', success: 'Synced!', error: 'Error' }
+            );
+        }
+    };
 
     const handleLogin = async (e) => {
         e.preventDefault();
@@ -89,22 +120,44 @@ const RestaurantAdmin = () => {
             setMongoId(res.data._id);
             setRestaurantName(res.data.restaurantName);
             setIsAuthenticated(true);
-            refreshData(res.data._id);
+            
+            fetchMenuData(res.data._id, res.data.token);
+            fetchLiveUpdates(res.data._id, res.data.token);
             toast.success("Welcome Back!");
         } catch (err) { toast.error("Invalid Key"); }
     };
 
-    // --- SMART PRINTING LOGIC ---
+    // --- 🖨️ SMART TWO-MACHINE PRINTING LOGIC ---
 
-    const handlePrintKOT = (order) => {
+    const handlePrintKOT = (order, type = "ALL") => {
+        let itemsToPrint = order.items;
+        let title = "KITCHEN TICKET";
+
+        // Filter Logic
+        if (type === "FOOD") {
+            itemsToPrint = order.items.filter(i => !BAR_CATEGORIES.includes(i.category));
+            title = "FOOD TICKET";
+        } 
+        else if (type === "BAR") {
+            itemsToPrint = order.items.filter(i => BAR_CATEGORIES.includes(i.category));
+            title = "BAR TICKET";
+        }
+
+        if (itemsToPrint.length === 0) {
+            return toast.error(`No ${type.toLowerCase()} items found.`);
+        }
+
         const win = window.open('', '', 'width=300,height=600');
-        win.document.write(`<html><body style="font-family:monospace;width:280px;padding:10px;"><h3 style="text-align:center;margin:0;">KITCHEN TICKET</h3><p style="text-align:center;font-size:12px">Order #${order._id.slice(-4)}</p><hr/><h2 style="text-align:center;margin:10px 0;">TABLE ${order.tableNum}</h2><hr/><table style="width:100%;font-size:14px;font-weight:bold;">${order.items.map(i => `<tr><td>${i.name}</td><td style="text-align:right;">x${i.quantity}</td></tr>`).join('')}</table><hr/><p style="text-align:center;">${new Date().toLocaleTimeString()}</p></body></html>`);
+        win.document.write(`<html><body style="font-family:monospace;width:280px;padding:10px;"><h3 style="text-align:center;margin:0;border-bottom:2px dashed black;">${title}</h3><p style="text-align:center;font-size:12px">Order #${order._id.slice(-4).toUpperCase()}</p><h2 style="text-align:center;margin:10px 0;">TABLE ${order.tableNum}</h2><hr/><table style="width:100%;font-size:14px;font-weight:bold;">${itemsToPrint.map(i => `<tr><td>${i.name}</td><td style="text-align:right;">x${i.quantity}</td></tr>`).join('')}</table><hr/><p style="text-align:center;">${new Date().toLocaleTimeString()}</p></body></html>`);
         win.document.close(); win.print(); win.close();
 
-        const newPrintedList = [...printedKOTs, order._id];
-        setPrintedKOTs(newPrintedList);
-        localStorage.setItem("printed_kots_log", JSON.stringify(newPrintedList));
-        toast.success("Sent to Kitchen");
+        // Only mark "notified" if printing Full or Food (Primary)
+        if (type === "ALL" || type === "FOOD") {
+            const newPrintedList = [...printedKOTs, order._id];
+            setPrintedKOTs(newPrintedList);
+            localStorage.setItem("printed_kots_log", JSON.stringify(newPrintedList));
+            toast.success("Sent to Kitchen");
+        }
     };
 
     const printBill = (tableNum, orders) => {
@@ -121,11 +174,12 @@ const RestaurantAdmin = () => {
             await Promise.all(orders.map(o => axios.put(`${API_BASE}/orders/${o._id}/status`, { status: 'Completed' })));
             toast.success("Table Cleared");
             setSelectedTable(null); 
-            refreshData();
+            const token = localStorage.getItem(`owner_token_${id}`);
+            fetchLiveUpdates(mongoId, token);
         } catch(e) { toast.error("Error closing"); }
     };
 
-    // --- TOOLS: GENERATE QR PDF ---
+    // --- TOOLS ---
     const generatePDF = () => {
         const doc = new jsPDF();
         let x = 10, y = 10;
@@ -135,7 +189,6 @@ const RestaurantAdmin = () => {
 
         for (let i = 1; i <= tableCount; i++) {
             if (y > 250) { doc.addPage(); y = 20; }
-            // ⚠️ REPLACE THIS URL WITH YOUR VERCEL/NETLIFY LINK
             const url = `https://smartmenuss.netlify.app/menu/${id}?table=${i}`;
             const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(url)}`;
             doc.setFontSize(14);
@@ -158,7 +211,7 @@ const RestaurantAdmin = () => {
             }, { headers: { Authorization: `Bearer ${token}` } });
             toast.success("Added!");
             setNewItem({ name: "", price: "", image: "", category: "Starters (Veg)" });
-            refreshData(mongoId);
+            fetchMenuData(mongoId, token);
         } catch (err) { toast.error("Failed"); }
     };
 
@@ -167,18 +220,17 @@ const RestaurantAdmin = () => {
         const token = localStorage.getItem(`owner_token_${id}`);
         try {
             await axios.delete(`${API_BASE}/dishes/${dishId}`, { headers: { Authorization: `Bearer ${token}` } });
-            refreshData(mongoId);
+            fetchMenuData(mongoId, token);
         } catch (err) { toast.error("Failed"); }
     };
 
-    // --- DATA CALCULATIONS ---
+    // --- DATA CALCS ---
     const tableData = useMemo(() => {
         const map = {};
         for(let i = 1; i <= tableCount; i++) map[i] = { tableNum: i, orders: [], totalAmount: 0, status: 'Free' };
         inboxOrders.filter(o => o.status === 'Pending').forEach(order => {
             const tNum = parseInt(order.tableNum) || "Walk-In"; 
             if (tNum === "Walk-In") {
-                // Handle Walk-Ins separately if needed, for now map to 0 or specific section
                 if(!map["Walk-In"]) map["Walk-In"] = { tableNum: "Walk-In", orders: [], totalAmount: 0, status: 'Occupied' };
                 map["Walk-In"].orders.push(order);
                 map["Walk-In"].totalAmount += order.totalAmount;
@@ -240,11 +292,11 @@ const RestaurantAdmin = () => {
                                             {order.items.map((item, i) => (
                                                 <div key={i} className="order-row"><span>{item.name}</span><b>x{item.quantity}</b></div>
                                             ))}
-                                            <div className="flex-end mt-10">
-                                                {isPrinted ? 
-                                                    <span className="success-text"><FaCheck /> KITCHEN NOTIFIED</span> : 
-                                                    <button onClick={() => handlePrintKOT(order)} className="btn-sm"><FaPrint/> PRINT KOT</button>
-                                                }
+                                            <div className="flex-end mt-10" style={{gap:8}}>
+                                                {/* ⚡️ TWO MACHINE BUTTONS HERE */}
+                                                <button onClick={() => handlePrintKOT(order, "ALL")} className="btn-sm"><FaPrint/> ALL</button>
+                                                <button onClick={() => handlePrintKOT(order, "FOOD")} className="btn-sm" style={{background:'#f59e0b', color:'black'}}><FaUtensils/> FOOD</button>
+                                                <button onClick={() => handlePrintKOT(order, "BAR")} className="btn-sm" style={{background:'#8b5cf6'}}><FaSignOutAlt/> BAR</button>
                                             </div>
                                         </div>
                                     );
@@ -270,7 +322,7 @@ const RestaurantAdmin = () => {
                 
                 <header className="app-header">
                     <div><h1 className="shop-title">{restaurantName}</h1><span className="badge-pro">LIVE DASHBOARD</span></div>
-                    <button onClick={() => window.location.reload()} className="btn-glass"><FaSyncAlt/></button>
+                    <button onClick={handleManualRefresh} className="btn-glass"><FaSyncAlt/></button>
                 </header>
 
                 <div className="nav-grid">
@@ -283,7 +335,6 @@ const RestaurantAdmin = () => {
                 {/* --- 1. TABLES (LIVE) --- */}
                 {activeTab === "orders" && (
                     <div className="table-grid">
-                        {/* Render "Walk-In" Box First if exists */}
                         {tableData["Walk-In"] && (
                              <div onClick={() => setSelectedTable(tableData["Walk-In"])} 
                                   className="table-box occupied"
@@ -293,8 +344,6 @@ const RestaurantAdmin = () => {
                                 <div className="t-amount">₹{tableData["Walk-In"].totalAmount}</div>
                             </div>
                         )}
-
-                        {/* Render Numeric Tables */}
                         {Object.values(tableData).filter(t => t.tableNum !== "Walk-In").map((table) => (
                             <div key={table.tableNum} onClick={() => table.status === 'Occupied' ? setSelectedTable(table) : null} 
                                  className={`table-box ${table.status === 'Occupied' ? 'occupied' : 'free'}`}
@@ -343,7 +392,6 @@ const RestaurantAdmin = () => {
                                     <div key={num} className="dish-item">
                                         <div className="fw-700">Table {num}</div>
                                         <button onClick={() => {
-                                            // ⚠️ REPLACE WITH YOUR REAL URL
                                             navigator.clipboard.writeText(`https://smartmenuss.netlify.app/menu/${id}?table=${num}`);
                                             toast.success("Link Copied");
                                         }} className="btn-glass" style={{fontSize:12}}>COPY LINK</button>

@@ -93,7 +93,7 @@ const Cart = ({ cart, clearCart, removeFromCart, tableNum }) => {
                     cart.map(item => (
                         <div key={item._id} style={{display:'flex', justifyContent:'space-between', alignItems:'center', background:'rgba(30, 41, 59, 0.4)', padding:'18px', borderRadius:18, border:'1px solid rgba(255,255,255,0.05)'}}>
                             <div style={{flex:1, paddingRight:10}}>
-                                {/* ⚡️ BIGGER FONT HERE */}
+                                {/* ⚡️ BIGGER FONT HERE (19px Bold) */}
                                 <div style={{fontWeight:'800', fontSize:'19px', color:'white', marginBottom:6, lineHeight:'1.3'}}>
                                     {item.name}
                                 </div>
