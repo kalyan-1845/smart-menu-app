@@ -103,7 +103,7 @@ const Terms = () => {
         <footer style={styles.footer}>
           <FaFileContract style={{marginBottom:10}} size={20}/>
           <p>© 2026 Kovixa Systems. Engineered in Hyderabad.</p>
-          <p style={{opacity:0.5, fontSize:11, marginTop:5}}>For legal inquiries: legal@kovixa.com</p>
+          <p style={{opacity:0.5, fontSize:11, marginTop:5}}>For legal inquiries: legal@smartmenuss.netlify.app</p>
         </footer>
 
       </div>
