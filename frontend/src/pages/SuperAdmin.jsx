@@ -362,7 +362,7 @@ const SuperAdmin = () => {
                                 <FaQrcode size={32} color="white"/>
                                 <div>
                                     <div style={{fontWeight:'bold', fontSize:14}}>Menu QR Code</div>
-                                    <a href={`https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=http://localhost:5173/menu/${selected.username}`} target="_blank" rel="noreferrer" style={{color:'#3b82f6', fontSize:12}}>Download High-Res</a>
+                                    <a href={`https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=http://localhost:3001/menu/${selected.username}`} target="_blank" rel="noreferrer" style={{color:'#3b82f6', fontSize:12}}>Download High-Res</a>
                                 </div>
                             </div>
 

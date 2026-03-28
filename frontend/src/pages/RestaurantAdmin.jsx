@@ -173,7 +173,7 @@ const RestaurantAdmin = () => {
 
         for (let i = 1; i <= tableCount; i++) {
             if (y > 250) { doc.addPage(); y = 20; }
-            const url = `http://localhost:5173/menu/${id}?table=${i}`;
+            const url = `http://localhost:3001/menu/${id}?table=${i}`;
             const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(url)}`;
             doc.setFontSize(14);
             doc.text(`Table ${i}`, x + 15, y);
@@ -376,7 +376,7 @@ const RestaurantAdmin = () => {
                                     <div key={num} className="dish-item">
                                         <div className="fw-700">Table {num}</div>
                                         <button onClick={() => {
-                                            navigator.clipboard.writeText(`http://localhost:5173/menu/${id}?table=${num}`);
+                                            navigator.clipboard.writeText(`http://localhost:3001/menu/${id}?table=${num}`);
                                             toast.success("Link Copied");
                                         }} className="btn-glass" style={{fontSize:12}}>COPY LINK</button>
                                     </div>

@@ -1,6 +1,8 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
+import dns from "node:dns";
+dns.setDefaultResultOrder("ipv4first");
 import mongoose from "mongoose";
 import { createServer } from "http";
 import { Server } from "socket.io";
@@ -33,7 +35,7 @@ mongoose.connect(MONGO_URI)
 app.set("trust proxy", 1);
 app.use(compression());
 app.use(cors({
-  origin: true, // Allow all origins (Mobile/Web)
+  origin: [process.env.FRONTEND_URL, "http://localhost:3001", "http://localhost:5173"], 
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
