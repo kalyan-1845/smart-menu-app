@@ -6,7 +6,7 @@ import { toast } from "react-hot-toast";
 import LoadingSpinner from "../components/LoadingSpinner";
 
 // ⚠️ CHANGE TO YOUR LIVE SERVER URL
-const API_BASE = "https://smart-menu-app-production.up.railway.app/api";
+const API_BASE = "http://localhost:8080/api";
 
 const Menu = ({ cart, addToCart, setRestaurantId, setTableNum, setCart, customerId }) => {
     const params = useParams();

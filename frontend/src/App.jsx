@@ -20,7 +20,7 @@ import RestaurantAdmin from "./pages/RestaurantAdmin";
 import RoleLogin from "./pages/RoleLogin"; 
 import ProjectFlyer from "./components/ProjectFlyer"; // Ensure this path is correct
 
-const API_BASE = "https://smart-menu-app-production.up.railway.app/api";
+const API_BASE = "http://localhost:8080/api";
 
 const ScrollToTop = () => {
   const { pathname } = useLocation();

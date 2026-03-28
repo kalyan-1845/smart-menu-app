@@ -11,7 +11,7 @@ import { toast } from "react-hot-toast";
 import { io } from "socket.io-client";
 
 // ⚠️ CHANGE TO YOUR LIVE SERVER URL
-const API_URL = "https://smart-menu-app-production.up.railway.app";
+const API_URL = "http://localhost:8080";
 
 const SuperAdmin = () => {
     const [token, setToken] = useState(localStorage.getItem('admin_token'));
@@ -362,7 +362,7 @@ const SuperAdmin = () => {
                                 <FaQrcode size={32} color="white"/>
                                 <div>
                                     <div style={{fontWeight:'bold', fontSize:14}}>Menu QR Code</div>
-                                    <a href={`https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=https://smartmenuss.netlify.app/menu/${selected.username}`} target="_blank" rel="noreferrer" style={{color:'#3b82f6', fontSize:12}}>Download High-Res</a>
+                                    <a href={`https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=http://localhost:5173/menu/${selected.username}`} target="_blank" rel="noreferrer" style={{color:'#3b82f6', fontSize:12}}>Download High-Res</a>
                                 </div>
                             </div>
 
