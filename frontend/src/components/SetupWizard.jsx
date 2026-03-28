@@ -3,7 +3,7 @@ import { FaStore, FaUtensils, FaQrcode, FaCheck, FaArrowRight, FaArrowLeft, FaMa
 import axios from "axios";
 import { toast } from "react-hot-toast";
 
-const API_BASE = "https://smart-menu-app-production.up.railway.app/api";
+const API_BASE = "http://localhost:8080/api";
 
 const SetupWizard = ({ ownerId, token, onComplete }) => {
     const [step, setStep] = useState(1);

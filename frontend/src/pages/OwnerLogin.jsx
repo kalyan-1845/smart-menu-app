@@ -5,7 +5,7 @@ import { FaLock, FaStore, FaKey, FaArrowRight, FaNetworkWired } from "react-icon
 
 // ⚠️ CHANGE THIS IF TESTING LOCALLY
 // const API_BASE = "http://localhost:8080/api";
-const API_BASE = "https://smart-menu-app-production.up.railway.app/api";
+const API_BASE = "http://localhost:8080/api";
 
 const styles = `
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');

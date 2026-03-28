@@ -80,7 +80,7 @@ const styles = `
 
 // Dynamic API Selection
 const API_BASE = window.location.hostname === "localhost" 
-    ? "http://localhost:5000/api" 
+    ? "http://localhost:8080/api" 
     : "https://smart-menu-app-production.up.railway.app/api";
 
 const Register = () => {

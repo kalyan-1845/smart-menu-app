@@ -5,7 +5,7 @@ import { FaArrowLeft, FaCheckCircle, FaTrash, FaUtensils, FaReceipt } from "reac
 import { toast } from "react-hot-toast";
 
 // ⚠️ CHANGE TO YOUR LIVE SERVER URL
-const API_BASE = "https://smart-menu-app-production.up.railway.app/api";
+const API_BASE = "http://localhost:8080/api";
 
 const Cart = ({ cart, clearCart, removeFromCart, tableNum }) => {
     const { restaurantId } = useParams();
